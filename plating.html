@@ -1,0 +1,1935 @@
+<html lang="th"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="งานชุบ B-1">
+<meta name="theme-color" content="#0f2744">
+<title>ใบรายงานการชุบประจำวัน B-1</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async="" defer=""></script>
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --navy-light:#1e4976;
+  --blue:#2e75b6; --blue-light:#5ba3d9;
+  --sky:#d6eaf8; --sky-pale:#eaf4fb;
+  --white:#fff; --off-white:#f4f8fb;
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --success:#0d6e56; --success-bg:#e0f4ef;
+  --error:#9b2c2c; --error-bg:#fdf0f0;
+  --border:rgba(46,117,182,0.18);
+  --shadow:0 2px 16px rgba(15,39,68,0.10);
+  --amber:#b45309; --amber-bg:#fffbeb; --amber-border:rgba(180,83,9,0.2);
+  --green:#065f46; --green-bg:#ecfdf5; --green-border:rgba(6,95,70,0.2);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;}
+
+/* ── Header ── */
+.app-header{background:var(--navy);padding:48px 20px 18px;position:relative;overflow:hidden;}
+.app-header::before{content:'';position:absolute;top:-60px;right:-40px;width:180px;height:180px;border-radius:50%;background:rgba(46,117,182,0.15);}
+.app-header::after{content:'';position:absolute;top:20px;right:60px;width:80px;height:80px;border-radius:50%;background:rgba(91,163,217,0.10);}
+.hdr-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:20px;font-weight:600;color:var(--white);line-height:1.2;}
+.hdr-sub{font-size:12px;color:var(--text-muted);margin-top:5px;}
+.hdr-lot{background:rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;text-align:right;flex-shrink:0;}
+.hdr-lot-label{font-size:9px;color:var(--blue-light);letter-spacing:.08em;text-transform:uppercase;}
+.hdr-lot-val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--white);margin-top:1px;}
+
+/* ── Tabs ── */
+.tab-bar{display:flex;background:var(--navy-mid);margin:12px 20px 0;border-radius:10px;padding:3px;gap:2px;}
+.tab-btn{flex:1;padding:8px 2px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;color:var(--text-muted);background:transparent;border:none;border-radius:8px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.tab-btn.active{background:var(--blue);color:var(--white);}
+
+/* ── Body ── */
+.body-wrap{background:var(--off-white);border-radius:20px 20px 0 0;margin-top:14px;min-height:calc(100vh - 170px);padding:16px 14px 60px;}
+.view{display:none;} .view.active{display:block;}
+
+/* ── Card ── */
+.card{background:var(--white);border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid var(--border);box-shadow:var(--shadow);}
+.card-label{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.10em;text-transform:uppercase;margin-bottom:10px;}
+
+/* ── Fields ── */
+.field{margin-bottom:10px;}
+.field:last-child{margin-bottom:0;}
+.field label{display:block;font-size:11px;font-weight:500;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select{width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;}
+.field input:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,0.12);background:var(--white);}
+.field input[type=number]{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;text-align:center;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+
+/* ── Barrel entry row ── */
+.barrel-form{background:var(--sky-pale);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
+.barrel-form-title{font-size:11px;font-weight:600;color:var(--navy);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.barrel-form-title span{background:var(--blue);color:#fff;font-size:10px;padding:1px 7px;border-radius:10px;}
+
+/* color type toggle */
+.type-row{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.type-btn{flex:1;min-width:48px;padding:8px 4px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);cursor:pointer;transition:all .15s;text-align:center;}
+.type-btn.sel-N{background:#e0f4ef;border-color:#0d6e56;color:#0d6e56;}
+.type-btn.sel-R{background:#fef2f2;border-color:#c0392b;color:#c0392b;}
+
+.color-row{display:flex;gap:6px;margin-bottom:10px;}
+.color-btn{flex:1;padding:8px 4px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text-muted);cursor:pointer;transition:all .15s;text-align:center;}
+.color-btn.sel-B{background:#e8f0fe;border-color:#1a4a7a;color:#1a4a7a;}
+.color-btn.sel-C{background:#fff0f6;border-color:#8b2252;color:#8b2252;}
+.color-btn.sel-K{background:#1c1c1c;border-color:#000;color:#fff;}
+
+/* ── Barrel list table ── */
+.barrel-list-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;}
+.barrel-table{width:100%;border-collapse:collapse;font-size:11px;min-width:440px;}
+.barrel-table thead tr{background:var(--navy);}
+.barrel-table thead th{padding:7px 6px;text-align:center;font-size:9px;font-weight:600;color:var(--blue-light);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.06);}
+.barrel-table thead th:first-child{border-radius:8px 0 0 0;text-align:left;}
+.barrel-table thead th:last-child{border-right:none;border-radius:0 8px 0 0;}
+.barrel-table tbody tr{border-bottom:1px solid var(--border);}
+.barrel-table tbody tr:last-child{border-bottom:none;}
+.barrel-table tbody tr:nth-child(even){background:#f8fafd;}
+.barrel-table td{padding:7px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-mid);white-space:nowrap;border-right:1px solid var(--border);}
+.barrel-table td:last-child{border-right:none;}
+.barrel-table td.td-l{text-align:left;font-family:'IBM Plex Sans Thai',sans-serif;}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:0 2px;line-height:1;}
+.del-btn:active{color:var(--error);}
+
+/* type/color badges */
+.badge-N{background:#e0f4ef;color:#065f46;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;}
+.badge-R{background:#fef2f2;color:#9b2c2c;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;}
+.badge-B{background:#e8f0fe;color:#1a4a7a;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;}
+.badge-C{background:#fff0f6;color:#8b2252;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;}
+.badge-K{background:#1c1c1c;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;}
+
+/* ── Summary cards ── */
+.sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.sum-card{background:var(--navy);border-radius:12px;padding:12px 14px;text-align:center;}
+.sum-card.full{grid-column:1/-1;}
+.sum-card-label{font-size:9px;color:var(--blue-light);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
+.sum-card-val{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:var(--white);line-height:1;}
+.sum-card-unit{font-size:10px;color:var(--text-muted);margin-top:2px;}
+
+.color-sum-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+.color-sum-item{border-radius:10px;padding:10px 8px;text-align:center;}
+.cs-B{background:#e8f0fe;}
+.cs-C{background:#fff0f6;}
+.cs-K{background:#1c1c1c;}
+.cs-label{font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px;}
+.cs-B .cs-label{color:#1a4a7a;} .cs-C .cs-label{color:#8b2252;} .cs-K .cs-label{color:#aaa;}
+.cs-val{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+.cs-B .cs-val{color:#1a4a7a;} .cs-C .cs-val{color:#8b2252;} .cs-K .cs-val{color:#fff;}
+.cs-unit{font-size:9px;margin-top:1px;}
+.cs-B .cs-unit{color:#2e75b6;} .cs-C .cs-unit{color:#c06;} .cs-K .cs-unit{color:#888;}
+
+/* ratio bar */
+.ratio-card{background:var(--navy);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.ratio-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.ratio-label{font-size:10px;color:var(--blue-light);letter-spacing:.06em;}
+.ratio-pct{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--white);}
+.ratio-track{background:rgba(255,255,255,0.12);border-radius:6px;height:7px;overflow:hidden;}
+.ratio-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 55%,#ef4444 100%);transition:width .4s;}
+.ratio-sub{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-muted);}
+
+/* AH row */
+.ah-row{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--navy-light),var(--navy-mid));border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.ah-left{flex:0 0 auto;}
+.ah-lbl{font-size:9px;color:var(--blue-light);letter-spacing:.08em;}
+.ah-display{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:var(--white);line-height:1;margin-top:2px;}
+.ah-unit{font-size:10px;color:var(--text-muted);}
+.ah-right{flex:1;}
+.ah-right input{width:100%;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;text-align:center;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;outline:none;-webkit-appearance:none;}
+.ah-right input:focus{border-color:var(--blue-light);}
+.ah-right input::placeholder{color:rgba(255,255,255,.3);}
+
+/* ── Buttons ── */
+.btn{padding:12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;border-radius:12px;border:none;cursor:pointer;transition:transform .15s,opacity .15s;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;}
+.btn:active{transform:scale(0.97);opacity:.9;}
+.btn-primary{background:var(--navy);color:#fff;margin-bottom:8px;}
+.btn-outline{background:var(--white);color:var(--navy);border:1.5px solid var(--border);margin-bottom:8px;}
+.btn-discord{background:#5865F2;color:#fff;margin-bottom:8px;}
+.btn-green{background:#065f46;color:#fff;margin-bottom:8px;}
+.btn-add{background:var(--blue);color:#fff;margin-top:8px;}
+
+/* spinner */
+.spin{display:none;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite;flex-shrink:0;}
+@keyframes rot{to{transform:rotate(360deg)}}
+.btn-loading .spin{display:inline-block;}
+.btn-loading .btn-lbl{opacity:.6;}
+
+/* ── Toast ── */
+.toast{display:none;padding:11px 14px;border-radius:10px;font-size:12px;font-weight:500;text-align:center;margin-bottom:10px;animation:slIn .2s ease;}
+@keyframes slIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+.toast.ok{background:var(--success-bg);color:var(--success);border:1px solid rgba(13,110,86,.2);}
+.toast.err{background:var(--error-bg);color:var(--error);border:1px solid rgba(155,44,44,.2);}
+
+/* ── History table (same as v2) ── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;}
+.rec-table{width:100%;border-collapse:collapse;font-size:11px;min-width:680px;}
+.rec-table thead tr{background:var(--navy);}
+.rec-table thead th{padding:8px 7px;text-align:center;font-size:9px;font-weight:600;color:var(--blue-light);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.06);}
+.rec-table thead th:first-child{text-align:left;border-radius:8px 0 0 0;}
+.rec-table thead th:last-child{border-right:none;border-radius:0 8px 0 0;}
+.rec-table thead th.grp{border-left:2px solid rgba(91,163,217,0.25);}
+.rec-table tbody tr{border-bottom:1px solid var(--border);}
+.rec-table tbody tr:last-child{border-bottom:none;}
+.rec-table tbody tr:hover{background:var(--sky-pale);}
+.rec-table tbody tr:nth-child(even){background:#f8fafd;}
+.rec-table td{padding:8px 7px;text-align:center;color:var(--text-mid);font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:nowrap;border-right:1px solid var(--border);}
+.rec-table td:last-child{border-right:none;}
+.rec-table td.td-l{text-align:left;font-family:'IBM Plex Sans Thai',sans-serif;}
+.rec-table td.grp{border-left:2px solid rgba(46,117,182,0.15);}
+.rec-table td.bold{font-weight:600;color:var(--navy);}
+.rec-table td.amber{color:var(--amber);font-weight:600;}
+.rec-table td.ratio-hi{color:#c0392b;font-weight:600;}
+.rec-table td.ratio-mid{color:var(--amber);font-weight:600;}
+.rec-table td.ratio-lo{color:#0d6e56;font-weight:600;}
+.td-del-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px;padding:0 2px;}
+.td-del-btn:active{color:var(--error);}
+
+/* ── Settings ── */
+.webhook-input{width:100%;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;margin-bottom:8px;}
+.webhook-input:focus{border-color:var(--blue);}
+.info-box{background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--text-mid);line-height:1.7;}
+.info-box strong{color:var(--navy);font-weight:600;}
+.step{display:flex;gap:8px;margin-bottom:6px;}
+.step-num{width:20px;height:20px;background:var(--navy);color:#fff;border-radius:50%;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.save-badge{display:inline-block;background:var(--success-bg);color:var(--success);font-size:10px;font-weight:600;padding:2px 9px;border-radius:12px;margin-bottom:8px;}
+
+/* ── Install ── */
+.install-card{background:var(--navy);border-radius:14px;padding:14px;margin-bottom:10px;}
+.install-title{font-size:13px;font-weight:600;color:#fff;margin-bottom:8px;}
+.install-step{display:flex;gap:8px;margin-bottom:7px;color:var(--sky);font-size:12px;align-items:flex-start;}
+.install-num{width:20px;height:20px;border-radius:50%;background:var(--blue);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+
+/* ── Expand / Detail row ── */
+.hist-row{cursor:pointer;}
+.expand-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;padding:0 2px;transition:transform .2s;line-height:1;}
+.expand-btn.open{transform:rotate(90deg);}
+.detail-row{display:none;}
+.detail-row.open{display:table-row;}
+.detail-inner{padding:8px 4px;}
+.detail-table{width:100%;border-collapse:collapse;font-size:10px;min-width:380px;}
+.detail-table thead tr{background:var(--navy-mid);}
+.detail-table thead th{padding:6px 6px;color:var(--blue-light);font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;text-align:center;white-space:nowrap;}
+.detail-table thead th:first-child{text-align:left;}
+.detail-table tbody tr{border-bottom:1px solid var(--border);}
+.detail-table tbody tr:nth-child(even){background:#f8fafd;}
+.detail-table td{padding:6px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-mid);}
+.detail-table td:first-child{text-align:left;}
+
+/* ── Autocomplete ── */
+.ac-drop{position:absolute;left:0;right:0;top:100%;z-index:200;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 16px rgba(10,20,40,0.13);max-height:160px;overflow-y:auto;}
+.ac-item{padding:9px 13px;font-size:12px;font-family:'IBM Plex Sans Thai',sans-serif;color:var(--navy);cursor:pointer;border-bottom:1px solid var(--border);}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:active,.ac-item:hover{background:var(--sky-pale);}
+
+/* ── Preset chips ── */
+.preset-chip{display:inline-flex;align-items:center;gap:5px;background:var(--navy);border:none;border-radius:20px;padding:5px 10px 5px 12px;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;color:#fff;cursor:pointer;max-width:180px;}
+.preset-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.preset-chip-del{background:rgba(255,255,255,0.18);border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;}
+
+/* ── Chemical dosing ── */
+.chem-row{background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;}
+.chem-row-top{display:flex;gap:6px;align-items:center;}
+.chem-name-input{flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;font-family:'IBM Plex Sans Thai',sans-serif;background:#fff;}
+.chem-type-select{border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;background:#fff;color:var(--navy);}
+.chem-del-btn{background:none;border:none;color:var(--error);font-size:16px;cursor:pointer;padding:2px 6px;}
+.chem-row-rates{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;}
+.chem-rate-wrap{display:flex;flex-direction:column;gap:2px;}
+.chem-rate-label{font-size:9px;color:var(--text-muted);text-align:center;}
+.chem-rate-input{border:1px solid var(--border);border-radius:8px;padding:5px 6px;font-size:12px;font-family:'IBM Plex Mono',monospace;text-align:center;width:100%;background:#fff;}
+.chem-summary-row{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;}
+.chem-summary-name{font-size:12px;font-weight:600;color:var(--navy);}
+.chem-summary-formula{font-size:10px;color:var(--text-muted);margin-top:1px;}
+.chem-summary-val{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--blue);}
+.chem-summary-unit{font-size:10px;color:var(--text-muted);text-align:right;}
+
+/* ── Lot Modal ── */
+.lot-modal-overlay{display:none;position:fixed;inset:0;background:rgba(10,20,40,0.72);z-index:999;align-items:flex-end;justify-content:center;}
+.lot-modal-overlay.open{display:flex;}
+.lot-modal{background:var(--off-white);border-radius:20px 20px 0 0;width:100%;max-height:82vh;display:flex;flex-direction:column;animation:slideUp .25s ease;}
+@keyframes slideUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
+.lot-modal-header{background:var(--navy);border-radius:20px 20px 0 0;padding:16px 16px 14px;flex-shrink:0;}
+.lot-modal-title{font-size:15px;font-weight:600;color:#fff;margin-bottom:2px;}
+.lot-modal-sub{font-size:11px;color:var(--blue-light);font-family:'IBM Plex Mono',monospace;}
+.lot-modal-close{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.12);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.lot-modal-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;flex:1;}
+.lot-modal-stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.lot-stat-item{background:var(--navy);border-radius:10px;padding:10px 8px;text-align:center;}
+.lot-stat-label{font-size:9px;color:var(--blue-light);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px;}
+.lot-stat-val{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#fff;}
+.lot-stat-unit{font-size:9px;color:var(--text-muted);margin-top:1px;}
+.lot-part-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;}
+.lot-part-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.lot-part-name{font-size:13px;font-weight:600;color:var(--navy);flex:1;margin-right:8px;}
+.lot-part-badges{display:flex;gap:4px;flex-shrink:0;}
+.lot-part-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.lot-part-meta-item{text-align:center;background:var(--sky-pale);border-radius:8px;padding:6px 4px;}
+.lot-part-meta-label{font-size:9px;color:var(--text-muted);letter-spacing:.04em;}
+.lot-part-meta-val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:var(--navy);}
+.lot-part-lotno{font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;margin-top:4px;}
+.lot-tag-time{font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;margin-bottom:4px;}
+.lot-chip{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+.lot-chip:hover{opacity:.75;}
+</style>
+<style id="googleidentityservice_button_styles">.qJTHM{-moz-user-select:none;-webkit-user-select:none;-ms-user-select:none;color:#202124;direction:ltr;-webkit-touch-callout:none;font-family:Roboto-Regular,arial,sans-serif;-webkit-font-smoothing:antialiased;font-weight:400;margin:0;overflow:hidden;-webkit-text-size-adjust:100%}.ynRLnc{left:-9999px;position:absolute;top:-9999px}.L6cTce{display:none}.bltWBb{overflow-wrap:break-word;word-break:break-word}.hSRGPd{color:#1a73e8;cursor:pointer;font-weight:500;text-decoration:none}.Bz112c-W3lGp{height:16px;width:16px}.Bz112c-E3DyYd{height:20px;width:20px}.Bz112c-r9oPif{height:24px;width:24px}.Bz112c-u2z5K{height:36px;width:36px}.Bz112c-uaxL4e{border-radius:10px}.LgbsSe-Bz112c{display:block}.S9gUrf-YoZ4jf{border:none;margin:0;padding:0}.S9gUrf-YoZ4jf *{border:none;margin:0;padding:0}.fFW7wc-ibnC6b>.aZ2wEe>div{border-color:#4285f4}.P1ekSe-ZMv3u{-webkit-transition:height .2s linear;transition:height .2s linear}.P1ekSe-ZMv3u>div:first-child{background-color:#1a73e8!important;-webkit-transition:width .3s linear;transition:width .3s linear}.P1ekSe-ZMv3u>div:nth-child(2){background-image:-webkit-gradient(linear,left top,right top,from(rgba(255,255,255,.7)),to(rgba(255,255,255,.7))),-webkit-gradient(linear,left top,right top,from(#1a73e8),to(#1a73e8))!important;background-image:-webkit-linear-gradient(left,rgba(255,255,255,.7),rgba(255,255,255,.7)),-webkit-linear-gradient(left,#1a73e8,#1a73e8)!important;background-image:linear-gradient(90deg,rgba(255,255,255,.7),rgba(255,255,255,.7)),linear-gradient(90deg,#1a73e8,#1a73e8)!important}.P1ekSe-ZMv3u>div:nth-child(3){background-image:-webkit-gradient(linear,left top,right top,from(rgba(255,255,255,.7)),to(rgba(255,255,255,.7))),-webkit-gradient(linear,left top,right top,from(#1a73e8),to(#1a73e8))!important;background-image:-webkit-linear-gradient(left,rgba(255,255,255,.7),rgba(255,255,255,.7)),-webkit-linear-gradient(left,#1a73e8,#1a73e8)!important;background-image:linear-gradient(90deg,rgba(255,255,255,.7),rgba(255,255,255,.7)),linear-gradient(90deg,#1a73e8,#1a73e8)!important}.haAclf{display:inline-block}.nsm7Bb-HzV7m-LgbsSe{border-radius:4px;box-sizing:border-box;-webkit-transition:background-color .218s,border-color .218s;transition:background-color .218s,border-color .218s;-moz-user-select:none;-webkit-user-select:none;-ms-user-select:none;-webkit-appearance:none;background-color:#fff;background-image:none;border:1px solid #dadce0;color:#3c4043;cursor:pointer;font-family:Google Sans,arial,sans-serif;font-size:14px;height:40px;letter-spacing:.25px;outline:none;overflow:hidden;padding:0 12px;position:relative;text-align:center;vertical-align:middle;white-space:nowrap;width:auto}@media screen and (-ms-high-contrast:active){.nsm7Bb-HzV7m-LgbsSe{border:2px solid windowText;color:windowText}}@media screen and (preferes-contrast:more){.nsm7Bb-HzV7m-LgbsSe{color:#000}}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe{font-size:14px;height:32px;letter-spacing:.25px;padding:0 10px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe{font-size:11px;height:20px;letter-spacing:.3px;padding:0 8px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe{padding:0;width:40px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe{width:32px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe{width:20px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK{border-radius:20px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.pSzOP-SxQuSe{border-radius:16px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.purZT-SxQuSe{border-radius:10px}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc{border:none;color:#fff}.nsm7Bb-HzV7m-LgbsSe.MFS4be-v3pZbf-Ia7Qfc{background-color:#1a73e8}.nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc{background-color:#202124;color:#e8eaed}@media screen and (prefers-contrast:more){.nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc{color:#fff}}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:18px;margin-right:8px;min-width:18px;width:18px}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:14px;min-width:14px;width:14px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:10px;min-width:10px;width:10px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin-left:8px;margin-right:-4px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin:0;padding:10px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{padding:8px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{padding:4px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-top-left-radius:3px;border-bottom-left-radius:3px;display:-webkit-box;display:-webkit-flex;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;align-items:center;background-color:#fff;height:36px;margin-left:-10px;margin-right:12px;min-width:36px;width:36px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf .nsm7Bb-HzV7m-LgbsSe-Bz112c,.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin:0;padding:0}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{height:28px;margin-left:-8px;margin-right:10px;min-width:28px;width:28px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{height:16px;margin-left:-6px;margin-right:8px;min-width:16px;width:16px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:3px;margin-left:2px;margin-right:0;padding:0}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:18px}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:14px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:8px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-bN97Pc-sM5MNb{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-align-items:center;-webkit-box-align:center;align-items:center;-webkit-flex-direction:row;-webkit-box-orient:horizontal;-webkit-box-direction:normal;flex-direction:row;-webkit-box-pack:justify;-webkit-justify-content:space-between;justify-content:space-between;-webkit-flex-wrap:nowrap;flex-wrap:nowrap;height:100%;position:relative;width:100%}.nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX{-webkit-box-pack:center;-webkit-justify-content:center;justify-content:center}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-BPrWId{-webkit-flex-grow:1;-webkit-box-flex:1;flex-grow:1;font-family:Google Sans,arial,sans-serif;font-weight:500;overflow:hidden;text-overflow:ellipsis;vertical-align:top}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-BPrWId{font-weight:300}.nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX .nsm7Bb-HzV7m-LgbsSe-BPrWId{-webkit-flex-grow:0;-webkit-box-flex:0;flex-grow:0}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-MJoBVe{-webkit-transition:background-color .218s;transition:background-color .218s;bottom:0;left:0;position:absolute;right:0;top:0}.nsm7Bb-HzV7m-LgbsSe:focus,.nsm7Bb-HzV7m-LgbsSe:hover{box-shadow:none;border-color:rgb(210,227,252);outline:none}.nsm7Bb-HzV7m-LgbsSe:focus-within{outline:2px solid #00639b;border-color:transparent}.nsm7Bb-HzV7m-LgbsSe:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(66,133,244,.08)}.nsm7Bb-HzV7m-LgbsSe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,.nsm7Bb-HzV7m-LgbsSe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(66,133,244,.1)}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(255,255,255,.24)}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(255,255,255,.32)}.nsm7Bb-HzV7m-LgbsSe .n1UuX-DkfjY{border-radius:50%;display:-webkit-box;display:-webkit-flex;display:flex;height:20px;margin-left:-4px;margin-right:8px;min-width:20px;width:20px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId{font-family:Roboto;font-size:12px;text-align:left}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .fmcmS,.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .ssJRIf{overflow:hidden;text-overflow:ellipsis}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-align-items:center;-webkit-box-align:center;align-items:center;color:#5f6368;fill:#5f6368;font-size:11px;font-weight:400}.nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{color:#e8eaed;fill:#e8eaed}@media screen and (prefers-contrast:more){.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff,.nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{color:#000;fill:#000}}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .Bz112c{height:18px;margin:-3px -3px -3px 2px;min-width:18px;width:18px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-top-left-radius:0;border-bottom-left-radius:0;border-top-right-radius:3px;border-bottom-right-radius:3px;margin-left:12px;margin-right:-10px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:18px}.L5Fo6c-sM5MNb{border:0;display:block;left:0;position:relative;top:0}.L5Fo6c-bF1uUb{border-radius:4px;bottom:0;cursor:pointer;left:0;position:absolute;right:0;top:0}.L5Fo6c-bF1uUb:focus{border:none;outline:none}sentinel{}</style></head>
+<body>
+
+<!-- Header -->
+<div class="app-header">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-badge">ใบรายงานการชุบประจำวัน</div>
+      <div class="hdr-title">BARREL - 1</div>
+      <div class="hdr-sub" id="hdrDate">วันจันทร์ที่ 18 พฤษภาคม 2569</div>
+    </div>
+    <div class="hdr-lot">
+      <div class="hdr-lot-label">Pro Lot No.</div>
+      <div class="hdr-lot-val" id="hdrLot">202605001</div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn" onclick="tab('entry')">กรอกรายรอบ</button>
+  <button class="tab-btn" onclick="tab('summary')">สรุปวันนี้</button>
+  <button class="tab-btn" onclick="tab('history')">ประวัติ (<span id="histCount">12</span>)</button>
+  <button class="tab-btn" onclick="tab('chart')">📊 กราฟ</button>
+  <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
+</div>
+
+<div class="body-wrap">
+
+<!-- ════════════════ TAB: ENTRY ════════════════ -->
+<div id="v-entry" class="view">
+
+  <!-- วันที่ + Pro Date + Lot -->
+  <div class="card">
+    <div class="card-label">ข้อมูลวัน / ใบงาน</div>
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>วันที่</label>
+        <input type="date" id="repDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Pro Lot No.</label>
+        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–'">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ผู้บันทึก</label>
+        <input type="text" id="recorder" placeholder="ชื่อ...">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>กระแสไฟ AH (สำหรับวันนี้)</label>
+        <input type="number" id="dayAH" placeholder="0" min="0" inputmode="numeric" oninput="updateAHDisplay()">
+      </div>
+    </div>
+  </div>
+
+  <!-- AH display -->
+  <div class="ah-row">
+    <div class="ah-left">
+      <div class="ah-lbl">AMPERE · HOUR</div>
+      <div class="ah-display" id="ahDisplay">0</div>
+      <div class="ah-unit">AH วันนี้</div>
+    </div>
+    <div class="ah-right">
+      <input type="number" id="dayAH2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH(this)">
+    </div>
+  </div>
+
+  <!-- Barrel entry form -->
+  <div class="barrel-form">
+    <div class="barrel-form-title">เพิ่มรายรอบชุบ <span id="barrelSeq">รอบที่ 1</span></div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>เวลาบันทึก <span style="font-size:9px;color:var(--blue-light);font-family:'IBM Plex Mono',monospace;" id="liveClock">20:50:48</span></label>
+        <div style="background:var(--navy);border-radius:10px;padding:12px 14px;text-align:center;">
+          <div id="timeDisplay" style="font-family:'IBM Plex Mono',monospace;font-size:32px;font-weight:600;color:#fff;letter-spacing:0.04em;line-height:1;">20:50</div>
+          <div style="font-size:9px;color:var(--blue-light);margin-top:3px;letter-spacing:.06em;">เวลาจริง ณ ปัจจุบัน · บันทึกอัตโนมัติเมื่อกด "เพิ่มรายรอบ"</div>
+        </div>
+        <input type="hidden" id="bTime" value="20:50">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เลขโม่/บาร์</label>
+        <input type="number" id="bBarrel" placeholder="0" min="1" inputmode="numeric">
+      </div>
+    </div>
+
+    <!-- ══ ชิ้นงาน + ลูกค้า smart input ══ -->
+    <div style="margin-bottom:8px;">
+
+      <!-- Preset chips -->
+      <div id="presetChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;min-height:0;"><button class="preset-chip" onclick="applyPreset(0)" title="SU02C126H06 · MST"><span>SU02C126H06 · MST</span><span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(0)">✕</span></button><button class="preset-chip" onclick="applyPreset(1)" title="SU02C126H02 · MST"><span>SU02C126H02 · MST</span><span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(1)">✕</span></button></div>
+
+      <!-- ปุ่มใช้ค่าเดิม -->
+      <div id="reuseBar" style="display: block; margin-bottom: 6px;">
+        <button onclick="reuseLastBarrel()" style="width:100%;background:var(--navy);border:none;border-radius:10px;padding:9px 12px;color:#fff;font-size:12px;font-family:'IBM Plex Sans Thai',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">
+          <span style="font-size:14px;">↩</span> ใช้ค่าเดิม: <span id="reuseLabel" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--sky);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SU02C126H06 · MST</span>
+        </button>
+      </div>
+
+      <!-- ชื่อชิ้นงาน with autocomplete -->
+      <div class="field" style="margin-bottom:6px;position:relative;">
+        <label>ชื่อ/หมายเลขชิ้นงาน</label>
+        <input type="text" id="bPartName" placeholder="เช่น 90522-KMHA-T002..." autocomplete="off" style="font-size:13px;" oninput="acInput('bPartName','acPartName')" onblur="acBlur('acPartName')" onfocus="acInput('bPartName','acPartName')">
+        <div id="acPartName" class="ac-drop" style="display:none;"></div>
+      </div>
+
+      <!-- ชื่อลูกค้า with autocomplete -->
+      <div class="field" style="margin-bottom:6px;position:relative;">
+        <label>ชื่อลูกค้า</label>
+        <input type="text" id="bCustomer" placeholder="เช่น Honda, Yamaha..." autocomplete="off" style="font-size:13px;" oninput="acInput('bCustomer','acCustomer')" onblur="acBlur('acCustomer')" onfocus="acInput('bCustomer','acCustomer')">
+        <div id="acCustomer" class="ac-drop" style="display:none;"></div>
+      </div>
+
+      <!-- บันทึก preset -->
+      <button onclick="savePreset()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
+        ⭐ บันทึกชุดนี้เป็น Preset
+      </button>
+    </div>
+    <div class="field" style="margin-bottom:8px;">
+      <label>Lot No / Data</label>
+      <input type="text" id="bLotNo" placeholder="เช่น 14.5.69..." autocomplete="off" style="font-size:13px;">
+    </div>
+
+    <!-- ประเภทงาน N / R -->
+    <div style="margin-bottom:6px;">
+      <label style="font-size:11px;font-weight:500;color:var(--text-mid);display:block;margin-bottom:4px;">ประเภทงาน</label>
+      <div class="type-row">
+        <button class="type-btn sel-N" id="type-N" onclick="selType('N')">N — งานใหม่</button>
+        <button class="type-btn" id="type-R" onclick="selType('R')">R — งานซ่อม</button>
+      </div>
+    </div>
+
+    <!-- สีที่ชุบ B / C / K -->
+    <div style="margin-bottom:8px;">
+      <label style="font-size:11px;font-weight:500;color:var(--text-mid);display:block;margin-bottom:4px;">สีที่ชุบ</label>
+      <div class="color-row">
+        <button class="color-btn sel-B" id="color-B" onclick="selColor('B')">B<br><span style="font-size:9px;opacity:.8;">ฟ้า</span></button>
+        <button class="color-btn" id="color-C" onclick="selColor('C')">C<br><span style="font-size:9px;opacity:.8;">รุ้ง</span></button>
+        <button class="color-btn" id="color-K" onclick="selColor('K')">K<br><span style="font-size:9px;opacity:.8;">ดำ</span></button>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:0;">
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก (Kgs)</label>
+        <input type="number" id="bKg" placeholder="0.0" min="0" step="0.1" inputmode="decimal">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>จำนวนชิ้น (Pcs)</label>
+        <input type="number" id="bPcs" placeholder="0" min="0" inputmode="numeric">
+      </div>
+    </div>
+
+    <button class="btn btn-add" onclick="addBarrel()">+ เพิ่มรายรอบนี้</button>
+  </div>
+
+  <!-- Barrel list -->
+  <div class="card">
+    <div class="card-label">รายรอบวันนี้ (<span id="barrelCount">0</span> รอบ)</div>
+    <div class="barrel-list-wrap">
+      <table class="barrel-table">
+        <thead><tr>
+          <th style="text-align:left;">เวลา</th>
+          <th>โม่</th>
+          <th style="text-align:left;">ชื่อชิ้นงาน</th>
+          <th style="text-align:left;">ลูกค้า</th>
+          <th>Lot No</th>
+          <th>ประเภท</th>
+          <th>สี</th>
+          <th>Kgs</th>
+          <th>Pcs</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="barrelBody"><tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted);font-family:'IBM Plex Sans Thai',sans-serif;">ยังไม่มีรายรอบ</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="toast-entry" class="toast"></div>
+
+  <!-- Save day button -->
+  <button class="btn btn-green" onclick="saveDay()">✓ บันทึกสรุปวันนี้</button>
+  <button class="btn btn-discord" id="btnDiscordEntry" onclick="saveDayAndDiscord()">
+    <div class="spin" id="spinEntry"></div>
+    <span class="btn-lbl">บันทึก + ส่ง Discord</span>
+  </button>
+  <button class="btn btn-outline" onclick="clearDay()">🗑 ล้างข้อมูลวันนี้</button>
+</div>
+
+<!-- ════════════════ TAB: SUMMARY ════════════════ -->
+<div id="v-summary" class="view">
+  <div class="card">
+    <div class="card-label">สรุปการชุบประจำวัน — <span id="sumDate">18 พฤษภาคม 2569</span></div>
+
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="sum-card-label">ปริมาณการชุบรวม</div>
+        <div class="sum-card-val" id="sumTotalKg">0</div>
+        <div class="sum-card-unit">Kgs</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-card-label">จำนวนรอบทั้งหมด</div>
+        <div class="sum-card-val" id="sumTotalBarrel">0</div>
+        <div class="sum-card-unit">รอบ</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-card-label">ชิ้นงานใหม่ (N)</div>
+        <div class="sum-card-val" id="sumNewKg">0</div>
+        <div class="sum-card-unit">Kgs</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-card-label">ชิ้นงานซ่อม (R)</div>
+        <div class="sum-card-val" id="sumReworkKg">0</div>
+        <div class="sum-card-unit">Kgs</div>
+      </div>
+      <div class="sum-card full">
+        <div class="sum-card-label">กระแสไฟที่ใช้</div>
+        <div class="sum-card-val" id="sumAH">0</div>
+        <div class="sum-card-unit">AH</div>
+      </div>
+    </div>
+
+    <!-- Color breakdown -->
+    <div class="card-label" style="margin-top:4px;">แยกตามสีชุบ</div>
+    <div class="color-sum-row">
+      <div class="color-sum-item cs-B">
+        <div class="cs-label">B — ฟ้า</div>
+        <div class="cs-val" id="sumKg-B">0</div>
+        <div class="cs-unit">Kgs</div>
+      </div>
+      <div class="color-sum-item cs-C">
+        <div class="cs-label">C — รุ้ง</div>
+        <div class="cs-val" id="sumKg-C">0</div>
+        <div class="cs-unit">Kgs</div>
+      </div>
+      <div class="color-sum-item cs-K">
+        <div class="cs-label">K — ดำ</div>
+        <div class="cs-val" id="sumKg-K">0</div>
+        <div class="cs-unit">Kgs</div>
+      </div>
+    </div>
+
+    <!-- Ratio -->
+    <div class="ratio-card">
+      <div class="ratio-header">
+        <div class="ratio-label">REWORK RATIO (R/รวม)</div>
+        <div class="ratio-pct" id="sumRatio">0.0%</div>
+      </div>
+      <div class="ratio-track"><div class="ratio-fill" id="sumRatioBar" style="width:0%"></div></div>
+      <div class="ratio-sub">
+        <span>งานใหม่ <span id="sumNewSub">0</span> Kgs</span>
+        <span>งานซ่อม <span id="sumRwSub">0</span> Kgs</span>
+      </div>
+    </div>
+
+    <!-- Chemical Dosing Summary -->
+    <div id="chemSummaryCard" style="display:none;">
+      <div class="card-label" style="margin-top:4px;">🧪 สรุปการใช้เคมีวันนี้</div>
+      <div id="chemSummaryRows" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ TAB: HISTORY ════════════════ -->
+<div id="v-history" class="view">
+  <div class="card">
+    <div class="card-label">ประวัติการบันทึกรายวัน <span style="font-weight:400;color:var(--blue-light);font-size:9px;">▶ กดแถวเพื่อดูรายละเอียดรอบชุบ</span></div>
+    <div class="tbl-wrap">
+      <table class="rec-table">
+        <thead><tr>
+          <th style="width:24px;"></th>
+          <th style="text-align:left;">วันที่</th>
+          <th>ผู้บันทึก</th>
+          <th class="grp">รวม Kgs</th>
+          <th>รอบ</th>
+          <th class="grp">B</th>
+          <th>C</th>
+          <th>K</th>
+          <th class="grp">ใหม่</th>
+          <th>ซ่อม</th>
+          <th>%</th>
+          <th class="grp">AH</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="histBody"><tr class="hist-row" onclick="toggleDetail(1779096208975)"><td><button class="expand-btn" id="btn-1779096208975">▶</button></td><td class="td-l" style="font-size:11px;">18 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1779096208975)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">test-2</td><td class="grp bold">59.70</td><td>6</td><td class="grp" style="color:#1a4a7a;">9.80</td><td style="color:#8b2252;">30</td><td>19.90</td><td class="grp">49.80</td><td class="amber">9.90</td><td class="ratio-mid">16.58%</td><td class="grp" style="color:#5b21b6;">12,000</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1779096208975)">✕</button></td></tr><tr class="detail-row" id="det-1779096208975"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 16:22</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>9.8</td><td>0</td></tr><tr><td>2. 16:22</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>3. 16:22</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>4. 16:22</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-K">K</span></td><td>9.9</td><td>0</td></tr><tr><td>5. 16:23</td><td>6</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr><tr><td>6. 16:23</td><td>5</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1779094280088)"><td><button class="expand-btn" id="btn-1779094280088">▶</button></td><td class="td-l" style="font-size:11px;">18 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1779094280088)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">test-2</td><td class="grp bold">50</td><td>5</td><td class="grp" style="color:#1a4a7a;">20</td><td style="color:#8b2252;">10</td><td>20</td><td class="grp">50</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">12,000</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1779094280088)">✕</button></td></tr><tr class="detail-row" id="det-1779094280088"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 15:50</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>2. 15:50</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>3. 15:50</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>4. 15:51</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr><tr><td>5. 15:51</td><td>5</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1779078944685)"><td><button class="expand-btn" id="btn-1779078944685">▶</button></td><td class="td-l" style="font-size:11px;">18 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1779078944685)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">test</td><td class="grp bold">50</td><td>5</td><td class="grp" style="color:#1a4a7a;">20</td><td style="color:#8b2252;">10</td><td>20</td><td class="grp">50</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">12,000</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1779078944685)">✕</button></td></tr><tr class="detail-row" id="det-1779078944685"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 11:34</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>2. 11:34</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>3. 11:35</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>4. 11:35</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr><tr><td>5. 11:35</td><td>5</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1779076542304)"><td><button class="expand-btn" id="btn-1779076542304">▶</button></td><td class="td-l" style="font-size:11px;">18 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1779076542304)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">test</td><td class="grp bold">59.90</td><td>5</td><td class="grp" style="color:#1a4a7a;">9.90</td><td style="color:#8b2252;">30</td><td>20</td><td class="grp">59.90</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">12,000</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1779076542304)">✕</button></td></tr><tr class="detail-row" id="det-1779076542304"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:53</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>9.9</td><td>0</td></tr><tr><td>2. 10:54</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>3. 10:54</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr><tr><td>4. 10:55</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-K">K</span></td><td>10</td><td>0</td></tr><tr><td>5. 10:55</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>20</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1779075061001)"><td><button class="expand-btn" id="btn-1779075061001">▶</button></td><td class="td-l" style="font-size:11px;">18 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1779075061001)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">test</td><td class="grp bold">30</td><td>3</td><td class="grp" style="color:#1a4a7a;">20</td><td style="color:#8b2252;">10</td><td>0</td><td class="grp">20</td><td class="amber">10</td><td class="ratio-hi">33.33%</td><td class="grp" style="color:#5b21b6;">1,198</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1779075061001)">✕</button></td></tr><tr class="detail-row" id="det-1779075061001"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:20</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>2. 10:30</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-C">C</span></td><td>10</td><td>0</td></tr><tr><td>3. 10:30</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778911655420)"><td><button class="expand-btn" id="btn-1778911655420">▶</button></td><td class="td-l" style="font-size:11px;">16 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778911655420)" title="กดเพื่อดูรายละเอียด lot">📦 202605001</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">39.80</td><td>4</td><td class="grp" style="color:#1a4a7a;">39.80</td><td style="color:#8b2252;">0</td><td>0</td><td class="grp">39.80</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">0</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778911655420)">✕</button></td></tr><tr class="detail-row" id="det-1778911655420"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 13:04</td><td>14</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>2. 13:04</td><td>9</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H06</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>9.9</td><td>0</td></tr><tr><td>3. 13:05</td><td>15</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>10</td><td>0</td></tr><tr><td>4. 13:06</td><td>4</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">SU02C126H02</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">MST</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>9.9</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778833449987)"><td><button class="expand-btn" id="btn-1778833449987">▶</button></td><td class="td-l" style="font-size:11px;">15 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778833449987)" title="กดเพื่อดูรายละเอียด lot">📦 202605013</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">65</td><td>3</td><td class="grp" style="color:#1a4a7a;">40</td><td style="color:#8b2252;">25</td><td>0</td><td class="grp">50</td><td class="amber">15</td><td class="ratio-hi">23.08%</td><td class="grp" style="color:#5b21b6;">13,200</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778833449987)">✕</button></td></tr><tr class="detail-row" id="det-1778833449987"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 15:21</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>25</td><td>0</td></tr><tr><td>2. 15:33</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-B">B</span></td><td>15</td><td>0</td></tr><tr><td>3. 15:45</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>25</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778815084128)"><td><button class="expand-btn" id="btn-1778815084128">▶</button></td><td class="td-l" style="font-size:11px;">13 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778815084128)" title="กดเพื่อดูรายละเอียด lot">📦 202605013</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">42</td><td>3</td><td class="grp" style="color:#1a4a7a;">27</td><td style="color:#8b2252;">15</td><td>0</td><td class="grp">30</td><td class="amber">12</td><td class="ratio-hi">28.57%</td><td class="grp" style="color:#5b21b6;">13,500</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778815084128)">✕</button></td></tr><tr class="detail-row" id="det-1778815084128"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:26</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>15</td><td>0</td></tr><tr><td>2. 10:36</td><td>2</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-B">B</span></td><td>12</td><td>0</td></tr><tr><td>3. 10:46</td><td>7</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>15</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778814919575)"><td><button class="expand-btn" id="btn-1778814919575">▶</button></td><td class="td-l" style="font-size:11px;">14 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778814919575)" title="กดเพื่อดูรายละเอียด lot">📦 202605014</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">78</td><td>4</td><td class="grp" style="color:#1a4a7a;">40</td><td style="color:#8b2252;">38</td><td>0</td><td class="grp">65</td><td class="amber">13</td><td class="ratio-mid">16.67%</td><td class="grp" style="color:#5b21b6;">0</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778814919575)">✕</button></td></tr><tr class="detail-row" id="det-1778814919575"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:32</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>25</td><td>0</td></tr><tr><td>2. 10:42</td><td>6</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>15</td><td>0</td></tr><tr><td>3. 10:14</td><td>1</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>25</td><td>0</td></tr><tr><td>4. 10:24</td><td>8</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-C">C</span></td><td>13</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778814591363)"><td><button class="expand-btn" id="btn-1778814591363">▶</button></td><td class="td-l" style="font-size:11px;">15 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778814591363)" title="กดเพื่อดูรายละเอียด lot">📦 202605015</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">15</td><td>1</td><td class="grp" style="color:#1a4a7a;">0</td><td style="color:#8b2252;">15</td><td>0</td><td class="grp">15</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">0</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778814591363)">✕</button></td></tr><tr class="detail-row" id="det-1778814591363"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:22</td><td>3</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-C">C</span></td><td>15</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778814412738)"><td><button class="expand-btn" id="btn-1778814412738">▶</button></td><td class="td-l" style="font-size:11px;">15 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778814412738)" title="กดเพื่อดูรายละเอียด lot">📦 202605015</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">15</td><td>1</td><td class="grp" style="color:#1a4a7a;">0</td><td style="color:#8b2252;">15</td><td>0</td><td class="grp">0</td><td class="amber">15</td><td class="ratio-hi">100%</td><td class="grp" style="color:#5b21b6;">0</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778814412738)">✕</button></td></tr><tr class="detail-row" id="det-1778814412738"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:12</td><td>5</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-R">R</span></td><td><span class="badge-C">C</span></td><td>15</td><td>0</td></tr></tbody></table></div></div></td></tr><tr class="hist-row" onclick="toggleDetail(1778814359064)"><td><button class="expand-btn" id="btn-1778814359064">▶</button></td><td class="td-l" style="font-size:11px;">15 พ.ค.<div style="font-size:9px;font-family:'IBM Plex Mono',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal(1778814359064)" title="กดเพื่อดูรายละเอียด lot">📦 202605015</span></div></td><td class="td-l" style="font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">pp</td><td class="grp bold">20</td><td>1</td><td class="grp" style="color:#1a4a7a;">20</td><td style="color:#8b2252;">0</td><td>0</td><td class="grp">20</td><td class="amber">0</td><td class="ratio-lo">0%</td><td class="grp" style="color:#5b21b6;">0</td><td><button class="td-del-btn" onclick="event.stopPropagation();delDay(1778814359064)">✕</button></td></tr><tr class="detail-row" id="det-1778814359064"><td colspan="13"><div class="detail-inner"><div class="tbl-wrap"><table class="detail-table"><thead><tr><th style="text-align:left;">เวลา</th><th>โม่</th><th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th></tr></thead><tbody><tr><td>1. 10:02</td><td>9</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">–</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">–</td><td style="font-size:10px;color:var(--text-muted);">–</td><td><span class="badge-N">N</span></td><td><span class="badge-B">B</span></td><td>20</td><td>0</td></tr></tbody></table></div></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <button class="btn btn-outline" onclick="exportCSV()">📊 ดาวน์โหลด CSV สำหรับ Excel</button>
+</div>
+
+<!-- ════════════════ TAB: CHART ════════════════ -->
+<div id="v-chart" class="view">
+
+  <!-- Month selector -->
+  <div class="card" style="padding:12px 14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div class="card-label" style="margin:0;">กราฟรายวัน</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button onclick="chartMonthStep(-1)" style="background:var(--navy);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">‹</button>
+        <span id="chartMonthLabel" style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--navy);min-width:72px;text-align:center;">–</span>
+        <button onclick="chartMonthStep(1)" style="background:var(--navy);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart 1: โม่ vs น้ำหนัก -->
+  <div class="card" style="padding:14px;">
+    <div class="card-label">รอบชุบ vs น้ำหนักรวม (Kgs) รายวัน</div>
+    <div style="position:relative;height:220px;margin-top:8px;">
+      <canvas id="chartBarrelKg"></canvas>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:8px;">
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);">
+        <div style="width:12px;height:4px;background:#2e75b6;border-radius:2px;"></div>รอบชุบ (แท่ง)
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);">
+        <div style="width:12px;height:4px;background:#e67e22;border-radius:2px;"></div>น้ำหนัก Kgs (เส้น)
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart 2: Kgs แยก N/R/Ratio -->
+  <div class="card" style="padding:14px;">
+    <div class="card-label">น้ำหนักรวม vs งานใหม่ / Rework / Ratio รายวัน</div>
+    <div style="position:relative;height:220px;margin-top:8px;">
+      <canvas id="chartNRRatio"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);">
+        <div style="width:12px;height:10px;background:rgba(46,117,182,0.7);border-radius:2px;"></div>งานใหม่ N
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);">
+        <div style="width:12px;height:10px;background:rgba(231,76,60,0.7);border-radius:2px;"></div>Rework R
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-muted);">
+        <div style="width:12px;height:4px;background:#8e44ad;border-radius:2px;"></div>Ratio % (เส้น)
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="chartEmpty" style="display:none;text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;">
+    ยังไม่มีข้อมูลในเดือนนี้
+  </div>
+
+</div>
+<div id="v-settings" class="view active">
+  <div class="card">
+    <div class="card-label">Discord Webhook</div>
+    <div class="save-badge" id="whBadge" style="background: var(--success-bg); color: var(--success);">ตั้งค่าแล้ว ✓</div>
+    <input type="password" class="webhook-input" id="webhookUrl" placeholder="https://discord.com/api/webhooks/...">
+    <button class="btn btn-discord" onclick="saveWebhook()">
+      <svg width="16" height="13" viewBox="0 0 71 55" fill="none"><path d="M60.1 4.9A58.6 58.6 0 0 0 45.6.7a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54.1 54.1 0 0 0-16.2 0A37.4 37.4 0 0 0 25.6.8a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.9 4.9a.2.2 0 0 0-.1.1C1.6 18.7-.9 32.2.3 45.5a.2.2 0 0 0 .1.2 58.9 58.9 0 0 0 17.7 8.9.2.2 0 0 0 .2-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.7 38.7 0 0 1-5.5-2.6.2.2 0 0 1 0-.4c.4-.3.7-.6 1.1-.9a.2.2 0 0 1 .2 0c11.5 5.3 24 5.3 35.4 0a.2.2 0 0 1 .2 0c.4.3.7.6 1.1.9a.2.2 0 0 1 0 .4 36.2 36.2 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47.1 47.1 0 0 0 3.6 5.9.2.2 0 0 0 .2.1 58.7 58.7 0 0 0 17.8-8.9.2.2 0 0 0 .1-.2c1.5-15.3-2.5-28.7-10.6-40.5a.2.2 0 0 0-.1-.1ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1c3.6 0 6.5 3.2 6.4 7.1 0 3.9-2.8 7.1-6.4 7.1Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1c3.6 0 6.5 3.2 6.4 7.1 0 3.9-2.8 7.1-6.4 7.1Z" fill="white"></path></svg>
+      บันทึก Webhook
+    </button>
+  </div>
+  <div class="card">
+    <div class="card-label">วิธีสร้าง Webhook</div>
+    <div class="info-box">
+      <div class="step"><div class="step-num">1</div><div>Discord → Server ที่ต้องการ → <strong>Server Settings</strong></div></div>
+      <div class="step"><div class="step-num">2</div><div><strong>Integrations → Webhooks → New Webhook</strong></div></div>
+      <div class="step"><div class="step-num">3</div><div>ตั้งชื่อ + เลือก Channel → <strong>Copy Webhook URL</strong></div></div>
+      <div class="step"><div class="step-num">4</div><div>วาง URL ในช่องด้านบน → กดบันทึก</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label">ทดสอบ Discord</div>
+    <button class="btn btn-outline" onclick="testDiscord()">ส่งข้อความทดสอบ</button>
+  </div>
+  <div class="card">
+    <div class="card-label">📤 ส่งออก / นำเข้าข้อมูล</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6;">
+      <strong>วิธีใช้:</strong> Tablet กด "ส่งออก" → อัปโหลดไฟล์ขึ้น Google Drive → PC ดาวน์โหลดไฟล์จาก Drive → กด "นำเข้า"
+    </div>
+    <button class="btn btn-green" onclick="exportData()" style="margin-bottom:8px;">📤 ส่งออกข้อมูล (บันทึกลง Drive)</button>
+    <div style="margin-bottom:8px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-mid);margin-bottom:6px;">📥 นำเข้าข้อมูล (โหลดจาก Drive)</label>
+      <input type="file" id="importFile" accept=".json" onchange="importData(event)" style="width:100%;padding:10px;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;font-size:12px;">
+    </div>
+    <div id="exportToast" class="toast" style="display:none;"></div>
+  </div>
+  <div class="install-card">
+    <div class="install-title">ติดตั้งบน iPhone / iPad (Safari)</div>
+    <div class="install-step"><div class="install-num">1</div><div>เปิดไฟล์ .html ใน <strong style="color:#fff">Safari</strong></div></div>
+    <div class="install-step"><div class="install-num">2</div><div>กดปุ่ม Share (กล่องลูกศรขึ้น)</div></div>
+    <div class="install-step"><div class="install-num">3</div><div>เลือก <strong style="color:#fff">"Add to Home Screen"</strong> → Add</div></div>
+  </div>
+
+  <!-- ══ CHEMICAL DOSING SETTINGS ══ -->
+  <div class="card">
+    <div class="card-label">🧪 ตั้งค่าเคมีและ Dosing Rate</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">เพิ่มเคมีได้ไม่จำกัด แต่ละชนิดเลือกสูตรคำนวณได้อิสระ</div>
+    <div id="chemList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"><div class="chem-row"><div class="chem-row-top"><input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value=""><select class="chem-type-select" onchange="toggleChemRates(this)"><option value="AH" selected="">ml/AH</option><option value="COLOR">ml/โม่ (ต่อสี)</option></select><button class="chem-del-btn" onclick="this.closest('.chem-row').remove()">✕</button></div><div class="chem-row-rates" data-type-rates=""><div class="chem-rate-wrap" style="grid-column:1/3"><div class="chem-rate-label">Rate (ml/AH)</div><input class="chem-rate-input" data-rate="AH" type="number" step="0.001" min="0" value="0"></div></div></div><div class="chem-row"><div class="chem-row-top"><input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value=""><select class="chem-type-select" onchange="toggleChemRates(this)"><option value="AH" selected="">ml/AH</option><option value="COLOR">ml/โม่ (ต่อสี)</option></select><button class="chem-del-btn" onclick="this.closest('.chem-row').remove()">✕</button></div><div class="chem-row-rates" data-type-rates=""><div class="chem-rate-wrap" style="grid-column:1/3"><div class="chem-rate-label">Rate (ml/AH)</div><input class="chem-rate-input" data-rate="AH" type="number" step="0.001" min="0" value="0"></div></div></div><div class="chem-row"><div class="chem-row-top"><input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value=""><select class="chem-type-select" onchange="toggleChemRates(this)"><option value="AH" selected="">ml/AH</option><option value="COLOR">ml/โม่ (ต่อสี)</option></select><button class="chem-del-btn" onclick="this.closest('.chem-row').remove()">✕</button></div><div class="chem-row-rates" data-type-rates=""><div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:var(--text-muted);">ใช้กับสี:</span><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112067223" value="B" checked="" style="margin:0;"> <span class="badge-B" style="padding:2px 8px;border-radius:10px;font-size:10px;">B ฟ้า</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112067223" value="C" style="margin:0;"> <span class="badge-C" style="padding:2px 8px;border-radius:10px;font-size:10px;">C รุ้ง</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112067223" value="K" style="margin:0;"> <span class="badge-K" style="padding:2px 8px;border-radius:10px;font-size:10px;">K ดำ</span></label></div><div class="chem-chemicals-list"><div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;"><input class="chem-rate-input" data-chem-name="" style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร"><input class="chem-rate-input" data-chem-rate="" type="number" step="0.01" min="0" style="width:60px;" value="0"><span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span><button onclick="this.closest('.chem-sub-row').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button></div></div><button onclick="addChemSubRow(this)" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;width:100%;margin-top:2px;">+ เพิ่มสาร</button></div></div><div class="chem-row"><div class="chem-row-top"><input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value=""><select class="chem-type-select" onchange="toggleChemRates(this)"><option value="AH" selected="">ml/AH</option><option value="COLOR">ml/โม่ (ต่อสี)</option></select><button class="chem-del-btn" onclick="this.closest('.chem-row').remove()">✕</button></div><div class="chem-row-rates" data-type-rates=""><div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:var(--text-muted);">ใช้กับสี:</span><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112137016" value="B" checked="" style="margin:0;"> <span class="badge-B" style="padding:2px 8px;border-radius:10px;font-size:10px;">B ฟ้า</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112137016" value="C" style="margin:0;"> <span class="badge-C" style="padding:2px 8px;border-radius:10px;font-size:10px;">C รุ้ง</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112137016" value="K" style="margin:0;"> <span class="badge-K" style="padding:2px 8px;border-radius:10px;font-size:10px;">K ดำ</span></label></div><div class="chem-chemicals-list"><div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;"><input class="chem-rate-input" data-chem-name="" style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร"><input class="chem-rate-input" data-chem-rate="" type="number" step="0.01" min="0" style="width:60px;" value="0"><span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span><button onclick="this.closest('.chem-sub-row').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button></div></div><button onclick="addChemSubRow(this)" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;width:100%;margin-top:2px;">+ เพิ่มสาร</button></div></div><div class="chem-row"><div class="chem-row-top"><input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value=""><select class="chem-type-select" onchange="toggleChemRates(this)"><option value="AH" selected="">ml/AH</option><option value="COLOR">ml/โม่ (ต่อสี)</option></select><button class="chem-del-btn" onclick="this.closest('.chem-row').remove()">✕</button></div><div class="chem-row-rates" data-type-rates=""><div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;"><span style="font-size:11px;color:var(--text-muted);">ใช้กับสี:</span><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112168384" value="B" checked="" style="margin:0;"> <span class="badge-B" style="padding:2px 8px;border-radius:10px;font-size:10px;">B ฟ้า</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112168384" value="C" style="margin:0;"> <span class="badge-C" style="padding:2px 8px;border-radius:10px;font-size:10px;">C รุ้ง</span></label><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-1779112168384" value="K" style="margin:0;"> <span class="badge-K" style="padding:2px 8px;border-radius:10px;font-size:10px;">K ดำ</span></label></div><div class="chem-chemicals-list"><div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;"><input class="chem-rate-input" data-chem-name="" style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร"><input class="chem-rate-input" data-chem-rate="" type="number" step="0.01" min="0" style="width:60px;" value="0"><span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span><button onclick="this.closest('.chem-sub-row').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button></div><div class="chem-sub-row" style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;"><input class="chem-rate-input" data-chem-name="" style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร"><input class="chem-rate-input" data-chem-rate="" type="number" step="0.01" min="0" style="width:60px;" value="0"><span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span><button onclick="this.closest('.chem-sub-row').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button></div><div class="chem-sub-row" style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;"><input class="chem-rate-input" data-chem-name="" style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร"><input class="chem-rate-input" data-chem-rate="" type="number" step="0.01" min="0" style="width:60px;" value="0"><span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span><button onclick="this.closest('.chem-sub-row').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button></div></div><button onclick="addChemSubRow(this)" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;width:100%;margin-top:2px;">+ เพิ่มสาร</button></div></div></div>
+    <button onclick="addChemRow()" style="width:100%;border:1px dashed var(--border);background:none;border-radius:10px;padding:9px;font-size:12px;color:var(--text-muted);cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">+ เพิ่มเคมี</button>
+    <button onclick="saveChemSettings()" class="btn" style="margin-top:8px;">💾 บันทึกการตั้งค่าเคมีลงไฟล์</button>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.6;">
+      กดบันทึกแล้วใช้ <strong>ไฟล์ที่ดาวน์โหลดใหม่</strong> แทนไฟล์เดิม — เปิดครั้งไหนก็มีค่าเคมีเดิมเสมอ
+    </div>
+  </div>
+</div>
+
+</div><!-- end body-wrap -->
+
+<!-- ════════ LOT DETAIL MODAL ════════ -->
+<div class="lot-modal-overlay" id="lotModalOverlay" onclick="closeLotModal(event)">
+  <div class="lot-modal" id="lotModal">
+    <div class="lot-modal-header" style="position:relative;">
+      <div class="lot-modal-title" id="modalLotTitle">–</div>
+      <div class="lot-modal-sub" id="modalLotSub">–</div>
+      <button class="lot-modal-close" onclick="closeLotModal()">✕</button>
+    </div>
+    <div class="lot-modal-body">
+      <div class="lot-modal-stat" id="modalStats"></div>
+      <div id="modalPartCards"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+var todayBarrels = [];   // รายรอบวันนี้ (ยังไม่ save)
+var dayRecords   = [];   // ประวัติรายวัน (saved)
+var discordWH    = '';
+var selTypeVal   = 'N';
+var selColorVal  = 'B';
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+function init() {
+  var d = new Date();
+  var dateStr = d.toLocaleDateString('th-TH', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('hdrDate').textContent = dateStr;
+  document.getElementById('repDate').value = isoDate(d);
+
+  // Live clock — updates every second, stamps time on add
+  function tickTime() {
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2,'0');
+    var mm = String(now.getMinutes()).padStart(2,'0');
+    var ss = String(now.getSeconds()).padStart(2,'0');
+    var disp = document.getElementById('timeDisplay');
+    var live = document.getElementById('liveClock');
+    var hidden = document.getElementById('bTime');
+    if (disp) disp.textContent = hh + ':' + mm;
+    if (live) live.textContent = hh + ':' + mm + ':' + ss;
+    if (hidden) hidden.value = hh + ':' + mm;
+  }
+  tickTime();
+  setInterval(tickTime, 1000);
+
+  try { dayRecords = JSON.parse(localStorage.getItem('dayRecords') || '[]'); } catch(e){ dayRecords=[]; }
+  try { todayBarrels = JSON.parse(localStorage.getItem('todayBarrels') || '[]'); } catch(e){ todayBarrels=[]; }
+  try {
+    discordWH = localStorage.getItem('discordWH') || '';
+    if (discordWH) { document.getElementById('webhookUrl').value = discordWH; setBadge(true); }
+    var lr = localStorage.getItem('lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
+    var ll = localStorage.getItem('lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
+  } catch(e){}
+
+  renderBarrels();
+  renderSummary();
+  renderHistory();
+  initSmartInput();
+  loadChemSettings();
+  gdriveAutoLoad();
+}
+
+function isoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// ═══════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════
+function tab(t) {
+  var tabs = ['entry','summary','history','chart','settings'];
+  tabs.forEach(function(n,i) {
+    document.getElementById('v-'+n).classList.toggle('active', n===t);
+    document.querySelectorAll('.tab-btn')[i].classList.toggle('active', n===t);
+  });
+  if (t === 'summary') renderSummary();
+  if (t === 'chart') renderCharts();
+}
+
+// ═══════════════════════════════════════
+//  AH sync
+// ═══════════════════════════════════════
+function updateAHDisplay() {
+  var v = document.getElementById('dayAH').value || '0';
+  document.getElementById('ahDisplay').textContent = parseInt(v).toLocaleString();
+  document.getElementById('dayAH2').value = v;
+}
+function syncAH(el) {
+  document.getElementById('dayAH').value = el.value;
+  document.getElementById('ahDisplay').textContent = parseInt(el.value||0).toLocaleString();
+}
+
+// ═══════════════════════════════════════
+//  TYPE / COLOR SELECT
+// ═══════════════════════════════════════
+function selType(t) {
+  selTypeVal = t;
+  ['N','R'].forEach(function(k) {
+    var btn = document.getElementById('type-'+k);
+    btn.className = 'type-btn' + (k===t ? ' sel-'+k : '');
+  });
+}
+function selColor(c) {
+  selColorVal = c;
+  ['B','C','K'].forEach(function(k) {
+    var btn = document.getElementById('color-'+k);
+    btn.className = 'color-btn' + (k===c ? ' sel-'+k : '');
+  });
+}
+
+// (time is always live — no freeze needed)
+
+// ═══════════════════════════════════════
+//  ADD BARREL
+// ═══════════════════════════════════════
+function addBarrel() {
+  var time   = document.getElementById('bTime').value;
+  var barrel = document.getElementById('bBarrel').value;
+  var kg     = parseFloat(document.getElementById('bKg').value) || 0;
+  var pcs    = parseInt(document.getElementById('bPcs').value)  || 0;
+
+
+  if (!barrel) { showToast('entry','กรุณากรอกเลขโม่','err'); return; }
+  if (!kg && !pcs) { showToast('entry','กรุณากรอก Kgs หรือ Pcs','err'); return; }
+
+  var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
+              partName: document.getElementById('bPartName').value.trim(),
+              customer: document.getElementById('bCustomer').value.trim(),
+              lotNo: document.getElementById('bLotNo').value.trim() };
+  todayBarrels.push(row);
+  try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+
+  // save last used for reuse button
+  if (row.partName || row.customer) {
+    try { localStorage.setItem('lastBarrelPart', JSON.stringify({partName: row.partName, customer: row.customer})); } catch(e){}
+    acAddHistory('partNames', row.partName);
+    acAddHistory('customerNames', row.customer);
+    renderReuseBar();
+  }
+
+  // reset barrel fields, keep type/color
+  document.getElementById('bBarrel').value    = '';
+  document.getElementById('bKg').value        = '';
+  document.getElementById('bPcs').value       = '';
+  document.getElementById('bPartName').value  = '';
+  document.getElementById('bCustomer').value  = '';
+  document.getElementById('bLotNo').value     = '';
+
+
+  renderBarrels();
+  showToast('entry','เพิ่มรอบชุบแล้ว ✓','ok');
+}
+
+function delBarrel(id) {
+  todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
+  try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  renderBarrels();
+}
+
+function renderBarrels() {
+  var seq = todayBarrels.length + 1;
+  document.getElementById('barrelSeq').textContent = 'รอบที่ ' + seq;
+  document.getElementById('barrelCount').textContent = todayBarrels.length;
+
+  var tbody = document.getElementById('barrelBody');
+  if (!todayBarrels.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted);font-family:\'IBM Plex Sans Thai\',sans-serif;">ยังไม่มีรายรอบ</td></tr>';
+    return;
+  }
+  tbody.innerHTML = todayBarrels.map(function(r) {
+    return '<tr>' +
+      '<td class="td-l">' + r.time + '</td>' +
+      '<td>' + r.barrel + '</td>' +
+      '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + (r.partName||'–') + '</td>' +
+      '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
+      '<td style="font-size:10px;color:var(--text-muted);">' + (r.lotNo||'–') + '</td>' +
+      '<td><span class="badge-'+r.type+'">'+r.type+'</span></td>' +
+      '<td><span class="badge-'+r.color+'">'+r.color+'</span></td>' +
+      '<td>' + (r.kg||0) + '</td>' +
+      '<td>' + (r.pcs||0) + '</td>' +
+      '<td><button class="del-btn" onclick="delBarrel('+r.id+')">✕</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  CALC SUMMARY
+// ═══════════════════════════════════════
+function calcSummary() {
+  var totalKg=0, newKg=0, reworkKg=0, kgB=0, kgC=0, kgK=0;
+  todayBarrels.forEach(function(r) {
+    totalKg += r.kg;
+    if (r.type==='N') newKg += r.kg; else reworkKg += r.kg;
+    if (r.color==='B') kgB += r.kg;
+    else if (r.color==='C') kgC += r.kg;
+    else if (r.color==='K') kgK += r.kg;
+  });
+  var ratio = totalKg > 0 ? reworkKg / totalKg * 100 : 0;
+  var ah = parseInt(document.getElementById('dayAH').value) || 0;
+  return { totalKg, newKg, reworkKg, kgB, kgC, kgK, ratio, ah, barrels: todayBarrels.length };
+}
+
+function renderSummary() {
+  var s = calcSummary();
+  var dt = document.getElementById('repDate').value;
+  document.getElementById('sumDate').textContent = dt ? new Date(dt+'T00:00:00').toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}) : '–';
+  document.getElementById('sumTotalKg').textContent    = fmt(s.totalKg);
+  document.getElementById('sumTotalBarrel').textContent = s.barrels;
+  document.getElementById('sumNewKg').textContent       = fmt(s.newKg);
+  document.getElementById('sumReworkKg').textContent    = fmt(s.reworkKg);
+  document.getElementById('sumAH').textContent          = s.ah.toLocaleString();
+  document.getElementById('sumKg-B').textContent        = fmt(s.kgB);
+  document.getElementById('sumKg-C').textContent        = fmt(s.kgC);
+  document.getElementById('sumKg-K').textContent        = fmt(s.kgK);
+  document.getElementById('sumRatio').textContent       = s.ratio.toFixed(1) + '%';
+  document.getElementById('sumRatioBar').style.width    = Math.min(s.ratio,100) + '%';
+  document.getElementById('sumNewSub').textContent      = fmt(s.newKg);
+  document.getElementById('sumRwSub').textContent       = fmt(s.reworkKg);
+
+  // นับโม่แต่ละสี
+  var barrelsB = todayBarrels.filter(function(b){ return b.color==='B'; }).length;
+  var barrelsC = todayBarrels.filter(function(b){ return b.color==='C'; }).length;
+  var barrelsK = todayBarrels.filter(function(b){ return b.color==='K'; }).length;
+  renderChemSummary(s.ah, barrelsB, barrelsC, barrelsK);
+}
+
+function fmt(n) { return n % 1 === 0 ? n : n.toFixed(2); }
+
+// ═══════════════════════════════════════
+//  SAVE DAY
+// ═══════════════════════════════════════
+function buildDayRecord() {
+  var s = calcSummary();
+  return {
+    id: Date.now(),
+    date: document.getElementById('repDate').value,
+    lotNo: document.getElementById('lotNo').value.trim(),
+    recorder: document.getElementById('recorder').value.trim() || '–',
+    totalKg: s.totalKg, barrels: s.barrels,
+    kgB: s.kgB, kgC: s.kgC, kgK: s.kgK,
+    newKg: s.newKg, reworkKg: s.reworkKg,
+    ratio: parseFloat(s.ratio.toFixed(2)),
+    ah: s.ah,
+    rows: JSON.parse(JSON.stringify(todayBarrels)),
+    ts: new Date().toLocaleString('th-TH')
+  };
+}
+
+function validateDay() {
+  if (!document.getElementById('repDate').value) { showToast('entry','กรุณาระบุวันที่','err'); return false; }
+  if (!todayBarrels.length) { showToast('entry','กรุณาเพิ่มรายรอบชุบอย่างน้อย 1 รอบ','err'); return false; }
+  return true;
+}
+
+function persist(rec) {
+  try { localStorage.setItem('lastRecorder', rec.recorder); } catch(e){}
+  try { localStorage.setItem('lastLot', rec.lotNo); } catch(e){}
+  dayRecords.unshift(rec);
+  try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  todayBarrels = [];
+  try { localStorage.setItem('todayBarrels', '[]'); } catch(e){}
+  renderBarrels();
+  renderHistory();
+  document.getElementById('histCount').textContent = dayRecords.length;
+}
+
+function saveDay() {
+  if (!validateDay()) return;
+  var rec = buildDayRecord();
+  persist(rec);
+  showToast('entry','บันทึกสรุปวันนี้สำเร็จ! ✓','ok');
+}
+
+async function saveDayAndDiscord() {
+  if (!validateDay()) return;
+  var wh = discordWH || localStorage.getItem('discordWH') || '';
+  if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
+
+  var btn = document.getElementById('btnDiscordEntry');
+  btn.classList.add('btn-loading'); btn.disabled = true;
+
+  var rec = buildDayRecord();
+  persist(rec);
+
+  var dateStr = rec.date ? new Date(rec.date+'T00:00:00').toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}) : rec.date;
+  var ratioClass = rec.ratio >= 20 ? 0xe74c3c : rec.ratio >= 10 ? 0xe67e22 : 0x1abc9c;
+
+  // สร้าง barrel row fields แบบแยก field ถ้าเกิน 1024 ตัวอักษร
+  var allRowLines = (rec.rows||[]).map(function(b,i){
+    return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
+      + (b.partName?' — '+b.partName:'')
+      + (b.customer?' ('+b.customer+')':'')
+      + (b.lotNo?' Lot:'+b.lotNo:'');
+  });
+  var barrelFields = [];
+  var chunk = '', chunkNum = 0;
+  allRowLines.forEach(function(line) {
+    if ((chunk + '\n' + line).length > 1020) {
+      barrelFields.push({ name: chunkNum === 0 ? '🔩 รายรอบ (' + rec.barrels + ' รอบ)' : '🔩 รายรอบ (ต่อ)', value: chunk, inline: false });
+      chunk = line; chunkNum++;
+    } else {
+      chunk = chunk ? chunk + '\n' + line : line;
+    }
+  });
+  if (chunk) barrelFields.push({ name: chunkNum === 0 ? '🔩 รายรอบ (' + rec.barrels + ' รอบ)' : '🔩 รายรอบ (ต่อ)', value: chunk, inline: false });
+
+  var payload = {
+    username: 'ใบรายงานชุบ B-1',
+    embeds: [{
+      title: '📋 สรุปการชุบประจำวัน — ' + dateStr,
+      color: 0x1F4E79,
+      fields: [
+        { name: '📅 วันที่', value: dateStr, inline: true },
+        { name: '🔖 Lot No', value: rec.lotNo || '–', inline: true },
+        { name: '👤 ผู้บันทึก', value: rec.recorder, inline: true },
+        { name: '\u200b', value: '\u200b', inline: false },
+        { name: '⚖️ ปริมาณการชุบรวม', value: '**' + fmt(rec.totalKg) + ' Kgs** (' + rec.barrels + ' รอบ)', inline: true },
+        { name: '⚡ กระแสไฟ', value: '**' + rec.ah.toLocaleString() + ' AH**', inline: true },
+        { name: '\u200b', value: '\u200b', inline: false },
+      ].concat(barrelFields).concat([
+        { name: '🎨 สีที่ชุบ', value:
+          '🔵 B (ฟ้า): **' + fmt(rec.kgB) + ' Kgs**\n' +
+          '🌈 C (รุ้ง): **' + fmt(rec.kgC) + ' Kgs**\n' +
+          '⬛ K (ดำ): **' + fmt(rec.kgK) + ' Kgs**', inline: true },
+        { name: '📊 งานใหม่ / ซ่อม', value:
+          '🆕 งานใหม่ (N): **' + fmt(rec.newKg) + ' Kgs**\n' +
+          '🔄 งานซ่อม (R): **' + fmt(rec.reworkKg) + ' Kgs**\n' +
+          '📈 Ratio: **' + rec.ratio + '%**', inline: true },
+      ]),
+      timestamp: new Date().toISOString(),
+      footer: { text: 'ระบบบันทึกงานชุบ · BARREL-1 · APK-FR-PR-006' }
+    }]
+  };
+
+  // เพิ่ม chem field ถ้ามีตั้งค่าไว้
+  if (chemSettings.length) {
+    var barrelsB = (rec.rows||[]).filter(function(b){ return b.color==='B'; }).length;
+    var barrelsC = (rec.rows||[]).filter(function(b){ return b.color==='C'; }).length;
+    var barrelsK = (rec.rows||[]).filter(function(b){ return b.color==='K'; }).length;
+    var barrelMap = { B: barrelsB, C: barrelsC, K: barrelsK };
+
+    // แยก field ต่อเคมี 1 กลุ่ม พร้อมแสดงรายการสารย่อย
+    chemSettings.forEach(function(c) {
+      var fieldLines = [];
+      var totalUsed = 0;
+
+      if (c.type === 'AH') {
+        var used = (c.rateAH || 0) * (rec.ah || 0);
+        totalUsed = used;
+        fieldLines.push('Rate: ' + c.rateAH + ' ml/AH × ' + (rec.ah||0).toLocaleString() + ' AH');
+        fieldLines.push('**รวม: ' + used.toFixed(1) + ' ml**');
+      } else {
+        var barrels = barrelMap[c.color] || 0;
+        var colorLabel = c.color === 'B' ? '🔵 B ฟ้า' : c.color === 'C' ? '🌈 C รุ้ง' : '⬛ K ดำ';
+        fieldLines.push(colorLabel + ' — ' + barrels + ' โม่');
+        (c.chemicals || []).forEach(function(ch) {
+          var u = ch.rate * barrels;
+          totalUsed += u;
+          fieldLines.push('• **' + ch.name + '**: ' + ch.rate + ' × ' + barrels + ' = **' + u.toFixed(1) + ' ml**');
+        });
+        if ((c.chemicals||[]).length > 1) {
+          fieldLines.push('รวมทั้งหมด: **' + totalUsed.toFixed(1) + ' ml**');
+        }
+      }
+
+      payload.embeds[0].fields.push({
+        name: '🧪 ' + c.name,
+        value: fieldLines.join('\n').substring(0, 1024),
+        inline: false
+      });
+    });
+  }
+
+  try {
+    var res = await fetch(wh, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (res.ok || res.status===204) showToast('entry','บันทึกและแจ้ง Discord สำเร็จ! ✓','ok');
+    else showToast('entry','บันทึกแล้ว Discord ตอบ: ' + res.status,'err');
+  } catch(e) {
+    showToast('entry','บันทึกแล้ว แต่แจ้ง Discord ไม่ได้','err');
+  } finally {
+    btn.classList.remove('btn-loading'); btn.disabled = false;
+  }
+
+  // Auto sync ขึ้น Google Drive อัตโนมัติ
+  gdriveSaveQuiet();
+}
+
+function clearDay() {
+  if (!confirm('ล้างรายรอบทั้งหมดวันนี้?')) return;
+  todayBarrels = [];
+  try { localStorage.setItem('todayBarrels','[]'); } catch(e){}
+  renderBarrels();
+}
+
+// ═══════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════
+function renderHistory() {
+  document.getElementById('histCount').textContent = dayRecords.length;
+  var tbody = document.getElementById('histBody');
+  if (!dayRecords.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="empty-state">ยังไม่มีประวัติ</td></tr>';
+    return;
+  }
+  var html = '';
+  dayRecords.forEach(function(r) {
+    var ds = '–';
+    try { ds = new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{month:'short',day:'numeric'}); } catch(e){ ds=r.date; }
+    var rc = r.ratio >= 20 ? 'ratio-hi' : r.ratio >= 10 ? 'ratio-mid' : 'ratio-lo';
+    var rid = 'det-' + r.id;
+
+    html += '<tr class="hist-row" onclick="toggleDetail('+r.id+')">' +
+      '<td><button class="expand-btn" id="btn-'+r.id+'">▶</button></td>' +
+      '<td class="td-l" style="font-size:11px;">' + ds +
+        (r.lotNo ? '<div style="font-size:9px;font-family:\'IBM Plex Mono\',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal('+r.id+')" title="กดเพื่อดูรายละเอียด lot">📦 ' + r.lotNo + '</span></div>' : '') + '</td>' +
+      '<td class="td-l" style="font-size:11px;font-family:\'IBM Plex Sans Thai\',sans-serif;">' + r.recorder + '</td>' +
+      '<td class="grp bold">' + fmt(r.totalKg) + '</td>' +
+      '<td>' + r.barrels + '</td>' +
+      '<td class="grp" style="color:#1a4a7a;">' + fmt(r.kgB) + '</td>' +
+      '<td style="color:#8b2252;">' + fmt(r.kgC) + '</td>' +
+      '<td>' + fmt(r.kgK) + '</td>' +
+      '<td class="grp">' + fmt(r.newKg) + '</td>' +
+      '<td class="amber">' + fmt(r.reworkKg) + '</td>' +
+      '<td class="' + rc + '">' + r.ratio + '%</td>' +
+      '<td class="grp" style="color:#5b21b6;">' + (r.ah||0).toLocaleString() + '</td>' +
+      '<td><button class="td-del-btn" onclick="event.stopPropagation();delDay('+r.id+')">✕</button></td>' +
+    '</tr>';
+
+    var detRows = (r.rows||[]).map(function(b,i) {
+      return '<tr>' +
+        '<td>' + (i+1) + '. ' + b.time + '</td>' +
+        '<td>' + b.barrel + '</td>' +
+        '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">' + (b.partName||'–') + '</td>' +
+        '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">' + (b.customer||'–') + '</td>' +
+        '<td style="font-size:10px;color:var(--text-muted);">' + (b.lotNo||'–') + '</td>' +
+        '<td><span class="badge-'+b.type+'">'+b.type+'</span></td>' +
+        '<td><span class="badge-'+b.color+'">'+b.color+'</span></td>' +
+        '<td>' + (b.kg||0) + '</td>' +
+        '<td>' + (b.pcs||0) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    html += '<tr class="detail-row" id="'+rid+'"><td colspan="13">' +
+      '<div class="detail-inner"><div class="tbl-wrap">' +
+        '<table class="detail-table"><thead><tr>' +
+          '<th style="text-align:left;">เวลา</th><th>โม่</th>' +
+          '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th>' +
+          '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>' +
+        '</tr></thead><tbody>' +
+        (detRows || '<tr><td colspan="9" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
+        '</tbody></table></div></div></td></tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function toggleDetail(id) {
+  var row = document.getElementById('det-' + id);
+  var btn = document.getElementById('btn-' + id);
+  if (!row) return;
+  var isOpen = row.classList.contains('open');
+  row.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+}
+
+function delDay(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  dayRecords = dayRecords.filter(function(r){ return r.id !== id; });
+  try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  renderHistory();
+}
+
+// ═══════════════════════════════════════
+//  EXPORT CSV
+// ═══════════════════════════════════════
+function exportCSV() {
+  if (!dayRecords.length) { alert('ยังไม่มีข้อมูล'); return; }
+
+  // Summary sheet
+  var hSum = 'วันที่,Lot No,ผู้บันทึก,รวม Kgs,รอบ,Kgs B,Kgs C,Kgs K,งานใหม่ Kgs,งานซ่อม Kgs,Ratio %,AH,เวลาบันทึก';
+  var rowsSum = dayRecords.map(function(r) {
+    return [r.date, r.lotNo, r.recorder, fmt(r.totalKg), r.barrels,
+            fmt(r.kgB), fmt(r.kgC), fmt(r.kgK),
+            fmt(r.newKg), fmt(r.reworkKg), r.ratio, r.ah||0, r.ts
+           ].map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(',');
+  });
+
+  // Detail sheet (all barrel rows)
+  var hDet = 'วันที่,Lot No (วัน),ผู้บันทึก,เวลา,เลขโม่,ชื่อชิ้นงาน,ลูกค้า,Lot No (รอบ),ประเภท,สี,Kgs,Pcs';
+  var rowsDet = [];
+  dayRecords.forEach(function(r) {
+    (r.rows||[]).forEach(function(b) {
+      rowsDet.push([r.date, r.lotNo, r.recorder, b.time, b.barrel,
+                    b.partName||'', b.customer||'', b.lotNo||'', b.type, b.color, b.kg||0, b.pcs||0]
+        .map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(','));
+    });
+  });
+
+  var csv = '\uFEFF=== สรุปรายวัน ===\n' + hSum + '\n' + rowsSum.join('\n') +
+            '\n\n=== รายละเอียดรายรอบ ===\n' + hDet + '\n' + rowsDet.join('\n');
+
+  try {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    a.download = 'รายงานชุบ_B1_' + isoDate(new Date()) + '.csv';
+    a.click();
+  } catch(e) { alert('ไม่สามารถดาวน์โหลดได้บนอุปกรณ์นี้'); }
+}
+
+// ═══════════════════════════════════════
+//  DISCORD SETTINGS
+// ═══════════════════════════════════════
+function saveWebhook() {
+  var wh = document.getElementById('webhookUrl').value.trim();
+  if (!wh) { alert('กรุณากรอก Webhook URL'); return; }
+  discordWH = wh;
+  try { localStorage.setItem('discordWH', wh); } catch(e){}
+  setBadge(true);
+  showToast('entry','บันทึก Webhook สำเร็จ! ✓','ok');
+}
+
+async function testDiscord() {
+  var wh = discordWH || localStorage.getItem('discordWH') || '';
+  if (!wh) { alert('กรุณาบันทึก Webhook URL ก่อน'); return; }
+  try {
+    await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({content:'✅ ทดสอบแจ้งเตือน — ระบบบันทึกงานชุบ BARREL-1 เชื่อมต่อสำเร็จ!'})});
+    alert('ส่งแล้ว! ตรวจสอบใน Discord ได้เลย');
+  } catch(e) { alert('ส่งไม่ได้: ' + e.message); }
+}
+
+function setBadge(ok) {
+  var b = document.getElementById('whBadge');
+  b.textContent = ok ? 'ตั้งค่าแล้ว ✓' : 'ยังไม่ได้ตั้งค่า';
+  b.style.background = ok ? 'var(--success-bg)' : '';
+  b.style.color = ok ? 'var(--success)' : '';
+}
+
+// ═══════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════
+var _toastTimers = {};
+function showToast(scope, msg, type) {
+  var id = 'toast-' + scope;
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  clearTimeout(_toastTimers[id]);
+  _toastTimers[id] = setTimeout(function(){ el.style.display='none'; }, 3200);
+}
+
+// ═══════════════════════════════════════
+//  LOT MODAL
+// ═══════════════════════════════════════
+function openLotModal(id) {
+  var r = dayRecords.find(function(x){ return x.id === id; });
+  if (!r) return;
+
+  var ds = r.date;
+  try { ds = new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}); } catch(e){}
+
+  document.getElementById('modalLotTitle').textContent = '📦 ' + (r.lotNo || '(ไม่มี Lot No.)');
+  document.getElementById('modalLotSub').textContent = ds + ' · ' + r.recorder;
+
+  // Stats
+  var rc = r.ratio >= 20 ? '#c0392b' : r.ratio >= 10 ? '#b45309' : '#065f46';
+  document.getElementById('modalStats').innerHTML =
+    modalStatHtml('รวม Kgs', fmt(r.totalKg), 'kg') +
+    modalStatHtml('รอบชุบ', r.barrels, 'รอบ') +
+    modalStatHtml('Ratio', r.ratio + '%', '', rc);
+
+  // Part cards — group by partName
+  var rows = r.rows || [];
+  if (!rows.length) {
+    document.getElementById('modalPartCards').innerHTML =
+      '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">ไม่มีรายรอบบันทึกไว้</div>';
+  } else {
+    // group by partName + customer + color + type
+    var groups = {};
+    rows.forEach(function(b) {
+      var key = (b.partName||'(ไม่ระบุชิ้นงาน)') + '|' + (b.customer||'') + '|' + b.color + '|' + b.type;
+      if (!groups[key]) groups[key] = {partName: b.partName||'(ไม่ระบุชิ้นงาน)', customer: b.customer||'', color: b.color, type: b.type, lotNos: [], times: [], totalKg: 0, totalPcs: 0, count: 0};
+      groups[key].totalKg += parseFloat(b.kg)||0;
+      groups[key].totalPcs += parseInt(b.pcs)||0;
+      groups[key].count++;
+      if (b.lotNo && groups[key].lotNos.indexOf(b.lotNo) < 0) groups[key].lotNos.push(b.lotNo);
+      if (b.time) groups[key].times.push(b.time);
+    });
+
+    var html = '';
+    Object.values(groups).forEach(function(g) {
+      var typeBadge = '<span class="badge-'+g.type+'">'+g.type+'</span>';
+      var colorBadge = '<span class="badge-'+g.color+'">'+g.color+'</span>';
+      html += '<div class="lot-part-card">' +
+        '<div class="lot-part-row">' +
+          '<div class="lot-part-name">' + g.partName +
+            (g.customer ? '<span style="font-size:10px;font-weight:400;color:var(--text-muted);margin-left:6px;">· ' + g.customer + '</span>' : '') +
+          '</div>' +
+          '<div class="lot-part-badges">' + typeBadge + ' ' + colorBadge + '</div>' +
+        '</div>' +
+        '<div class="lot-part-meta">' +
+          modalMetaHtml('Kgs', fmt(g.totalKg)) +
+          modalMetaHtml('Pcs', g.totalPcs.toLocaleString()) +
+          modalMetaHtml('รอบ', g.count) +
+        '</div>' +
+        (g.lotNos.length ? '<div class="lot-part-lotno">Lot: ' + g.lotNos.join(', ') + '</div>' : '') +
+        (g.times.length ? '<div class="lot-tag-time">เวลา: ' + g.times.join(', ') + '</div>' : '') +
+      '</div>';
+    });
+    document.getElementById('modalPartCards').innerHTML = html;
+  }
+
+  document.getElementById('lotModalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function modalStatHtml(label, val, unit, color) {
+  return '<div class="lot-stat-item">' +
+    '<div class="lot-stat-label">' + label + '</div>' +
+    '<div class="lot-stat-val"' + (color ? ' style="color:'+color+'"' : '') + '>' + val + '</div>' +
+    (unit ? '<div class="lot-stat-unit">' + unit + '</div>' : '') +
+  '</div>';
+}
+
+function modalMetaHtml(label, val) {
+  return '<div class="lot-part-meta-item">' +
+    '<div class="lot-part-meta-label">' + label + '</div>' +
+    '<div class="lot-part-meta-val">' + val + '</div>' +
+  '</div>';
+}
+
+function closeLotModal(e) {
+  if (e && e.target !== document.getElementById('lotModalOverlay')) return;
+  document.getElementById('lotModalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════
+//  CHART
+// ═══════════════════════════════════════
+var _chartMonth = null; // 'YYYY-MM'
+var _chartBK = null;    // Chart instance 1
+var _chartNR = null;    // Chart instance 2
+
+function initChartMonth() {
+  if (_chartMonth) return;
+  // default to most recent month in records, or current month
+  if (dayRecords.length) {
+    var sorted = dayRecords.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    _chartMonth = sorted[0].date.substring(0,7);
+  } else {
+    var now = new Date();
+    _chartMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  }
+}
+
+function chartMonthStep(delta) {
+  initChartMonth();
+  var parts = _chartMonth.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1])-1+delta, 1);
+  _chartMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  renderCharts();
+}
+
+function renderCharts() {
+  initChartMonth();
+  var ym = _chartMonth;
+  var parts = ym.split('-');
+  var year = parseInt(parts[0]), month = parseInt(parts[1]);
+
+  // Label
+  var monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  document.getElementById('chartMonthLabel').textContent = monthNames[month-1] + ' ' + (year+543);
+
+  // Filter records for this month
+  var recs = dayRecords.filter(function(r){ return r.date && r.date.substring(0,7) === ym; });
+  recs.sort(function(a,b){ return a.date.localeCompare(b.date); });
+
+  // Build day list for entire month
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var labels = [], barrelArr = [], kgArr = [], newArr = [], reworkArr = [], ratioArr = [];
+  for (var d = 1; d <= daysInMonth; d++) {
+    var ds = year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var rec = recs.find(function(r){ return r.date === ds; });
+    labels.push(d + '');
+    barrelArr.push(rec ? rec.barrels : null);
+    kgArr.push(rec ? rec.totalKg : null);
+    newArr.push(rec ? rec.newKg : null);
+    reworkArr.push(rec ? rec.reworkKg : null);
+    ratioArr.push(rec ? rec.ratio : null);
+  }
+
+  var empty = recs.length === 0;
+  document.getElementById('chartEmpty').style.display = empty ? 'block' : 'none';
+
+  var fontFamily = "'IBM Plex Sans Thai', sans-serif";
+  var gridColor = 'rgba(46,117,182,0.1)';
+  var tickColor = '#6b8cae';
+
+  // ── Chart 1: Barrel (bar) + KG (line) ──
+  var ctx1 = document.getElementById('chartBarrelKg').getContext('2d');
+  if (_chartBK) _chartBK.destroy();
+  _chartBK = new Chart(ctx1, {
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'รอบชุบ',
+          data: barrelArr,
+          backgroundColor: 'rgba(46,117,182,0.65)',
+          borderRadius: 4,
+          yAxisID: 'yBarrel',
+          spanGaps: false
+        },
+        {
+          type: 'line',
+          label: 'น้ำหนัก Kgs',
+          data: kgArr,
+          borderColor: '#e67e22',
+          backgroundColor: 'rgba(230,126,34,0.1)',
+          pointBackgroundColor: '#e67e22',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.35,
+          fill: true,
+          yAxisID: 'yKg',
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'รอบชุบ') return ' รอบชุบ: ' + (ctx.raw ?? '–') + ' รอบ';
+              return ' น้ำหนัก: ' + (ctx.raw != null ? ctx.raw.toFixed(2) : '–') + ' Kgs';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font: { family: fontFamily, size: 9 }, maxRotation: 0 }
+        },
+        yBarrel: {
+          position: 'left',
+          title: { display: true, text: 'รอบ', color: '#2e75b6', font: { size: 9, family: fontFamily } },
+          grid: { color: gridColor },
+          ticks: { color: '#2e75b6', font: { family: fontFamily, size: 9 }, stepSize: 1 },
+          beginAtZero: true
+        },
+        yKg: {
+          position: 'right',
+          title: { display: true, text: 'Kgs', color: '#e67e22', font: { size: 9, family: fontFamily } },
+          grid: { display: false },
+          ticks: { color: '#e67e22', font: { family: fontFamily, size: 9 } },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // ── Chart 2: N / R stacked bar + Ratio line ──
+  var ctx2 = document.getElementById('chartNRRatio').getContext('2d');
+  if (_chartNR) _chartNR.destroy();
+  _chartNR = new Chart(ctx2, {
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'งานใหม่ N',
+          data: newArr,
+          backgroundColor: 'rgba(46,117,182,0.7)',
+          borderRadius: 3,
+          stack: 'kg',
+          yAxisID: 'yKg2',
+          spanGaps: false
+        },
+        {
+          type: 'bar',
+          label: 'Rework R',
+          data: reworkArr,
+          backgroundColor: 'rgba(231,76,60,0.7)',
+          borderRadius: 3,
+          stack: 'kg',
+          yAxisID: 'yKg2',
+          spanGaps: false
+        },
+        {
+          type: 'line',
+          label: 'Ratio %',
+          data: ratioArr,
+          borderColor: '#8e44ad',
+          backgroundColor: 'rgba(142,68,173,0.08)',
+          pointBackgroundColor: '#8e44ad',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.35,
+          fill: false,
+          yAxisID: 'yRatio',
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.dataset.label === 'Ratio %') return ' Ratio: ' + (ctx.raw != null ? ctx.raw.toFixed(1) : '–') + '%';
+              return ' ' + ctx.dataset.label + ': ' + (ctx.raw != null ? ctx.raw.toFixed(2) : '–') + ' Kgs';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font: { family: fontFamily, size: 9 }, maxRotation: 0 }
+        },
+        yKg2: {
+          position: 'left',
+          stacked: true,
+          title: { display: true, text: 'Kgs', color: '#2e75b6', font: { size: 9, family: fontFamily } },
+          grid: { color: gridColor },
+          ticks: { color: '#2e75b6', font: { family: fontFamily, size: 9 } },
+          beginAtZero: true
+        },
+        yRatio: {
+          position: 'right',
+          title: { display: true, text: 'Ratio %', color: '#8e44ad', font: { size: 9, family: fontFamily } },
+          grid: { display: false },
+          ticks: { color: '#8e44ad', font: { family: fontFamily, size: 9 }, callback: function(v){ return v + '%'; } },
+          beginAtZero: true, max: 100
+        }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+//  SMART INPUT — AUTOCOMPLETE / REUSE / PRESET
+// ═══════════════════════════════════════
+
+// ── Autocomplete history (stored in localStorage) ──
+function acGetHistory(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; }
+}
+function acAddHistory(key, val) {
+  if (!val) return;
+  var list = acGetHistory(key).filter(function(v){ return v !== val; });
+  list.unshift(val);
+  if (list.length > 30) list = list.slice(0, 30);
+  try { localStorage.setItem(key, JSON.stringify(list)); } catch(e){}
+}
+
+var _acBlurTimer = {};
+function acInput(inputId, dropId) {
+  var inp = document.getElementById(inputId);
+  var drop = document.getElementById(dropId);
+  var q = inp.value.toLowerCase();
+  var key = inputId === 'bPartName' ? 'partNames' : 'customerNames';
+  var list = acGetHistory(key).filter(function(v){ return !q || v.toLowerCase().indexOf(q) >= 0; });
+  if (!list.length) { drop.style.display = 'none'; return; }
+  drop.innerHTML = list.slice(0, 8).map(function(v) {
+    return '<div class="ac-item" onmousedown="acPick(\'' + inputId + '\',\'' + dropId + '\',\'' + v.replace(/'/g,"\\'") + '\')">' + v + '</div>';
+  }).join('');
+  drop.style.display = 'block';
+}
+function acPick(inputId, dropId, val) {
+  document.getElementById(inputId).value = val;
+  document.getElementById(dropId).style.display = 'none';
+  // if partName picked, also try to fill customer from last matching preset
+  if (inputId === 'bPartName') {
+    var presets = getPresets();
+    var match = presets.find(function(p){ return p.partName === val; });
+    if (match && !document.getElementById('bCustomer').value) {
+      document.getElementById('bCustomer').value = match.customer;
+    }
+  }
+}
+function acBlur(dropId) {
+  _acBlurTimer[dropId] = setTimeout(function(){ document.getElementById(dropId).style.display = 'none'; }, 200);
+}
+
+// ── Reuse last barrel ──
+function renderReuseBar() {
+  try {
+    var last = JSON.parse(localStorage.getItem('lastBarrelPart') || 'null');
+    var bar = document.getElementById('reuseBar');
+    var lbl = document.getElementById('reuseLabel');
+    if (last && (last.partName || last.customer)) {
+      lbl.textContent = (last.partName || '') + (last.customer ? ' · ' + last.customer : '');
+      bar.style.display = 'block';
+    } else {
+      bar.style.display = 'none';
+    }
+  } catch(e){}
+}
+function reuseLastBarrel() {
+  try {
+    var last = JSON.parse(localStorage.getItem('lastBarrelPart') || 'null');
+    if (!last) return;
+    document.getElementById('bPartName').value = last.partName || '';
+    document.getElementById('bCustomer').value = last.customer || '';
+    showToast('entry', 'ใช้ค่าเดิมแล้ว ✓', 'ok');
+  } catch(e){}
+}
+
+// ── Preset ──
+function getPresets() {
+  try { return JSON.parse(localStorage.getItem('partPresets') || '[]'); } catch(e) { return []; }
+}
+function savePresets(list) {
+  try { localStorage.setItem('partPresets', JSON.stringify(list)); } catch(e){}
+}
+function savePreset() {
+  var pn = document.getElementById('bPartName').value.trim();
+  var cu = document.getElementById('bCustomer').value.trim();
+  if (!pn && !cu) { showToast('entry', 'กรอกชื่อชิ้นงานหรือลูกค้าก่อน', 'err'); return; }
+  var presets = getPresets();
+  var exists = presets.some(function(p){ return p.partName === pn && p.customer === cu; });
+  if (exists) { showToast('entry', 'มี Preset นี้แล้ว', 'err'); return; }
+  presets.push({ partName: pn, customer: cu });
+  savePresets(presets);
+  renderPresetChips();
+  showToast('entry', 'บันทึก Preset แล้ว ⭐', 'ok');
+}
+function applyPreset(idx) {
+  var p = getPresets()[idx];
+  if (!p) return;
+  document.getElementById('bPartName').value = p.partName || '';
+  document.getElementById('bCustomer').value = p.customer || '';
+  showToast('entry', 'เลือก Preset แล้ว ✓', 'ok');
+}
+function delPreset(idx) {
+  var presets = getPresets();
+  presets.splice(idx, 1);
+  savePresets(presets);
+  renderPresetChips();
+}
+function renderPresetChips() {
+  var presets = getPresets();
+  var wrap = document.getElementById('presetChips');
+  if (!presets.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = presets.map(function(p, i) {
+    var label = (p.partName || '') + (p.customer ? ' · ' + p.customer : '');
+    return '<button class="preset-chip" onclick="applyPreset(' + i + ')" title="' + label + '">' +
+      '<span>' + label + '</span>' +
+      '<span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(' + i + ')">✕</span>' +
+    '</button>';
+  }).join('');
+}
+
+// ── Init smart input ──
+function initSmartInput() {
+  renderReuseBar();
+  renderPresetChips();
+  // seed AC history from existing dayRecords
+  var pNames = [], cNames = [];
+  dayRecords.forEach(function(r) {
+    (r.rows||[]).forEach(function(b) {
+      if (b.partName && pNames.indexOf(b.partName) < 0) pNames.push(b.partName);
+      if (b.customer && cNames.indexOf(b.customer) < 0) cNames.push(b.customer);
+    });
+  });
+  var existP = acGetHistory('partNames');
+  var existC = acGetHistory('customerNames');
+  pNames.forEach(function(v){ if (existP.indexOf(v) < 0) existP.push(v); });
+  cNames.forEach(function(v){ if (existC.indexOf(v) < 0) existC.push(v); });
+  try {
+    localStorage.setItem('partNames', JSON.stringify(existP.slice(0,30)));
+    localStorage.setItem('customerNames', JSON.stringify(existC.slice(0,30)));
+  } catch(e){}
+}
+
+// ═══════════════════════════════════════
+//  CHEMICAL DOSING
+// ═══════════════════════════════════════
+// ── CHEM SETTINGS (ฝังในไฟล์ — แก้โดย saveChemSettings) ──
+var CHEM_DEFAULTS = [{"name":"ZB 1533 (ยาพื้น)","type":"AH","rateAH":0.225},{"name":"ZB 1534 (ยาเงา)","type":"AH","rateAH":0.1},{"name":"White Chromate","type":"COLOR","color":"B","chemicals":[{"name":"TB-110","rate":50}]},{"name":"Yellow Chromate","type":"COLOR","color":"C","chemicals":[{"name":"TC-125","rate":35}]},{"name":"Black Chromate","type":"COLOR","color":"K","chemicals":[{"name":"ALX-441A","rate":50},{"name":"ALX-441B","rate":35},{"name":"HYPRO200","rate":15}]}]; /* CHEM_DEFAULTS_JSON */
+var chemSettings = [];
+
+function loadChemSettings() {
+  // โหลดจาก localStorage ก่อน ถ้าไม่มีใช้ค่าที่ฝังในไฟล์
+  try {
+    var stored = localStorage.getItem('chemSettings');
+    chemSettings = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(CHEM_DEFAULTS));
+  } catch(e) { chemSettings = JSON.parse(JSON.stringify(CHEM_DEFAULTS)); }
+}
+
+function readChemFromUI() {
+  var rows = document.querySelectorAll('.chem-row');
+  var result = [];
+  rows.forEach(function(row) {
+    var name = row.querySelector('.chem-name-input').value.trim();
+    var type = row.querySelector('.chem-type-select').value;
+    if (!name) return;
+    var c = { name: name, type: type };
+    if (type === 'AH') {
+      c.rateAH = parseFloat(row.querySelector('[data-rate="AH"]').value) || 0;
+    } else {
+      c.color = row.querySelector('input[name^="cr-"]:checked') ? row.querySelector('input[name^="cr-"]:checked').value : 'B';
+      c.chemicals = [];
+      row.querySelectorAll('.chem-sub-row').forEach(function(sr) {
+        var n = sr.querySelector('[data-chem-name]').value.trim();
+        var r = parseFloat(sr.querySelector('[data-chem-rate]').value) || 0;
+        if (n) c.chemicals.push({ name: n, rate: r });
+      });
+    }
+    result.push(c);
+  });
+  return result;
+}
+
+function saveChemSettings() {
+  chemSettings = readChemFromUI();
+  // บันทึกลง localStorage ด้วย
+  try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+
+  // ── บันทึกลงในไฟล์ HTML โดยตรง ──
+  try {
+    var src = document.documentElement.outerHTML;
+    var newJson = JSON.stringify(chemSettings);
+    // แทนที่ค่า CHEM_DEFAULTS เดิมในไฟล์
+    src = src.replace(/var CHEM_DEFAULTS = (\[.*?\]); \/\* CHEM_DEFAULTS_JSON \*\//s,
+      'var CHEM_DEFAULTS = ' + newJson + '; /* CHEM_DEFAULTS_JSON */');
+    var blob = new Blob([src], { type: 'text/html;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'รายงานงานชุบ_v4_10.html';
+    a.click();
+    showToast('settings', '💾 บันทึกเคมีลงไฟล์แล้ว — ใช้ไฟล์ที่ดาวน์โหลดแทนไฟล์เดิม ✓', 'ok');
+  } catch(e) {
+    showToast('settings', 'บันทึก localStorage แล้ว (บันทึกลงไฟล์ไม่สำเร็จ)', 'err');
+  }
+  renderSummary();
+}
+
+function exportChemSettings() {
+  saveChemSettings(); // บันทึกก่อน export ให้แน่ใจ
+  if (!chemSettings.length) { showToast('settings','ยังไม่มีการตั้งค่าเคมี','err'); return; }
+  try {
+    var data = JSON.stringify({ chemSettings: chemSettings, exportedAt: new Date().toISOString() }, null, 2);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = 'chem_settings_' + isoDate(new Date()) + '.json';
+    a.click();
+    showToast('settings','Export เคมีสำเร็จ ✓','ok');
+  } catch(e) { showToast('settings','Export ไม่สำเร็จ','err'); }
+}
+
+function importChemSettings(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (!data.chemSettings || !Array.isArray(data.chemSettings)) throw new Error('format ไม่ถูกต้อง');
+      chemSettings = data.chemSettings;
+      try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(err){}
+      // render ใหม่
+      var list = document.getElementById('chemList');
+      list.innerHTML = '';
+      chemSettings.forEach(function(c) { addChemRow(c); });
+      showToast('settings','Import เคมีสำเร็จ ✓ (' + chemSettings.length + ' รายการ)','ok');
+      renderSummary();
+    } catch(err) {
+      showToast('settings','ไฟล์ไม่ถูกต้อง: ' + err.message,'err');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function addChemRow(c) {
+  // โครงสร้างใหม่: { name, type:'AH'|'COLOR', color:'B'|'C'|'K', chemicals:[{name,rate}], rateAH }
+  c = c || { name:'', type:'AH', rateAH:0, color:'B', chemicals:[{name:'',rate:0}] };
+  if (!c.chemicals) c.chemicals = [{name:'',rate:0}];
+  if (!c.color) c.color = 'B';
+  var ts = Date.now() + Math.random();
+
+  var chemHtml = c.chemicals.map(function(ch) {
+    return '<div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
+      '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร เช่น TB110" value="' + (ch.name||'') + '">' +
+      '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="' + (ch.rate||0) + '">' +
+      '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
+      '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>' +
+    '</div>';
+  }).join('');
+
+  var div = document.createElement('div');
+  div.className = 'chem-row';
+  div.innerHTML =
+    '<div class="chem-row-top">' +
+      '<input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value="' + (c.name||'') + '">' +
+      '<select class="chem-type-select" onchange="toggleChemRates(this)">' +
+        '<option value="AH"' + (c.type==='AH'?' selected':'') + '>ml/AH</option>' +
+        '<option value="COLOR"' + (c.type==='COLOR'?' selected':'') + '>ml/โม่ (ต่อสี)</option>' +
+      '</select>' +
+      '<button class="chem-del-btn" onclick="this.closest(\'.chem-row\').remove()">✕</button>' +
+    '</div>' +
+    '<div class="chem-row-rates" data-type-rates>' +
+      (c.type === 'COLOR' ?
+        '<div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:11px;color:var(--text-muted);">ใช้กับสี:</span>' +
+          '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="B"' + (c.color==='B'?' checked':'') + ' style="margin:0;"> <span class="badge-B" style="padding:2px 8px;border-radius:10px;font-size:10px;">B ฟ้า</span></label>' +
+          '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="C"' + (c.color==='C'?' checked':'') + ' style="margin:0;"> <span class="badge-C" style="padding:2px 8px;border-radius:10px;font-size:10px;">C รุ้ง</span></label>' +
+          '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="K"' + (c.color==='K'?' checked':'') + ' style="margin:0;"> <span class="badge-K" style="padding:2px 8px;border-radius:10px;font-size:10px;">K ดำ</span></label>' +
+        '</div>' +
+        '<div class="chem-chemicals-list">' + chemHtml + '</div>' +
+        '<button onclick="addChemSubRow(this)" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;width:100%;margin-top:2px;">+ เพิ่มสาร</button>'
+      :
+        '<div class="chem-rate-wrap" style="grid-column:1/3"><div class="chem-rate-label">Rate (ml/AH)</div><input class="chem-rate-input" data-rate="AH" type="number" step="0.001" min="0" value="' + (c.rateAH||0) + '"></div>'
+      ) +
+    '</div>';
+  document.getElementById('chemList').appendChild(div);
+}
+
+function addChemSubRow(btn) {
+  var list = btn.previousElementSibling;
+  var row = document.createElement('div');
+  row.className = 'chem-sub-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
+  row.innerHTML =
+    '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร">' +
+    '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="0">' +
+    '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
+    '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>';
+  list.appendChild(row);
+}
+
+function toggleChemRates(sel) {
+  var ratesDiv = sel.closest('.chem-row').querySelector('[data-type-rates]');
+  var type = sel.value;
+  var ts = Date.now();
+  ratesDiv.innerHTML = type === 'COLOR' ?
+    '<div style="margin-bottom:6px;display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:11px;color:var(--text-muted);">ใช้กับสี:</span>' +
+      '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="B" checked style="margin:0;"> <span class="badge-B" style="padding:2px 8px;border-radius:10px;font-size:10px;">B ฟ้า</span></label>' +
+      '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="C" style="margin:0;"> <span class="badge-C" style="padding:2px 8px;border-radius:10px;font-size:10px;">C รุ้ง</span></label>' +
+      '<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;"><input type="radio" name="cr-'+ts+'" value="K" style="margin:0;"> <span class="badge-K" style="padding:2px 8px;border-radius:10px;font-size:10px;">K ดำ</span></label>' +
+    '</div>' +
+    '<div class="chem-chemicals-list">' +
+      '<div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
+        '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร">' +
+        '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="0">' +
+        '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
+        '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>' +
+      '</div>' +
+    '</div>' +
+    '<button onclick="addChemSubRow(this)" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;width:100%;margin-top:2px;">+ เพิ่มสาร</button>'
+    :
+    '<div class="chem-rate-wrap" style="grid-column:1/3"><div class="chem-rate-label">Rate (ml/AH)</div><input class="chem-rate-input" data-rate="AH" type="number" step="0.001" min="0" value="0"></div>';
+}
+
+function calcChemUsage(ah, barrelsB, barrelsC, barrelsK) {
+  var barrelMap = { B: barrelsB, C: barrelsC, K: barrelsK };
+  return chemSettings.map(function(c) {
+    var used = 0, formula = '';
+    if (c.type === 'AH') {
+      used = (c.rateAH || 0) * ah;
+      formula = c.rateAH + ' ml/AH × ' + ah.toLocaleString() + ' AH';
+    } else {
+      var barrels = barrelMap[c.color] || 0;
+      var colorName = c.color === 'B' ? 'White chromate' : c.color === 'C' ? 'Yellow chromate' : 'Black chromate';
+      var parts = (c.chemicals || []).map(function(ch) {
+        var u = ch.rate * barrels;
+        used += u;
+        return ch.name + ': ' + ch.rate + '×' + barrels + ' โม่ = ' + u.toFixed(1) + ' ml';
+      });
+      formula = colorName + ' (' + c.color + ') ' + barrels + ' โม่\n' + parts.join('\n');
+    }
+    return { name: c.name, used: used, formula: formula, type: c.type };
+  });
+}
+
+function renderChemSummary(ah, barrelsB, barrelsC, barrelsK) {
+  var card = document.getElementById('chemSummaryCard');
+  var container = document.getElementById('chemSummaryRows');
+  if (!chemSettings.length) { card.style.display='none'; return; }
+  var results = calcChemUsage(ah, barrelsB, barrelsC, barrelsK);
+  container.innerHTML = results.map(function(r) {
+    var formulaHtml = r.formula.replace(/\n/g, '<br>');
+    return '<div class="chem-summary-row">' +
+      '<div style="flex:1;"><div class="chem-summary-name">🧪 ' + r.name + '</div>' +
+      '<div class="chem-summary-formula" style="line-height:1.6;">' + formulaHtml + '</div></div>' +
+      '<div style="text-align:right;flex-shrink:0;margin-left:8px;"><div class="chem-summary-val">' + r.used.toFixed(1) + '</div>' +
+      '<div class="chem-summary-unit">ml</div></div>' +
+    '</div>';
+  }).join('');
+  card.style.display = 'block';
+}
+
+// ═══════════════════════════════════════
+//  APPS SCRIPT SYNC (ไม่ต้อง login)
+// ═══════════════════════════════════════
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyxXbkNGWrj3AMw2NyqPP6DzV1EJxSWI3LWByCFynw02yhPhfkqIqceP5wU_GNCjXNM/exec';
+
+// บันทึกขึ้น Google Drive ผ่าน Apps Script
+function gdriveSaveQuiet() {
+  var payload = JSON.stringify({ dayRecords: dayRecords, savedAt: new Date().toISOString() });
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: payload
+  }).then(function(r){ 
+    if(r.ok) showToast('entry','☁️ บันทึกขึ้น Drive แล้ว','ok');
+  }).catch(function(){ });
+}
+
+// โหลดข้อมูลจาก Google Drive ผ่าน Apps Script (เรียกตอนเปิดแอป)
+function gdriveAutoLoad() {
+  fetch(APPS_SCRIPT_URL)
+    .then(function(r){ return r.text(); })
+    .then(function(text) {
+      if (!text || text === '{}') return;
+      try {
+        var parsed = JSON.parse(text);
+        if (parsed.dayRecords && parsed.dayRecords.length > 0) {
+          dayRecords = parsed.dayRecords;
+          try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+          renderHistory();
+          renderSummary();
+          showToast('entry','☁️ โหลดข้อมูลจาก Drive แล้ว ('+dayRecords.length+' วัน)','ok');
+        }
+      } catch(e) {}
+    }).catch(function(){});
+}
+
+// ═══════════════════════════════════════
+//  START
+// ═══════════════════════════════════════
+init();
+</script>
+
+
+</body></html>
