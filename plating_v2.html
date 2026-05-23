@@ -309,7 +309,18 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       🔓 เข้าสู่ระบบ
     </button>
     <div class="login-error" id="loginError">❌ PIN ไม่ถูกต้อง กรุณาลองใหม่</div>
-    <div class="login-note" style="margin-top:16px;">🔒 เฉพาะผู้มีสิทธิ์เท่านั้น</div>
+    <hr class="login-divider">
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+      <div style="font-size:11px;color:var(--text-muted);text-align:left;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
+        👑 <strong style="color:#fff;">Admin</strong> — แก้ไขได้ทุกอย่าง
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);text-align:left;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
+        👁️ <strong style="color:#fff;">Viewer</strong> — ดูประวัติ + ดาวน์โหลด CSV
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);text-align:left;background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;">
+        ✏️ <strong style="color:#fff;">Operator</strong> — กรอกรายรอบอย่างเดียว
+      </div>
+    </div>
   </div>
 </div>
 
@@ -317,7 +328,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 <div id="userBar" class="user-bar" style="display:none;">
   <div class="user-bar-info">
     <div class="user-avatar" id="userAvatar">🔧</div>
-    <div class="user-name" id="userName">งานชุบ B-1</div>
+    <div class="user-name" id="userName">-</div>
   </div>
   <button class="logout-btn" onclick="doLogout()">ออกจากระบบ</button>
 </div>
@@ -2120,16 +2131,27 @@ function fbStartPoll() {
 }
 
 // ═══════════════════════════════════════
-//  PIN LOGIN
+//  PIN LOGIN — 3 ระดับ
 // ═══════════════════════════════════════
 
-var CORRECT_PIN = 'APK774';
+var PINS = {
+  'APK774': 'admin',    // ระดับ 1 — แก้ไขทุกอย่าง
+  'Apk002': 'viewer',   // ระดับ 2 — ดูประวัติ + ดาวน์โหลด CSV
+  'Apk001': 'operator'  // ระดับ 3 — กรอกรายรอบอย่างเดียว
+};
+
+var currentRole = null;
 
 function checkPin() {
   var input = document.getElementById('pinInput').value.trim();
-  if (input === CORRECT_PIN) {
-    try { localStorage.setItem('pinAuth', '1'); } catch(e){}
-    showApp();
+  var role = PINS[input];
+  if (role) {
+    currentRole = role;
+    try {
+      localStorage.setItem('pinAuth', '1');
+      localStorage.setItem('pinRole', role);
+    } catch(e){}
+    showApp(role);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -2137,16 +2159,69 @@ function checkPin() {
   }
 }
 
-function showApp() {
+function applyRoleUI(role) {
+  // แสดง role badge
+  var roleNames = { admin:'👑 Admin', viewer:'👁️ Viewer', operator:'✏️ Operator' };
+  document.getElementById('userName').textContent = roleNames[role] || role;
+
+  // ซ่อน/แสดงตาม role
+  var isAdmin    = role === 'admin';
+  var isViewer   = role === 'viewer';
+  var isOperator = role === 'operator';
+
+  // Tab bar — Viewer เห็นแค่ประวัติ+กราฟ, Operator เห็นแค่กรอกรายรอบ
+  var tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(function(btn) {
+    var txt = btn.textContent.trim();
+    if (isOperator) {
+      // Operator: เห็นแค่ "กรอกรายรอบ"
+      btn.style.display = txt.includes('กรอกรายรอบ') ? '' : 'none';
+    } else if (isViewer) {
+      // Viewer: ซ่อน "กรอกรายรอบ" และ "ตั้งค่า"
+      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ตั้งค่า')) ? 'none' : '';
+    }
+    // Admin: เห็นทุก tab
+  });
+
+  // ถ้า Operator → force tab กรอกรายรอบ
+  if (isOperator) { tab('entry'); }
+  // ถ้า Viewer → force tab ประวัติ
+  if (isViewer) { tab('history'); }
+
+  // ปุ่มบันทึก/เพิ่มรอบ — Viewer ซ่อน
+  var saveButtons = ['saveBtn','discordBtn','clearBtn','addBarrelBtn'];
+  saveButtons.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = (isViewer) ? 'none' : '';
+  });
+
+  // ปุ่มลบข้อมูลประวัติ — Admin เท่านั้น
+  var delBtns = document.querySelectorAll('.del-btn, .history-del, [onclick*="deleteDay"]');
+  delBtns.forEach(function(el){
+    el.style.display = isAdmin ? '' : 'none';
+  });
+
+  // ตั้งค่าระบบ — Admin เท่านั้น
+  var settingsTab = document.getElementById('v-settings');
+  if (settingsTab && !isAdmin) settingsTab.style.display = 'none';
+}
+
+function showApp(role) {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('userBar').style.display = 'flex';
   init();
+  // ใส่ delay เล็กน้อยให้ DOM render ก่อน
+  setTimeout(function(){ applyRoleUI(role); }, 300);
 }
 
 function doLogout() {
   if (!confirm('ออกจากระบบ?')) return;
-  try { localStorage.removeItem('pinAuth'); } catch(e){}
+  currentRole = null;
+  try {
+    localStorage.removeItem('pinAuth');
+    localStorage.removeItem('pinRole');
+  } catch(e){}
   document.getElementById('userBar').style.display = 'none';
   document.getElementById('appContent').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -2157,7 +2232,9 @@ function doLogout() {
 function checkAutoLogin() {
   try {
     if (localStorage.getItem('pinAuth') === '1') {
-      showApp();
+      var role = localStorage.getItem('pinRole') || 'operator';
+      currentRole = role;
+      showApp(role);
       return;
     }
   } catch(e){}
