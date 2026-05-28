@@ -907,6 +907,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div id="chemCardCode" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-light);margin-bottom:2px;"></div>
           <div id="chemCardName" style="font-size:16px;font-weight:700;"></div>
           <div id="chemCardSupplier" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;"></div>
+          <button onclick="openEditChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไขข้อมูล</button>
         </div>
         <div style="text-align:right;">
           <div style="font-size:10px;color:var(--blue-light);margin-bottom:2px;">คงเหลือ</div>
@@ -928,6 +929,33 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div style="font-size:9px;color:var(--blue-light);">เบิกจากระบบ</div>
           <div id="chemCardAutoOut" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#6ee7b7;margin-top:2px;">0</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── ฟอร์มแก้ไขข้อมูลเคมี ── -->
+    <div id="editChemItemForm" style="display:none;" class="card" >
+      <div class="card-label">✏️ แก้ไขข้อมูลเคมี</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">รหัสเคมี</div>
+          <input id="editChemCode" type="text" placeholder="เช่น C-001" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box;">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">ชื่อเคมี <span style="color:#c0392b;">*</span></div>
+          <input id="editChemName" type="text" placeholder="เช่น ZB 1533 (ยาพื้น)" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">ผู้จัดจำหน่าย</div>
+          <input id="editChemSupplier" type="text" placeholder="ชื่อบริษัท" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;box-sizing:border-box;">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">ที่อยู่/หมายเหตุ</div>
+          <input id="editChemAddress" type="text" placeholder="ที่อยู่หรือหมายเหตุ" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;box-sizing:border-box;">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+        <button onclick="confirmEditChemItem()" style="padding:11px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">💾 บันทึกการแก้ไข</button>
+        <button onclick="document.getElementById('editChemItemForm').style.display='none'" style="padding:11px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">ยกเลิก</button>
       </div>
     </div>
 
@@ -3258,6 +3286,61 @@ function confirmAddChemItem() {
   document.getElementById('addChemItemForm').style.display='none';
   renderChemStockSelect();
   updateChemStockCount();
+}
+
+// ── แก้ไขข้อมูลเคมีที่มีอยู่ ──────────────────────────────────
+function openEditChemItem() {
+  var item = chemItems.find(function(c){ return c.id===_selChemId; });
+  if (!item) return;
+  document.getElementById('editChemCode').value    = item.code    || '';
+  document.getElementById('editChemName').value    = item.name    || '';
+  document.getElementById('editChemSupplier').value= item.supplier|| '';
+  document.getElementById('editChemAddress').value = item.address || '';
+  var f = document.getElementById('editChemItemForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+}
+
+function confirmEditChemItem() {
+  var item = chemItems.find(function(c){ return c.id===_selChemId; });
+  if (!item) return;
+  var newCode = (document.getElementById('editChemCode').value||'').trim();
+  var newName = (document.getElementById('editChemName').value||'').trim();
+  if (!newName) { alert('กรุณากรอกชื่อเคมี'); return; }
+  var oldName = item.name;
+  item.code     = newCode;
+  item.name     = newName;
+  item.supplier = (document.getElementById('editChemSupplier').value||'').trim();
+  item.address  = (document.getElementById('editChemAddress').value||'').trim();
+  // อัปเดตชื่อใน chemSettings ด้วย (เพื่อให้คำนวณตัด stock ได้ถูก)
+  chemSettings.forEach(function(cs) {
+    if (cs.name && cs.name.trim().toLowerCase() === oldName.trim().toLowerCase()) {
+      cs.name = newName;
+    }
+    if (cs.chemicals) {
+      cs.chemicals.forEach(function(ch) {
+        if (ch.name && ch.name.trim().toLowerCase() === oldName.trim().toLowerCase()) {
+          ch.name = newName;
+        }
+      });
+    }
+  });
+  // อัปเดตชื่อใน manualDosings และ dayRecords ที่บันทึกไว้แล้ว
+  dayRecords.forEach(function(rec) {
+    if (rec.manualDosings) {
+      rec.manualDosings.forEach(function(md) {
+        if (md.chemName && md.chemName.trim().toLowerCase() === oldName.trim().toLowerCase()) {
+          md.chemName = newName;
+        }
+      });
+    }
+  });
+  saveChemData();
+  try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  if (fbIsConfigured()) fbSave();
+  document.getElementById('editChemItemForm').style.display='none';
+  renderChemStockCard();
+  renderChemStockSelect();
+  showToast('entry','✅ แก้ไขข้อมูลเคมีแล้ว: '+newName,'ok');
 }
 
 function updateChemStockCount() {
