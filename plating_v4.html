@@ -1013,6 +1013,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
     <button class="btn btn-primary" onclick="saveFbConfig()" style="margin-bottom:8px;">💾 บันทึกและเชื่อมต่อ Firebase</button>
     <button class="btn btn-outline" onclick="fbManualSync()" style="margin-bottom:8px;">🔄 โหลดข้อมูลจาก Cloud ตอนนี้</button>
+    <button class="btn btn-outline" onclick="fbMigrateLocal()" style="margin-bottom:8px;background:#fff3cd;border-color:#f0ad4e;color:#856404;">📤 อัปโหลดข้อมูลในเครื่องขึ้น Cloud</button>
     <div id="toast-firebase" class="toast"></div>
     <div style="background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:4px;">
       <div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px;">วิธีหา Database URL:</div>
@@ -2579,7 +2580,8 @@ function gdriveAutoLoad() {
 //  FIREBASE REALTIME DATABASE (Real-time Sync)
 //  ฟรี 100% — ไม่ต้องผูกบัตร
 // ═══════════════════════════════════════
-var FB_DB_URL     = 'https://platingapp-92e21-default-rtdb.firebaseio.com';   // เช่น https://platingapp-92e21-default-rtdb.firebaseio.com
+var FB_DB_URL_DEFAULT = 'https://platingapp-92e21-default-rtdb.asia-southeast1.firebasedatabase.app';
+var FB_DB_URL     = FB_DB_URL_DEFAULT;
 var _fbPollTimer  = null;
 var _fbLastSavedAt = '';
 
@@ -2592,16 +2594,19 @@ function fbDataUrl() {
   return FB_DB_URL.replace(/\/$/, '') + '/plating-b1.json';
 }
 
-// โหลด config จาก localStorage
+// โหลด config จาก localStorage (ถ้าไม่มีใช้ค่า default)
 function fbLoadConfig() {
   try {
-    FB_DB_URL = localStorage.getItem('fbDbUrl') || '';
-    if (FB_DB_URL) {
-      document.getElementById('fbDbUrl').value = FB_DB_URL;
-      fbSetBadge(true);
-      fbStartPoll();
-    }
-  } catch(e){}
+    var stored = localStorage.getItem('fbDbUrl') || '';
+    FB_DB_URL = stored || FB_DB_URL_DEFAULT;
+    document.getElementById('fbDbUrl').value = FB_DB_URL;
+    fbSetBadge(true);
+    fbStartPoll();
+  } catch(e){
+    FB_DB_URL = FB_DB_URL_DEFAULT;
+    fbSetBadge(true);
+    fbStartPoll();
+  }
 }
 
 // บันทึก config และเริ่ม sync
@@ -2694,6 +2699,15 @@ function fbManualSync() {
   if (!fbIsConfigured()) { showToast('firebase','กรุณาบันทึก Database URL ก่อน','err'); return; }
   showToast('firebase','กำลังโหลดจาก Firebase...','ok');
   fbLoad(false);
+}
+
+// อัปโหลดข้อมูล localStorage ขึ้น Firebase (ใช้ครั้งเดียวตอน migrate)
+async function fbMigrateLocal() {
+  if (!fbIsConfigured()) { showToast("firebase","ยังไม่ได้เชื่อมต่อ Firebase","err"); return; }
+  if (!confirm("จะอัปโหลดข้อมูลในเครื่องนี้ขึ้น Cloud ทั้งหมด (" + dayRecords.length + " วัน)\nข้อมูล Cloud เดิมจะถูกรวมกับข้อมูลในเครื่อง ยืนยัน?")) return;
+  showToast("firebase","กำลังอัปโหลด...","ok");
+  await fbSave();
+  showToast("firebase","✅ อัปโหลดสำเร็จ! " + dayRecords.length + " วัน","ok");
 }
 
 // Polling ทุก 15 วินาที (auto sync)
