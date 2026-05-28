@@ -2306,10 +2306,20 @@ function readChemFromUI() {
   return result;
 }
 
+function loadChemSettingsToUI() {
+  // โหลด chemSettings ไปแสดงใน UI
+  var container = document.getElementById('chemList');
+  if (!container) return;
+  container.innerHTML = '';
+  chemSettings.forEach(function(c) { addChemRow(c); });
+}
+
 function saveChemSettings() {
   chemSettings = readChemFromUI();
   // บันทึกลง localStorage ด้วย
   try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  // บันทึกขึ้น Firebase ด้วย
+  if (fbIsConfigured()) fbSave();
 
   // ── บันทึกลงในไฟล์ HTML โดยตรง ──
   try {
@@ -2593,6 +2603,9 @@ function fbIsConfigured() {
 function fbDataUrl() {
   return FB_DB_URL.replace(/\/$/, '') + '/plating-b1.json';
 }
+function fbSettingsUrl() {
+  return FB_DB_URL.replace(/\/$/, '') + '/plating-b1-settings.json';
+}
 
 // โหลด config จาก localStorage (ถ้าไม่มีใช้ค่า default)
 function fbLoadConfig() {
@@ -2635,6 +2648,12 @@ async function fbSave() {
   if (!fbIsConfigured()) return;
   var savedAt = new Date().toISOString();
   var body = { dayRecords: dayRecords, todayBarrels: todayBarrels, savedAt: savedAt };
+  // รวมข้อมูล settings เข้าไปด้วย
+  try { body.chemSettings = chemSettings; } catch(e){}
+  try { body.partPresets = JSON.parse(localStorage.getItem('partPresets')||'[]'); } catch(e){}
+  try { body.partNames = JSON.parse(localStorage.getItem('partNames')||'[]'); } catch(e){}
+  try { body.customerNames = JSON.parse(localStorage.getItem('customerNames')||'[]'); } catch(e){}
+  try { body.discordWH = discordWH || ''; } catch(e){}
   try {
     var res = await fetch(fbDataUrl(), {
       method: 'PUT',
@@ -2688,6 +2707,21 @@ async function fbLoad(silent) {
       renderBarrels();
     }
     try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+
+    // โหลด settings จาก cloud
+    if (data.chemSettings && Array.isArray(data.chemSettings) && data.chemSettings.length) {
+      chemSettings = data.chemSettings;
+      try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+      loadChemSettingsToUI();
+    }
+    if (data.partPresets) { try { localStorage.setItem('partPresets', JSON.stringify(data.partPresets)); } catch(e){} }
+    if (data.partNames)   { try { localStorage.setItem('partNames',   JSON.stringify(data.partNames));   } catch(e){} }
+    if (data.customerNames) { try { localStorage.setItem('customerNames', JSON.stringify(data.customerNames)); } catch(e){} }
+    if (data.discordWH) {
+      discordWH = data.discordWH;
+      try { localStorage.setItem('discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
+    }
+
     renderHistory();
     renderSummary();
     if (!silent) showToast('entry','☁️ โหลดจาก Firebase แล้ว ('+dayRecords.length+' วัน)','ok');
