@@ -334,6 +334,18 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 </div>
 
 <div id="appContent" style="display:none;">
+
+<!-- ── Live Sync Banner ── -->
+<div id="liveSyncBanner" style="display:none;position:sticky;top:0;z-index:200;background:linear-gradient(90deg,#0d6e56,#0d9488);color:#fff;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;font-family:'IBM Plex Sans Thai',sans-serif;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="width:8px;height:8px;border-radius:50%;background:#6ee7b7;display:inline-block;animation:pulse 1.5s infinite;"></span>
+    <span id="liveBannerText">🔄 กำลังรับข้อมูล real-time...</span>
+  </div>
+  <span id="liveBannerTime" style="font-size:10px;opacity:.8;"></span>
+</div>
+<style>
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+</style>
 <div class="app-header">
   <div class="hdr-top">
     <div>
@@ -578,14 +590,25 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
   <div id="toast-entry" class="toast"></div>
 
-  <!-- Live status indicator -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:6px 10px;background:var(--sky-pale);border-radius:10px;border:1px solid var(--border);">
-    <div style="display:flex;align-items:center;gap:6px;">
-      <span id="liveIndicator" style="font-size:11px;font-weight:600;color:var(--text-muted);">⚪ ยังไม่ได้ sync</span>
-      <span style="font-size:10px;color:var(--text-muted);">— ข้อมูล push ขึ้น Firebase ทุกครั้งที่เพิ่มรอบ</span>
+  <!-- Live status indicator + Auto Discord toggle -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:8px 12px;background:var(--sky-pale);border-radius:10px;border:1px solid var(--border);">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+      <span id="liveIndicator" style="font-size:11px;font-weight:600;color:var(--text-muted);white-space:nowrap;">⚪ ยังไม่ได้ sync</span>
+      <!-- Auto Discord Toggle -->
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;margin-left:4px;">
+        <div style="position:relative;width:36px;height:20px;flex-shrink:0;">
+          <input type="checkbox" id="autoDiscordToggle"
+            onchange="localStorage.setItem('autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
+            style="opacity:0;width:0;height:0;position:absolute;">
+          <span id="autoDiscordKnob" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:20px;transition:.3s;">
+            <span style="position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;"></span>
+          </span>
+        </div>
+        <span style="font-size:10px;color:var(--navy);font-weight:600;white-space:nowrap;">Auto Discord</span>
+      </label>
     </div>
-    <button onclick="sendLiveDiscord()" style="padding:5px 10px;border-radius:8px;background:#5865F2;color:#fff;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;">
-      📣 Live → Discord
+    <button onclick="sendLiveDiscord()" style="padding:5px 10px;border-radius:8px;background:#5865F2;color:#fff;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;flex-shrink:0;margin-left:8px;">
+      📣 ส่งตอนนี้
     </button>
   </div>
 
@@ -1311,7 +1334,9 @@ function init() {
   if (intakeDateEl) intakeDateEl.value = isoDate(new Date());
   fbLoadConfig();       // โหลด Firebase config และเริ่ม poll
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
-  loadAlertConfig();    // โหลดการตั้งค่าแจ้งเตือนสต็อค
+  loadAlertConfig();
+  loadAutoDiscordSetting();
+  renderSummaryMonthTable();    // โหลดการตั้งค่าแจ้งเตือนสต็อค
   tab('entry'); // ตั้ง default view หลัง DOM พร้อม
 }
 
@@ -2772,12 +2797,74 @@ async function fbMigrateLocal() {
   showToast("firebase","✅ อัปโหลดสำเร็จ! " + dayRecords.length + " วัน","ok");
 }
 
-// Polling ทุก 15 วินาที (auto sync)
+// Polling ทุก 5 วินาที (real-time sync)
 function fbStartPoll() {
   if (_fbPollTimer) clearInterval(_fbPollTimer);
   fbLoad(true);
-  _fbPollTimer = setInterval(function(){ fbLoad(true); }, 15000);
+  _fbPollTimer = setInterval(function(){ fbLivePoll(); }, 5000);
 }
+
+// Poll เฉพาะ todayBarrels (เบากว่า fbLoad เต็ม)
+async function fbLivePoll() {
+  if (!fbIsConfigured()) return;
+  try {
+    var liveUrl = getStoredFbUrl().replace(/\/+$/, '') + '/live.json';
+    var res = await fetch(liveUrl);
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data || !data.updatedAt) return;
+
+    // ถ้าข้อมูลใหม่กว่าที่เรามีอยู่
+    if (data.updatedAt <= (_fbLiveUpdatedAt || '')) return;
+    _fbLiveUpdatedAt = data.updatedAt;
+
+    // อัปเดต todayBarrels จาก cloud
+    if (data.rows && Array.isArray(data.rows)) {
+      var cloudIds = data.rows.map(function(r){return r.id;}).join(',');
+      var localIds2 = todayBarrels.map(function(r){return r.id;}).join(',');
+      if (cloudIds !== localIds2) {
+        todayBarrels = data.rows;
+        try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+        renderBarrels();
+        renderSummary();
+      }
+      // แสดง banner เสมอถ้าข้อมูลใหม่
+      updateLiveBanner(data);
+      updateLiveIndicator(true);
+    }
+  } catch(e) {}
+}
+
+var _fbLiveUpdatedAt = '';
+
+// แสดง banner เมื่อรับข้อมูล real-time จาก Firebase
+function updateLiveBanner(data) {
+  var banner = document.getElementById('liveSyncBanner');
+  var txt    = document.getElementById('liveBannerText');
+  var time   = document.getElementById('liveBannerTime');
+  if (!banner) return;
+
+  var recorder = data.recorder || '–';
+  var lotNo    = data.lotNo || '–';
+  var barrels  = data.barrels || 0;
+  var totalKg  = data.totalKg || 0;
+  var updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+  var timeStr  = updatedAt.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+
+  if (txt) txt.textContent = '🔴 Live: ' + recorder + ' | ' + lotNo +
+    ' | ' + barrels + ' รอบ | ' + (totalKg%1===0?totalKg:totalKg.toFixed(2)) + ' Kgs';
+  if (time) time.textContent = 'อัปเดต ' + timeStr;
+
+  banner.style.display = 'flex';
+
+  // ซ่อนหลัง 30 วิถ้าไม่มีการอัปเดตใหม่
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(function(){
+    banner.style.display = 'none';
+  }, 30000);
+}
+
+// ─────────────────────────────────────────────────────────────
 
 // ═══════════════════════════════════════
 //  LIVE SYNC — push ทุกครั้งที่เพิ่ม/ลบรอบ
@@ -2791,14 +2878,15 @@ function livePush() {
 }
 
 async function livePushNow() {
-  if (!fbIsConfigured()) return;
   var s = calcDay();
   var now = new Date();
+  var recorder = (document.getElementById('recorder')||{}).value || '–';
+  var lotNo    = (document.getElementById('lotNo')||{}).value || '–';
   var liveData = {
     updatedAt: now.toISOString(),
     date: isoDate(now),
-    recorder: (document.getElementById('repRecorder')||{}).value || '–',
-    lotNo: (document.getElementById('repLotNo')||{}).value || '–',
+    recorder: recorder,
+    lotNo: lotNo,
     totalKg: s.totalKg, newKg: s.newKg, reworkKg: s.reworkKg,
     kgB: s.kgB, kgC: s.kgC, kgK: s.kgK,
     ratio: s.ratio, ah: s.ah,
@@ -2806,18 +2894,108 @@ async function livePushNow() {
     rows: JSON.parse(JSON.stringify(todayBarrels)),
     status: 'live'
   };
-  try {
-    var liveUrl = getStoredFbUrl().replace(/\/+$/, '') + '/live.json';
-    await fetch(liveUrl, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(liveData) });
-    updateLiveIndicator(true);
-  } catch(e) { updateLiveIndicator(false); }
+
+  // ── Firebase: push /live + update /data todayBarrels ──
+  if (fbIsConfigured()) {
+    try {
+      var base = getStoredFbUrl().replace(/\/+$/, '');
+      // push /live สำหรับ poll จากเครื่องอื่น
+      await fetch(base + '/live.json', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(liveData)
+      });
+      // update /data/todayBarrels ให้เครื่อง Viewer เห็น
+      await fetch(base + '/data/todayBarrels.json', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(todayBarrels)
+      });
+      _fbLiveUpdatedAt = liveData.updatedAt;
+      updateLiveIndicator(true);
+    } catch(e) { updateLiveIndicator(false); }
+  }
+
+  // ── Auto Discord (ถ้าเปิด toggle) ──
+  var autoDisc = localStorage.getItem('autoDiscordOnAdd') === '1';
+  if (autoDisc) {
+    var wh = discordWH || localStorage.getItem('discordWH') || '';
+    if (!wh) {
+      showToast('entry','⚠️ Auto Discord: กรุณาตั้งค่า Webhook URL ก่อน','err');
+    } else if (todayBarrels.length) {
+      try {
+        await sendLiveDiscordSilent(wh, s, liveData);
+        updateLiveIndicator(true);
+        showToast('entry','📣 ส่ง Discord อัตโนมัติแล้ว ✓','ok');
+      } catch(e) {
+        console.warn('Auto Discord failed:', e.message);
+        showToast('entry','❌ Discord ส่งไม่ได้: ' + e.message,'err');
+        updateLiveIndicator(false);
+      }
+    }
+  }
 }
 
 function updateLiveIndicator(ok) {
   var el = document.getElementById('liveIndicator');
   if (!el) return;
-  el.textContent = ok ? '🟢 Live' : '🔴 Offline';
-  el.style.color  = ok ? '#0d6e56' : '#9b2c2c';
+  var autoOn = localStorage.getItem('autoDiscordOnAdd') === '1';
+  if (ok) {
+    el.textContent = autoOn ? '🟢 Live + Auto Discord' : '🟢 Live';
+    el.style.color = '#0d6e56';
+  } else {
+    el.textContent = '🔴 ส่งไม่ได้';
+    el.style.color = '#9b2c2c';
+  }
+}
+
+function updateAutoDiscordUI() {
+  var chk  = document.getElementById('autoDiscordToggle');
+  var knob = document.getElementById('autoDiscordKnob');
+  if (!chk || !knob) return;
+  var on = chk.checked;
+  knob.style.background = on ? '#5865F2' : '#ccc';
+  var dot = knob.querySelector('span');
+  if (dot) dot.style.transform = on ? 'translateX(16px)' : 'translateX(0)';
+}
+
+function loadAutoDiscordSetting() {
+  var on = localStorage.getItem('autoDiscordOnAdd') === '1';
+  var chk = document.getElementById('autoDiscordToggle');
+  if (chk) { chk.checked = on; updateAutoDiscordUI(); }
+}
+
+// ส่ง Discord อัตโนมัติ (ไม่โชว์ toast)
+async function sendLiveDiscordSilent(wh, s, liveData) {
+  var now = new Date();
+  var dateStr = now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+  var timeStr = now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  var allRowLines = todayBarrels.map(function(b,i){
+    return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
+      +(b.partName?' — '+b.partName:'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
+  });
+  var barrelField = {
+    name: '🔩 รายรอบ ('+todayBarrels.length+' รอบ)',
+    value: allRowLines.join('\n').slice(0,1024)||'–', inline:false
+  };
+  var payload = { username:'ใบรายงานชุบ B-1 (Auto Live)', embeds:[{
+    title: '🔴 Live Update — ' + dateStr,
+    description: '> อัปเดตอัตโนมัติ **'+timeStr+' น.** เมื่อเพิ่มรอบชุบ',
+    color: 0xe67e22,
+    fields: [
+      {name:'📅 วันที่',value:dateStr,inline:true},
+      {name:'🔖 Pro Lot No',value:liveData.lotNo||'–',inline:true},
+      {name:'👤 ผู้บันทึก',value:liveData.recorder||'–',inline:true},
+      {name:'\u200b',value:'\u200b',inline:false},
+      {name:'⚖️ รวม Kgs ('+todayBarrels.length+' รอบ)',value:'**'+fmt(s.totalKg)+' Kgs**',inline:true},
+      {name:'⚡ AH',value:'**'+(s.ah||0).toLocaleString()+'**',inline:true},
+      {name:'\u200b',value:'\u200b',inline:false},
+      {name:'🎨 แยกสี',value:'🔵 B: **'+fmt(s.kgB)+'**\n🌈 C: **'+fmt(s.kgC)+'**\n⬛ K: **'+fmt(s.kgK)+'**',inline:true},
+      {name:'📊 N / R',value:'🆕 N: **'+fmt(s.newKg)+'**\n🔄 R: **'+fmt(s.reworkKg)+'**\n📈 '+s.ratio+'%',inline:true},
+      barrelField
+    ],
+    timestamp: now.toISOString(),
+    footer: {text:'🔴 LIVE AUTO · อัปเดตทุกครั้งที่เพิ่มรอบ'}
+  }]};
+  await fetch(wh, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
 }
 
 // ── ส่ง Live Report → Discord ────────────────────────────────
@@ -2830,8 +3008,8 @@ async function sendLiveDiscord() {
   var now = new Date();
   var dateStr = now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
   var timeStr = now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-  var recorder = (document.getElementById('repRecorder')||{}).value || '–';
-  var lotNo    = (document.getElementById('repLotNo')||{}).value || '–';
+  var recorder = (document.getElementById('recorder')||{}).value || '–';
+  var lotNo    = (document.getElementById('lotNo')||{}).value || '–';
 
   var allRowLines = todayBarrels.map(function(b,i){
     return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
@@ -3478,7 +3656,7 @@ function addChemIn() {
     setTimeout(function(){ msg.style.display='none'; },2500); return;
   }
 
-  var recorder = (document.getElementById('repRecorder')||{}).value || 'ระบบ';
+  var recorder = (document.getElementById('recorder')||{}).value || 'ระบบ';
   chemRecords.push({
     id: 'CR'+Date.now(), chemId: _selChemId,
     type: 'in', date: date, bill: bill,
