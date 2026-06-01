@@ -393,21 +393,27 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <input type="text" id="recorder" placeholder="ชื่อ...">
       </div>
       <div class="field" style="margin:0;">
-        <label>กระแสไฟ AH (สำหรับวันนี้)</label>
+        <label>กระแสไฟ AH <span style="font-size:10px;background:#1e40af;color:#fff;border-radius:4px;padding:1px 6px;">บ่อ 1</span></label>
         <input type="number" id="dayAH" placeholder="0" min="0" inputmode="numeric" oninput="updateAHDisplay()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>กระแสไฟ AH <span style="font-size:10px;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 6px;">บ่อ 2</span></label>
+        <input type="number" id="dayAH_b2" placeholder="0" min="0" inputmode="numeric" oninput="updateAHDisplay()">
       </div>
     </div>
   </div>
 
   <!-- AH display -->
-  <div class="ah-row">
-    <div class="ah-left">
-      <div class="ah-lbl">AMPERE · HOUR</div>
-      <div class="ah-display" id="ahDisplay">0</div>
-      <div class="ah-unit">AH วันนี้</div>
+  <div class="ah-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <div style="background:rgba(30,64,175,.3);border-radius:10px;padding:10px;text-align:center;">
+      <div class="ah-lbl">AH · บ่อ 1</div>
+      <div class="ah-display" id="ahDisplay" style="font-size:20px;">0</div>
+      <input type="number" id="dayAH2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH(this)" style="width:100%;padding:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;text-align:center;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;outline:none;margin-top:6px;">
     </div>
-    <div class="ah-right">
-      <input type="number" id="dayAH2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH(this)">
+    <div style="background:rgba(124,58,237,.3);border-radius:10px;padding:10px;text-align:center;">
+      <div class="ah-lbl">AH · บ่อ 2</div>
+      <div class="ah-display" id="ahDisplay_b2" style="font-size:20px;">0</div>
+      <input type="number" id="dayAH2_b2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH_b2(this)" style="width:100%;padding:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;text-align:center;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;outline:none;margin-top:6px;">
     </div>
   </div>
 
@@ -766,7 +772,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <div id="smReworkKg" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--navy);">–</div>
       </div>
       <div style="padding:10px 4px;text-align:center;">
-        <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">AH</div>
+        <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">AH (บ่อ1 / บ่อ2)</div>
         <div id="smAH" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--navy);">–</div>
       </div>
     </div>
@@ -975,7 +981,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div id="chemCardCode" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-light);margin-bottom:2px;"></div>
           <div id="chemCardName" style="font-size:16px;font-weight:700;"></div>
           <div id="chemCardSupplier" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;"></div>
-          <button onclick="openEditChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไขข้อมูล</button>
+          <button onclick="openEditChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไขข้อมูล</button><button onclick="confirmDeleteChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(248,113,113,.25);border:1px solid rgba(248,113,113,.5);border-radius:8px;color:#fca5a5;font-size:11px;cursor:pointer;">🗑️ ลบรายการนี้</button>
         </div>
         <div style="text-align:right;">
           <div style="font-size:10px;color:var(--blue-light);margin-bottom:2px;">คงเหลือ</div>
@@ -1410,11 +1416,21 @@ function tab(t) {
 // ═══════════════════════════════════════
 function updateAHDisplay() {
   var v = document.getElementById('dayAH').value || '0';
+  var v2 = document.getElementById('dayAH_b2') ? (document.getElementById('dayAH_b2').value||'0') : '0';
+  var d2 = document.getElementById('ahDisplay_b2');
+  if(d2) d2.textContent = parseInt(v2).toLocaleString();
   document.getElementById('ahDisplay').textContent = parseInt(v).toLocaleString();
   document.getElementById('dayAH2').value = v;
 }
 function syncAH(el) {
   document.getElementById('dayAH').value = el.value;
+  var d = document.getElementById('ahDisplay');
+  if(d) d.textContent = parseInt(el.value||0).toLocaleString();
+}
+function syncAH_b2(el) {
+  document.getElementById('dayAH_b2').value = el.value;
+  var d = document.getElementById('ahDisplay_b2');
+  if(d) d.textContent = parseInt(el.value||0).toLocaleString();
   document.getElementById('ahDisplay').textContent = parseInt(el.value||0).toLocaleString();
 }
 
@@ -1574,8 +1590,9 @@ function calcSummary() {
     else if (r.color==='K') kgK += r.kg;
   });
   var ratio = totalKg > 0 ? reworkKg / totalKg * 100 : 0;
-  var ah = parseInt(document.getElementById('dayAH').value) || 0;
-  return { totalKg, newKg, reworkKg, kgB, kgC, kgK, ratio, ah, barrels: todayBarrels.length };
+  var ah  = parseInt(document.getElementById('dayAH').value) || 0;
+  var ahB2 = parseInt((document.getElementById('dayAH_b2')||{}).value||0) || 0;
+  return { totalKg, newKg, reworkKg, kgB, kgC, kgK, ratio, ah, ahB2, barrels: todayBarrels.length };
 }
 
 function renderSummary() {
@@ -1586,7 +1603,7 @@ function renderSummary() {
   document.getElementById('sumTotalBarrel').textContent = s.barrels;
   document.getElementById('sumNewKg').textContent       = fmt(s.newKg);
   document.getElementById('sumReworkKg').textContent    = fmt(s.reworkKg);
-  document.getElementById('sumAH').textContent          = s.ah.toLocaleString();
+  document.getElementById('sumAH').textContent = s.ah.toLocaleString() + ' / ' + (s.ahB2||0).toLocaleString();
   document.getElementById('sumKg-B').textContent        = fmt(s.kgB);
   document.getElementById('sumKg-C').textContent        = fmt(s.kgC);
   document.getElementById('sumKg-K').textContent        = fmt(s.kgK);
@@ -1633,6 +1650,7 @@ function buildDayRecord() {
     newKg: s.newKg, reworkKg: s.reworkKg,
     ratio: parseFloat(s.ratio.toFixed(2)),
     ah: s.ah,
+    ahB2: s.ahB2 || 0,
     rows: JSON.parse(JSON.stringify(todayBarrels)),
     ts: new Date().toLocaleString('th-TH')
   };
@@ -2572,6 +2590,14 @@ function addChemRow(c) {
   var div = document.createElement('div');
   div.className = 'chem-row';
   div.innerHTML =
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+      '<span style="font-size:10px;color:var(--text-muted);">ใช้กับบ่อ:</span>' +
+      '<select class="chem-batch-select" style="font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--border);">' +
+        '<option value="both"' + ((!c.batch||c.batch==="both")?' selected':'') + '>ทั้ง 2 บ่อ</option>' +
+        '<option value="1"' + (c.batch==="1"?' selected':'') + '>บ่อ 1 เท่านั้น</option>' +
+        '<option value="2"' + (c.batch==="2"?' selected':'') + '>บ่อ 2 เท่านั้น</option>' +
+      '</select>' +
+    '</div>' +
     '<div class="chem-row-top">' +
       '<input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value="' + (c.name||'') + '">' +
       '<select class="chem-type-select" onchange="toggleChemRates(this)">' +
@@ -2727,6 +2753,7 @@ function renderChemAccum() {
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:600;color:var(--blue);">'+fmt2(bal.totalIn)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;color:#0d6e56;">'+fmt2(bal.autoOut+bal.manualOut)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:700;color:'+remainColor+';">'+fmt2(bal.remain)+'</td>' +
+      '<td style="padding:4px;text-align:center;"><button onclick="deleteChemItem(\''+item.id+'\');" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:14px;">🗑️</button></td>' +
     '</tr>';
   });
   tbody.innerHTML = html;
@@ -3093,7 +3120,7 @@ async function livePushNow() {
     lotNo: lotNo,
     totalKg: s.totalKg, newKg: s.newKg, reworkKg: s.reworkKg,
     kgB: s.kgB, kgC: s.kgC, kgK: s.kgK,
-    ratio: s.ratio, ah: s.ah,
+    ratio: s.ratio, ah: s.ah, ahB2: s.ahB2||0,
     barrels: todayBarrels.length,
     rows: JSON.parse(JSON.stringify(todayBarrels)),
     status: 'live'
@@ -3742,6 +3769,22 @@ function confirmEditChemItem() {
   showToast('entry','✅ แก้ไขข้อมูลเคมีแล้ว: '+newName,'ok');
 }
 
+function confirmDeleteChemItem() {
+  if (!_selChemId) { showToast('entry','กรุณาเลือกรายการเคมีก่อน','err'); return; }
+  deleteChemItem(_selChemId);
+}
+function deleteChemItem(itemId) {
+  var item = chemItems.find(function(cc){ return cc.id===itemId; });
+  if (!item) return;
+  if (!confirm('ลบ "'+item.name+'" ออก?\n⚠️ ประวัติการรับเข้า/ใช้จะถูกลบด้วย')) return;
+  chemItems = chemItems.filter(function(cc){ return cc.id!==itemId; });
+  chemRecords = chemRecords.filter(function(r){ return r.chemId!==itemId; });
+  try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
+  try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  if (typeof fbSave==='function' && fbIsConfigured()) fbSave();
+  renderChemStockSelect(); renderChemStockCard();
+  showToast('entry','🗑️ ลบรายการเคมี: '+item.name+' แล้ว','ok');
+}
 function updateChemStockCount() {
   var el = document.getElementById('chemStockCount');
   if (el) el.textContent = chemItems.length;
