@@ -791,7 +791,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <button onclick="exportCSVDetail()" style="padding:7px 12px;border-radius:8px;background:#0d6e56;color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;">
           📋 CSV รายรอบ
         </button>
-        <button onclick="deleteAllHistory()" style="padding:7px 12px;border-radius:8px;background:#fdf0f0;color:#9b2c2c;border:1.5px solid #fca5a5;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;">
+        <button onclick="deleteAllHistory()" id="btnDeleteAllHistory" style="display:none;padding:7px 12px;border-radius:8px;background:#fdf0f0;color:#9b2c2c;border:1.5px solid #fca5a5;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;">
           🗑 ลบทั้งหมด
         </button>
       </div>
@@ -2670,6 +2670,9 @@ function renderChemAccum() {
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:600;color:var(--blue);">'+fmt2(bal.totalIn)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;color:#0d6e56;">'+fmt2(bal.autoOut+bal.manualOut)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:700;color:'+remainColor+';">'+fmt2(bal.remain)+'</td>' +
+      '<td style="padding:4px 6px;text-align:center;">' +
+        '<button onclick="deleteChemItem(\''+item.id+'\')" title="ลบรายการนี้" style="background:none;border:none;cursor:pointer;font-size:15px;color:#f87171;padding:2px 6px;" >🗑️</button>' +
+      '</td>' +
     '</tr>';
   });
   tbody.innerHTML = html;
@@ -3672,6 +3675,20 @@ function confirmEditChemItem() {
   renderChemStockCard();
   renderChemStockSelect();
   showToast('entry','✅ แก้ไขข้อมูลเคมีแล้ว: '+newName,'ok');
+}
+
+function deleteChemItem(itemId) {
+  var item = chemItems.find(function(c){ return c.id === itemId; });
+  if (!item) return;
+  if (!confirm('ลบ "' + item.name + '" ออกจาก Stock Card?\n\n⚠️ ประวัติการรับเข้า/ใช้ไปของเคมีนี้จะถูกลบด้วย')) return;
+  chemItems = chemItems.filter(function(c){ return c.id !== itemId; });
+  chemRecords = chemRecords.filter(function(r){ return r.chemId !== itemId; });
+  try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
+  try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  if (fbIsConfigured()) fbSave();
+  renderChemStockSelect();
+  renderChemStockCard();
+  showToast('entry', '🗑️ ลบรายการเคมี: ' + item.name + ' แล้ว', 'ok');
 }
 
 function updateChemStockCount() {
@@ -5213,6 +5230,9 @@ function applyRoleUI(role) {
   delBtns.forEach(function(el){
     el.style.display = isAdmin ? '' : 'none';
   });
+  // ปุ่มลบทั้งหมด — Admin เท่านั้น
+  var btnDelAll = document.getElementById('btnDeleteAllHistory');
+  if (btnDelAll) btnDelAll.style.display = isAdmin ? '' : 'none';
 
   // ตั้งค่าระบบ — Admin เท่านั้น
   var settingsTab = document.getElementById('v-settings');
