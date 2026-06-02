@@ -384,7 +384,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
       <div class="field" style="margin:0;">
         <label>Pro Lot No.</label>
-        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–';var bl=document.getElementById('bLotNo');if(bl&&!bl.value){bl.value=this.value;if(this.value){bl.style.borderColor='var(--border)';bl.style.background='';}}">
+        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–';var bl=document.getElementById('bLotNo');if(bl){bl.value=this.value;if(this.value){bl.style.borderColor='var(--border)';bl.style.background='';}}try{localStorage.setItem('lastLot',this.value);}catch(e){}">
       </div>
     </div>
     <div class="grid2">
@@ -2996,7 +2996,13 @@ async function fbLoad(silent) {
     if (data.lastLot) {
       var lotEl = document.getElementById('lotNo');
       var hdrEl = document.getElementById('hdrLot');
-      if (lotEl) { lotEl.value = data.lastLot; if (hdrEl) hdrEl.textContent = data.lastLot; try { localStorage.setItem('lastLot', data.lastLot); } catch(e){} }
+      var blEl  = document.getElementById('bLotNo');
+      if (lotEl) {
+        lotEl.value = data.lastLot;
+        if (hdrEl) hdrEl.textContent = data.lastLot;
+        if (blEl && !blEl.value) { blEl.value = data.lastLot; blEl.style.borderColor='var(--border)'; blEl.style.background=''; }
+        try { localStorage.setItem('lastLot', data.lastLot); } catch(e){}
+      }
     }
     if (data.discordWH) {
       discordWH = data.discordWH;
