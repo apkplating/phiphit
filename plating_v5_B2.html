@@ -2796,7 +2796,7 @@ function gdriveAutoLoad() {
 //  FIREBASE REALTIME DATABASE (Real-time Sync)
 //  ฟรี 100% — ไม่ต้องผูกบัตร
 // ═══════════════════════════════════════
-var FB_DB_URL_DEFAULT = 'https://platingapp-92e21-default-rtdb.asia-southeast1.firebasedatabase.app';
+var FB_DB_URL_DEFAULT = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app';
 var FB_DB_URL     = FB_DB_URL_DEFAULT;
 var _fbPollTimer  = null;
 var _fbLastSavedAt = '';
@@ -2807,10 +2807,10 @@ function fbIsConfigured() {
 
 // URL สำหรับ REST
 function fbDataUrl() {
-  return FB_DB_URL.replace(/\/$/, '') + '/plating-b1.json';
+  return FB_DB_URL.replace(/\/$/, '') + '/plating-b2.json';
 }
 function fbSettingsUrl() {
-  return FB_DB_URL.replace(/\/$/, '') + '/plating-b1-settings.json';
+  return FB_DB_URL.replace(/\/$/, '') + '/plating-b2-settings.json';
 }
 
 // โหลด config จาก localStorage (ถ้าไม่มีใช้ค่า default)
@@ -3006,6 +3006,7 @@ async function fbLoad(silent) {
 // sync ด้วยตัวเอง (กดปุ่ม)
 function fbManualSync() {
   if (!fbIsConfigured()) { showToast('firebase','กรุณาบันทึก Database URL ก่อน','err'); return; }
+  _fbLastSavedAt = ''; // reset เพื่อบังคับโหลดใหม่
   showToast('firebase','กำลังโหลดจาก Firebase...','ok');
   fbLoad(false);
 }
