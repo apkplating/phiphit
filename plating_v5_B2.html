@@ -366,6 +366,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('history')">ประวัติ (<span id="histCount">0</span>)</button>
   <button class="tab-btn" onclick="tab('chart')">📊 กราฟ</button>
   <button class="tab-btn" onclick="tab('chem')">🧪 เคมี</button>
+  <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
 
@@ -1378,6 +1379,8 @@ function init() {
   var intakeDateEl = document.getElementById('intakeDate');
   if (intakeDateEl) intakeDateEl.value = isoDate(new Date());
   fbLoadConfig();       // โหลด Firebase config และเริ่ม poll
+  thickInit();          // โหลดข้อมูลความหนาผิวชุบ
+  setTimeout(thickFbLoad, 2000);
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
   loadAutoDiscordSetting();
@@ -1393,7 +1396,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1403,6 +1406,7 @@ function tab(t) {
   if (t === 'summary') { renderSummary(); renderSummaryMonthTable(); renderChemAccum(); }
   if (t === 'chart') renderCharts();
   if (t === 'chem') { renderChemStockSelect(); renderChemStockCard(); }
+  if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
 }
 
 // ═══════════════════════════════════════
@@ -3043,6 +3047,7 @@ function fbStartPoll() {
     // ทุก 30 วิ (ทุก 6 รอบ) ดึง full data เพื่อตรวจ clearedAt
     if (_fbPollCount % 6 === 0) {
       fbLoad(true);
+      thickFbLoad();
     } else {
       fbLivePoll();
     }
@@ -5323,7 +5328,7 @@ function applyRoleUI(role) {
     var txt = btn.textContent.trim();
     if (isOperator) {
       // Operator: เห็นแค่ "กรอกรายรอบ"
-      btn.style.display = txt.includes('กรอกรายรอบ') ? '' : 'none';
+      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ความหนา')) ? '' : 'none';
     } else if (isViewer) {
       // Viewer: ซ่อน "กรอกรายรอบ" และ "ตั้งค่า"
       btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ตั้งค่า')) ? 'none' : '';
@@ -5396,10 +5401,464 @@ function checkAutoLogin() {
 
 window.addEventListener('load', function(){ checkAutoLogin(); });
 
+// ══════════════════════════════════════
+//  THICKNESS CHECK — ความหนาผิวชุบ
+// ══════════════════════════════════════
+
+var thickRecords = [];
+
+function thickInit() {
+  // โหลดจาก localStorage
+  try { thickRecords = JSON.parse(localStorage.getItem('b2_thickRecords') || '[]'); } catch(e){ thickRecords=[]; }
+  // ตั้งวันที่และเวลา auto
+  var now = new Date();
+  var d = document.getElementById('thickDate');
+  if (d) d.value = now.toISOString().slice(0,10);
+  thickAutoTime();
+}
+
+function thickAutoTime() {
+  var now = new Date();
+  var hh = String(now.getHours()).padStart(2,'0');
+  var mm = String(now.getMinutes()).padStart(2,'0');
+  var el = document.getElementById('thickTime');
+  if (el) el.value = hh + ':' + mm;
+}
+
+function calcThickAvg() {
+  var v1 = parseFloat(document.getElementById('thick1').value) || 0;
+  var v2 = parseFloat(document.getElementById('thick2').value) || 0;
+  var v3 = parseFloat(document.getElementById('thick3').value) || 0;
+  var filled = [v1,v2,v3].filter(function(v){ return v > 0; });
+  if (!filled.length) {
+    document.getElementById('thickAvgDisplay').textContent = '–';
+    document.getElementById('thickStatusBadge').textContent = 'รอข้อมูล';
+    document.getElementById('thickStatusBadge').style.background = '#e2e8f0';
+    document.getElementById('thickStatusBadge').style.color = '#64748b';
+    return 0;
+  }
+  var avg = filled.reduce(function(a,b){ return a+b; },0) / filled.length;
+  avg = Math.round(avg * 100) / 100;
+  document.getElementById('thickAvgDisplay').textContent = avg.toFixed(2);
+
+  var mn = parseFloat(document.getElementById('thickMin').value) || 0;
+  var mx = parseFloat(document.getElementById('thickMax').value) || 999;
+  var badge = document.getElementById('thickStatusBadge');
+  if (avg < mn) {
+    badge.textContent = '⚠️ ต่ำกว่าเกณฑ์'; badge.style.background='#fef2f2'; badge.style.color='#dc2626';
+  } else if (avg > mx) {
+    badge.textContent = '⚠️ สูงกว่าเกณฑ์'; badge.style.background='#fff7ed'; badge.style.color='#ea580c';
+  } else {
+    badge.textContent = '✅ ผ่านเกณฑ์'; badge.style.background='#f0fdf4'; badge.style.color='#16a34a';
+  }
+  return avg;
+}
+
+function addThickRecord() {
+  // อัปเดตเวลาตอนกด
+  thickAutoTime();
+  var date = document.getElementById('thickDate').value;
+  var time = document.getElementById('thickTime').value;
+  var v1   = parseFloat(document.getElementById('thick1').value);
+  var v2   = parseFloat(document.getElementById('thick2').value);
+  var v3   = parseFloat(document.getElementById('thick3').value);
+  var note = document.getElementById('thickNote').value.trim();
+  var mn   = parseFloat(document.getElementById('thickMin').value) || 0;
+  var mx   = parseFloat(document.getElementById('thickMax').value) || 999;
+
+  if (!date) { showToast('thick','กรุณาระบุวันที่','err'); return; }
+  var filled = [v1,v2,v3].filter(function(v){ return !isNaN(v) && v >= 0; });
+  if (filled.length < 3) { showToast('thick','กรุณากรอกค่าความหนาทั้ง 3 ชิ้น','err'); return; }
+
+  var avg = Math.round((v1+v2+v3)/3 * 100) / 100;
+  var status = avg < mn ? 'ต่ำ' : avg > mx ? 'สูง' : 'ผ่าน';
+
+  var rec = { id: Date.now(), date: date, time: time,
+    v1: v1, v2: v2, v3: v3, avg: avg, status: status, note: note,
+    min: mn, max: mx };
+
+  thickRecords.unshift(rec);
+  try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+
+  // Sync Firebase
+  thickFbSave();
+
+  // Clear inputs
+  ['thick1','thick2','thick3','thickNote'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('thickAvgDisplay').textContent = '–';
+  document.getElementById('thickStatusBadge').textContent = 'รอข้อมูล';
+  document.getElementById('thickStatusBadge').style.background = '#e2e8f0';
+  document.getElementById('thickStatusBadge').style.color = '#64748b';
+
+  populateThickFilter();
+  renderThickHistory();
+  renderThickChart();
+  showToast('thick','บันทึกความหนาสำเร็จ ✓ (เฉลี่ย '+avg.toFixed(2)+' µm)','ok');
+}
+
+function delThickRecord(id) {
+  thickRecords = thickRecords.filter(function(r){ return r.id !== id; });
+  try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+  thickFbSave();
+  renderThickHistory();
+  renderThickChart();
+  populateThickFilter();
+}
+
+function populateThickFilter() {
+  // sync ทั้ง 2 dropdowns: filter table + filter chart
+  var dates = [];
+  thickRecords.forEach(function(r){ if (dates.indexOf(r.date)<0) dates.push(r.date); });
+  dates.sort().reverse();
+
+  ['thickFilterDate','thickChartDate'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    var cur = sel.value;
+    var opts = (selId === 'thickFilterDate')
+      ? '<option value="">— ทุกวัน —</option>'
+      : '<option value="">— เลือกวัน —</option>';
+    opts += dates.map(function(d){
+      var label = new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
+      return '<option value="'+d+'"'+(d===cur?' selected':'')+'>'+label+'</option>';
+    }).join('');
+    sel.innerHTML = opts;
+    // ถ้าไม่มีค่าเดิม ให้ default เป็นวันแรก (ล่าสุด)
+    if (!cur && dates.length && selId === 'thickChartDate') sel.value = dates[0];
+  });
+}
+
+function renderThickHistory() {
+  populateThickFilter();
+  var filterDate = (document.getElementById('thickFilterDate') || {}).value || '';
+  var rows = filterDate
+    ? thickRecords.filter(function(r){ return r.date === filterDate; })
+    : thickRecords;
+
+  // นับทั้งหมดที่แสดงอยู่
+  document.getElementById('thickTodayCount').textContent = rows.length;
+
+  var tbody = document.getElementById('thickBody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(function(r) {
+    var dateLabel = new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+    var statusColor = r.status==='ผ่าน'
+      ? 'background:#f0fdf4;color:#16a34a;'
+      : r.status==='ต่ำ'
+        ? 'background:#fef2f2;color:#dc2626;'
+        : 'background:#fff7ed;color:#ea580c;';
+    var statusText = r.status==='ผ่าน' ? '✅ ผ่าน' : r.status==='ต่ำ' ? '⚠️ ต่ำกว่า' : '⚠️ สูงกว่า';
+    return '<tr>' +
+      '<td class="td-l">' + dateLabel + '</td>' +
+      '<td>' + r.time + '</td>' +
+      '<td>' + (r.v1||0).toFixed(2) + '</td>' +
+      '<td>' + (r.v2||0).toFixed(2) + '</td>' +
+      '<td>' + (r.v3||0).toFixed(2) + '</td>' +
+      '<td style="font-weight:700;color:var(--blue);">' + (r.avg||0).toFixed(2) + '</td>' +
+      '<td><span style="' + statusColor + 'padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">' + statusText + '</span></td>' +
+      '<td class="td-l" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-muted);">' + (r.note||'–') + '</td>' +
+      '<td><button class="del-btn" onclick="delThickRecord(' + r.id + ')">✕</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+var _thickChartObj = null;
+
+function renderThickChart() {
+  var ctx = document.getElementById('thickChart');
+  var emptyEl = document.getElementById('thickChartEmpty');
+  if (!ctx) return;
+
+  // เลือกวันจาก dropdown
+  var selDate = (document.getElementById('thickChartDate') || {}).value || '';
+
+  // กรองและเรียงเก่า→ใหม่ (ซ้าย→ขวา)
+  var rows = (selDate
+    ? thickRecords.filter(function(r){ return r.date === selDate; })
+    : thickRecords
+  ).slice().reverse();
+
+  if (_thickChartObj) { _thickChartObj.destroy(); _thickChartObj = null; }
+
+  if (!rows.length) {
+    if (emptyEl) { emptyEl.style.display='block'; ctx.style.display='none'; }
+    return;
+  }
+  if (emptyEl) { emptyEl.style.display='none'; ctx.style.display='block'; }
+
+  // ค่าเกณฑ์จากข้อมูลล่าสุด
+  var mn = parseFloat(rows[rows.length-1].min) || 5;
+  var mx = parseFloat(rows[rows.length-1].max) || 15;
+
+  // แกนนอน = เวลา, แกนตั้ง = ความหนา µm
+  var timeLabels = rows.map(function(r){ return r.time; });
+  var avgData    = rows.map(function(r){ return r.avg; });
+
+  // สีจุดตามเกณฑ์
+  var ptColors = rows.map(function(r){
+    return r.avg < mn ? '#dc2626' : r.avg > mx ? '#ea580c' : '#16a34a';
+  });
+
+  _thickChartObj = new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: timeLabels,
+      datasets: [
+        {
+          label: 'ค่าเฉลี่ย (µm)',
+          data: avgData,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.07)',
+          borderWidth: 2.5,
+          pointBackgroundColor: ptColors,
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 7,
+          tension: 0,
+          fill: false,
+        },
+        {
+          label: 'เกณฑ์ต่ำสุด (' + mn + ' µm)',
+          data: rows.map(function(){ return mn; }),
+          borderColor: '#dc2626',
+          borderDash: [6,4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: 'เกณฑ์สูงสุด (' + mx + ' µm)',
+          data: rows.map(function(){ return mx; }),
+          borderColor: '#ea580c',
+          borderDash: [6,4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      spanGaps: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            title: function(items){ return 'เวลา ' + items[0].label; },
+            label: function(item){
+              if (item.datasetIndex === 0) {
+                var r = rows[item.dataIndex];
+                return [
+                  'เฉลี่ย: ' + item.parsed.y.toFixed(2) + ' µm',
+                  'ชิ้น 1: ' + (r.v1||0).toFixed(2) + ' µm',
+                  'ชิ้น 2: ' + (r.v2||0).toFixed(2) + ' µm',
+                  'ชิ้น 3: ' + (r.v3||0).toFixed(2) + ' µm',
+                ];
+              }
+              return item.dataset.label + ': ' + item.parsed.y.toFixed(2) + ' µm';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'category',
+          title: { display: true, text: 'เวลา', font: { size: 11 } },
+          ticks: { font: { size: 12 }, maxRotation: 0 },
+          offset: true,
+        },
+        y: {
+          title: { display: true, text: 'ความหนา (µm)', font: { size: 11 } },
+          ticks: { font: { size: 10 } },
+          min: Math.max(0, mn - 2),
+          max: mx + 2,
+        }
+      }
+    }
+  });
+}
+
+// Firebase sync สำหรับ thickRecords
+async function thickFbSave() {
+  if (!fbIsConfigured()) return;
+  try {
+    await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b2-thick.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: thickRecords, savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('thickFbSave:', e.message); }
+}
+
+async function thickFbLoad() {
+  if (!fbIsConfigured()) return;
+  try {
+    var res = await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b2-thick.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.records) && data.records.length > thickRecords.length) {
+      thickRecords = data.records;
+      try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+      renderThickHistory();
+      renderThickChart();
+      populateThickFilter();
+    }
+  } catch(e) { console.warn('thickFbLoad:', e.message); }
+}
+
+function exportThickCSV() {
+  if (!thickRecords.length) { alert('ยังไม่มีข้อมูล'); return; }
+  var rows = [['วันที่','เวลา','ชิ้น1','ชิ้น2','ชิ้น3','เฉลี่ย','สถานะ','หมายเหตุ']];
+  thickRecords.forEach(function(r){
+    rows.push([r.date, r.time, r.v1, r.v2, r.v3, r.avg, r.status, r.note||'']);
+  });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'thickness_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+
 // ═══════════════════════════════════════
 //  START — จัดการโดย checkAutoLogin()
 // ═══════════════════════════════════════
 </script>
+
+
+<!-- ══════════════════════════════════════ -->
+<!--  TAB: ความหนาผิวชุบ                    -->
+<!-- ══════════════════════════════════════ -->
+<div id="v-thick" class="view">
+
+  <!-- ══ กราฟอยู่บนสุด ══ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;">📊 กราฟความหนาผิวชุบ</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--text-muted);">แสดงวัน:</span>
+        <select id="thickChartDate" onchange="renderThickChart()"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— เลือกวัน —</option>
+        </select>
+      </div>
+    </div>
+    <!-- กราฟ: แกน X = ความหนา µm, แกน Y = เวลา -->
+    <canvas id="thickChart" style="max-height:340px;"></canvas>
+    <div id="thickChartEmpty" style="display:none;text-align:center;color:var(--text-muted);padding:40px 0;font-size:13px;">
+      ยังไม่มีข้อมูล — กรอกความหนาด้านล่างแล้วกดบันทึก
+    </div>
+  </div>
+
+  <!-- ══ ฟอร์มกรอก ══ -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">📏 บันทึกความหนาผิวชุบ (3 ชิ้น/ชั่วโมง)</div>
+
+    <div class="grid2" style="margin-bottom:10px;">
+      <div class="field" style="margin:0;">
+        <label>วันที่</label>
+        <input type="date" id="thickDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เวลา <span style="font-size:10px;color:var(--text-muted);">(Auto)</span></label>
+        <input type="text" id="thickTime" readonly style="background:#f1f5f9;cursor:default;">
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div class="field" style="margin:0;">
+        <label>ชิ้นที่ 1 (µm)</label>
+        <input type="number" id="thick1" placeholder="0.0" step="0.1" min="0" inputmode="decimal" oninput="calcThickAvg()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชิ้นที่ 2 (µm)</label>
+        <input type="number" id="thick2" placeholder="0.0" step="0.1" min="0" inputmode="decimal" oninput="calcThickAvg()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชิ้นที่ 3 (µm)</label>
+        <input type="number" id="thick3" placeholder="0.0" step="0.1" min="0" inputmode="decimal" oninput="calcThickAvg()">
+      </div>
+    </div>
+
+    <!-- ค่าเฉลี่ย live -->
+    <div style="background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">ค่าเฉลี่ย (Average)</div>
+        <div id="thickAvgDisplay" style="font-size:28px;font-weight:800;color:var(--blue);font-family:'IBM Plex Mono',monospace;">–</div>
+        <div style="font-size:10px;color:var(--text-muted);">µm</div>
+      </div>
+      <div id="thickStatusBadge" style="font-size:13px;font-weight:700;padding:8px 16px;border-radius:20px;background:#e2e8f0;color:#64748b;">
+        รอข้อมูล
+      </div>
+    </div>
+
+    <!-- เกณฑ์ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div class="field" style="margin:0;">
+        <label>เกณฑ์ต่ำสุด (µm)</label>
+        <input type="number" id="thickMin" placeholder="5" step="0.1" min="0" value="5" inputmode="decimal" oninput="calcThickAvg()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เกณฑ์สูงสุด (µm)</label>
+        <input type="number" id="thickMax" placeholder="15" step="0.1" min="0" value="15" inputmode="decimal" oninput="calcThickAvg()">
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:12px;">
+      <label>หมายเหตุ</label>
+      <input type="text" id="thickNote" placeholder="เช่น ชุบรอบที่ 3 / ปรับกระแส">
+    </div>
+
+    <button class="btn btn-primary" onclick="addThickRecord()" style="width:100%;margin-bottom:0;">
+      + บันทึกความหนา
+    </button>
+    <div id="toast-thick" class="toast"></div>
+  </div>
+
+  <!-- ══ ตารางประวัติ ══ -->
+  <div class="card" style="margin-top:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;">📋 ประวัติ (<span id="thickTodayCount">0</span> รายการ)</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <select id="thickFilterDate" onchange="renderThickHistory()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— ทุกวัน —</option>
+        </select>
+        <button onclick="exportThickCSV()"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;">
+          📥 CSV
+        </button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">วันที่</th>
+            <th>เวลา</th>
+            <th>ชิ้น 1</th>
+            <th>ชิ้น 2</th>
+            <th>ชิ้น 3</th>
+            <th style="background:#1e3a5f;">เฉลี่ย (µm)</th>
+            <th>สถานะ</th>
+            <th style="text-align:left;">หมายเหตุ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="thickBody">
+          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
 
 </body></html>
