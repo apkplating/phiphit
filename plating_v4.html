@@ -371,6 +371,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('chart')">📊 กราฟ</button>
   <button class="tab-btn" onclick="tab('chem')">🧪 เคมี</button>
   <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
+  <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
 
@@ -1367,7 +1368,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','qa','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1378,6 +1379,7 @@ function tab(t) {
   if (t === 'chart') renderCharts();
   if (t === 'chem') { renderChemStockSelect(); renderChemStockCard(); }
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
+  if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
 }
 
 // ═══════════════════════════════════════
@@ -5755,5 +5757,770 @@ function exportThickCSV() {
   </div>
 
 </div>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  TAB: บันทึกผลการวิเคราะห์ (QA Control Chart)  -->
+<!-- ══════════════════════════════════════════════ -->
+<div id="v-qa" class="view">
+
+  <!-- Header -->
+  <div style="background:var(--navy);border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+    <div style="font-size:14px;font-weight:700;color:#fff;">📋 บันทึกผลการวิเคราะห์</div>
+    <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">การวัดและปรับค่าในกระบวนการ · Control Chart</div>
+  </div>
+
+  <!-- กราฟ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;">📊 Control Chart</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="qaChartProcess" onchange="qaRenderChart()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;">
+          <option value="">— เลือก Process —</option>
+        </select>
+        <select id="qaChartDate" onchange="qaRenderChart()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— ทุกวัน —</option>
+        </select>
+      </div>
+    </div>
+    <canvas id="qaChart" style="max-height:300px;"></canvas>
+    <div id="qaChartEmpty" style="display:none;text-align:center;color:var(--text-muted);padding:30px 0;font-size:13px;">ยังไม่มีข้อมูล</div>
+    <!-- Legend CL lines -->
+    <div id="qaChartLegend" style="display:none;margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text-muted);">
+      <span><span style="display:inline-block;width:24px;height:2px;background:#ef4444;border-top:2px dashed #ef4444;margin-right:4px;vertical-align:middle;"></span>UCL</span>
+      <span><span style="display:inline-block;width:24px;height:2px;background:#2e75b6;border-top:2px dashed #2e75b6;margin-right:4px;vertical-align:middle;"></span>CL</span>
+      <span><span style="display:inline-block;width:24px;height:2px;background:#f59e0b;border-top:2px dashed #f59e0b;margin-right:4px;vertical-align:middle;"></span>LCL</span>
+    </div>
+  </div>
+
+  <!-- ฟอร์มบันทึก -->
+  <div class="card">
+    <div class="card-label">✏️ บันทึกผลการวัด</div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>วันที่</label>
+        <input type="date" id="qaDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เวลา</label>
+        <select id="qaShift" style="width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;">
+          <option value="เช้า">เช้า</option>
+          <option value="บ่าย">บ่าย</option>
+          <option value="OT">OT</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- เลือก Process -->
+    <div class="field">
+      <label>Process Name</label>
+      <div style="display:flex;gap:6px;">
+        <select id="qaProcess" onchange="qaOnProcessSelect()"
+          style="flex:1;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;">
+          <option value="">— เลือก Process —</option>
+        </select>
+        <button onclick="qaOpenAddProcess()"
+          style="padding:10px 14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'IBM Plex Sans Thai',sans-serif;">+ เพิ่ม</button>
+      </div>
+    </div>
+
+    <!-- ฟอร์มเพิ่ม Process ใหม่ -->
+    <div id="qaAddProcessForm" style="display:none;background:var(--sky-pale);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px;">➕ เพิ่ม Process ใหม่</div>
+      <div class="field" style="margin-bottom:8px;">
+        <label>ชื่อ Process / Tank</label>
+        <input type="text" id="qaNewProcessName" placeholder="เช่น ชุบนิเกิลยาในดึงซิงค์ Pos 15-22">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div class="field" style="margin:0;">
+          <label>Pos no.</label>
+          <input type="text" id="qaNewPosNo" placeholder="เช่น 15-22">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>ปริมาณถัง (L)</label>
+          <input type="number" id="qaNewTankVol" placeholder="990" step="1" inputmode="numeric">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Item check</label>
+          <input type="text" id="qaNewProcessItem" placeholder="เช่น โลหะซิงค์, pH">
+        </div>
+      </div>
+      <div class="grid2" style="margin-bottom:8px;">
+        <div class="field" style="margin:0;">
+          <label>Standard (เกณฑ์)</label>
+          <input type="text" id="qaNewStandard" placeholder="เช่น 8-14 g/L">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>หน่วยผล</label>
+          <input type="text" id="qaNewProcessUnit" placeholder="เช่น g/L, pH, cc/L">
+        </div>
+      </div>
+      <!-- Coefficient row -->
+      <div style="background:rgba(46,117,182,0.08);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:600;color:var(--navy);margin-bottom:6px;">🧮 สูตรคำนวณ: Result = Titration (cc) × Coefficient</div>
+        <div class="grid2">
+          <div class="field" style="margin:0;">
+            <label>Coefficient (ค่าสัมประสิทธิ์)</label>
+            <input type="number" id="qaNewCoeff" placeholder="เช่น 3.265, 7.3" step="0.001" inputmode="decimal">
+          </div>
+          <div class="field" style="margin:0;">
+            <label>ประเภทผล</label>
+            <select id="qaNewResultType" style="width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;">
+              <option value="titration">ไตรเทรต × Coefficient = g/L</option>
+              <option value="direct">กรอกตรง (pH / Direct read)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div class="field" style="margin:0;">
+          <label>UCL</label>
+          <input type="number" id="qaNewUCL" placeholder="19.0" step="0.01" inputmode="decimal">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>CL (Target)</label>
+          <input type="number" id="qaNewCL" placeholder="11.0" step="0.01" inputmode="decimal">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>LCL</label>
+          <input type="number" id="qaNewLCL" placeholder="7.0" step="0.01" inputmode="decimal">
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="qaConfirmAddProcess()" style="flex:1;padding:9px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✓ บันทึก Process</button>
+        <button onclick="document.getElementById('qaAddProcessForm').style.display='none'" style="padding:9px 14px;background:#fff;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;">ยกเลิก</button>
+      </div>
+    </div>
+
+    <!-- ฟอร์มแก้ไข Process -->
+    <div id="qaEditProcessForm" style="display:none;background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:10px;">
+      <input type="hidden" id="qaEditPid">
+      <div style="font-size:11px;font-weight:600;color:#b45309;margin-bottom:8px;">✏️ แก้ไข Process</div>
+      <div class="field" style="margin-bottom:8px;">
+        <label>ชื่อ Process / Tank</label>
+        <input type="text" id="qaEditProcessName" placeholder="ชื่อ Process">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div class="field" style="margin:0;"><label>Pos no.</label><input type="text" id="qaEditPosNo"></div>
+        <div class="field" style="margin:0;"><label>ปริมาณถัง (L)</label><input type="number" id="qaEditTankVol" step="1" inputmode="numeric"></div>
+        <div class="field" style="margin:0;"><label>Item check</label><input type="text" id="qaEditProcessItem"></div>
+      </div>
+      <div class="grid2" style="margin-bottom:8px;">
+        <div class="field" style="margin:0;"><label>Standard</label><input type="text" id="qaEditStandard"></div>
+        <div class="field" style="margin:0;"><label>หน่วยผล</label><input type="text" id="qaEditProcessUnit"></div>
+      </div>
+      <div style="background:rgba(180,83,9,0.06);border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:10px;font-weight:600;color:#b45309;margin-bottom:6px;">🧮 สูตรคำนวณ</div>
+        <div class="grid2">
+          <div class="field" style="margin:0;"><label>Coefficient</label><input type="number" id="qaEditCoeff" step="0.001" inputmode="decimal"></div>
+          <div class="field" style="margin:0;">
+            <label>ประเภทผล</label>
+            <select id="qaEditResultType" style="width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;">
+              <option value="titration">ไตรเทรต × Coefficient</option>
+              <option value="direct">กรอกตรง (Direct)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;">
+        <div class="field" style="margin:0;"><label>UCL</label><input type="number" id="qaEditUCL" step="0.01"></div>
+        <div class="field" style="margin:0;"><label>CL</label><input type="number" id="qaEditCL" step="0.01"></div>
+        <div class="field" style="margin:0;"><label>LCL</label><input type="number" id="qaEditLCL" step="0.01"></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="qaConfirmEditProcess()" style="flex:1;padding:9px;background:#b45309;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✓ อัปเดต</button>
+        <button onclick="qaDeleteProcess()" style="padding:9px 12px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;font-size:12px;cursor:pointer;color:#9b2c2c;font-weight:600;">🗑 ลบ</button>
+        <button onclick="document.getElementById('qaEditProcessForm').style.display='none'" style="padding:9px 14px;background:#fff;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;">ยกเลิก</button>
+      </div>
+    </div>
+
+    <!-- แสดงค่าเกณฑ์ของ Process ที่เลือก -->
+    <div id="qaProcessInfo" style="display:none;background:linear-gradient(135deg,var(--navy-light),var(--navy-mid));border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div style="font-size:10px;color:var(--blue-light);"><span id="qaInfoItem"></span> · <span id="qaInfoStandard" style="color:#fde68a;"></span></div>
+        <button onclick="qaOpenEditProcess()" style="padding:3px 10px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:6px;color:#fff;font-size:10px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไข</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--blue-light);">UCL</div>
+          <div id="qaInfoUCL" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#fca5a5;"></div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--blue-light);">CL (Target)</div>
+          <div id="qaInfoCL" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#93c5fd;"></div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--blue-light);">LCL</div>
+          <div id="qaInfoLCL" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#fde68a;"></div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--blue-light);">Coeff ×</div>
+          <div id="qaInfoCoeff" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#6ee7b7;"></div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--blue-light);">หน่วย</div>
+          <div id="qaInfoUnit" style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:#fff;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Titration input (สำหรับ Process แบบ titration) ── -->
+    <div id="qaTitrationRow" style="display:none;">
+      <div style="background:rgba(46,117,182,0.08);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:10px;font-weight:600;color:var(--navy);margin-bottom:8px;">🧪 การไตรเทรต → คำนวณความเข้มข้น</div>
+        <div class="grid2">
+          <div class="field" style="margin:0;">
+            <label>Titration (cc)</label>
+            <input type="number" id="qaTitration" placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+              oninput="qaCalcFromTitration()"
+              style="font-size:20px;font-weight:700;text-align:center;">
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;">
+            <div style="font-size:11px;color:var(--text-muted);">× <span id="qaCoeffDisplay" style="font-weight:700;color:var(--navy);">-</span></div>
+            <div style="font-size:18px;">＝</div>
+          </div>
+        </div>
+        <!-- ผล Calculate -->
+        <div style="background:var(--navy);border-radius:8px;padding:10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:9px;color:var(--blue-light);">Calculate / Result</div>
+            <div id="qaCalcDisplay" style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:700;color:#6ee7b7;">–</div>
+          </div>
+          <div id="qaCalcUnit" style="font-size:12px;color:var(--blue-light);"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ค่าที่วัดได้ (Direct / คำนวณแล้ว) -->
+    <div class="field">
+      <label id="qaResultLabel">ค่าผลการวิเคราะห์ (<span id="qaUnitLabel">-</span>)</label>
+      <input type="number" id="qaResult" placeholder="0.00" step="0.01" inputmode="decimal" oninput="qaCheckResult()" style="font-size:22px;font-weight:700;text-align:center;">
+    </div>
+
+    <!-- Status badge -->
+    <div id="qaResultStatus" style="display:none;text-align:center;padding:8px;border-radius:10px;font-size:13px;font-weight:700;margin-bottom:10px;"></div>
+
+    <div class="field">
+      <label>ผู้บันทึก (JUDGE / ผู้บันทึก)</label>
+      <input type="text" id="qaJudge" placeholder="ชื่อ...">
+    </div>
+    <div class="field">
+      <label>ข้อมูลการปรับเติม / หมายเหตุ</label>
+      <input type="text" id="qaNote" placeholder="เช่น เติมกรด 50 ml / ปรับเพิ่ม">
+    </div>
+
+    <button class="btn btn-primary" onclick="qaAddRecord()" style="width:100%;margin-bottom:0;">
+      + บันทึกผลการวัด
+    </button>
+    <div id="toast-qa" class="toast"></div>
+  </div>
+
+  <!-- ตารางประวัติ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;">📋 ประวัติ (<span id="qaTotalCount">0</span> รายการ)</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <select id="qaFilterProcess" onchange="qaRenderHistory()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;">
+          <option value="">— ทุก Process —</option>
+        </select>
+        <select id="qaFilterDate" onchange="qaRenderHistory()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— ทุกวัน —</option>
+        </select>
+        <button onclick="qaExportCSV()"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;">
+          📥 CSV
+        </button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">วันที่</th>
+            <th>เวลา</th>
+            <th style="text-align:left;">Process / Item</th>
+            <th>Titration (cc)</th>
+            <th>Coeff</th>
+            <th>Result (g/L)</th>
+            <th>หน่วย</th>
+            <th>UCL</th>
+            <th>CL</th>
+            <th>LCL</th>
+            <th>สถานะ</th>
+            <th style="text-align:left;">ผู้บันทึก</th>
+            <th style="text-align:left;">หมายเหตุ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="qaHistBody">
+          <tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  QA CONTROL CHART — v2 with Titration & Coefficient
+// ═══════════════════════════════════════════════
+
+var QA_PROCESSES_KEY = 'qa_processes_b1';
+var QA_RECORDS_KEY   = 'qa_records_b1';
+var qaChartInst = null;
+
+function qaLoadProcesses() {
+  try { return JSON.parse(localStorage.getItem(QA_PROCESSES_KEY) || '[]'); } catch(e) { return []; }
+}
+function qaSaveProcesses(arr) { localStorage.setItem(QA_PROCESSES_KEY, JSON.stringify(arr)); }
+function qaLoadRecords() {
+  try { return JSON.parse(localStorage.getItem(QA_RECORDS_KEY) || '[]'); } catch(e) { return []; }
+}
+function qaSaveRecords(arr) { localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(arr)); }
+
+// ── Default processes (from Excel + paper forms) ──
+(function qaInitDefaults() {
+  if (qaLoadProcesses().length > 0) return;
+  var defaults = [
+    { id:'p1', name:'ล้างขี้มัน (Pos 2-4)',       posNo:'2-4',   tankVol:990,   item:'AP 100',    standard:'50-60 g/L',  unit:'g/L', coeff:7.3,   resultType:'titration', ucl:60,   cl:55,   lcl:50  },
+    { id:'p2', name:'กัดกรด (Pos 7-8)',            posNo:'7-8',   tankVol:660,   item:'กรดเกลือ 35%', standard:'10-12%',  unit:'%',   coeff:3.12,  resultType:'titration', ucl:12,   cl:11,   lcl:10  },
+    { id:'p3', name:'ช็อตไฟฟ้าด่าง (Pos 11-12)',  posNo:'11-12', tankVol:660,   item:'EP-91',      standard:'60-80 g/L',  unit:'g/L', coeff:2.97,  resultType:'titration', ucl:80,   cl:70,   lcl:60  },
+    { id:'p4', name:'ชุบนิเกิลยาในดึงซิงค์ (Pos 15-22)', posNo:'15-22', tankVol:3130, item:'โลหะซิงค์', standard:'8-14 g/L', unit:'g/L', coeff:3.265, resultType:'titration', ucl:14,   cl:11,   lcl:8   },
+    { id:'p5', name:'ชุบนิเกิลยาในดึงซิงค์ (Pos 15-22)', posNo:'15-22', tankVol:3130, item:'โซดาไฟ',    standard:'100-140 g/L',unit:'g/L', coeff:8,     resultType:'titration', ucl:140,  cl:120,  lcl:100 },
+    { id:'p6', name:'ชุบ (บ่อหมัก Pos 22)',        posNo:'22',    tankVol:1260,  item:'โลหะซิงค์', standard:'30-60 g/L',  unit:'g/L', coeff:3.265, resultType:'titration', ucl:60,   cl:45,   lcl:30  },
+    { id:'p7', name:'ชุบ (บ่อหมัก Pos 22)',        posNo:'22',    tankVol:1260,  item:'โซดาไฟ',    standard:'120-160 g/L',unit:'g/L', coeff:8,     resultType:'titration', ucl:160,  cl:140,  lcl:120 },
+    { id:'p8', name:'โครมาติ้ง วงสีน้ำเงิน',      posNo:'',      tankVol:0,     item:'pH',         standard:'1.8-2.5',    unit:'pH',  coeff:1,     resultType:'direct',    ucl:2.50, cl:2.10, lcl:1.75},
+    { id:'p9', name:'โครมาติ้ง วงสีดำ',           posNo:'',      tankVol:0,     item:'pH',         standard:'2.0-2.5',    unit:'pH',  coeff:1,     resultType:'direct',    ucl:2.45, cl:2.20, lcl:2.00},
+    { id:'p10',name:'กาวโตไคเซอร์สุ้นน้ำ',        posNo:'',      tankVol:0,     item:'pH',         standard:'1.0-1.8',    unit:'pH',  coeff:1,     resultType:'direct',    ucl:1.60, cl:1.40, lcl:1.00},
+  ];
+  qaSaveProcesses(defaults);
+})();
+
+// ── Populate selects ──
+function qaPopulateProcessSelect(selId, allOption) {
+  var procs = qaLoadProcesses();
+  var sel = document.getElementById(selId);
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = allOption ? '<option value="">— ทุก Process —</option>' : '<option value="">— เลือก Process —</option>';
+  procs.forEach(function(p) {
+    var opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name + ' [' + p.item + ']';
+    sel.appendChild(opt);
+  });
+  if (cur) sel.value = cur;
+}
+
+// ── Process select handler ──
+function qaOnProcessSelect() {
+  var pid = document.getElementById('qaProcess').value;
+  var info = document.getElementById('qaProcessInfo');
+  var titrRow = document.getElementById('qaTitrationRow');
+  var unitLbl = document.getElementById('qaUnitLabel');
+  var resLabel = document.getElementById('qaResultLabel');
+
+  // clear calc
+  document.getElementById('qaTitration') && (document.getElementById('qaTitration').value = '');
+  document.getElementById('qaResult').value = '';
+  document.getElementById('qaCalcDisplay') && (document.getElementById('qaCalcDisplay').textContent = '–');
+  document.getElementById('qaResultStatus').style.display = 'none';
+
+  if (!pid) { info.style.display='none'; titrRow.style.display='none'; unitLbl.textContent='-'; return; }
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) { info.style.display='none'; return; }
+
+  document.getElementById('qaInfoUCL').textContent    = p.ucl;
+  document.getElementById('qaInfoCL').textContent     = p.cl;
+  document.getElementById('qaInfoLCL').textContent    = p.lcl;
+  document.getElementById('qaInfoUnit').textContent   = p.unit;
+  document.getElementById('qaInfoCoeff').textContent  = (p.resultType==='direct') ? 'Direct' : ('×' + (p.coeff||1));
+  document.getElementById('qaInfoItem').textContent   = p.item;
+  document.getElementById('qaInfoStandard').textContent = p.standard || '';
+  unitLbl.textContent = p.unit;
+
+  var isTitration = p.resultType === 'titration';
+  titrRow.style.display = isTitration ? 'block' : 'none';
+  if (isTitration) {
+    document.getElementById('qaCoeffDisplay').textContent = p.coeff;
+    document.getElementById('qaCalcUnit').textContent = p.unit;
+    resLabel.innerHTML = 'ค่าผลการวิเคราะห์ — คำนวณอัตโนมัติ (<span id="qaUnitLabel">' + p.unit + '</span>)';
+    document.getElementById('qaResult').readOnly = true;
+    document.getElementById('qaResult').style.background = '#f1f5f9';
+    document.getElementById('qaResult').style.color = '#2e75b6';
+    document.getElementById('qaResult').placeholder = 'คำนวณจาก Titration × ' + p.coeff;
+  } else {
+    resLabel.innerHTML = 'ค่าที่วัดได้ (<span id="qaUnitLabel">' + p.unit + '</span>)';
+    document.getElementById('qaResult').readOnly = false;
+    document.getElementById('qaResult').style.background = '';
+    document.getElementById('qaResult').style.color = '';
+    document.getElementById('qaResult').placeholder = '0.00';
+  }
+  info.style.display = 'block';
+  qaCheckResult();
+}
+
+function qaCalcFromTitration() {
+  var pid = document.getElementById('qaProcess').value;
+  var titr = parseFloat(document.getElementById('qaTitration').value);
+  if (!pid || isNaN(titr)) {
+    document.getElementById('qaCalcDisplay').textContent = '–';
+    document.getElementById('qaResult').value = '';
+    document.getElementById('qaResultStatus').style.display = 'none';
+    return;
+  }
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) return;
+  var result = Math.round(titr * (p.coeff||1) * 1000) / 1000;
+  document.getElementById('qaCalcDisplay').textContent = result.toFixed(3);
+  document.getElementById('qaResult').value = result;
+  qaCheckResult();
+}
+
+function qaCheckResult() {
+  var pid = document.getElementById('qaProcess').value;
+  var val = parseFloat(document.getElementById('qaResult').value);
+  var statusEl = document.getElementById('qaResultStatus');
+  if (!pid || isNaN(val)) { statusEl.style.display='none'; return; }
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) { statusEl.style.display='none'; return; }
+  var s = qaGetStatus(val, p);
+  statusEl.style.display = 'block';
+  if (s === 'OK') {
+    statusEl.style.background='#e0f4ef'; statusEl.style.color='#065f46';
+    statusEl.textContent = '✅ อยู่ในเกณฑ์ (IN) — ' + val.toFixed(3) + ' ' + p.unit;
+  } else if (s === 'HIGH') {
+    statusEl.style.background='#fef2f2'; statusEl.style.color='#9b2c2c';
+    statusEl.textContent = '🔴 เกิน UCL (HIGH) — ' + val.toFixed(3) + ' > ' + p.ucl + ' ' + p.unit;
+  } else {
+    statusEl.style.background='#fffbeb'; statusEl.style.color='#b45309';
+    statusEl.textContent = '🟡 ต่ำกว่า LCL (LOW) — ' + val.toFixed(3) + ' < ' + p.lcl + ' ' + p.unit;
+  }
+}
+
+function qaGetStatus(val, p) {
+  if (val > p.ucl) return 'HIGH';
+  if (val < p.lcl) return 'LOW';
+  return 'OK';
+}
+
+// ── Add Process ──
+function qaOpenAddProcess() {
+  var f = document.getElementById('qaAddProcessForm');
+  document.getElementById('qaEditProcessForm').style.display = 'none';
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+}
+
+function qaConfirmAddProcess() {
+  var name = document.getElementById('qaNewProcessName').value.trim();
+  if (!name) { alert('กรุณาใส่ชื่อ Process'); return; }
+  var newP = {
+    id: 'p_' + Date.now(),
+    name: name,
+    posNo:      document.getElementById('qaNewPosNo').value.trim(),
+    tankVol:    parseFloat(document.getElementById('qaNewTankVol').value) || 0,
+    item:       document.getElementById('qaNewProcessItem').value.trim() || 'pH',
+    standard:   document.getElementById('qaNewStandard').value.trim(),
+    unit:       document.getElementById('qaNewProcessUnit').value.trim() || 'g/L',
+    coeff:      parseFloat(document.getElementById('qaNewCoeff').value) || 1,
+    resultType: document.getElementById('qaNewResultType').value || 'titration',
+    ucl:  parseFloat(document.getElementById('qaNewUCL').value) || 0,
+    cl:   parseFloat(document.getElementById('qaNewCL').value) || 0,
+    lcl:  parseFloat(document.getElementById('qaNewLCL').value) || 0,
+  };
+  var procs = qaLoadProcesses();
+  procs.push(newP);
+  qaSaveProcesses(procs);
+  document.getElementById('qaAddProcessForm').style.display='none';
+  ['qaNewProcessName','qaNewPosNo','qaNewTankVol','qaNewProcessItem','qaNewStandard','qaNewProcessUnit','qaNewCoeff','qaNewUCL','qaNewCL','qaNewLCL'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  qaPopulateAll();
+  document.getElementById('qaProcess').value = newP.id;
+  qaOnProcessSelect();
+}
+
+// ── Edit Process ──
+function qaOpenEditProcess() {
+  var pid = document.getElementById('qaProcess').value;
+  if (!pid) return;
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) return;
+  document.getElementById('qaAddProcessForm').style.display = 'none';
+  document.getElementById('qaEditPid').value        = p.id;
+  document.getElementById('qaEditProcessName').value = p.name;
+  document.getElementById('qaEditPosNo').value       = p.posNo || '';
+  document.getElementById('qaEditTankVol').value     = p.tankVol || '';
+  document.getElementById('qaEditProcessItem').value = p.item || '';
+  document.getElementById('qaEditStandard').value    = p.standard || '';
+  document.getElementById('qaEditProcessUnit').value = p.unit || '';
+  document.getElementById('qaEditCoeff').value       = p.coeff || 1;
+  document.getElementById('qaEditResultType').value  = p.resultType || 'titration';
+  document.getElementById('qaEditUCL').value = p.ucl;
+  document.getElementById('qaEditCL').value  = p.cl;
+  document.getElementById('qaEditLCL').value = p.lcl;
+  document.getElementById('qaEditProcessForm').style.display = 'block';
+  document.getElementById('qaEditProcessForm').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function qaConfirmEditProcess() {
+  var pid = document.getElementById('qaEditPid').value;
+  var procs = qaLoadProcesses();
+  var idx = procs.findIndex(function(x){return x.id===pid;});
+  if (idx < 0) return;
+  procs[idx] = {
+    id: pid,
+    name:       document.getElementById('qaEditProcessName').value.trim(),
+    posNo:      document.getElementById('qaEditPosNo').value.trim(),
+    tankVol:    parseFloat(document.getElementById('qaEditTankVol').value) || 0,
+    item:       document.getElementById('qaEditProcessItem').value.trim(),
+    standard:   document.getElementById('qaEditStandard').value.trim(),
+    unit:       document.getElementById('qaEditProcessUnit').value.trim(),
+    coeff:      parseFloat(document.getElementById('qaEditCoeff').value) || 1,
+    resultType: document.getElementById('qaEditResultType').value,
+    ucl:  parseFloat(document.getElementById('qaEditUCL').value) || 0,
+    cl:   parseFloat(document.getElementById('qaEditCL').value) || 0,
+    lcl:  parseFloat(document.getElementById('qaEditLCL').value) || 0,
+  };
+  qaSaveProcesses(procs);
+  document.getElementById('qaEditProcessForm').style.display = 'none';
+  qaPopulateAll();
+  document.getElementById('qaProcess').value = pid;
+  qaOnProcessSelect();
+}
+
+function qaDeleteProcess() {
+  var pid = document.getElementById('qaEditPid').value;
+  if (!confirm('ลบ Process นี้? (ประวัติที่บันทึกไว้จะยังคงอยู่)')) return;
+  var procs = qaLoadProcesses().filter(function(x){return x.id!==pid;});
+  qaSaveProcesses(procs);
+  document.getElementById('qaEditProcessForm').style.display='none';
+  qaPopulateAll();
+  document.getElementById('qaProcess').value = '';
+  qaOnProcessSelect();
+}
+
+// ── Add Record ──
+function qaAddRecord() {
+  var date   = document.getElementById('qaDate').value;
+  var shift  = document.getElementById('qaShift').value;
+  var pid    = document.getElementById('qaProcess').value;
+  var result = parseFloat(document.getElementById('qaResult').value);
+  var titr   = parseFloat(document.getElementById('qaTitration').value);
+  var judge  = document.getElementById('qaJudge').value.trim();
+  var note   = document.getElementById('qaNote').value.trim();
+
+  if (!date)      { qaToast('กรุณาเลือกวันที่', false); return; }
+  if (!pid)       { qaToast('กรุณาเลือก Process', false); return; }
+  if (isNaN(result)) { qaToast('กรุณากรอก/คำนวณค่าผลการวิเคราะห์', false); return; }
+
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) return;
+
+  var rec = {
+    id: 'qr_' + Date.now(),
+    date: date, shift: shift,
+    pid: pid, processName: p.name, posNo: p.posNo||'', item: p.item, standard: p.standard||'',
+    unit: p.unit, coeff: p.coeff||1, resultType: p.resultType||'direct',
+    titration: isNaN(titr) ? null : titr,
+    result: result,
+    ucl: p.ucl, cl: p.cl, lcl: p.lcl,
+    status: qaGetStatus(result, p),
+    judge: judge, note: note, ts: Date.now()
+  };
+
+  var recs = qaLoadRecords();
+  recs.push(rec);
+  qaSaveRecords(recs);
+
+  // clear form
+  document.getElementById('qaResult').value = '';
+  document.getElementById('qaNote').value = '';
+  document.getElementById('qaTitration') && (document.getElementById('qaTitration').value = '');
+  document.getElementById('qaCalcDisplay') && (document.getElementById('qaCalcDisplay').textContent = '–');
+  document.getElementById('qaResultStatus').style.display = 'none';
+  qaToast('✅ บันทึกสำเร็จ', true);
+  qaPopulateDateFilter();
+  qaRenderHistory();
+  qaRenderChart();
+}
+
+function qaToast(msg, ok) {
+  var t = document.getElementById('toast-qa');
+  t.textContent = msg;
+  t.className = 'toast ' + (ok?'ok':'err');
+  t.style.display = 'block';
+  setTimeout(function(){t.style.display='none';}, 2500);
+}
+
+function qaDeleteRecord(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  qaSaveRecords(qaLoadRecords().filter(function(r){return r.id!==id;}));
+  qaRenderHistory();
+  qaRenderChart();
+}
+
+// ── Date filter populate ──
+function qaPopulateDateFilter() {
+  var recs = qaLoadRecords();
+  var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
+  ['qaChartDate','qaFilterDate'].forEach(function(selId) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">— ทุกวัน —</option>';
+    dates.forEach(function(d){
+      var o = document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  });
+}
+
+function qaPopulateAll() {
+  qaPopulateProcessSelect('qaProcess', false);
+  qaPopulateProcessSelect('qaFilterProcess', true);
+  qaPopulateProcessSelect('qaChartProcess', false);
+  qaPopulateDateFilter();
+}
+
+// ── Render history ──
+function qaRenderHistory() {
+  var filterProc = (document.getElementById('qaFilterProcess')||{}).value || '';
+  var filterDate = (document.getElementById('qaFilterDate')||{}).value || '';
+  var recs = qaLoadRecords().filter(function(r){
+    if (filterProc && r.pid !== filterProc) return false;
+    if (filterDate && r.date !== filterDate) return false;
+    return true;
+  }).sort(function(a,b){return b.ts-a.ts;});
+
+  document.getElementById('qaTotalCount').textContent = recs.length;
+  var tbody = document.getElementById('qaHistBody');
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = recs.map(function(r){
+    var sc = r.status==='OK'?'#e0f4ef':r.status==='HIGH'?'#fef2f2':'#fffbeb';
+    var tc = r.status==='OK'?'#065f46':r.status==='HIGH'?'#9b2c2c':'#b45309';
+    var sl = r.status==='OK'?'✅ IN':r.status==='HIGH'?'🔴 HIGH':'🟡 LOW';
+    var titrCell = (r.resultType==='titration' && r.titration!=null) ? r.titration : '—';
+    var coeffCell = (r.resultType==='titration') ? ('×'+r.coeff) : 'Direct';
+    return '<tr>'
+      +'<td class="td-l">'+r.date+'</td>'
+      +'<td>'+r.shift+'</td>'
+      +'<td class="td-l">'+r.processName+'<br><span style="font-size:9px;color:var(--text-muted);">'+r.item+'</span></td>'
+      +'<td style="color:var(--blue);font-weight:600;">'+titrCell+'</td>'
+      +'<td style="font-size:10px;color:var(--text-muted);">'+coeffCell+'</td>'
+      +'<td style="font-weight:800;font-size:14px;color:var(--navy);">'+r.result.toFixed(3)+'</td>'
+      +'<td>'+r.unit+'</td>'
+      +'<td style="color:#9b2c2c;">'+r.ucl+'</td>'
+      +'<td style="color:#2e75b6;">'+r.cl+'</td>'
+      +'<td style="color:#b45309;">'+r.lcl+'</td>'
+      +'<td><span style="background:'+sc+';color:'+tc+';padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">'+sl+'</span></td>'
+      +'<td class="td-l">'+(r.judge||'–')+'</td>'
+      +'<td class="td-l">'+(r.note||'–')+'</td>'
+      +'<td><button class="del-btn" onclick="qaDeleteRecord(\''+r.id+'\')">🗑</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+// ── Render chart ──
+function qaRenderChart() {
+  var pid   = (document.getElementById('qaChartProcess')||{}).value || '';
+  var dateF = (document.getElementById('qaChartDate')||{}).value || '';
+  var canvasEl = document.getElementById('qaChart');
+  var emptyEl  = document.getElementById('qaChartEmpty');
+  var legendEl = document.getElementById('qaChartLegend');
+  if (!canvasEl) return;
+
+  var recs = qaLoadRecords().filter(function(r){
+    if (pid && r.pid !== pid) return false;
+    if (dateF && r.date !== dateF) return false;
+    return true;
+  }).sort(function(a,b){return a.ts-b.ts;});
+
+  if (qaChartInst) { qaChartInst.destroy(); qaChartInst=null; }
+
+  if (!recs.length || !pid) {
+    canvasEl.style.display='none'; emptyEl.style.display='block'; legendEl.style.display='none';
+    return;
+  }
+
+  var procs = qaLoadProcesses();
+  var p = procs.find(function(x){return x.id===pid;});
+  if (!p) return;
+
+  canvasEl.style.display='block'; emptyEl.style.display='none'; legendEl.style.display='flex';
+
+  var labels  = recs.map(function(r){ return r.date+' '+r.shift; });
+  var values  = recs.map(function(r){ return r.result; });
+  var ptColors= values.map(function(v){
+    return v > p.ucl ? '#ef4444' : v < p.lcl ? '#f59e0b' : '#10b981';
+  });
+
+  qaChartInst = new Chart(canvasEl, {
+    type:'line',
+    data:{
+      labels:labels,
+      datasets:[
+        { label:'Result ('+p.unit+')', data:values, borderColor:'#2e75b6', backgroundColor:'rgba(46,117,182,0.07)',
+          pointBackgroundColor:ptColors, pointBorderColor:ptColors, pointRadius:5, tension:0.2, fill:false, order:1 },
+        { label:'UCL', data:recs.map(function(){return p.ucl;}), borderColor:'#ef4444', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:2 },
+        { label:'CL',  data:recs.map(function(){return p.cl;}),  borderColor:'#2e75b6', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:3 },
+        { label:'LCL', data:recs.map(function(){return p.lcl;}), borderColor:'#f59e0b', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:4 },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:function(ctx){
+          if(ctx.datasetIndex===0){
+            var r=recs[ctx.dataIndex];
+            var titrStr = (r.resultType==='titration'&&r.titration!=null) ? ' (Titr: '+r.titration+' cc × '+r.coeff+')' : '';
+            return 'Result: '+ctx.parsed.y.toFixed(3)+' '+p.unit+titrStr;
+          }
+          return ctx.dataset.label+': '+ctx.parsed.y;
+        }}}
+      },
+      scales:{
+        x:{ ticks:{font:{size:9},maxRotation:45} },
+        y:{ ticks:{font:{size:10}}, title:{display:true,text:p.item+' ('+p.unit+')',font:{size:10}} }
+      }
+    }
+  });
+}
+
+// ── Export CSV ──
+function qaExportCSV() {
+  var recs = qaLoadRecords().sort(function(a,b){return a.ts-b.ts;});
+  if (!recs.length) { alert('ไม่มีข้อมูล'); return; }
+  var h = ['วันที่','เวลา','Process','Pos no.','Item','Standard','Titration(cc)','Coefficient','Result','หน่วย','UCL','CL','LCL','สถานะ','ผู้บันทึก','หมายเหตุ'];
+  var rows = recs.map(function(r){
+    return [r.date,r.shift,r.processName,r.posNo||'',r.item,r.standard||'',
+      (r.titration!=null?r.titration:''),r.coeff,r.result,r.unit,r.ucl,r.cl,r.lcl,r.status,r.judge||'',r.note||''].join(',');
+  });
+  var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href=url; a.download='qa_chemical_analysis.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init on load ──
+document.addEventListener('DOMContentLoaded', function() {
+  qaPopulateAll();
+  var today = new Date().toISOString().split('T')[0];
+  var qd = document.getElementById('qaDate');
+  if (qd && !qd.value) qd.value = today;
+});
+</script>
 
 </body></html>
