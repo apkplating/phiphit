@@ -1070,6 +1070,40 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
   </div>
 
+
+  <!-- ══ เบิกเคมีจาก Master Stock ══ -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">🔗 เบิกเคมีจาก Master Stock (Shared)</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      Stock กลางจาก <strong>Chem Master</strong> — เบิกที่นี่จะหักจาก stock ที่ใช้ร่วมกันทั้ง B1/B2/R1
+    </div>
+    <button class="btn btn-outline" onclick="masterLoad()" style="width:auto;margin-bottom:10px;font-size:11px;padding:6px 12px;">
+      🔄 รีเฟรช Stock Master
+    </button>
+    <div id="masterStockList">
+      <div style="text-align:center;color:var(--text-muted);padding:16px;">กำลังโหลด...</div>
+    </div>
+    <div style="margin-top:10px;padding:12px;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;">เบิกออก</div>
+      <div class="field" style="margin-bottom:8px;">
+        <label>รายการเคมี</label>
+        <select id="masterChemSel"><option value="">— เลือก —</option></select>
+      </div>
+      <div class="grid2" style="margin-bottom:8px;">
+        <div class="field" style="margin:0;">
+          <label>ปริมาณ (ลิตร)</label>
+          <input type="number" id="masterOutLiter" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>หมายเหตุ</label>
+          <input type="text" id="masterOutNote" placeholder="เช่น เติมบ่อ">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="doMasterOut()" style="margin-bottom:0;">📤 เบิกออก</button>
+      <div id="toast-master" class="toast"></div>
+    </div>
+  </div>
+
 </div>
 
 
@@ -1352,7 +1386,8 @@ function init() {
   if (intakeDateEl) intakeDateEl.value = isoDate(new Date());
   fbLoadConfig();       // โหลด Firebase config และเริ่ม poll
   thickInit();          // โหลดข้อมูลความหนาผิวชุบ
-  setTimeout(thickFbLoad, 2000); // sync Firebase
+  setTimeout(thickFbLoad, 2000);
+  setTimeout(masterLoad, 1500); // sync Firebase
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
   loadAutoDiscordSetting();
@@ -2963,6 +2998,7 @@ function fbStartPoll() {
     if (_fbPollCount % 6 === 0) {
       fbLoad(true);
       thickFbLoad(); // sync ความหนาทุก 30 วิ
+      masterLoad();   // sync chem master
     } else {
       fbLivePoll();
     }
@@ -5621,6 +5657,99 @@ function exportThickCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = 'thickness_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
+}
+
+
+// ══════════════════════════════════════
+//  CHEM MASTER — ดึง/เบิกจาก Stock กลาง
+// ══════════════════════════════════════
+var FB_MASTER_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
+var masterItems   = [];
+var masterRecords = [];
+
+async function masterLoad() {
+  try {
+    var res = await fetch(FB_MASTER_PATH + '.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data) {
+      masterItems   = Array.isArray(data.items)   ? data.items   : [];
+      masterRecords = Array.isArray(data.records) ? data.records : [];
+      renderMasterStock();
+    }
+  } catch(e) { console.warn('masterLoad:', e.message); }
+}
+
+async function execMasterOut(chemId, liter, note) {
+  if (!chemId || !liter) return;
+  var rec = {
+    id: Date.now(), chemId: chemId, type: 'out-b1',
+    date: new Date().toISOString().slice(0,10),
+    liter: liter, bucket: 0, note: note || 'B1 เบิก'
+  };
+  masterRecords.unshift(rec);
+  try {
+    await fetch(FB_MASTER_PATH + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: masterItems, records: masterRecords, savedAt: new Date().toISOString() })
+    });
+    showToast('master', '\u2705 เบิกเคมีสำเร็จ — ' + liter.toFixed(2) + ' ลิตร', 'ok');
+    masterLoad();
+  } catch(e) { showToast('master', '\u274c เบิกไม่สำเร็จ', 'err'); }
+}
+
+function calcMasterBalance(itemId) {
+  var totalIn=0, out_b1=0, out_b2=0, out_r1=0, outOther=0;
+  masterRecords.forEach(function(r) {
+    if (r.chemId !== itemId) return;
+    if (r.type==='in')     totalIn  += Number(r.liter||0);
+    if (r.type==='out-b1') out_b1   += Number(r.liter||0);
+    if (r.type==='out-b2') out_b2   += Number(r.liter||0);
+    if (r.type==='out-r1') out_r1   += Number(r.liter||0);
+    if (r.type==='out')    outOther += Number(r.liter||0);
+  });
+  return { totalIn: totalIn, out_b1: out_b1, out_b2: out_b2, out_r1: out_r1,
+    remain: totalIn - out_b1 - out_b2 - out_r1 - outOther };
+}
+
+function renderMasterStock() {
+  var el  = document.getElementById('masterStockList');
+  var sel = document.getElementById('masterChemSel');
+  if (!el) return;
+  if (sel) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">\u2014 เลือก \u2014</option>' +
+      masterItems.map(function(c) {
+        return '<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.code+' \u2014 '+c.name+'</option>';
+      }).join('');
+  }
+  if (!masterItems.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูลจาก Chem Master</div>';
+    return;
+  }
+  el.innerHTML = masterItems.map(function(item) {
+    var b = calcMasterBalance(item.id);
+    var color = b.remain < 0 ? '#dc2626' : b.remain < (b.totalIn*0.2) ? '#d97706' : '#16a34a';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;">' +
+      '<div>' +
+        '<div style="font-size:11px;font-weight:700;color:var(--navy);">' + (item.code||'') + ' \u2014 ' + item.name + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);">รับเข้า:'+b.totalIn.toFixed(2)+'L | B1:'+b.out_b1.toFixed(2)+'L | B2:'+b.out_b2.toFixed(2)+'L | R1:'+b.out_r1.toFixed(2)+'L</div>' +
+      '</div>' +
+      '<div style="font-size:15px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+color+';">' + b.remain.toFixed(2) + ' L</div>' +
+    '</div>';
+  }).join('');
+}
+
+function doMasterOut() {
+  var chemId = (document.getElementById('masterChemSel')||{}).value;
+  var liter  = parseFloat((document.getElementById('masterOutLiter')||{}).value) || 0;
+  var note   = (document.getElementById('masterOutNote')||{}).value || '';
+  if (!chemId) { showToast('master','กรุณาเลือกรายการเคมี','err'); return; }
+  if (!liter)  { showToast('master','กรุณากรอกปริมาณ','err'); return; }
+  execMasterOut(chemId, liter, note);
+  document.getElementById('masterOutLiter').value = '';
+  document.getElementById('masterOutNote').value  = '';
 }
 
 // ═══════════════════════════════════════
