@@ -621,11 +621,13 @@ function renderQCChecklist() {
   el.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px;">หัวข้อตรวจสอบ</div>' +
     qcTopics.map(function(t, i) {
       var val = qcResults[i] || '';
+      var passStyle = 'padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='pass'?'#16a34a':'var(--border)')+';background:'+(val==='pass'?'#f0fdf4':'#fff')+';color:'+(val==='pass'?'#16a34a':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;';
+      var failStyle = 'padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='fail'?'#dc2626':'var(--border)')+';background:'+(val==='fail'?'#fef2f2':'#fff')+';color:'+(val==='fail'?'#dc2626':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;background:#fafafa;">' +
         '<span style="font-size:12px;">' + t + '</span>' +
         '<div style="display:flex;gap:4px;">' +
-          '<button onclick="setTopicResult('+i+','pass')" style="padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='pass'?'#16a34a':'var(--border)')+';background:'+(val==='pass'?'#f0fdf4':'#fff')+';color:'+(val==='pass'?'#16a34a':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;">✅ ผ่าน</button>' +
-          '<button onclick="setTopicResult('+i+','fail')" style="padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='fail'?'#dc2626':'var(--border)')+';background:'+(val==='fail'?'#fef2f2':'#fff')+';color:'+(val==='fail'?'#dc2626':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;">❌ ไม่ผ่าน</button>' +
+          '<button data-idx="'+i+'" data-val="pass" onclick="setTopicResult(+this.dataset.idx,this.dataset.val)" style="'+passStyle+'">✅ ผ่าน</button>' +
+          '<button data-idx="'+i+'" data-val="fail" onclick="setTopicResult(+this.dataset.idx,this.dataset.val)" style="'+failStyle+'">❌ ไม่ผ่าน</button>' +
         '</div>' +
       '</div>';
     }).join('');
