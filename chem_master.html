@@ -195,6 +195,8 @@ input:focus,select:focus{border-color:var(--blue2);}
 <div id="v-in" class="view">
   <div class="card">
     <div class="card-label">📥 บันทึกรับเคมีเข้า</div>
+
+    <!-- ─── ข้อมูลหลัก ─── -->
     <div class="field">
       <label>รายการเคมี</label>
       <select id="inChemSel">
@@ -225,12 +227,81 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="number" id="inPrice" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
       </div>
     </div>
+
+    <!-- ─── ผู้รับของ ─── -->
+    <div class="field">
+      <label>ชื่อผู้รับของ</label>
+      <input type="text" id="inReceiver" placeholder="เช่น สมชาย / ฝ่ายจัดซื้อ">
+    </div>
+
     <div class="field">
       <label>หมายเหตุ</label>
       <input type="text" id="inNote" placeholder="เช่น ล็อต A / Supplier X">
     </div>
+  </div>
+
+  <!-- ─── การตรวจสอบคุณภาพ ─── -->
+  <div class="card" style="margin-top:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-label" style="margin:0;">🔍 ผลการตรวจสอบคุณภาพ</div>
+      <button onclick="toggleQCSetup()" style="font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--text-mid);cursor:pointer;">
+        ⚙️ แก้ไขหัวข้อ
+      </button>
+    </div>
+
+    <!-- setup หัวข้อตรวจ (ซ่อนไว้) -->
+    <div id="qcSetupBox" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;">จัดการหัวข้อตรวจสอบ</div>
+      <div id="qcSetupList" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="qcNewTopic" placeholder="เพิ่มหัวข้อใหม่..." style="flex:1;padding:7px 10px;border-radius:7px;border:1px solid var(--border);font-size:12px;">
+        <button onclick="addQCTopic()" style="padding:7px 14px;border-radius:7px;background:var(--blue);color:#fff;border:none;font-size:12px;cursor:pointer;">+ เพิ่ม</button>
+      </div>
+    </div>
+
+    <!-- checklist ตรวจสอบ -->
+    <div id="qcChecklist" style="margin-bottom:12px;"></div>
+
+    <!-- สรุปผล -->
+    <div style="display:flex;gap:8px;margin-bottom:0;">
+      <button id="qcPassBtn" onclick="setQCResult('pass')"
+        style="flex:1;padding:12px;border-radius:10px;border:2px solid #86efac;background:#f0fdf4;color:#16a34a;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;">
+        ✅ ผ่าน
+      </button>
+      <button id="qcFailBtn" onclick="setQCResult('fail')"
+        style="flex:1;padding:12px;border-radius:10px;border:2px solid var(--border);background:#fff;color:var(--text-muted);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;">
+        ❌ ไม่ผ่าน
+      </button>
+    </div>
+    <div id="qcFailNote" style="display:none;margin-top:8px;">
+      <input type="text" id="inQCFailReason" placeholder="ระบุสาเหตุที่ไม่ผ่าน..." style="width:100%;padding:9px;border-radius:8px;border:1.5px solid #fca5a5;font-size:12px;">
+    </div>
+    <input type="hidden" id="inQCResult" value="">
+  </div>
+
+  <!-- ─── Certificate / เอกสารแนบ ─── -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">📎 Certificate / เอกสารแนบ</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      ถ่ายรูป Certificate แล้วอัปโหลดใน Google Drive → กด Share → Copy Link แล้ววางที่นี่
+    </div>
+    <div id="certList" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="certLinkInput" placeholder="วาง Google Drive link ที่นี่..."
+        style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:monospace;">
+      <button onclick="addCertLink()"
+        style="padding:9px 16px;border-radius:8px;background:var(--blue);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">
+        + แนบ
+      </button>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
+      💡 วิธีรับ link: Google Drive → คลิกขวาไฟล์ → Share → Copy link
+    </div>
+  </div>
+
+  <div style="padding:0 0 12px;">
     <button class="btn btn-green" onclick="addChemIn()">📥 บันทึกรับเข้า</button>
-    <div id="toast-in" class="toast"></div>
+    <div id="toast-in" class="toast" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -305,7 +376,7 @@ function tab(t) {
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
   if (t==='stock') { populateStockSel(); renderStockCard(); }
-  if (t==='in')    { renderInSelect(); }
+  if (t==='in')    { renderInSelect(); loadQCTopics(); renderQCChecklist(); renderCertLinks(); }
   if (t==='items') { renderItemsList(); }
 }
 
@@ -443,7 +514,15 @@ function renderStockCard() {
     var outDate= or ? new Date(or.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '';
     rows += '<tr>' +
       '<td class="td-l" style="color:var(--text-mid);font-size:10px;">'+(inDate||'')+'</td>' +
-      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(ir?(ir.bill||'—'):'')+'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">' +
+        (ir ? [
+          ir.bill||'',
+          ir.receiver ? '<span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;margin-left:3px;">👤'+ir.receiver+'</span>' : '',
+          ir.qcResult === 'pass' ? '<span style="font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:3px;">✅ QC</span>' :
+          ir.qcResult === 'fail' ? '<span style="font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px;">❌ QC</span>' : '',
+          (ir.certLinks&&ir.certLinks.length) ? '<a href="'+ir.certLinks[0].url+'" target="_blank" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>' : '',
+        ].filter(Boolean).join('') : '—') +
+      '</td>' +
       '<td style="font-weight:700;color:var(--green);">'+(ir?ir.liter.toFixed(2):'')+'</td>' +
       '<td style="border-right:2px solid var(--border);">'+(ir?(ir.bucket||'—'):'')+'</td>' +
       '<td class="td-l" style="color:var(--text-mid);font-size:10px;">'+(outDate||'')+'</td>' +
@@ -485,22 +564,172 @@ function renderInSelect() {
   if (d && !d.value) d.value = new Date().toISOString().slice(0,10);
 }
 
+// ══ QC Topics ══
+var qcTopics = ['สภาพบรรจุภัณฑ์','สีและลักษณะทางกายภาพ','กลิ่น','ปริมาณตรงตามใบส่งของ','มี Certificate แนบ'];
+var qcResults = {}; // { topicIdx: 'pass'|'fail'|'' }
+var certLinks = []; // [{name, url}]
+var _qcResult = ''; // 'pass' | 'fail' | ''
+
+function loadQCTopics() {
+  try { qcTopics = JSON.parse(localStorage.getItem('master_qcTopics') || JSON.stringify(qcTopics)); } catch(e){}
+}
+function saveQCTopics() {
+  try { localStorage.setItem('master_qcTopics', JSON.stringify(qcTopics)); } catch(e){}
+}
+
+function toggleQCSetup() {
+  var box = document.getElementById('qcSetupBox');
+  if (box.style.display === 'none') {
+    box.style.display = 'block';
+    renderQCSetup();
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function renderQCSetup() {
+  var el = document.getElementById('qcSetupList');
+  el.innerHTML = qcTopics.map(function(t, i) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);">' +
+      '<span style="font-size:12px;">' + (i+1) + '. ' + t + '</span>' +
+      '<button onclick="removeQCTopic('+i+')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;">ลบ</button>' +
+    '</div>';
+  }).join('');
+}
+
+function addQCTopic() {
+  var inp = document.getElementById('qcNewTopic');
+  var val = inp.value.trim();
+  if (!val) return;
+  qcTopics.push(val);
+  saveQCTopics();
+  inp.value = '';
+  renderQCSetup();
+  renderQCChecklist();
+}
+
+function removeQCTopic(i) {
+  qcTopics.splice(i, 1);
+  saveQCTopics();
+  renderQCSetup();
+  renderQCChecklist();
+}
+
+function renderQCChecklist() {
+  var el = document.getElementById('qcChecklist');
+  if (!qcTopics.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:8px;">หัวข้อตรวจสอบ</div>' +
+    qcTopics.map(function(t, i) {
+      var val = qcResults[i] || '';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;background:#fafafa;">' +
+        '<span style="font-size:12px;">' + t + '</span>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<button onclick="setTopicResult('+i+','pass')" style="padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='pass'?'#16a34a':'var(--border)')+';background:'+(val==='pass'?'#f0fdf4':'#fff')+';color:'+(val==='pass'?'#16a34a':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;">✅ ผ่าน</button>' +
+          '<button onclick="setTopicResult('+i+','fail')" style="padding:4px 10px;border-radius:6px;border:1.5px solid '+(val==='fail'?'#dc2626':'var(--border)')+';background:'+(val==='fail'?'#fef2f2':'#fff')+';color:'+(val==='fail'?'#dc2626':'var(--text-muted)')+';font-size:11px;font-weight:600;cursor:pointer;">❌ ไม่ผ่าน</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function setTopicResult(i, val) {
+  qcResults[i] = qcResults[i] === val ? '' : val;
+  renderQCChecklist();
+}
+
+function setQCResult(val) {
+  _qcResult = _qcResult === val ? '' : val;
+  document.getElementById('inQCResult').value = _qcResult;
+  var passBtn = document.getElementById('qcPassBtn');
+  var failBtn = document.getElementById('qcFailBtn');
+  var failNote = document.getElementById('qcFailNote');
+  if (_qcResult === 'pass') {
+    passBtn.style.background='#f0fdf4'; passBtn.style.borderColor='#16a34a'; passBtn.style.color='#16a34a';
+    failBtn.style.background='#fff'; failBtn.style.borderColor='var(--border)'; failBtn.style.color='var(--text-muted)';
+    failNote.style.display = 'none';
+  } else if (_qcResult === 'fail') {
+    passBtn.style.background='#fff'; passBtn.style.borderColor='var(--border)'; passBtn.style.color='var(--text-muted)';
+    failBtn.style.background='#fef2f2'; failBtn.style.borderColor='#dc2626'; failBtn.style.color='#dc2626';
+    failNote.style.display = 'block';
+  } else {
+    passBtn.style.background='#f0fdf4'; passBtn.style.borderColor='#86efac'; passBtn.style.color='#16a34a';
+    failBtn.style.background='#fff'; failBtn.style.borderColor='var(--border)'; failBtn.style.color='var(--text-muted)';
+    failNote.style.display = 'none';
+  }
+}
+
+// ══ Cert Links ══
+function renderCertLinks() {
+  var el = document.getElementById('certList');
+  if (!certLinks.length) { el.innerHTML=''; return; }
+  el.innerHTML = certLinks.map(function(c, i) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;margin-bottom:5px;">' +
+      '<a href="'+c.url+'" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">📄 '+c.name+'</a>' +
+      '<button onclick="removeCertLink('+i+')" style="background:none;border:none;color:#dc2626;font-size:12px;cursor:pointer;flex-shrink:0;">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+function addCertLink() {
+  var inp = document.getElementById('certLinkInput');
+  var url = inp.value.trim();
+  if (!url) return;
+  // สร้างชื่อจาก URL
+  var name = 'Certificate ' + (certLinks.length+1);
+  if (url.includes('drive.google.com')) name = 'Google Drive ' + (certLinks.length+1);
+  certLinks.push({ name:name, url:url });
+  inp.value = '';
+  renderCertLinks();
+}
+
+function removeCertLink(i) {
+  certLinks.splice(i, 1);
+  renderCertLinks();
+}
+
 function addChemIn() {
-  var chemId = document.getElementById('inChemSel').value;
-  var date   = document.getElementById('inDate').value;
-  var bill   = document.getElementById('inBill').value.trim();
-  var liter  = parseFloat(document.getElementById('inLiter').value)||0;
-  var bucket = parseInt(document.getElementById('inBucket').value)||0;
-  var price  = parseFloat(document.getElementById('inPrice').value)||0;
-  var note   = document.getElementById('inNote').value.trim();
-  if (!chemId){ showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
-  if (!date)  { showToast('in','กรุณาระบุวันที่','err'); return; }
-  if (!liter) { showToast('in','กรุณากรอกปริมาณ (ลิตร)','err'); return; }
-  chemRecords.unshift({ id:Date.now(), chemId, type:'in', date, bill, liter, bucket, price, note });
+  var chemId   = document.getElementById('inChemSel').value;
+  var date     = document.getElementById('inDate').value;
+  var bill     = document.getElementById('inBill').value.trim();
+  var liter    = parseFloat(document.getElementById('inLiter').value)||0;
+  var bucket   = parseInt(document.getElementById('inBucket').value)||0;
+  var price    = parseFloat(document.getElementById('inPrice').value)||0;
+  var note     = document.getElementById('inNote').value.trim();
+  var receiver = document.getElementById('inReceiver').value.trim();
+  var qcResult = _qcResult;
+  var qcFail   = document.getElementById('inQCFailReason').value.trim();
+  var qcSnap   = JSON.parse(JSON.stringify(qcResults)); // snapshot หัวข้อ
+  var certs    = certLinks.slice();
+
+  if (!chemId)   { showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
+  if (!date)     { showToast('in','กรุณาระบุวันที่','err'); return; }
+  if (!liter)    { showToast('in','กรุณากรอกปริมาณ (ลิตร)','err'); return; }
+  if (!receiver) { showToast('in','กรุณาระบุชื่อผู้รับของ','err'); return; }
+
+  chemRecords.unshift({
+    id: Date.now(), chemId, type:'in',
+    date, bill, liter, bucket, price, note,
+    receiver,
+    qcResult,       // 'pass'|'fail'|''
+    qcFailReason: qcFail,
+    qcTopicResults: qcSnap,
+    qcTopicNames: qcTopics.slice(),
+    certLinks: certs,
+  });
   saveLocal(); fbSave();
-  ['inBill','inLiter','inBucket','inPrice','inNote'].forEach(function(id){ document.getElementById(id).value=''; });
+
+  // reset form
+  ['inBill','inLiter','inBucket','inPrice','inNote','inReceiver','inQCFailReason','certLinkInput'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
   document.getElementById('inChemSel').value='';
-  showToast('in','✅ บันทึกรับเข้าสำเร็จ — '+liter.toFixed(2)+' ลิตร','ok');
+  qcResults = {};
+  certLinks = [];
+  _qcResult = '';
+  setQCResult('');
+  renderQCChecklist();
+  renderCertLinks();
+
+  showToast('in','✅ บันทึกรับเข้าสำเร็จ — '+liter.toFixed(2)+' ลิตร (QC: '+(qcResult==='pass'?'✅ ผ่าน':qcResult==='fail'?'❌ ไม่ผ่าน':'—')+')','ok');
 }
 
 // ══ ITEMS ══
@@ -571,6 +800,7 @@ window.addEventListener('load', function(){
       loadLocal(); startPoll(); setTimeout(fbLoad, 500);
     }
   } catch(e){}
+  loadQCTopics();
   var d=document.getElementById('inDate');
   if (d) d.value=new Date().toISOString().slice(0,10);
 });
