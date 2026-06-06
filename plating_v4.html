@@ -1006,36 +1006,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
     </div>
 
-    <!-- ── ฟอร์มรับเข้าจัดซื้อ ── -->
-    <div class="card">
-      <div class="card-label">📥 บันทึกรับเข้า (ฝ่ายจัดซื้อ)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;">
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">ว.ด.ป.</div>
-          <input id="chemInDate" type="date" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">เลขที่ใบรับงาน</div>
-          <input id="chemInBill" type="text" placeholder="เช่น PO-2026-001"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">จำนวนรับเข้า (ลิตร) <span style="color:#c0392b;">*</span></div>
-          <input id="chemInLiter" type="number" placeholder="0.0" min="0" step="0.01" inputmode="decimal"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:14px;font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">จำนวนรับเข้า (ถัง)</div>
-          <input id="chemInBucket" type="number" placeholder="0" min="0" step="1" inputmode="numeric"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:14px;font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;box-sizing:border-box;">
-        </div>
-      </div>
-      <button onclick="addChemIn()" style="margin-top:10px;width:100%;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
-        📥 บันทึกรับเข้า
-      </button>
-      <div id="chemInMsg" style="display:none;margin-top:8px;padding:8px;border-radius:8px;font-size:12px;text-align:center;"></div>
-    </div>
-
     <!-- ── ตาราง Stock Card ── -->
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="background:var(--navy);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">

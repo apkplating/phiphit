@@ -6,175 +6,89 @@
 <title>Chemical Master — APK Plating</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root {
-  --navy:   #0f2044;
-  --blue:   #1e40af;
-  --blue2:  #3b82f6;
-  --teal:   #0d9488;
-  --green:  #16a34a;
-  --red:    #dc2626;
-  --orange: #ea580c;
-  --amber:  #d97706;
-  --white:  #ffffff;
-  --bg:     #f1f5f9;
-  --card:   #ffffff;
-  --border: #e2e8f0;
-  --text:   #0f172a;
-  --text-mid: #475569;
-  --text-muted: #94a3b8;
-  --sky-pale: #f0f9ff;
-  --success-bg: #f0fdf4;
-  --success: #16a34a;
+:root{
+  --navy:#0f2044; --blue:#1e40af; --blue2:#3b82f6; --teal:#0d9488;
+  --green:#16a34a; --red:#dc2626; --orange:#ea580c; --amber:#d97706;
+  --bg:#f1f5f9; --card:#ffffff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --sky-pale:#f0f9ff; --success-bg:#f0fdf4; --success:#16a34a;
 }
-*{ box-sizing:border-box; margin:0; padding:0; }
-body{ font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
-
-/* ── Header ── */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
 .app-header{
-  background: linear-gradient(135deg, var(--navy) 0%, #1e3a5f 100%);
-  color:#fff; padding:12px 16px;
-  position:sticky; top:0; z-index:100;
-  display:flex; align-items:center; justify-content:space-between;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  background:linear-gradient(135deg,var(--navy) 0%,#1e3a5f 100%);
+  color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 12px rgba(0,0,0,0.3);
 }
-.app-header-left{ display:flex; flex-direction:column; gap:2px; }
-.app-header-sub{ font-size:10px; color:#93c5fd; letter-spacing:0.5px; text-transform:uppercase; }
-.app-header-title{ font-size:16px; font-weight:700; letter-spacing:-0.3px; }
-.sync-badge{
-  font-size:10px; padding:4px 10px; border-radius:20px;
-  background:rgba(255,255,255,0.12); color:#93c5fd;
-  display:flex; align-items:center; gap:5px;
-}
-.sync-dot{ width:7px; height:7px; border-radius:50%; background:#94a3b8; }
-.sync-dot.ok{ background:#4ade80; box-shadow:0 0 6px #4ade80; animation:pulse 2s infinite; }
-@keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:0.5} }
+.sync-badge{font-size:10px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.12);color:#93c5fd;display:flex;align-items:center;gap:5px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#94a3b8;}
+.sync-dot.ok{background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.tab-bar{display:flex;background:var(--navy);padding:0 8px 8px;gap:4px;overflow-x:auto;}
+.tab-btn{flex:1;padding:8px 6px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;color:#94a3b8;background:transparent;border:none;border-radius:8px;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:60px;}
+.tab-btn.active{background:var(--blue);color:#fff;}
+.main{padding:12px;max-width:960px;margin:0 auto;}
+.view{display:none;} .view.active{display:block;}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.card-label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:#fff;transition:border-color .2s;outline:none;}
+input:focus,select:focus{border-color:var(--blue2);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.btn{padding:11px 16px;border-radius:10px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;width:100%;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:7px;width:auto;}
+.toast{margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;display:none;}
+.toast.ok{background:var(--success-bg);color:var(--success);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;}
+.line-badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;margin:1px;}
+.line-b1{background:#dbeafe;color:#1e40af;} .line-b2{background:#ede9fe;color:#6d28d9;} .line-r1{background:#fce7f3;color:#be185d;}
 
-/* ── Tab bar ── */
-.tab-bar{
-  display:flex; background:var(--navy);
-  padding:0 8px 8px; gap:4px; overflow-x:auto;
-}
-.tab-btn{
-  flex:1; padding:8px 6px; font-family:'IBM Plex Sans Thai',sans-serif;
-  font-size:11px; font-weight:500; color:#94a3b8;
-  background:transparent; border:none; border-radius:8px;
-  cursor:pointer; transition:all .2s; white-space:nowrap; min-width:60px;
-}
-.tab-btn.active{ background:var(--blue); color:#fff; }
+/* Stock Card Table */
+.sc-table{width:100%;border-collapse:collapse;font-size:11px;min-width:700px;}
+.sc-table th{background:var(--navy);color:#fff;padding:7px 6px;text-align:center;font-size:9px;font-weight:600;}
+.sc-table th.in-col{color:#93c5fd;}
+.sc-table th.out-col{color:#6ee7b7;}
+.sc-table th.bal-col{background:#0f3460;color:#fcd34d;}
+.sc-table td{padding:7px 6px;border-bottom:1px solid var(--border);font-size:11px;text-align:center;vertical-align:middle;}
+.sc-table td.td-l{text-align:left;}
+.sc-table tr.in-row td{background:#f0fdf4;}
+.sc-table tr.out-row td{background:#fff7ed;}
+.sc-table tr:hover td{filter:brightness(0.97);}
+.bal-pos{color:var(--green);font-weight:700;}
+.bal-neg{color:var(--red);font-weight:700;}
+.type-in{background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
+.type-out-b1{background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
+.type-out-b2{background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
+.type-out-r1{background:#fce7f3;color:#be185d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
 
-/* ── Layout ── */
-.main{ padding:12px; max-width:900px; margin:0 auto; }
-.view{ display:none; }
-.view.active{ display:block; }
+/* Summary chips */
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.sum-chip{text-align:center;padding:8px;border-radius:10px;border:1px solid var(--border);}
+.sum-chip-label{font-size:9px;color:var(--text-muted);margin-bottom:2px;}
+.sum-chip-val{font-size:15px;font-weight:800;font-family:'IBM Plex Mono',monospace;}
 
-/* ── Card ── */
-.card{
-  background:var(--card); border-radius:14px;
-  border:1px solid var(--border); padding:14px;
-  margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);
-}
-.card-label{
-  font-size:11px; font-weight:700; color:var(--navy);
-  text-transform:uppercase; letter-spacing:0.8px; margin-bottom:12px;
-}
-
-/* ── Form ── */
-.field{ margin-bottom:10px; }
-.field label{ display:block; font-size:11px; font-weight:600; color:var(--navy); margin-bottom:4px; }
-input[type=text],input[type=number],input[type=date],select,textarea{
-  width:100%; padding:10px 12px; border:1.5px solid var(--border);
-  border-radius:8px; font-family:'IBM Plex Sans Thai',sans-serif;
-  font-size:13px; color:var(--text); background:#fff;
-  transition:border-color .2s; outline:none;
-}
-input:focus,select:focus{ border-color:var(--blue2); }
-.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
-.grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px; }
-
-/* ── Button ── */
-.btn{ padding:11px 16px; border-radius:10px; font-family:'IBM Plex Sans Thai',sans-serif; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:all .2s; width:100%; }
-.btn-primary{ background:var(--blue); color:#fff; }
-.btn-primary:active{ background:#1e3a8a; }
-.btn-outline{ background:#fff; color:var(--blue); border:1.5px solid var(--blue); }
-.btn-green{ background:var(--green); color:#fff; }
-.btn-red{ background:var(--red); color:#fff; font-size:12px; }
-.btn-sm{ padding:6px 12px; font-size:11px; border-radius:7px; width:auto; }
-
-/* ── Table ── */
-.data-table{ width:100%; border-collapse:collapse; font-size:11px; }
-.data-table th{
-  background:var(--navy); color:#fff; padding:8px 6px;
-  text-align:center; font-weight:600; font-size:10px; letter-spacing:0.3px;
-}
-.data-table td{ padding:8px 6px; border-bottom:1px solid var(--border); text-align:center; vertical-align:middle; }
-.data-table tr:hover td{ background:#f8fafc; }
-.td-l{ text-align:left !important; }
-
-/* ── Stock card chips ── */
-.line-badge{
-  display:inline-block; padding:2px 7px; border-radius:10px;
-  font-size:10px; font-weight:700; margin:1px;
-}
-.line-b1{ background:#dbeafe; color:#1e40af; }
-.line-b2{ background:#ede9fe; color:#6d28d9; }
-.line-r1{ background:#fce7f3; color:#be185d; }
-.line-all{ background:#dcfce7; color:#15803d; }
-
-/* ── Stock summary cards ── */
-.stock-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
-.stock-mini{
-  background:var(--sky-pale); border:1px solid var(--border);
-  border-radius:10px; padding:10px 12px; text-align:center;
-}
-.stock-mini-label{ font-size:10px; color:var(--text-muted); margin-bottom:4px; }
-.stock-mini-val{ font-size:18px; font-weight:800; font-family:'IBM Plex Mono',monospace; color:var(--navy); }
-.stock-mini-unit{ font-size:10px; color:var(--text-muted); }
-.stock-mini.danger .stock-mini-val{ color:var(--red); }
-.stock-mini.warning .stock-mini-val{ color:var(--amber); }
-.stock-mini.ok .stock-mini-val{ color:var(--green); }
-
-/* ── Toast ── */
-.toast{
-  margin-top:8px; padding:10px 14px; border-radius:8px;
-  font-size:12px; font-weight:600; display:none;
-}
-.toast.ok{ background:var(--success-bg); color:var(--success); display:block; }
-.toast.err{ background:#fef2f2; color:var(--red); display:block; }
-
-/* ── Responsive ── */
-@media(max-width:480px){
-  .stock-grid{ grid-template-columns:1fr 1fr; }
-  .grid3{ grid-template-columns:1fr 1fr; }
-}
-
-/* ── Login ── */
-#loginScreen{
-  position:fixed; inset:0; background:linear-gradient(135deg,var(--navy),#1e3a5f);
-  display:flex; align-items:center; justify-content:center; z-index:999;
-}
-.login-box{
-  background:#fff; border-radius:20px; padding:32px 28px;
-  width:320px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.4);
-}
-.login-title{ font-size:20px; font-weight:800; color:var(--navy); margin-bottom:4px; }
-.login-sub{ font-size:11px; color:var(--text-muted); margin-bottom:20px; }
-.pin-input{
-  width:100%; padding:14px; text-align:center; font-size:22px;
-  font-family:'IBM Plex Mono',monospace; letter-spacing:6px;
-  border:2px solid var(--border); border-radius:10px; margin-bottom:12px;
-}
-.pin-input:focus{ border-color:var(--blue); outline:none; }
-.login-err{ color:var(--red); font-size:12px; margin-bottom:8px; display:none; }
+/* Login */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+@media(max-width:480px){.sum-grid{grid-template-columns:repeat(2,1fr);}.grid3{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
 
-<!-- ══ Login ══ -->
 <div id="loginScreen">
   <div class="login-box">
     <div style="font-size:36px;margin-bottom:8px;">🧪</div>
-    <div class="login-title">Chem Master</div>
-    <div class="login-sub">APK Plating — ระบบจัดการสต็อกเคมีกลาง</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">Chem Master</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — ระบบจัดการสต็อกเคมีกลาง</div>
     <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
       onkeydown="if(event.key==='Enter')checkPin()">
     <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
@@ -182,47 +96,111 @@ input:focus,select:focus{ border-color:var(--blue2); }
   </div>
 </div>
 
-<!-- ══ App ══ -->
 <div id="appScreen" style="display:none;">
-
 <div class="app-header">
-  <div class="app-header-left">
-    <div class="app-header-sub">APK Plating</div>
-    <div class="app-header-title">🧪 Chemical Master</div>
+  <div>
+    <div style="font-size:10px;color:#93c5fd;letter-spacing:0.5px;">APK PLATING</div>
+    <div style="font-size:16px;font-weight:700;">🧪 Chemical Master</div>
   </div>
-  <div class="sync-badge">
-    <div class="sync-dot" id="syncDot"></div>
-    <span id="syncLabel">กำลังเชื่อมต่อ...</span>
-  </div>
+  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
 </div>
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="tab('stock')">📦 Stock Card</button>
   <button class="tab-btn" onclick="tab('in')">📥 รับเข้า</button>
-  <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
   <button class="tab-btn" onclick="tab('items')">⚙️ รายการเคมี</button>
 </div>
 
 <div class="main">
 
-<!-- ══════ TAB: STOCK CARD ══════ -->
+<!-- ══ TAB: STOCK CARD (รวมประวัติ) ══ -->
 <div id="v-stock" class="view active">
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div class="card-label" style="margin:0;">📦 Stock Card รวม (<span id="itemCount">0</span> รายการ)</div>
-      <div style="font-size:10px;color:var(--text-muted);">อัปเดต: <span id="lastSync">—</span></div>
+  <!-- selector เคมี -->
+  <div class="card" style="padding:12px;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="stockItemSel" onchange="renderStockCard()"
+        style="flex:1;min-width:160px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'IBM Plex Sans Thai',sans-serif;">
+        <option value="">— เลือกรายการเคมี —</option>
+      </select>
+      <button onclick="exportStockCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
     </div>
-    <div id="stockCards"></div>
-    <div id="stockEmpty" style="text-align:center;color:var(--text-muted);padding:30px 0;display:none;">
-      ยังไม่มีรายการเคมี — ไปที่ ⚙️ รายการเคมี เพื่อเพิ่ม
+  </div>
+
+  <!-- summary chips -->
+  <div id="stockSummary" style="display:none;" class="card" style="padding:10px;">
+    <div class="sum-grid">
+      <div class="sum-chip" style="background:#f0fdf4;border-color:#86efac;">
+        <div class="sum-chip-label">รับเข้ารวม</div>
+        <div class="sum-chip-val" style="color:var(--green);" id="sumIn">0.00</div>
+        <div style="font-size:9px;color:var(--text-muted);">ลิตร</div>
+      </div>
+      <div class="sum-chip" style="background:#dbeafe;border-color:#93c5fd;">
+        <div class="sum-chip-label">B1 เบิก</div>
+        <div class="sum-chip-val" style="color:#1e40af;" id="sumB1">0.00</div>
+        <div style="font-size:9px;color:var(--text-muted);">ลิตร</div>
+      </div>
+      <div class="sum-chip" style="background:#ede9fe;border-color:#c4b5fd;">
+        <div class="sum-chip-label">B2 เบิก</div>
+        <div class="sum-chip-val" style="color:#6d28d9;" id="sumB2">0.00</div>
+        <div style="font-size:9px;color:var(--text-muted);">ลิตร</div>
+      </div>
+      <div class="sum-chip" style="background:#fce7f3;border-color:#f9a8d4;">
+        <div class="sum-chip-label">R1 เบิก</div>
+        <div class="sum-chip-val" style="color:#be185d;" id="sumR1">0.00</div>
+        <div style="font-size:9px;color:var(--text-muted);">ลิตร</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;border:2px solid var(--border);background:#f8fafc;">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);">คงเหลือ</div>
+      <div id="sumRemain" style="font-size:22px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:var(--green);">0.00 L</div>
+    </div>
+  </div>
+
+  <!-- ตาราง Stock Card แบบ Excel -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="background:var(--navy);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:12px;font-weight:600;color:#fff;">📋 รายการเคลื่อนไหว</div>
+      <div id="stockItemName" style="font-size:11px;color:#93c5fd;"></div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="sc-table">
+        <thead>
+          <tr>
+            <th colspan="4" class="in-col" style="border-right:2px solid rgba(255,255,255,0.2);">ส่วนจัดซื้อ (รับเข้า)</th>
+            <th colspan="4" class="out-col" style="border-right:2px solid rgba(255,255,255,0.2);">ส่วนผลิต (เบิกใช้)</th>
+            <th colspan="2" class="bal-col">คงเหลือ</th>
+          </tr>
+          <tr style="background:#1e3a5f;">
+            <th class="in-col td-l" style="text-align:left;">ว.ด.ป.</th>
+            <th class="in-col td-l" style="text-align:left;">เลขที่ใบรับ</th>
+            <th class="in-col">รับเข้า (ลิตร)</th>
+            <th class="in-col" style="border-right:2px solid rgba(255,255,255,0.15);">รับเข้า (ถัง)</th>
+            <th class="out-col td-l" style="text-align:left;">ว.ด.ป.</th>
+            <th class="out-col">ไลน์</th>
+            <th class="out-col">เบิก (ลิตร)</th>
+            <th class="out-col" style="border-right:2px solid rgba(255,255,255,0.15);">หมายเหตุ</th>
+            <th class="bal-col">คงเหลือ (ลิตร)</th>
+            <th class="bal-col"></th>
+          </tr>
+        </thead>
+        <tbody id="stockBody">
+          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 
-<!-- ══════ TAB: รับเข้า ══════ -->
+<!-- ══ TAB: รับเข้า ══ -->
 <div id="v-in" class="view">
   <div class="card">
     <div class="card-label">📥 บันทึกรับเคมีเข้า</div>
+    <div class="field">
+      <label>รายการเคมี</label>
+      <select id="inChemSel">
+        <option value="">— เลือกรายการเคมี —</option>
+      </select>
+    </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>วันที่รับ</label>
@@ -232,12 +210,6 @@ input:focus,select:focus{ border-color:var(--blue2); }
         <label>เลขที่ใบสั่งซื้อ (PO)</label>
         <input type="text" id="inBill" placeholder="เช่น PO-2026-001">
       </div>
-    </div>
-    <div class="field">
-      <label>รายการเคมี</label>
-      <select id="inChemSel" onchange="onInChemSelect()">
-        <option value="">— เลือกรายการเคมี —</option>
-      </select>
     </div>
     <div class="grid3">
       <div class="field" style="margin:0;">
@@ -257,83 +229,24 @@ input:focus,select:focus{ border-color:var(--blue2); }
       <label>หมายเหตุ</label>
       <input type="text" id="inNote" placeholder="เช่น ล็อต A / Supplier X">
     </div>
-    <button class="btn btn-green" onclick="addChemIn()" style="margin-bottom:0;">
-      📥 บันทึกรับเข้า
-    </button>
+    <button class="btn btn-green" onclick="addChemIn()">📥 บันทึกรับเข้า</button>
     <div id="toast-in" class="toast"></div>
   </div>
 </div>
 
-<!-- ══════ TAB: ประวัติ ══════ -->
-<div id="v-history" class="view">
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-      <div class="card-label" style="margin:0;">📋 ประวัติรับเข้า-จ่ายออก</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <select id="histChemFilter" onchange="renderHistory()"
-          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);">
-          <option value="">— ทุกรายการ —</option>
-        </select>
-        <select id="histTypeFilter" onchange="renderHistory()"
-          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);">
-          <option value="">— ทุกประเภท —</option>
-          <option value="in">📥 รับเข้า</option>
-          <option value="out-b1">B1 เบิก</option>
-          <option value="out-b2">B2 เบิก</option>
-          <option value="out-r1">R1 เบิก</option>
-        </select>
-        <button onclick="exportHistoryCSV()"
-          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;">
-          📥 CSV
-        </button>
-      </div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="text-align:left;">วันที่</th>
-            <th style="text-align:left;">รายการเคมี</th>
-            <th>ประเภท</th>
-            <th>ลิตร</th>
-            <th>ถัง</th>
-            <th style="text-align:left;">หมายเหตุ</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="histBody">
-          <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีประวัติ</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ══════ TAB: รายการเคมี ══════ -->
+<!-- ══ TAB: รายการเคมี ══ -->
 <div id="v-items" class="view">
   <div class="card">
     <div class="card-label">⚙️ รายการเคมีทั้งหมด</div>
-    <button class="btn btn-outline btn-sm" onclick="toggleAddForm()" style="margin-bottom:12px;width:auto;">
-      + เพิ่มรายการเคมีใหม่
-    </button>
+    <button class="btn btn-outline btn-sm" onclick="toggleAddForm()" style="margin-bottom:12px;">+ เพิ่มรายการเคมีใหม่</button>
     <div id="addItemForm" style="display:none;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;">
       <div class="grid2">
-        <div class="field" style="margin:0;">
-          <label>รหัสเคมี</label>
-          <input type="text" id="newCode" placeholder="เช่น C-001">
-        </div>
-        <div class="field" style="margin:0;">
-          <label>ชื่อเคมี</label>
-          <input type="text" id="newName" placeholder="เช่น ZB 1533">
-        </div>
+        <div class="field" style="margin:0;"><label>รหัสเคมี</label><input type="text" id="newCode" placeholder="เช่น C-001"></div>
+        <div class="field" style="margin:0;"><label>ชื่อเคมี</label><input type="text" id="newName" placeholder="เช่น ZB 1533"></div>
       </div>
       <div class="grid2">
-        <div class="field" style="margin:0;">
-          <label>Supplier</label>
-          <input type="text" id="newSupplier" placeholder="เช่น Kelly">
-        </div>
-        <div class="field" style="margin:0;">
-          <label>ใช้ใน Line</label>
+        <div class="field" style="margin:0;"><label>Supplier</label><input type="text" id="newSupplier" placeholder="เช่น Kelly"></div>
+        <div class="field" style="margin:0;"><label>ใช้ใน Line</label>
           <select id="newLines" multiple style="height:70px;">
             <option value="b1" selected>B1</option>
             <option value="b2" selected>B2</option>
@@ -354,218 +267,213 @@ input:focus,select:focus{ border-color:var(--blue2); }
 </div><!-- /appScreen -->
 
 <script>
-// ══════════════════════════════════════
-//  CONFIG
-// ══════════════════════════════════════
-var PINS = {
-  '010517': 'admin',
-  'Apk002': 'viewer',
-};
-
+// ══ CONFIG ══
+var PINS = { '010517':'admin', 'Apk002':'viewer' };
 var FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
-  authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
-  databaseURL:       "https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId:         "platingapp-92e21-c1346",
-  storageBucket:     "platingapp-92e21-c1346.firebasestorage.app",
-  messagingSenderId: "595867939924",
-  appId:             "1:595867939924:web:a5f4e5a10372c1c160a9c1"
+  apiKey:"AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
+  authDomain:"platingapp-92e21-c1346.firebaseapp.com",
+  databaseURL:"https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"platingapp-92e21-c1346",
 };
-var FB_URL = FIREBASE_CONFIG.databaseURL;
-var FB_PATH = FB_URL.replace(/\/$/, '') + '/chem-master';
+var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
 
-// ══════════════════════════════════════
-//  DATA
-// ══════════════════════════════════════
-var chemItems   = [];  // รายการเคมี
-var chemRecords = [];  // ประวัติ in/out ทั้งหมด
-var _pollTimer  = null;
-var _pollCount  = 0;
+// ══ DATA ══
+var chemItems   = [];
+var chemRecords = [];
+var _pollTimer  = null, _pollCount = 0;
 
-// ══════════════════════════════════════
-//  LOGIN
-// ══════════════════════════════════════
+// ══ LOGIN ══
 function checkPin() {
   var pin = document.getElementById('pinInput').value.trim();
   if (PINS[pin]) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
-    loadLocal();
-    startPoll();
-    setTimeout(fbLoad, 1000);
+    try { localStorage.setItem('master_pin','1'); } catch(e){}
+    loadLocal(); startPoll(); setTimeout(fbLoad, 800);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
   }
 }
 
-// ══════════════════════════════════════
-//  TAB
-// ══════════════════════════════════════
+// ══ TAB ══
 function tab(t) {
-  ['stock','in','history','items'].forEach(function(n, i) {
+  ['stock','in','items'].forEach(function(n,i){
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
-  if (t==='stock')   renderStockCards();
-  if (t==='history') { renderHistoryFilters(); renderHistory(); }
-  if (t==='items')   renderItemsList();
-  if (t==='in')      renderInSelect();
+  if (t==='stock') { populateStockSel(); renderStockCard(); }
+  if (t==='in')    { renderInSelect(); }
+  if (t==='items') { renderItemsList(); }
 }
 
-// ══════════════════════════════════════
-//  LOCAL STORAGE
-// ══════════════════════════════════════
+// ══ LOCAL STORAGE ══
 function loadLocal() {
   try { chemItems   = JSON.parse(localStorage.getItem('master_chemItems')   || '[]'); } catch(e){ chemItems=[]; }
   try { chemRecords = JSON.parse(localStorage.getItem('master_chemRecords') || '[]'); } catch(e){ chemRecords=[]; }
 }
-
 function saveLocal() {
   try { localStorage.setItem('master_chemItems',   JSON.stringify(chemItems));   } catch(e){}
   try { localStorage.setItem('master_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
 }
 
-// ══════════════════════════════════════
-//  FIREBASE
-// ══════════════════════════════════════
+// ══ FIREBASE ══
 async function fbSave() {
   try {
-    var res = await fetch(FB_PATH + '.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        items:   chemItems,
-        records: chemRecords,
-        savedAt: new Date().toISOString()
-      })
+    await fetch(FB_PATH+'.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items:chemItems, records:chemRecords, savedAt:new Date().toISOString() })
     });
-    if (res.ok) setSyncOk();
-  } catch(e) { setSyncErr(); }
+    setSyncOk();
+  } catch(e){ setSyncErr(); }
 }
 
 async function fbLoad() {
   try {
-    var res = await fetch(FB_PATH + '.json');
-    if (!res.ok) { setSyncErr(); return; }
+    var res = await fetch(FB_PATH+'.json');
+    if (!res.ok){ setSyncErr(); return; }
     var data = await res.json();
     if (data) {
       if (Array.isArray(data.items))   chemItems   = data.items;
       if (Array.isArray(data.records)) chemRecords = data.records;
       saveLocal();
-      document.getElementById('lastSync').textContent =
-        new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
       setSyncOk();
-      // refresh UI ถ้า tab active
-      var activeTab = document.querySelector('.view.active');
-      if (activeTab) {
-        var id = activeTab.id.replace('v-','');
-        tab(id);
-      }
+      document.getElementById('lastSyncTime') && (document.getElementById('lastSyncTime').textContent = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+      // refresh active tab
+      var active = document.querySelector('.view.active');
+      if (active) tab(active.id.replace('v-',''));
     }
-  } catch(e) { setSyncErr(); }
+  } catch(e){ setSyncErr(); }
 }
 
 function startPoll() {
   if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(function(){
-    _pollCount++;
-    if (_pollCount % 6 === 0) fbLoad();
-  }, 5000);
+  _pollTimer = setInterval(function(){ _pollCount++; if (_pollCount%6===0) fbLoad(); }, 5000);
 }
+function setSyncOk(){ document.getElementById('syncDot').className='sync-dot ok'; document.getElementById('syncLabel').textContent='Sync แล้ว'; }
+function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; document.getElementById('syncLabel').textContent='ออฟไลน์'; }
 
-function setSyncOk() {
-  document.getElementById('syncDot').className = 'sync-dot ok';
-  document.getElementById('syncLabel').textContent = 'Sync แล้ว';
-}
-function setSyncErr() {
-  document.getElementById('syncDot').className = 'sync-dot';
-  document.getElementById('syncLabel').textContent = 'ออฟไลน์';
-}
-
-// ══════════════════════════════════════
-//  STOCK CARD
-// ══════════════════════════════════════
+// ══ STOCK CARD ══
 function calcBalance(itemId) {
-  var totalIn = 0, totalOut_b1 = 0, totalOut_b2 = 0, totalOut_r1 = 0, manualOut = 0;
-  chemRecords.forEach(function(r) {
-    if (r.chemId !== itemId) return;
-    if (r.type === 'in')     totalIn    += Number(r.liter||0);
-    if (r.type === 'out-b1') totalOut_b1 += Number(r.liter||0);
-    if (r.type === 'out-b2') totalOut_b2 += Number(r.liter||0);
-    if (r.type === 'out-r1') totalOut_r1 += Number(r.liter||0);
-    if (r.type === 'out')    manualOut   += Number(r.liter||0);
+  var totalIn=0, outB1=0, outB2=0, outR1=0;
+  chemRecords.forEach(function(r){
+    if (r.chemId!==itemId) return;
+    if (r.type==='in')     totalIn += Number(r.liter||0);
+    if (r.type==='out-b1') outB1   += Number(r.liter||0);
+    if (r.type==='out-b2') outB2   += Number(r.liter||0);
+    if (r.type==='out-r1') outR1   += Number(r.liter||0);
   });
-  var totalOut = totalOut_b1 + totalOut_b2 + totalOut_r1 + manualOut;
-  var remain   = totalIn - totalOut;
-  return { totalIn, totalOut, totalOut_b1, totalOut_b2, totalOut_r1, remain };
+  return { totalIn, outB1, outB2, outR1, remain: totalIn-outB1-outB2-outR1 };
 }
 
-function renderStockCards() {
-  var el = document.getElementById('stockCards');
-  var empty = document.getElementById('stockEmpty');
-  document.getElementById('itemCount').textContent = chemItems.length;
+function populateStockSel() {
+  var sel = document.getElementById('stockItemSel');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกรายการเคมี —</option>' +
+    chemItems.map(function(c){
+      return '<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.code+' — '+c.name+'</option>';
+    }).join('');
+}
 
-  if (!chemItems.length) {
-    el.innerHTML = '';
-    empty.style.display = 'block';
+function renderStockCard() {
+  var itemId = document.getElementById('stockItemSel').value;
+  var summaryEl = document.getElementById('stockSummary');
+  var tbody = document.getElementById('stockBody');
+
+  if (!itemId) {
+    summaryEl.style.display = 'none';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
+    document.getElementById('stockItemName').textContent = '';
     return;
   }
-  empty.style.display = 'none';
 
-  el.innerHTML = chemItems.map(function(item) {
-    var b = calcBalance(item.id);
-    var statusClass = b.remain < 0 ? 'danger' : b.remain < (b.totalIn * 0.2) ? 'warning' : 'ok';
-    var lines = (item.lines||['b1','b2','r1']);
+  var item = chemItems.find(function(c){ return c.id===itemId; }) || {};
+  document.getElementById('stockItemName').textContent = item.code+' — '+item.name;
 
-    return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
-        '<div>' +
-          '<div style="font-size:12px;font-weight:700;color:var(--navy);">' + (item.code||'') + ' — ' + item.name + '</div>' +
-          '<div style="font-size:10px;color:var(--text-muted);">' + (item.supplier||'') + '</div>' +
-          '<div style="margin-top:4px;">' +
-            lines.map(function(l){
-              return '<span class="line-badge line-'+l+'">'+l.toUpperCase()+'</span>';
-            }).join('') +
-          '</div>' +
-        '</div>' +
-        '<div class="stock-mini ' + statusClass + '" style="min-width:80px;">' +
-          '<div class="stock-mini-label">คงเหลือ</div>' +
-          '<div class="stock-mini-val">' + b.remain.toFixed(2) + '</div>' +
-          '<div class="stock-mini-unit">ลิตร</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="stock-grid" style="grid-template-columns:repeat(4,1fr);">' +
-        '<div style="text-align:center;padding:6px;background:#f8fafc;border-radius:8px;">' +
-          '<div style="font-size:9px;color:var(--text-muted);">รับเข้า</div>' +
-          '<div style="font-size:14px;font-weight:700;color:var(--green);font-family:\'IBM Plex Mono\',monospace;">' + b.totalIn.toFixed(2) + '</div>' +
-          '<div style="font-size:9px;color:var(--text-muted);">ลิตร</div>' +
-        '</div>' +
-        '<div style="text-align:center;padding:6px;background:#dbeafe;border-radius:8px;">' +
-          '<div style="font-size:9px;color:#1e40af;">B1 เบิก</div>' +
-          '<div style="font-size:14px;font-weight:700;color:#1e40af;font-family:\'IBM Plex Mono\',monospace;">' + b.totalOut_b1.toFixed(2) + '</div>' +
-          '<div style="font-size:9px;color:#1e40af;">ลิตร</div>' +
-        '</div>' +
-        '<div style="text-align:center;padding:6px;background:#ede9fe;border-radius:8px;">' +
-          '<div style="font-size:9px;color:#6d28d9;">B2 เบิก</div>' +
-          '<div style="font-size:14px;font-weight:700;color:#6d28d9;font-family:\'IBM Plex Mono\',monospace;">' + b.totalOut_b2.toFixed(2) + '</div>' +
-          '<div style="font-size:9px;color:#6d28d9;">ลิตร</div>' +
-        '</div>' +
-        '<div style="text-align:center;padding:6px;background:#fce7f3;border-radius:8px;">' +
-          '<div style="font-size:9px;color:#be185d;">R1 เบิก</div>' +
-          '<div style="font-size:14px;font-weight:700;color:#be185d;font-family:\'IBM Plex Mono\',monospace;">' + b.totalOut_r1.toFixed(2) + '</div>' +
-          '<div style="font-size:9px;color:#be185d;">ลิตร</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+  var recs = chemRecords.filter(function(r){ return r.chemId===itemId; })
+    .slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  // คำนวณ summary
+  var b = calcBalance(itemId);
+  document.getElementById('sumIn').textContent  = b.totalIn.toFixed(2);
+  document.getElementById('sumB1').textContent  = b.outB1.toFixed(2);
+  document.getElementById('sumB2').textContent  = b.outB2.toFixed(2);
+  document.getElementById('sumR1').textContent  = b.outR1.toFixed(2);
+  var remEl = document.getElementById('sumRemain');
+  remEl.textContent = b.remain.toFixed(2) + ' L';
+  remEl.style.color = b.remain < 0 ? 'var(--red)' : b.remain < (b.totalIn*0.2) ? 'var(--amber)' : 'var(--green)';
+  summaryEl.style.display = 'block';
+
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีรายการ</td></tr>';
+    return;
+  }
+
+  // แยก in/out แล้ว render คู่กัน (แบบ Excel)
+  var inRecs  = recs.filter(function(r){ return r.type==='in'; });
+  var outRecs = recs.filter(function(r){ return r.type!=='in'; });
+  var maxRows = Math.max(inRecs.length, outRecs.length);
+
+  // running balance
+  var runBal = 0;
+  var allSorted = recs.slice();
+  var balMap = {};
+  allSorted.forEach(function(r){
+    if (r.type==='in') runBal += Number(r.liter||0);
+    else               runBal -= Number(r.liter||0);
+    balMap[r.id] = runBal;
+  });
+
+  // render แบบ 2 ฝั่ง
+  var rows = '';
+  for (var i=0; i<maxRows; i++) {
+    var ir = inRecs[i];
+    var or = outRecs[i];
+    var balVal = or ? balMap[or.id] : (ir ? balMap[ir.id] : null);
+    var balStr = balVal !== null ? balVal.toFixed(2) : '—';
+    var balClass = balVal !== null ? (balVal<0?'bal-neg':'bal-pos') : '';
+    var lineLabel = or ? ({
+      'out-b1':'<span class="type-out-b1">B1</span>',
+      'out-b2':'<span class="type-out-b2">B2</span>',
+      'out-r1':'<span class="type-out-r1">R1</span>',
+    }[or.type]||or.type) : '';
+    var inDate = ir ? new Date(ir.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '';
+    var outDate= or ? new Date(or.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '';
+    rows += '<tr>' +
+      '<td class="td-l" style="color:var(--text-mid);font-size:10px;">'+(inDate||'')+'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(ir?(ir.bill||'—'):'')+'</td>' +
+      '<td style="font-weight:700;color:var(--green);">'+(ir?ir.liter.toFixed(2):'')+'</td>' +
+      '<td style="border-right:2px solid var(--border);">'+(ir?(ir.bucket||'—'):'')+'</td>' +
+      '<td class="td-l" style="color:var(--text-mid);font-size:10px;">'+(outDate||'')+'</td>' +
+      '<td>'+lineLabel+'</td>' +
+      '<td style="font-weight:700;color:var(--orange);">'+(or?or.liter.toFixed(2):'')+'</td>' +
+      '<td style="font-size:10px;color:var(--text-muted);border-right:2px solid var(--border);">'+(or?(or.note||'—'):'')+'</td>' +
+      '<td class="'+balClass+'">'+balStr+'</td>' +
+      '<td><button onclick="deleteRecord(\''+( or?or.id:(ir?ir.id:'') )+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;visibility:'+(ir||or?'visible':'hidden')+'">✕</button></td>' +
+    '</tr>';
+  }
+  tbody.innerHTML = rows;
 }
 
-// ══════════════════════════════════════
-//  รับเข้า
-// ══════════════════════════════════════
+function exportStockCSV() {
+  var itemId = document.getElementById('stockItemSel').value;
+  if (!itemId) { alert('กรุณาเลือกรายการเคมีก่อน'); return; }
+  var item = chemItems.find(function(c){ return c.id===itemId; }) || {};
+  var recs = chemRecords.filter(function(r){ return r.chemId===itemId; })
+    .slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  var rows = [['วันที่','ประเภท','ลิตร','ถัง','ราคา','หมายเหตุ/PO']];
+  recs.forEach(function(r){ rows.push([r.date,r.type,r.liter||0,r.bucket||0,r.price||0,r.note||r.bill||'']); });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'stock_'+item.code+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+// ══ รับเข้า ══
 function renderInSelect() {
   var sel = document.getElementById('inChemSel');
   var cur = sel.value;
@@ -573,209 +481,98 @@ function renderInSelect() {
     chemItems.map(function(c){
       return '<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.code+' — '+c.name+'</option>';
     }).join('');
-  // ตั้งวันที่อัตโนมัติ
-  var dateEl = document.getElementById('inDate');
-  if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+  var d = document.getElementById('inDate');
+  if (d && !d.value) d.value = new Date().toISOString().slice(0,10);
 }
-
-function onInChemSelect() {}
 
 function addChemIn() {
   var chemId = document.getElementById('inChemSel').value;
   var date   = document.getElementById('inDate').value;
   var bill   = document.getElementById('inBill').value.trim();
-  var liter  = parseFloat(document.getElementById('inLiter').value) || 0;
-  var bucket = parseInt(document.getElementById('inBucket').value)  || 0;
-  var price  = parseFloat(document.getElementById('inPrice').value) || 0;
+  var liter  = parseFloat(document.getElementById('inLiter').value)||0;
+  var bucket = parseInt(document.getElementById('inBucket').value)||0;
+  var price  = parseFloat(document.getElementById('inPrice').value)||0;
   var note   = document.getElementById('inNote').value.trim();
-
-  if (!chemId) { showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
-  if (!date)   { showToast('in','กรุณาระบุวันที่','err'); return; }
-  if (!liter)  { showToast('in','กรุณากรอกปริมาณ (ลิตร)','err'); return; }
-
-  var rec = {
-    id: Date.now(), chemId: chemId, type: 'in',
-    date: date, bill: bill, liter: liter, bucket: bucket,
-    price: price, note: note
-  };
-  chemRecords.unshift(rec);
-  saveLocal();
-  fbSave();
-
-  // clear
-  ['inBill','inLiter','inBucket','inPrice','inNote'].forEach(function(id){
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('inChemSel').value = '';
-
+  if (!chemId){ showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
+  if (!date)  { showToast('in','กรุณาระบุวันที่','err'); return; }
+  if (!liter) { showToast('in','กรุณากรอกปริมาณ (ลิตร)','err'); return; }
+  chemRecords.unshift({ id:Date.now(), chemId, type:'in', date, bill, liter, bucket, price, note });
+  saveLocal(); fbSave();
+  ['inBill','inLiter','inBucket','inPrice','inNote'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('inChemSel').value='';
   showToast('in','✅ บันทึกรับเข้าสำเร็จ — '+liter.toFixed(2)+' ลิตร','ok');
 }
 
-// ══════════════════════════════════════
-//  HISTORY
-// ══════════════════════════════════════
-function renderHistoryFilters() {
-  var sel = document.getElementById('histChemFilter');
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">— ทุกรายการ —</option>' +
-    chemItems.map(function(c){
-      return '<option value="'+c.id+'"'+(c.id===cur?' selected':'')+'>'+c.code+' '+c.name+'</option>';
-    }).join('');
+// ══ ITEMS ══
+function toggleAddForm(){
+  var f=document.getElementById('addItemForm');
+  f.style.display=f.style.display==='none'?'block':'none';
 }
-
-function renderHistory() {
-  var chemFilter = document.getElementById('histChemFilter').value;
-  var typeFilter = document.getElementById('histTypeFilter').value;
-
-  var rows = chemRecords.filter(function(r){
-    if (chemFilter && r.chemId !== chemFilter) return false;
-    if (typeFilter && r.type  !== typeFilter)  return false;
-    return true;
-  });
-
-  var tbody = document.getElementById('histBody');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">ไม่มีข้อมูล</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = rows.map(function(r) {
-    var item = chemItems.find(function(c){ return c.id===r.chemId; }) || {};
-    var typeLabel = {
-      'in':     '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับเข้า</span>',
-      'out-b1': '<span class="line-badge line-b1">B1 เบิก</span>',
-      'out-b2': '<span class="line-badge line-b2">B2 เบิก</span>',
-      'out-r1': '<span class="line-badge line-r1">R1 เบิก</span>',
-      'out':    '<span style="background:#fee2e2;color:#dc2626;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 เบิก</span>',
-    }[r.type] || r.type;
-    var dateLabel = r.date ? new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
-    return '<tr>' +
-      '<td class="td-l">' + dateLabel + '</td>' +
-      '<td class="td-l">' + (item.code||'?') + ' ' + (item.name||'—') + '</td>' +
-      '<td>' + typeLabel + '</td>' +
-      '<td><strong>' + (r.liter||0).toFixed(2) + '</strong></td>' +
-      '<td>' + (r.bucket||'—') + '</td>' +
-      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">' + (r.note||r.bill||'—') + '</td>' +
-      '<td><button onclick="deleteRecord('+r.id+')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;">✕</button></td>' +
-    '</tr>';
-  }).join('');
+function confirmAddItem(){
+  var code=document.getElementById('newCode').value.trim();
+  var name=document.getElementById('newName').value.trim();
+  var supplier=document.getElementById('newSupplier').value.trim();
+  var lines=Array.from(document.getElementById('newLines').selectedOptions).map(function(o){return o.value;});
+  if (!code||!name){alert('กรุณากรอกรหัสและชื่อเคมี');return;}
+  if (chemItems.some(function(c){return c.code===code;})){alert('รหัสเคมีซ้ำ');return;}
+  chemItems.push({id:'CH'+Date.now(),code,name,supplier,lines});
+  saveLocal(); fbSave();
+  ['newCode','newName','newSupplier'].forEach(function(id){document.getElementById(id).value='';});
+  toggleAddForm(); renderItemsList(); populateStockSel();
 }
-
-function deleteRecord(id) {
-  if (!confirm('ลบรายการนี้?')) return;
-  chemRecords = chemRecords.filter(function(r){ return r.id !== id; });
-  saveLocal();
-  fbSave();
-  renderHistory();
-  renderStockCards();
-}
-
-function exportHistoryCSV() {
-  if (!chemRecords.length) { alert('ยังไม่มีข้อมูล'); return; }
-  var rows = [['วันที่','รหัส','ชื่อเคมี','ประเภท','ลิตร','ถัง','ราคา','หมายเหตุ']];
-  chemRecords.forEach(function(r){
-    var item = chemItems.find(function(c){ return c.id===r.chemId; }) || {};
-    rows.push([r.date, item.code||'', item.name||'', r.type, r.liter||0, r.bucket||0, r.price||0, r.note||r.bill||'']);
-  });
-  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
-  var blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'chem_history_' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-}
-
-// ══════════════════════════════════════
-//  ITEMS MANAGEMENT
-// ══════════════════════════════════════
-function toggleAddForm() {
-  var f = document.getElementById('addItemForm');
-  f.style.display = f.style.display==='none' ? 'block' : 'none';
-}
-
-function confirmAddItem() {
-  var code     = document.getElementById('newCode').value.trim();
-  var name     = document.getElementById('newName').value.trim();
-  var supplier = document.getElementById('newSupplier').value.trim();
-  var linesSel = document.getElementById('newLines');
-  var lines    = Array.from(linesSel.selectedOptions).map(function(o){ return o.value; });
-
-  if (!code || !name) { alert('กรุณากรอกรหัสและชื่อเคมี'); return; }
-  if (chemItems.some(function(c){ return c.code===code; })) { alert('รหัสเคมีซ้ำ'); return; }
-
-  chemItems.push({ id:'CH'+Date.now(), code:code, name:name, supplier:supplier, lines:lines });
-  saveLocal();
-  fbSave();
-  ['newCode','newName','newSupplier'].forEach(function(id){ document.getElementById(id).value=''; });
-  toggleAddForm();
-  renderItemsList();
-  renderInSelect();
-}
-
-function renderItemsList() {
-  var el = document.getElementById('itemsList');
-  if (!chemItems.length) {
-    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีรายการเคมี</div>';
-    return;
-  }
-  el.innerHTML = chemItems.map(function(item){
-    var b = calcBalance(item.id);
-    var lines = (item.lines||['b1','b2','r1']);
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;">' +
-      '<div>' +
-        '<div style="font-weight:700;font-size:12px;">' + item.code + ' — ' + item.name + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);">' + (item.supplier||'') + '</div>' +
-        '<div style="margin-top:3px;">' + lines.map(function(l){ return '<span class="line-badge line-'+l+'">'+l.toUpperCase()+'</span>'; }).join('') + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;">' +
-        '<div style="font-size:11px;color:var(--text-muted);">คงเหลือ</div>' +
-        '<div style="font-size:16px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+(b.remain<0?'#dc2626':b.remain<5?'#d97706':'#16a34a')+'">' + b.remain.toFixed(2) + ' L</div>' +
-        '<button onclick="deleteItem(\''+item.id+'\')" style="margin-top:4px;background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">ลบ</button>' +
-      '</div>' +
+function renderItemsList(){
+  var el=document.getElementById('itemsList');
+  if (!chemItems.length){el.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีรายการเคมี</div>';return;}
+  el.innerHTML=chemItems.map(function(item){
+    var b=calcBalance(item.id);
+    var color=b.remain<0?'#dc2626':b.remain<5?'#d97706':'#16a34a';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;">'+
+      '<div>'+
+        '<div style="font-weight:700;font-size:12px;">'+item.code+' — '+item.name+'</div>'+
+        '<div style="font-size:10px;color:var(--text-muted);">'+(item.supplier||'')+'</div>'+
+        '<div style="margin-top:3px;">'+(item.lines||['b1','b2','r1']).map(function(l){return '<span class="line-badge line-'+l+'">'+l.toUpperCase()+'</span>';}).join('')+'</div>'+
+      '</div>'+
+      '<div style="text-align:right;">'+
+        '<div style="font-size:11px;color:var(--text-muted);">คงเหลือ</div>'+
+        '<div style="font-size:16px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+color+';">'+b.remain.toFixed(2)+' L</div>'+
+        '<button onclick="deleteItem(\''+item.id+'\')" style="margin-top:4px;background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">ลบ</button>'+
+      '</div>'+
     '</div>';
   }).join('');
 }
-
-function deleteItem(id) {
-  var item = chemItems.find(function(c){ return c.id===id; });
-  if (!item) return;
-  if (!confirm('ลบ "'+item.name+'" และประวัติทั้งหมด?')) return;
-  chemItems   = chemItems.filter(function(c){ return c.id!==id; });
-  chemRecords = chemRecords.filter(function(r){ return r.chemId!==id; });
-  saveLocal();
-  fbSave();
-  renderItemsList();
-  renderStockCards();
+function deleteItem(id){
+  var item=chemItems.find(function(c){return c.id===id;});
+  if (!item||!confirm('ลบ "'+item.name+'" และประวัติทั้งหมด?')) return;
+  chemItems=chemItems.filter(function(c){return c.id!==id;});
+  chemRecords=chemRecords.filter(function(r){return r.chemId!==id;});
+  saveLocal(); fbSave(); renderItemsList(); populateStockSel(); renderStockCard();
+}
+function deleteRecord(id){
+  if (!id||!confirm('ลบรายการนี้?')) return;
+  chemRecords=chemRecords.filter(function(r){return String(r.id)!==String(id);});
+  saveLocal(); fbSave(); renderStockCard();
 }
 
-// ══════════════════════════════════════
-//  TOAST
-// ══════════════════════════════════════
-function showToast(section, msg, type) {
-  var el = document.getElementById('toast-'+section);
+// ══ TOAST ══
+function showToast(section,msg,type){
+  var el=document.getElementById('toast-'+section);
   if (!el) return;
-  el.textContent = msg;
-  el.className = 'toast ' + (type==='ok' ? 'ok' : 'err');
-  setTimeout(function(){ el.className='toast'; }, 3500);
+  el.textContent=msg;
+  el.className='toast '+(type==='ok'?'ok':'err');
+  setTimeout(function(){el.className='toast';},3500);
 }
 
-// ══════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════
+// ══ INIT ══
 window.addEventListener('load', function(){
-  // check auto-login
   try {
-    if (localStorage.getItem('master_pin') === '1') {
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('appScreen').style.display = 'block';
-      loadLocal();
-      startPoll();
-      setTimeout(fbLoad, 500);
+    if (localStorage.getItem('master_pin')==='1'){
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('appScreen').style.display='block';
+      loadLocal(); startPoll(); setTimeout(fbLoad, 500);
     }
   } catch(e){}
-  // ตั้งวันที่
-  var d = document.getElementById('inDate');
-  if (d) d.value = new Date().toISOString().slice(0,10);
+  var d=document.getElementById('inDate');
+  if (d) d.value=new Date().toISOString().slice(0,10);
 });
 </script>
 </body>
