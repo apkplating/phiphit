@@ -2969,6 +2969,12 @@ function fbStartPoll() {
       fbLivePoll();
     }
   }, 5000);
+
+  // Fast poll 3 วิ เฉพาะตอนอยู่ใน tab กรอกรายรอบ
+  setInterval(function(){
+    var activeEl = document.querySelector('.view.active');
+    if (activeEl && activeEl.id === 'v-entry') fbLivePoll();
+  }, 3000);
 }
 
 // Poll เฉพาะ todayBarrels (เบากว่า fbLoad เต็ม)
@@ -2981,18 +2987,26 @@ async function fbLivePoll() {
     var data = await res.json();
     if (!data || !data.updatedAt) return;
 
-    // ถ้าข้อมูลใหม่กว่าที่เรามีอยู่
-    if (data.updatedAt <= (_fbLiveUpdatedAt || '')) return;
+    // เช็คว่าข้อมูล cloud ต่างจาก local ไหม (ไม่เช็ค updatedAt อย่างเดียว)
+    var cloudIds = (data.rows||[]).map(function(r){return r.id;}).join(',');
+    var localIds2 = todayBarrels.map(function(r){return r.id;}).join(',');
+    var isNewer = data.updatedAt > (_fbLiveUpdatedAt || '');
+    var isDiff  = cloudIds !== localIds2;
+
+    if (!isNewer && !isDiff) return;
     _fbLiveUpdatedAt = data.updatedAt;
 
     // อัปเดต todayBarrels จาก cloud
     if (data.rows && Array.isArray(data.rows)) {
-      var cloudIds = data.rows.map(function(r){return r.id;}).join(',');
-      var localIds2 = todayBarrels.map(function(r){return r.id;}).join(',');
-      if (cloudIds !== localIds2) {
+      if (isDiff) {
+        var prevCount = todayBarrels.length;
         todayBarrels = data.rows;
         try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
         renderBarrels();
+        // แจ้งเตือนถ้ามีรอบใหม่จากเครื่องอื่น
+        if (todayBarrels.length > prevCount) {
+          showToast('entry','🔵 มีรายรอบใหม่จากเครื่องอื่น ('+todayBarrels.length+' รอบ)','ok');
+        }
         renderSummary();
       }
       // แสดง banner เสมอถ้าข้อมูลใหม่
@@ -3041,7 +3055,7 @@ var _livePushTimer = null;
 
 function livePush() {
   if (_livePushTimer) clearTimeout(_livePushTimer);
-  _livePushTimer = setTimeout(livePushNow, 1500);
+  _livePushTimer = setTimeout(livePushNow, 300);
 }
 
 async function livePushNow() {
