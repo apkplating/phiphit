@@ -2907,42 +2907,38 @@ async function fbLoad(silent) {
     }
     try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
 
-    // ── โหลด chemItems (master รายการเคมี) ──
+    // ── โหลด chemItems — Firebase เป็น source of truth เสมอ ──
     if (data.chemItems && Array.isArray(data.chemItems) && data.chemItems.length) {
-      // merge: เอาของ cloud ที่ local ยังไม่มี
-      var localChemIds = {};
-      chemItems.forEach(function(c){ localChemIds[c.id] = true; });
-      var newItems = data.chemItems.filter(function(c){ return !localChemIds[c.id]; });
-      if (newItems.length) {
-        chemItems = chemItems.concat(newItems);
-        try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
-        renderChemStockSelect();
-        renderChemAccum();
-        updateChemStockCount();
-      }
-      // ถ้าของ cloud มีทั้งหมดและ local ว่าง → ใช้ cloud
-      if (!chemItems.length && data.chemItems.length) {
-        chemItems = data.chemItems;
-        try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
-        renderChemStockSelect();
-        renderChemAccum();
-        updateChemStockCount();
-      }
+      // ทับ local ทันที (ไม่ merge เพื่อป้องกันซ้ำ)
+      chemItems = data.chemItems;
+      // dedup ป้องกันกรณีข้อมูลซ้ำใน Firebase เอง
+      var seen = {};
+      chemItems = chemItems.filter(function(c){
+        if (seen[c.id]) return false;
+        seen[c.id] = true;
+        return true;
+      });
+      try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
+      renderChemStockSelect();
+      renderChemAccum();
+      updateChemStockCount();
     }
 
-    // ── โหลด chemRecords (ประวัติรับเข้า/เบิก) ──
+    // ── โหลด chemRecords — Firebase เป็น source of truth เสมอ ──
     if (data.chemRecords && Array.isArray(data.chemRecords) && data.chemRecords.length) {
-      var localRecIds = {};
-      chemRecords.forEach(function(r){ localRecIds[r.id] = true; });
-      var newRecs = data.chemRecords.filter(function(r){ return !localRecIds[r.id]; });
-      if (newRecs.length) {
-        chemRecords = chemRecords.concat(newRecs);
-        chemRecords.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
-        try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
-        renderChemStockCard();
-        renderChemAccum();
-      }
-      // ถ้า local ว่างและ cloud มีข้อมูล
+      // ทับ local ทันที
+      chemRecords = data.chemRecords;
+      // dedup
+      var seenR = {};
+      chemRecords = chemRecords.filter(function(r){
+        if (seenR[r.id]) return false;
+        seenR[r.id] = true;
+        return true;
+      });
+      try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+      renderChemStockCard();
+      renderChemAccum();
+      // ถ้า local ว่างและ cloud มีข้อมูล (compat)
       if (!chemRecords.length && data.chemRecords.length) {
         chemRecords = data.chemRecords;
         try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
@@ -3625,7 +3621,19 @@ function renderManualDosingList() {
 //  CHEMICAL STOCK CARD
 // ═══════════════════════════════════════
 
-var chemItems   = [];   // รายการเคมีทั้งหมด (master)
+var chemItems = [
+  { id:'C-001', code:'C-001', name:'ZB 1533 (ยาพื้น)',          supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-002', code:'C-002', name:'ZB 1534 (ยาเงา)',           supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-003', code:'C-003', name:'ALX-441A',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-004', code:'C-004', name:'ALX-441B',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-005', code:'C-005', name:'HYPRO200',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-006', code:'C-006', name:'White Chromate',             supplier:'Extra',  unit:'L', minStock:5 },
+  { id:'C-007', code:'C-007', name:'Yellow Chromate',            supplier:'Extra',  unit:'L', minStock:5 },
+  { id:'C-008', code:'C-008', name:'ZB-1526 (ปรับสภาพน้ำ)',     supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-009', code:'C-009', name:'Britec ZN 930 A (ยาพื้น)',  supplier:'Britech', unit:'L', minStock:5 },
+  { id:'C-010', code:'C-010', name:'Britec ZN 930 B (ยาเงา)',   supplier:'Britech', unit:'L', minStock:5 },
+  { id:'C-011', code:'C-011', name:'Britec ZN 930 C (ปรับสภาพน้ำ)', supplier:'Britech', unit:'L', minStock:5 },
+]; // รายการเคมีทั้งหมด — Firebase เป็น source of truth
 var chemRecords = [];   // รายการเคลื่อนไหวทั้งหมด
 var _selChemId  = null;
 
