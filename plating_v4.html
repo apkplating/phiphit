@@ -304,7 +304,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="login-title">งานชุบ B-1</div>
     <div class="login-sub">ระบบรายงานการชุบประจำวัน<br>กรุณาใส่รหัส PIN เพื่อเข้าใช้งาน</div>
     <div style="margin:20px 0 8px;">
-      <input id="pinInput" type="password" placeholder="ใส่ PIN" autocomplete="off"
+      <input id="pinInput" type="password" placeholder="ใส่ PIN" autocomplete="new-password" onfocus="this.value=''"
         style="width:100%;padding:14px;font-size:20px;text-align:center;letter-spacing:0.3em;border-radius:12px;border:2px solid rgba(91,163,217,0.3);background:rgba(255,255,255,0.08);color:#fff;font-family:'IBM Plex Mono',monospace;outline:none;"
         onkeydown="if(event.key==='Enter')checkPin()">
     </div>

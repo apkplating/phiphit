@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Master — APK Plating</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --blue:#1e40af; --blue2:#3b82f6;
+  --green:#16a34a; --red:#dc2626; --orange:#ea580c; --amber:#d97706;
+  --bg:#f1f5f9; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --sky-pale:#f0f9ff; --success-bg:#f0fdf4; --success:#16a34a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
+
+.app-header{background:linear-gradient(135deg,var(--navy) 0%,#1e3a5f 100%);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.sync-badge{font-size:10px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.12);color:#93c5fd;display:flex;align-items:center;gap:5px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#94a3b8;}
+.sync-dot.ok{background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.tab-bar{display:flex;background:var(--navy);padding:0 8px 8px;gap:4px;overflow-x:auto;}
+.tab-btn{flex:1;padding:8px 6px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;color:#94a3b8;background:transparent;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;min-width:60px;transition:all .2s;}
+.tab-btn.active{background:var(--blue);color:#fff;}
+
+.main{padding:12px;max-width:960px;margin:0 auto;}
+.view{display:none;}.view.active{display:block;}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.card-label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:#fff;outline:none;transition:border-color .2s;}
+input:focus,select:focus{border-color:var(--blue2);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.btn{padding:11px 16px;border-radius:10px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;width:100%;transition:all .2s;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:7px;width:auto;}
+
+/* Job table */
+.jt{width:100%;border-collapse:collapse;font-size:11px;min-width:640px;}
+.jt th{background:var(--navy);color:#fff;padding:7px 6px;text-align:center;font-size:10px;font-weight:600;white-space:nowrap;}
+.jt td{padding:7px 6px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;}
+.jt tr:hover td{background:#f8fafc;}
+.td-l{text-align:left!important;}
+
+/* Status badge */
+.st-ok{background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.st-warn{background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.st-done{background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.st-over{background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+
+/* summary chips */
+.sum-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.sum-chip{text-align:center;padding:8px;border-radius:10px;border:1px solid var(--border);}
+.sum-chip-label{font-size:9px;color:var(--text-muted);margin-bottom:2px;}
+.sum-chip-val{font-size:16px;font-weight:800;font-family:'IBM Plex Mono',monospace;}
+
+.toast{margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;display:none;}
+.toast.ok{background:var(--success-bg);color:var(--success);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;}
+
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+
+@media(max-width:480px){
+  .sum-row{grid-template-columns:repeat(2,1fr);}
+  .grid3{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ Login ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px;">📋</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">Job Master</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — ระบบติดตามงานเข้า-ออก</div>
+    <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
+    <button class="btn btn-primary" onclick="checkPin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ══ App ══ -->
+<div id="appScreen" style="display:none;">
+
+<div class="app-header">
+  <div>
+    <div style="font-size:10px;color:#93c5fd;letter-spacing:.5px;">APK PLATING</div>
+    <div style="font-size:16px;font-weight:700;">📋 Job Master</div>
+  </div>
+  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="tab('board')">📊 ภาพรวม</button>
+  <button class="tab-btn" onclick="tab('in')">📥 รับงานเข้า</button>
+  <button class="tab-btn" onclick="tab('out')">📤 จ่ายงานออก</button>
+  <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
+</div>
+
+<div class="main">
+
+<!-- ══ TAB: ภาพรวม ══ -->
+<div id="v-board" class="view active">
+  <div class="card" style="padding:10px 12px;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="boardSearch" placeholder="🔍 ค้นหา เลขบิล / ชื่อชิ้นงาน / ลูกค้า"
+        oninput="renderBoard()" style="flex:1;min-width:160px;padding:9px 12px;">
+      <select id="boardStatus" onchange="renderBoard()"
+        style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
+        <option value="">— ทุกสถานะ —</option>
+        <option value="กำลังผลิต">กำลังผลิต</option>
+        <option value="รอจ่าย">รอจ่าย</option>
+        <option value="จ่ายบางส่วน">จ่ายบางส่วน</option>
+        <option value="จ่ายครบ">จ่ายครบแล้ว</option>
+        <option value="เกินกำหนด">เกินกำหนด</option>
+      </select>
+      <button onclick="exportBoardCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
+    </div>
+  </div>
+
+  <!-- summary -->
+  <div class="sum-row">
+    <div class="sum-chip" style="background:#f0fdf4;border-color:#86efac;">
+      <div class="sum-chip-label">งานทั้งหมด</div>
+      <div class="sum-chip-val" style="color:var(--navy);" id="sumTotal">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+    <div class="sum-chip" style="background:#fff7ed;border-color:#fed7aa;">
+      <div class="sum-chip-label">กำลังผลิต</div>
+      <div class="sum-chip-val" style="color:var(--orange);" id="sumActive">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+    <div class="sum-chip" style="background:#fef2f2;border-color:#fca5a5;">
+      <div class="sum-chip-label">เกินกำหนด</div>
+      <div class="sum-chip-val" style="color:var(--red);" id="sumOver">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+    <div class="sum-chip" style="background:#f1f5f9;border-color:#cbd5e1;">
+      <div class="sum-chip-label">จ่ายครบ</div>
+      <div class="sum-chip-val" style="color:#64748b;" id="sumDone">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt">
+        <thead>
+          <tr>
+            <th class="td-l">เลขที่บิล</th>
+            <th class="td-l">วันรับ</th>
+            <th class="td-l" style="min-width:140px;">ชื่อชิ้นงาน</th>
+            <th class="td-l">ลูกค้า</th>
+            <th>รับเข้า</th>
+            <th>จ่ายออก</th>
+            <th>คงเหลือ</th>
+            <th>วันค้าง</th>
+            <th>สถานะ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="boardBody">
+          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีงาน</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: รับงานเข้า ══ -->
+<div id="v-in" class="view">
+  <div class="card">
+    <div class="card-label">📥 บันทึกรับงานเข้า</div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>เลขที่บิล <span style="color:var(--red);">*</span></label>
+        <input type="text" id="inBill" placeholder="เช่น 230526 200609">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>วันที่รับเข้า <span style="color:var(--red);">*</span></label>
+        <input type="date" id="inDate">
+      </div>
+    </div>
+    <div class="field">
+      <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
+      <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND">
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ลูกค้า</label>
+        <input type="text" id="inCustomer" placeholder="เช่น HONDA / OTC">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>จำนวนรับเข้า (ชิ้น) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="inQty" placeholder="0" min="0" inputmode="numeric">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ไลน์ผลิต</label>
+        <select id="inLine">
+          <option value="">— เลือกไลน์ —</option>
+          <option value="B1">B1 — Barrel 1</option>
+          <option value="B2">B2 — Barrel 2</option>
+          <option value="R1">R1 — Rack 1</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>กำหนดส่ง</label>
+        <input type="date" id="inDueDate">
+      </div>
+    </div>
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <input type="text" id="inNote" placeholder="เช่น ด่วน / ตรวจพิเศษ">
+    </div>
+    <button class="btn btn-green" onclick="addJobIn()">📥 บันทึกรับงานเข้า</button>
+    <div id="toast-in" class="toast"></div>
+  </div>
+</div>
+
+<!-- ══ TAB: จ่ายงานออก ══ -->
+<div id="v-out" class="view">
+  <div class="card">
+    <div class="card-label">📤 บันทึกจ่ายงานออก</div>
+    <div class="field">
+      <label>เลือกบิลที่ต้องการจ่าย <span style="color:var(--red);">*</span></label>
+      <select id="outJobSel" onchange="onOutJobSelect()">
+        <option value="">— เลือกเลขที่บิล —</option>
+      </select>
+    </div>
+    <!-- info บิลที่เลือก -->
+    <div id="outJobInfo" style="display:none;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;" id="outJobInfoTitle"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--text-muted);">รับเข้า</div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy);" id="outInfoIn">0</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--text-muted);">จ่ายแล้ว</div>
+          <div style="font-size:16px;font-weight:800;color:var(--orange);" id="outInfoOut">0</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:var(--text-muted);">คงเหลือ</div>
+          <div style="font-size:16px;font-weight:800;color:var(--green);" id="outInfoRemain">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>วันที่จ่าย <span style="color:var(--red);">*</span></label>
+        <input type="date" id="outDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เลขที่ INV</label>
+        <input type="text" id="outInv" placeholder="เช่น 2606004">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>จำนวนจ่าย (ชิ้น) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="outQty" placeholder="0" min="0" inputmode="numeric">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ผู้จ่าย</label>
+        <input type="text" id="outBy" placeholder="เช่น สมชาย">
+      </div>
+    </div>
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <input type="text" id="outNote" placeholder="เช่น ส่งบางส่วน / ส่งคืนลูกค้า">
+    </div>
+    <button class="btn btn-primary" onclick="addJobOut()">📤 บันทึกจ่ายออก</button>
+    <div id="toast-out" class="toast"></div>
+  </div>
+</div>
+
+<!-- ══ TAB: ประวัติ ══ -->
+<div id="v-history" class="view">
+  <div class="card" style="padding:10px 12px;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="histJobFilter" onchange="renderHistory()"
+        style="flex:1;min-width:140px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
+        <option value="">— ทุกบิล —</option>
+      </select>
+      <select id="histTypeFilter" onchange="renderHistory()"
+        style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
+        <option value="">— ทุกประเภท —</option>
+        <option value="in">📥 รับเข้า</option>
+        <option value="out">📤 จ่ายออก</option>
+      </select>
+      <button onclick="exportHistoryCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt">
+        <thead>
+          <tr>
+            <th class="td-l">วันที่</th>
+            <th>ประเภท</th>
+            <th class="td-l">เลขบิล</th>
+            <th class="td-l" style="min-width:120px;">ชิ้นงาน</th>
+            <th>จำนวน</th>
+            <th class="td-l">เลข INV</th>
+            <th class="td-l">ผู้บันทึก</th>
+            <th class="td-l">หมายเหตุ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="histBody">
+          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีประวัติ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /appScreen -->
+
+<script>
+// ══════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════
+var PINS = { '010517':'admin', 'Apk002':'viewer' };
+var FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
+  authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
+  databaseURL:       "https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "platingapp-92e21-c1346",
+};
+var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master';
+
+// ══════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════
+// jobItems: { id, bill, date, partName, customer, qty, line, dueDate, note }
+// jobRecords: { id, jobId, type:'in'|'out', date, qty, inv, by, note }
+var jobItems   = [];
+var jobRecords = [];
+var _pollTimer = null, _pollCount = 0;
+var currentRole = '';
+
+// ══════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  currentRole = PINS[pin];
+  if (currentRole) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    try { localStorage.setItem('job_pin','1'); localStorage.setItem('job_role', currentRole); } catch(e){}
+    applyRole();
+    loadLocal();
+    startPoll();
+    setTimeout(fbLoad, 800);
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pinInput').value = '';
+  }
+}
+
+function applyRole() {
+  // Viewer ซ่อนปุ่มรับเข้า/จ่ายออก
+  var isViewer = currentRole === 'viewer';
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
+    if (isViewer && (i === 1 || i === 2)) btn.style.display = 'none';
+  });
+}
+
+// ══════════════════════════════════════
+//  TAB
+// ══════════════════════════════════════
+function tab(t) {
+  ['board','in','out','history'].forEach(function(n, i) {
+    var el = document.getElementById('v-'+n);
+    if (el) el.classList.toggle('active', n===t);
+    var btns = document.querySelectorAll('.tab-btn');
+    if (btns[i]) btns[i].classList.toggle('active', n===t);
+  });
+  if (t==='board')   renderBoard();
+  if (t==='out')     { renderOutSelect(); initOutDate(); }
+  if (t==='history') { renderHistFilter(); renderHistory(); }
+}
+
+// ══════════════════════════════════════
+//  LOCAL STORAGE
+// ══════════════════════════════════════
+function loadLocal() {
+  try { jobItems   = JSON.parse(localStorage.getItem('job_items')   || '[]'); } catch(e){ jobItems=[]; }
+  try { jobRecords = JSON.parse(localStorage.getItem('job_records') || '[]'); } catch(e){ jobRecords=[]; }
+}
+function saveLocal() {
+  try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
+  try { localStorage.setItem('job_records', JSON.stringify(jobRecords)); } catch(e){}
+}
+
+// ══════════════════════════════════════
+//  FIREBASE
+// ══════════════════════════════════════
+async function fbSave() {
+  try {
+    var res = await fetch(FB_PATH+'.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items:jobItems, records:jobRecords, savedAt:new Date().toISOString() })
+    });
+    if (res.ok) setSyncOk();
+  } catch(e) { setSyncErr(); }
+}
+
+async function fbLoad() {
+  try {
+    var res = await fetch(FB_PATH+'.json');
+    if (!res.ok) { setSyncErr(); return; }
+    var data = await res.json();
+    if (data) {
+      if (Array.isArray(data.items))   jobItems   = data.items;
+      if (Array.isArray(data.records)) jobRecords = data.records;
+      saveLocal();
+      setSyncOk();
+      // refresh UI
+      var active = document.querySelector('.view.active');
+      if (active) tab(active.id.replace('v-',''));
+    }
+  } catch(e) { setSyncErr(); }
+}
+
+function startPoll() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(function(){ _pollCount++; if (_pollCount%6===0) fbLoad(); }, 5000);
+}
+function setSyncOk(){ document.getElementById('syncDot').className='sync-dot ok'; document.getElementById('syncLabel').textContent='Sync แล้ว'; }
+function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; document.getElementById('syncLabel').textContent='ออฟไลน์'; }
+
+// ══════════════════════════════════════
+//  CALC
+// ══════════════════════════════════════
+function calcJob(jobId) {
+  var totalIn = 0, totalOut = 0;
+  jobRecords.forEach(function(r) {
+    if (r.jobId !== jobId) return;
+    if (r.type==='in')  totalIn  += Number(r.qty||0);
+    if (r.type==='out') totalOut += Number(r.qty||0);
+  });
+  return { totalIn:totalIn, totalOut:totalOut, remain:totalIn-totalOut };
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return 0;
+  var d = new Date(dateStr+'T00:00:00');
+  var now = new Date();
+  return Math.floor((now - d) / 86400000);
+}
+
+function getStatus(job) {
+  var b = calcJob(job.id);
+  if (b.remain <= 0 && b.totalIn > 0) return 'จ่ายครบ';
+  var days = daysSince(job.date);
+  if (b.totalOut > 0 && b.remain > 0) return 'จ่ายบางส่วน';
+  if (job.dueDate && new Date(job.dueDate) < new Date()) return 'เกินกำหนด';
+  return 'กำลังผลิต';
+}
+
+function statusBadge(status) {
+  var cls = { 'กำลังผลิต':'st-ok', 'จ่ายบางส่วน':'st-warn', 'จ่ายครบ':'st-done', 'เกินกำหนด':'st-over', 'รอจ่าย':'st-warn' };
+  return '<span class="'+(cls[status]||'st-ok')+'">'+status+'</span>';
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+}
+
+// ══════════════════════════════════════
+//  BOARD
+// ══════════════════════════════════════
+function renderBoard() {
+  var search = (document.getElementById('boardSearch')||{}).value || '';
+  var statusFilter = (document.getElementById('boardStatus')||{}).value || '';
+  search = search.toLowerCase();
+
+  var rows = jobItems.filter(function(job) {
+    if (search && !( (job.bill||'').toLowerCase().includes(search) ||
+                     (job.partName||'').toLowerCase().includes(search) ||
+                     (job.customer||'').toLowerCase().includes(search) )) return false;
+    if (statusFilter) {
+      var s = getStatus(job);
+      if (s !== statusFilter) return false;
+    }
+    return true;
+  });
+
+  // summary
+  var allStatus = jobItems.map(function(j){ return getStatus(j); });
+  document.getElementById('sumTotal').textContent  = jobItems.length;
+  document.getElementById('sumActive').textContent = allStatus.filter(function(s){ return s==='กำลังผลิต'||s==='จ่ายบางส่วน'; }).length;
+  document.getElementById('sumOver').textContent   = allStatus.filter(function(s){ return s==='เกินกำหนด'; }).length;
+  document.getElementById('sumDone').textContent   = allStatus.filter(function(s){ return s==='จ่ายครบ'; }).length;
+
+  var tbody = document.getElementById('boardBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีงาน</td></tr>';
+    return;
+  }
+
+  // เรียงตาม วันรับ (ใหม่สุดก่อน)
+  rows = rows.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  tbody.innerHTML = rows.map(function(job) {
+    var b = calcJob(job.id);
+    var days = daysSince(job.date);
+    var status = getStatus(job);
+    var remainColor = b.remain <= 0 ? '#94a3b8' : b.remain < b.totalIn*0.2 ? 'var(--red)' : 'var(--green)';
+    var daysColor = days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--text-muted)';
+    return '<tr>' +
+      '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+'</td>' +
+      '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
+      '<td style="font-weight:700;">'+b.totalIn+'</td>' +
+      '<td style="color:var(--orange);font-weight:700;">'+b.totalOut+'</td>' +
+      '<td style="font-weight:800;color:'+remainColor+';">'+b.remain+'</td>' +
+      '<td style="font-weight:700;color:'+daysColor+';">'+days+'</td>' +
+      '<td>'+statusBadge(status)+'</td>' +
+      '<td><button onclick="deleteJob(\''+job.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function deleteJob(id) {
+  var job = jobItems.find(function(j){ return j.id===id; });
+  if (!job || !confirm('ลบ "'+job.bill+'" และประวัติทั้งหมด?')) return;
+  jobItems   = jobItems.filter(function(j){ return j.id!==id; });
+  jobRecords = jobRecords.filter(function(r){ return r.jobId!==id; });
+  saveLocal(); fbSave(); renderBoard();
+}
+
+function exportBoardCSV() {
+  var rows = [['เลขบิล','วันรับ','ชิ้นงาน','ลูกค้า','ไลน์','รับเข้า','จ่ายออก','คงเหลือ','วันค้าง','สถานะ']];
+  jobItems.forEach(function(j){
+    var b = calcJob(j.id);
+    rows.push([j.bill,j.date,j.partName,j.customer||'',j.line||'',b.totalIn,b.totalOut,b.remain,daysSince(j.date),getStatus(j)]);
+  });
+  dlCSV(rows, 'jobs_'+isoToday()+'.csv');
+}
+
+// ══════════════════════════════════════
+//  รับเข้า
+// ══════════════════════════════════════
+function addJobIn() {
+  var bill     = document.getElementById('inBill').value.trim();
+  var date     = document.getElementById('inDate').value;
+  var partName = document.getElementById('inPartName').value.trim();
+  var customer = document.getElementById('inCustomer').value.trim();
+  var qty      = parseInt(document.getElementById('inQty').value)||0;
+  var line     = document.getElementById('inLine').value;
+  var dueDate  = document.getElementById('inDueDate').value;
+  var note     = document.getElementById('inNote').value.trim();
+
+  if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
+  if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
+  if (!partName) { showToast('in','กรุณากรอกชื่อชิ้นงาน','err'); return; }
+  if (!qty)      { showToast('in','กรุณากรอกจำนวนรับเข้า','err'); return; }
+
+  var jobId = 'J'+Date.now();
+  jobItems.unshift({ id:jobId, bill, date, partName, customer, qty, line, dueDate, note });
+  jobRecords.unshift({ id:'R'+Date.now(), jobId, type:'in', date, qty, inv:'', by:'', note });
+  saveLocal(); fbSave();
+
+  ['inBill','inPartName','inCustomer','inQty','inNote'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('inLine').value='';
+  document.getElementById('inDueDate').value='';
+  showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+qty+' ชิ้น','ok');
+}
+
+// ══════════════════════════════════════
+//  จ่ายออก
+// ══════════════════════════════════════
+function renderOutSelect() {
+  var sel = document.getElementById('outJobSel');
+  var cur = sel.value;
+  // เฉพาะงานที่ยังมีคงเหลือ
+  var active = jobItems.filter(function(j){
+    var b = calcJob(j.id);
+    return b.remain > 0;
+  });
+  sel.innerHTML = '<option value="">— เลือกเลขที่บิล —</option>' +
+    active.map(function(j){
+      var b = calcJob(j.id);
+      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' | '+j.partName.slice(0,25)+'... [เหลือ '+b.remain+']</option>';
+    }).join('');
+  if (cur !== sel.value) {
+    document.getElementById('outJobInfo').style.display='none';
+  }
+}
+
+function initOutDate() {
+  var d = document.getElementById('outDate');
+  if (d && !d.value) d.value = isoToday();
+}
+
+function onOutJobSelect() {
+  var jobId = document.getElementById('outJobSel').value;
+  var infoEl = document.getElementById('outJobInfo');
+  if (!jobId) { infoEl.style.display='none'; return; }
+  var job = jobItems.find(function(j){ return j.id===jobId; });
+  if (!job) { infoEl.style.display='none'; return; }
+  var b = calcJob(jobId);
+  document.getElementById('outJobInfoTitle').textContent = job.bill + ' — ' + job.partName;
+  document.getElementById('outInfoIn').textContent     = b.totalIn;
+  document.getElementById('outInfoOut').textContent    = b.totalOut;
+  document.getElementById('outInfoRemain').textContent = b.remain;
+  infoEl.style.display = 'block';
+}
+
+function addJobOut() {
+  var jobId = document.getElementById('outJobSel').value;
+  var date  = document.getElementById('outDate').value;
+  var inv   = document.getElementById('outInv').value.trim();
+  var qty   = parseInt(document.getElementById('outQty').value)||0;
+  var by    = document.getElementById('outBy').value.trim();
+  var note  = document.getElementById('outNote').value.trim();
+
+  if (!jobId) { showToast('out','กรุณาเลือกบิล','err'); return; }
+  if (!date)  { showToast('out','กรุณาระบุวันที่จ่าย','err'); return; }
+  if (!qty)   { showToast('out','กรุณากรอกจำนวนที่จ่าย','err'); return; }
+
+  var b = calcJob(jobId);
+  if (qty > b.remain) { showToast('out','⚠️ จำนวนเกินคงเหลือ (เหลือ '+b.remain+' ชิ้น)','err'); return; }
+
+  jobRecords.unshift({ id:'R'+Date.now(), jobId, type:'out', date, qty, inv, by, note });
+  saveLocal(); fbSave();
+
+  ['outInv','outQty','outBy','outNote'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('outJobSel').value='';
+  document.getElementById('outJobInfo').style.display='none';
+
+  showToast('out','✅ บันทึกจ่ายออกสำเร็จ — '+qty+' ชิ้น','ok');
+  renderOutSelect();
+}
+
+// ══════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════
+function renderHistFilter() {
+  var sel = document.getElementById('histJobFilter');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— ทุกบิล —</option>' +
+    jobItems.map(function(j){
+      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' — '+j.partName.slice(0,20)+'</option>';
+    }).join('');
+}
+
+function renderHistory() {
+  var jobFilter  = document.getElementById('histJobFilter').value;
+  var typeFilter = document.getElementById('histTypeFilter').value;
+
+  var rows = jobRecords.filter(function(r){
+    if (jobFilter  && r.jobId !== jobFilter)  return false;
+    if (typeFilter && r.type  !== typeFilter)  return false;
+    return true;
+  });
+
+  var tbody = document.getElementById('histBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(function(r) {
+    var job = jobItems.find(function(j){ return j.id===r.jobId; }) || {};
+    var typeBadge = r.type==='in'
+      ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับ</span>'
+      : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
+    return '<tr>' +
+      '<td class="td-l" style="font-size:10px;">'+fmtDate(r.date)+'</td>' +
+      '<td>'+typeBadge+'</td>' +
+      '<td class="td-l" style="font-weight:600;font-size:11px;">'+(job.bill||'—')+'</td>' +
+      '<td class="td-l" style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;">'+(job.partName||'—')+'</td>' +
+      '<td style="font-weight:700;color:'+(r.type==='in'?'var(--green)':'var(--orange)')+';">'+(r.qty||0)+'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(r.inv||'—')+'</td>' +
+      '<td class="td-l" style="font-size:10px;">'+(r.by||'—')+'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(r.note||'—')+'</td>' +
+      '<td><button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function deleteRecord(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  jobRecords = jobRecords.filter(function(r){ return r.id!==id; });
+  saveLocal(); fbSave(); renderHistory(); renderHistFilter();
+}
+
+function exportHistoryCSV() {
+  var rows = [['วันที่','ประเภท','เลขบิล','ชิ้นงาน','จำนวน','INV','ผู้จ่าย','หมายเหตุ']];
+  jobRecords.forEach(function(r){
+    var j = jobItems.find(function(x){ return x.id===r.jobId; })||{};
+    rows.push([r.date,r.type,j.bill||'',j.partName||'',r.qty||0,r.inv||'',r.by||'',r.note||'']);
+  });
+  dlCSV(rows, 'job_history_'+isoToday()+'.csv');
+}
+
+// ══════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════
+function isoToday() { return new Date().toISOString().slice(0,10); }
+
+function dlCSV(rows, filename) {
+  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+}
+
+function showToast(section, msg, type) {
+  var el = document.getElementById('toast-'+section);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast '+(type==='ok'?'ok':'err');
+  setTimeout(function(){ el.className='toast'; }, 3500);
+}
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+window.addEventListener('load', function(){
+  // ตั้งวันที่ default
+  var d = document.getElementById('inDate');
+  if (d) d.value = isoToday();
+
+  try {
+    if (localStorage.getItem('job_pin')==='1') {
+      currentRole = localStorage.getItem('job_role') || 'operator';
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('appScreen').style.display='block';
+      applyRole();
+      loadLocal(); startPoll(); setTimeout(fbLoad, 500);
+    }
+  } catch(e){}
+});
+</script>
+</body>
+</html>
