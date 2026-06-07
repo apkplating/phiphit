@@ -304,7 +304,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="login-title">งานชุบ B-1</div>
     <div class="login-sub">ระบบรายงานการชุบประจำวัน<br>กรุณาใส่รหัส PIN เพื่อเข้าใช้งาน</div>
     <div style="margin:20px 0 8px;">
-      <input id="pinInput" type="password" placeholder="ใส่ PIN" autocomplete="new-password" onfocus="this.value=''"
+      <input id="pinInput" type="password" placeholder="ใส่ PIN" autocomplete="off"
         style="width:100%;padding:14px;font-size:20px;text-align:center;letter-spacing:0.3em;border-radius:12px;border:2px solid rgba(91,163,217,0.3);background:rgba(255,255,255,0.08);color:#fff;font-family:'IBM Plex Mono',monospace;outline:none;"
         onkeydown="if(event.key==='Enter')checkPin()">
     </div>
@@ -371,6 +371,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('chart')">📊 กราฟ</button>
   <button class="tab-btn" onclick="tab('chem')">🧪 เคมี</button>
   <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
+  <button class="tab-btn" onclick="tab('job')">📋 งาน</button>
   <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
@@ -1075,6 +1076,90 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   </div>
 
 </div>
+<!-- ══════════════════════════════════════ -->
+<!--  TAB: งานเข้า-ออก (Job)               -->
+<!-- ══════════════════════════════════════ -->
+<div id="v-job" class="view">
+  <div class="card" style="padding:10px 12px;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div style="font-size:11px;color:var(--text-muted);">ดึงข้อมูลจาก <strong>Job Master</strong></div>
+      <button onclick="jobMasterLoad()" style="font-size:11px;padding:5px 12px;border-radius:7px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;width:auto;">
+        🔄 รีเฟรช
+      </button>
+      <span id="jobSyncLabel" style="font-size:10px;color:var(--text-muted);"></span>
+    </div>
+  </div>
+
+  <!-- summary -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">
+    <div style="text-align:center;padding:8px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+      <div style="font-size:9px;color:var(--text-muted);">งานทั้งหมด</div>
+      <div style="font-size:16px;font-weight:800;color:var(--navy);" id="jobSumTotal">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;">
+      <div style="font-size:9px;color:var(--text-muted);">กำลังผลิต</div>
+      <div style="font-size:16px;font-weight:800;color:var(--orange);" id="jobSumActive">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+    <div style="text-align:center;padding:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;">
+      <div style="font-size:9px;color:var(--text-muted);">เกินกำหนด</div>
+      <div style="font-size:16px;font-weight:800;color:var(--red);" id="jobSumOver">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+    </div>
+  </div>
+
+  <!-- ตารางงาน -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="barrel-table" style="min-width:600px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;">เลขบิล</th>
+            <th style="text-align:left;">วันรับ</th>
+            <th style="text-align:left;min-width:120px;">ชิ้นงาน</th>
+            <th style="text-align:left;">ลูกค้า</th>
+            <th>รับเข้า</th>
+            <th>จ่ายออก</th>
+            <th>คงเหลือ</th>
+            <th>วันค้าง</th>
+            <th>สถานะ</th>
+            <!-- ปุ่มจ่ายออกจากไลน์นี้ -->
+            <th>เบิกใช้</th>
+          </tr>
+        </thead>
+        <tbody id="jobBody">
+          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:20px;">กด 🔄 รีเฟรช เพื่อโหลดข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal จ่ายออก -->
+  <div id="jobOutModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:none;align-items:flex-end;justify-content:center;">
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:70vh;overflow-y:auto;">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;" id="jobOutModalTitle">เบิกใช้งาน</div>
+      <input type="hidden" id="jobOutJobId">
+      <div class="field">
+        <label>จำนวนที่เบิกใช้ (ชิ้น)</label>
+        <input type="number" id="jobOutQty" placeholder="0" min="1" inputmode="numeric" style="font-size:18px;text-align:center;">
+      </div>
+      <div class="field">
+        <label>เลขที่ INV</label>
+        <input type="text" id="jobOutInv" placeholder="เช่น 2606004">
+      </div>
+      <div class="field">
+        <label>หมายเหตุ</label>
+        <input type="text" id="jobOutNote" placeholder="เช่น ส่งบางส่วน">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn btn-outline" onclick="closeJobOutModal()">ยกเลิก</button>
+        <button class="btn btn-primary" onclick="confirmJobOut()">📤 ยืนยันเบิก</button>
+      </div>
+      <div id="toast-job" class="toast" style="margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
 
 
 <div id="v-settings" class="view">
@@ -1384,6 +1469,7 @@ function tab(t) {
   if (t === 'chart') renderCharts();
   if (t === 'chem') { renderChemStockSelect(); renderChemStockCard(); }
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
+  if (t === 'job')   { jobMasterLoad(); }
   if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
 }
 
@@ -2965,6 +3051,7 @@ function fbStartPoll() {
       fbLoad(true);
       thickFbLoad(); // sync ความหนาทุก 30 วิ
       masterLoad();   // sync chem master
+      jobMasterLoad(); // sync job master
     } else {
       fbLivePoll();
     }
@@ -2986,6 +3073,10 @@ async function fbLivePoll() {
     if (!res.ok) return;
     var data = await res.json();
     if (!data || !data.updatedAt) return;
+
+    // ══ เช็ควันที่ก่อน — ถ้าข้อมูล cloud เป็นของเมื่อวานให้ข้าม ══
+    var today = isoDate(new Date());
+    if (data.date && data.date !== today) return; // ข้อมูลเก่า ไม่รับ
 
     // เช็คว่าข้อมูล cloud ต่างจาก local ไหม (ไม่เช็ค updatedAt อย่างเดียว)
     var cloudIds = (data.rows||[]).map(function(r){return r.id;}).join(',');
@@ -5744,6 +5835,146 @@ function doMasterOut() {
   document.getElementById('masterOutNote').value  = '';
 }
 
+
+// ══════════════════════════════════════
+//  JOB MASTER — ดึง/เบิกงานจาก Job Master
+// ══════════════════════════════════════
+var FB_JOB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master';
+var jobMasterItems   = [];
+var jobMasterRecords = [];
+
+async function jobMasterLoad() {
+  document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
+  try {
+    var res = await fetch(FB_JOB_PATH + '.json');
+    if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
+    var data = await res.json();
+    if (data) {
+      jobMasterItems   = Array.isArray(data.items)   ? data.items   : [];
+      jobMasterRecords = Array.isArray(data.records) ? data.records : [];
+    }
+    document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+    renderJobBoard();
+  } catch(e) {
+    document.getElementById('jobSyncLabel').textContent = '❌ ออฟไลน์';
+  }
+}
+
+function calcJobBal(jobId) {
+  var totalIn=0, totalOut=0;
+  jobMasterRecords.forEach(function(r){
+    if (r.jobId!==jobId) return;
+    if (r.type==='in')  totalIn  += Number(r.qty||0);
+    if (r.type==='out') totalOut += Number(r.qty||0);
+  });
+  return { totalIn:totalIn, totalOut:totalOut, remain:totalIn-totalOut };
+}
+
+function getJobStatus(job) {
+  var b = calcJobBal(job.id);
+  if (b.remain <= 0 && b.totalIn > 0) return 'จ่ายครบ';
+  if (b.totalOut > 0 && b.remain > 0) return 'จ่ายบางส่วน';
+  if (job.dueDate && new Date(job.dueDate) < new Date()) return 'เกินกำหนด';
+  return 'กำลังผลิต';
+}
+
+function daysSinceJob(dateStr) {
+  if (!dateStr) return 0;
+  return Math.floor((new Date() - new Date(dateStr+'T00:00:00')) / 86400000);
+}
+
+function renderJobBoard() {
+  var items = jobMasterItems;
+  // summary
+  document.getElementById('jobSumTotal').textContent  = items.length;
+  document.getElementById('jobSumActive').textContent = items.filter(function(j){ var s=getJobStatus(j); return s==='กำลังผลิต'||s==='จ่ายบางส่วน'; }).length;
+  document.getElementById('jobSumOver').textContent   = items.filter(function(j){ return getJobStatus(j)==='เกินกำหนด'; }).length;
+
+  var tbody = document.getElementById('jobBody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:20px;">ไม่มีงาน</td></tr>';
+    return;
+  }
+
+  // เรียงวันใหม่ก่อน กรองเฉพาะงานที่ยังไม่เสร็จ
+  var active = items.filter(function(j){ return getJobStatus(j)!=='จ่ายครบ'; });
+  var done   = items.filter(function(j){ return getJobStatus(j)==='จ่ายครบ'; });
+  var sorted = active.concat(done);
+
+  tbody.innerHTML = sorted.map(function(job) {
+    var b = calcJobBal(job.id);
+    var days = daysSinceJob(job.date);
+    var status = getJobStatus(job);
+    var stBadge = {
+      'กำลังผลิต':  '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">กำลังผลิต</span>',
+      'จ่ายบางส่วน':'<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">บางส่วน</span>',
+      'จ่ายครบ':    '<span style="background:#f1f5f9;color:#64748b;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">ครบ</span>',
+      'เกินกำหนด':  '<span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">⚠️ เกิน</span>',
+    }[status] || status;
+    var remColor = b.remain<=0?'#94a3b8':b.remain<b.totalIn*0.2?'var(--red)':'var(--green)';
+    var dayColor = days>7?'var(--red)':days>3?'var(--amber)':'var(--text-muted)';
+    var fmtDate = job.date ? new Date(job.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+    var canOut = b.remain > 0;
+    return '<tr>' +
+      '<td style="text-align:left;font-weight:600;font-size:11px;">'+(job.bill||'—')+'</td>' +
+      '<td style="text-align:left;font-size:10px;color:var(--text-muted);">'+fmtDate+'</td>' +
+      '<td style="text-align:left;max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+(job.partName||'—')+'</td>' +
+      '<td style="text-align:left;font-size:10px;color:var(--text-muted);">'+(job.customer||'—')+'</td>' +
+      '<td style="font-weight:700;">'+b.totalIn+'</td>' +
+      '<td style="color:var(--orange);font-weight:700;">'+b.totalOut+'</td>' +
+      '<td style="font-weight:800;color:'+remColor+';">'+b.remain+'</td>' +
+      '<td style="font-weight:700;color:'+dayColor+';">'+days+'</td>' +
+      '<td>'+stBadge+'</td>' +
+      '<td>'+(canOut?'<button onclick="openJobOutModal(''+job.id+'')" style="background:var(--blue);color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;">📤 เบิก</button>':'')+'</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function openJobOutModal(jobId) {
+  var job = jobMasterItems.find(function(j){ return j.id===jobId; });
+  if (!job) return;
+  var b = calcJobBal(jobId);
+  document.getElementById('jobOutJobId').value = jobId;
+  document.getElementById('jobOutModalTitle').textContent = '📤 เบิกใช้: ' + job.bill + ' | ' + job.partName + ' [เหลือ ' + b.remain + ' ชิ้น]';
+  document.getElementById('jobOutQty').value  = '';
+  document.getElementById('jobOutInv').value  = '';
+  document.getElementById('jobOutNote').value = '';
+  var modal = document.getElementById('jobOutModal');
+  modal.style.display = 'flex';
+}
+
+function closeJobOutModal() {
+  document.getElementById('jobOutModal').style.display = 'none';
+}
+
+async function confirmJobOut() {
+  var jobId = document.getElementById('jobOutJobId').value;
+  var qty   = parseInt(document.getElementById('jobOutQty').value)||0;
+  var inv   = document.getElementById('jobOutInv').value.trim();
+  var note  = document.getElementById('jobOutNote').value.trim();
+
+  if (!qty) { showToast('job','กรุณากรอกจำนวน','err'); return; }
+  var b = calcJobBal(jobId);
+  if (qty > b.remain) { showToast('job','⚠️ เกินคงเหลือ ['+b.remain+' ชิ้น]','err'); return; }
+
+  var rec = {
+    id: 'R'+Date.now(), jobId: jobId, type:'out',
+    date: new Date().toISOString().slice(0,10),
+    qty: qty, inv: inv, by: '', note: note
+  };
+  jobMasterRecords.unshift(rec);
+
+  try {
+    await fetch(FB_JOB_PATH + '.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items:jobMasterItems, records:jobMasterRecords, savedAt:new Date().toISOString() })
+    });
+    showToast('job','✅ เบิกสำเร็จ — '+qty+' ชิ้น','ok');
+    setTimeout(function(){ closeJobOutModal(); renderJobBoard(); }, 1200);
+  } catch(e) {
+    showToast('job','❌ บันทึกไม่สำเร็จ','err');
+  }
+}
 // ═══════════════════════════════════════
 //  START — จัดการโดย checkAutoLogin()
 // ═══════════════════════════════════════
