@@ -2932,7 +2932,7 @@ var FIREBASE_CONFIG = {
   measurementId:     "G-VWPXND1LV3"
 };
 var FB_DB_URL_DEFAULT = FIREBASE_CONFIG.databaseURL;
-var FB_MASTER_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
+var FB_MASTER_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/chem-master';
 var FB_DB_URL     = FB_DB_URL_DEFAULT;
 var _fbPollTimer  = null;
 var _fbLastSavedAt = '';
@@ -5859,7 +5859,7 @@ async function thickFbLoad() {
 // ══════════════════════════════════════
 //  CHEM MASTER — ดึง/เบิกจาก Stock กลาง
 // ══════════════════════════════════════
-var FB_MASTER_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
+// FB_MASTER_PATH declared above (points to Chem Master shared DB)
 var masterItems   = [];
 var masterRecords = [];
 
