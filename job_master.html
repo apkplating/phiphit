@@ -59,7 +59,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 .sum-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
 .sum-chip{text-align:center;padding:8px;border-radius:10px;border:1px solid var(--border);}
 .sum-chip-label{font-size:9px;color:var(--text-muted);margin-bottom:2px;}
-.sum-chip-val{font-size:16px;font-weight:800;font-family:'IBM Plex Mono',monospace;}
+.sum-chip-val{font-size:16px;font-weight:800;font-family:monospace;}
 
 .toast{margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;display:none;}
 .toast.ok{background:var(--success-bg);color:var(--success);display:block;}
@@ -67,7 +67,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 #loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
 .login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
-.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
+.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
 .pin-input:focus{border-color:var(--blue);outline:none;}
 .login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
 
@@ -75,6 +75,24 @@ input:focus,select:focus{border-color:var(--blue2);}
   .sum-row{grid-template-columns:repeat(2,1fr);}
   .grid3{grid-template-columns:1fr 1fr;}
 }
+
+/* ══ Edit Modal ══ */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;display:none;align-items:center;justify-content:center;padding:12px;}
+.modal-bg.open{display:flex;}
+.modal-box{background:#fff;border-radius:18px;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.modal-title{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.modal-footer{display:flex;gap:8px;margin-top:14px;}
+.modal-footer .btn{flex:1;}
+
+/* ══ Autocomplete ══ */
+.ac-wrap{position:relative;}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue2);border-top:none;border-radius:0 0 8px 8px;z-index:200;max-height:180px;overflow-y:auto;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+.ac-list.open{display:block;}
+.ac-item{padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+.ac-item:hover{background:var(--sky-pale);}
+.ac-item:last-child{border-bottom:none;}
+.ac-item-part{font-weight:600;color:var(--text);}
+.ac-item-cust{font-size:11px;color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -122,7 +140,6 @@ input:focus,select:focus{border-color:var(--blue2);}
         style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
         <option value="">— ทุกสถานะ —</option>
         <option value="กำลังผลิต">กำลังผลิต</option>
-        <option value="รอจ่าย">รอจ่าย</option>
         <option value="จ่ายบางส่วน">จ่ายบางส่วน</option>
         <option value="จ่ายครบ">จ่ายครบแล้ว</option>
         <option value="เกินกำหนด">เกินกำหนด</option>
@@ -162,18 +179,20 @@ input:focus,select:focus{border-color:var(--blue2);}
           <tr>
             <th class="td-l">เลขที่บิล</th>
             <th class="td-l">วันรับ</th>
-            <th class="td-l" style="min-width:140px;">ชื่อชิ้นงาน</th>
+            <th class="td-l" style="min-width:130px;">ชื่อชิ้นงาน / P.No</th>
             <th class="td-l">ลูกค้า</th>
+            <th>หน่วย</th>
             <th>รับเข้า</th>
             <th>จ่ายออก</th>
-            <th>คงเหลือ</th>
+            <th>คงเหลือ<br><span style="font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th>คงเหลือ<br><span style="font-weight:400;font-size:9px;">(กก.)</span></th>
             <th>วันค้าง</th>
             <th>สถานะ</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="boardBody">
-          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีงาน</td></tr>
+          <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีงาน</td></tr>
         </tbody>
       </table>
     </div>
@@ -196,32 +215,42 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="field">
       <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
-      <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND">
+      <div class="ac-wrap">
+        <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND"
+          autocomplete="off" oninput="acShow('inPartName')" onblur="acHide('inPartName',300)" onfocus="acShow('inPartName')">
+        <div class="ac-list" id="ac-inPartName"></div>
+      </div>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>ลูกค้า</label>
-        <input type="text" id="inCustomer" placeholder="เช่น HONDA / OTC">
+        <div class="ac-wrap">
+          <input type="text" id="inCustomer" placeholder="เช่น HONDA / OTC"
+            autocomplete="off" oninput="acShow('inCustomer')" onblur="acHide('inCustomer',300)" onfocus="acShow('inCustomer')">
+          <div class="ac-list" id="ac-inCustomer"></div>
+        </div>
       </div>
       <div class="field" style="margin:0;">
-        <label>จำนวนรับเข้า (ชิ้น) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="inQty" placeholder="0" min="0" inputmode="numeric">
-      </div>
-    </div>
-    <div class="grid2">
-      <div class="field" style="margin:0;">
-        <label>ไลน์ผลิต</label>
-        <select id="inLine">
-          <option value="">— เลือกไลน์ —</option>
-          <option value="B1">B1 — Barrel 1</option>
-          <option value="B2">B2 — Barrel 2</option>
-          <option value="R1">R1 — Rack 1</option>
+        <label>หน่วยนับ <span style="color:var(--red);">*</span></label>
+        <select id="inUnit" onchange="onUnitChange()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;">
+          <option value="pcs">ชิ้น (Pcs)</option>
+          <option value="kg">กิโลกรัม (Kg)</option>
         </select>
       </div>
+    </div>
+    <div class="grid2" id="inQtyRow">
       <div class="field" style="margin:0;">
-        <label>กำหนดส่ง</label>
-        <input type="date" id="inDueDate">
+        <label id="inQtyLabel">จำนวนรับเข้า (ชิ้น) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="inQty" placeholder="0" min="0" step="1" inputmode="numeric">
       </div>
+      <div class="field" id="inQtyKgWrap" style="margin:0;display:none;">
+        <label>น้ำหนัก (กก.) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="inQtyKg" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
+      </div>
+    </div>
+    <div class="field">
+      <label>กำหนดส่ง</label>
+      <input type="date" id="inDueDate">
     </div>
     <div class="field">
       <label>หมายเหตุ</label>
@@ -272,8 +301,8 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label>จำนวนจ่าย (ชิ้น) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="outQty" placeholder="0" min="0" inputmode="numeric">
+        <label for="outQty">จำนวนจ่าย (ชิ้น) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="outQty" placeholder="0" min="0" step="1" inputmode="numeric">
       </div>
       <div class="field" style="margin:0;">
         <label>ผู้จ่าย</label>
@@ -314,8 +343,9 @@ input:focus,select:focus{border-color:var(--blue2);}
             <th class="td-l">วันที่</th>
             <th>ประเภท</th>
             <th class="td-l">เลขบิล</th>
-            <th class="td-l" style="min-width:120px;">ชิ้นงาน</th>
-            <th>จำนวน</th>
+            <th class="td-l" style="min-width:120px;">ชิ้นงาน / P.No</th>
+            <th>จำนวน (ชิ้น)</th>
+            <th>ไลน์ชุบ</th>
             <th class="td-l">เลข INV</th>
             <th class="td-l">ผู้บันทึก</th>
             <th class="td-l">หมายเหตุ</th>
@@ -332,6 +362,66 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 </div><!-- /main -->
 </div><!-- /appScreen -->
+
+<!-- ══ Edit Job Modal ══ -->
+<div class="modal-bg" id="editModal">
+  <div class="modal-box">
+    <div class="modal-title">✏️ แก้ไขข้อมูลบิล</div>
+    <input type="hidden" id="editJobId">
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>เลขที่บิล <span style="color:var(--red);">*</span></label>
+        <input type="text" id="editBill">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>วันที่รับเข้า</label>
+        <input type="date" id="editDate">
+      </div>
+    </div>
+    <div class="field">
+      <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
+      <input type="text" id="editPartName">
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ลูกค้า</label>
+        <input type="text" id="editCustomer">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หน่วยนับ</label>
+        <select id="editUnit">
+          <option value="pcs">ชิ้น (Pcs)</option>
+          <option value="kg">กิโลกรัม (Kg)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label id="editQtyLabel">จำนวนรับเข้า (ชิ้น)</label>
+        <input type="number" id="editQty" min="0" step="1">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก (กก.)</label>
+        <input type="number" id="editQtyKg" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>กำหนดส่ง</label>
+        <input type="date" id="editDueDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="editNote">
+      </div>
+    </div>
+    <div id="toast-edit" class="toast"></div>
+    <div class="modal-footer">
+      <button class="btn btn-green" onclick="saveEditJob()">💾 บันทึก</button>
+      <button class="btn btn-outline" onclick="closeEditModal()">ยกเลิก</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════
@@ -370,6 +460,7 @@ function checkPin() {
     loadLocal();
     startPoll();
     setTimeout(fbLoad, 800);
+    setTimeout(pullFromLines, 3000);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -443,7 +534,11 @@ async function fbLoad() {
 
 function startPoll() {
   if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(function(){ _pollCount++; if (_pollCount%6===0) fbLoad(); }, 5000);
+  _pollTimer = setInterval(function(){
+    _pollCount++;
+    if (_pollCount%6===0) fbLoad();
+    if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที
+  }, 5000);
 }
 function setSyncOk(){ document.getElementById('syncDot').className='sync-dot ok'; document.getElementById('syncLabel').textContent='Sync แล้ว'; }
 function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; document.getElementById('syncLabel').textContent='ออฟไลน์'; }
@@ -452,13 +547,25 @@ function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; 
 //  CALC
 // ══════════════════════════════════════
 function calcJob(jobId) {
+  var job = jobItems.find(function(j){ return j.id===jobId; }) || {};
+  var unit = job.unit || 'pcs';
   var totalIn = 0, totalOut = 0;
+  var totalInKg = 0, totalOutKg = 0;
   jobRecords.forEach(function(r) {
     if (r.jobId !== jobId) return;
-    if (r.type==='in')  totalIn  += Number(r.qty||0);
-    if (r.type==='out') totalOut += Number(r.qty||0);
+    if (r.type==='in') {
+      totalIn  += Number(r.qty||0);
+      totalInKg += Number(r.qtyKg||0);
+    }
+    if (r.type==='out') {
+      totalOut  += Number(r.qty||0);
+      totalOutKg += Number(r.qtyKg||0);
+    }
   });
-  return { totalIn:totalIn, totalOut:totalOut, remain:totalIn-totalOut };
+  var remain   = totalIn - totalOut;
+  var remainKg = Math.max(0, parseFloat((totalInKg - totalOutKg).toFixed(3)));
+  return { totalIn:totalIn, totalOut:totalOut, remain:remain,
+           totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
 }
 
 function daysSince(dateStr) {
@@ -515,7 +622,7 @@ function renderBoard() {
 
   var tbody = document.getElementById('boardBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีงาน</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีงาน</td></tr>';
     return;
   }
 
@@ -528,19 +635,45 @@ function renderBoard() {
     var status = getStatus(job);
     var remainColor = b.remain <= 0 ? '#94a3b8' : b.remain < b.totalIn*0.2 ? 'var(--red)' : 'var(--green)';
     var daysColor = days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--text-muted)';
+    var unitBadge = job.unit==='kg'
+      ? '<span style="background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">กก.</span>'
+      : '<span style="background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">ชิ้น</span>';
+    var remainPcsCell = (job.unit==='pcs'||!job.unit)
+      ? '<td style="font-weight:800;color:'+remainColor+';">'+b.remain+'</td>'
+      : '<td style="color:#94a3b8;">—</td>';
+    var remainKgCell = job.unit==='kg'
+      ? '<td style="font-weight:800;color:'+remainColor+';">'+b.remainKg.toFixed(2)+'</td>'
+      : '<td style="color:#94a3b8;">—</td>';
     return '<tr>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+'</td>' +
       '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
+      '<td>'+unitBadge+'</td>' +
       '<td style="font-weight:700;">'+b.totalIn+'</td>' +
       '<td style="color:var(--orange);font-weight:700;">'+b.totalOut+'</td>' +
-      '<td style="font-weight:800;color:'+remainColor+';">'+b.remain+'</td>' +
+      remainPcsCell +
+      remainKgCell +
       '<td style="font-weight:700;color:'+daysColor+';">'+days+'</td>' +
       '<td>'+statusBadge(status)+'</td>' +
-      '<td><button onclick="deleteJob(\''+job.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button></td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button onclick="openEditModal(\''+job.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
+        '<button onclick="deleteJob(\''+job.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>' +
+      '</td>' +
     '</tr>';
   }).join('');
+}
+
+function viewJobHistory(jobId) {
+  // ไปหน้าประวัติแล้ว filter บิลนั้น
+  tab('history');
+  setTimeout(function(){
+    var sel = document.getElementById('histJobFilter');
+    if (sel) {
+      sel.value = jobId;
+      renderHistory();
+    }
+  }, 100);
 }
 
 function deleteJob(id) {
@@ -552,10 +685,10 @@ function deleteJob(id) {
 }
 
 function exportBoardCSV() {
-  var rows = [['เลขบิล','วันรับ','ชิ้นงาน','ลูกค้า','ไลน์','รับเข้า','จ่ายออก','คงเหลือ','วันค้าง','สถานะ']];
+  var rows = [['เลขบิล','วันรับ','ชิ้นงาน','ลูกค้า','หน่วย','รับเข้า','จ่ายออก','คงเหลือ(ชิ้น)','คงเหลือ(กก.)','วันค้าง','สถานะ']];
   jobItems.forEach(function(j){
     var b = calcJob(j.id);
-    rows.push([j.bill,j.date,j.partName,j.customer||'',j.line||'',b.totalIn,b.totalOut,b.remain,daysSince(j.date),getStatus(j)]);
+    rows.push([j.bill,j.date,j.partName,j.customer||'',j.unit||'pcs',b.totalIn,b.totalOut,b.remain,b.remainKg.toFixed(2),daysSince(j.date),getStatus(j)]);
   });
   dlCSV(rows, 'jobs_'+isoToday()+'.csv');
 }
@@ -568,25 +701,31 @@ function addJobIn() {
   var date     = document.getElementById('inDate').value;
   var partName = document.getElementById('inPartName').value.trim();
   var customer = document.getElementById('inCustomer').value.trim();
-  var qty      = parseInt(document.getElementById('inQty').value)||0;
-  var line     = document.getElementById('inLine').value;
+  var unit     = document.getElementById('inUnit').value || 'pcs';
   var dueDate  = document.getElementById('inDueDate').value;
   var note     = document.getElementById('inNote').value.trim();
 
   if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
   if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
   if (!partName) { showToast('in','กรุณากรอกชื่อชิ้นงาน','err'); return; }
-  if (!qty)      { showToast('in','กรุณากรอกจำนวนรับเข้า','err'); return; }
+  if (unit==='pcs' && !qty) { showToast('in','กรุณากรอกจำนวนรับเข้า (ชิ้น)','err'); return; }
+  if (unit==='kg'  && !qtyKg) { showToast('in','กรุณากรอกน้ำหนัก (กก.)','err'); return; }
 
+  var displayQty = unit==='kg' ? qtyKg : qty;
   var jobId = 'J'+Date.now();
-  jobItems.unshift({ id:jobId, bill, date, partName, customer, qty, line, dueDate, note });
-  jobRecords.unshift({ id:'R'+Date.now(), jobId, type:'in', date, qty, inv:'', by:'', note });
+  jobItems.unshift({ id:jobId, bill:bill, date:date, partName:partName, customer:customer,
+                     qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
+                     dueDate:dueDate, note:note });
+  jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'in', date:date,
+                       qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
+                       inv:'', by:'', note:note });
   saveLocal(); fbSave();
 
-  ['inBill','inPartName','inCustomer','inQty','inNote'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('inLine').value='';
+  ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
   document.getElementById('inDueDate').value='';
-  showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+qty+' ชิ้น','ok');
+  showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+displayQty+(unit==='kg'?' กก.':" ชิ้น"),'ok');
 }
 
 // ══════════════════════════════════════
@@ -598,12 +737,13 @@ function renderOutSelect() {
   // เฉพาะงานที่ยังมีคงเหลือ
   var active = jobItems.filter(function(j){
     var b = calcJob(j.id);
-    return b.remain > 0;
+    return j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
   });
   sel.innerHTML = '<option value="">— เลือกเลขที่บิล —</option>' +
     active.map(function(j){
       var b = calcJob(j.id);
-      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' | '+j.partName.slice(0,25)+'... [เหลือ '+b.remain+']</option>';
+      var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
+      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' | '+j.partName.slice(0,25)+'... [เหลือ '+rem+']</option>';
     }).join('');
   if (cur !== sel.value) {
     document.getElementById('outJobInfo').style.display='none';
@@ -622,10 +762,16 @@ function onOutJobSelect() {
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { infoEl.style.display='none'; return; }
   var b = calcJob(jobId);
-  document.getElementById('outJobInfoTitle').textContent = job.bill + ' — ' + job.partName;
-  document.getElementById('outInfoIn').textContent     = b.totalIn;
-  document.getElementById('outInfoOut').textContent    = b.totalOut;
-  document.getElementById('outInfoRemain').textContent = b.remain;
+  var isKg = job.unit==='kg';
+  document.getElementById('outJobInfoTitle').textContent = job.bill + ' — ' + job.partName + (isKg?' [หน่วย: กก.]':' [หน่วย: ชิ้น]');
+  document.getElementById('outInfoIn').textContent     = isKg ? b.totalInKg.toFixed(2)  : b.totalIn;
+  document.getElementById('outInfoOut').textContent    = isKg ? b.totalOutKg.toFixed(2) : b.totalOut;
+  document.getElementById('outInfoRemain').textContent = isKg ? b.remainKg.toFixed(2)   : b.remain;
+  // ปรับ label จำนวนจ่าย
+  var qtyLabel = document.querySelector('label[for="outQty"]');
+  if (qtyLabel) qtyLabel.textContent = isKg ? 'น้ำหนักจ่าย (กก.) *' : 'จำนวนจ่าย (ชิ้น) *';
+  var qtyInput = document.getElementById('outQty');
+  if (qtyInput) { qtyInput.step = isKg?'0.01':'1'; qtyInput.placeholder = isKg?'0.00':'0'; }
   infoEl.style.display = 'block';
 }
 
@@ -633,7 +779,7 @@ function addJobOut() {
   var jobId = document.getElementById('outJobSel').value;
   var date  = document.getElementById('outDate').value;
   var inv   = document.getElementById('outInv').value.trim();
-  var qty   = parseInt(document.getElementById('outQty').value)||0;
+  var qty   = parseFloat(document.getElementById('outQty').value)||0;
   var by    = document.getElementById('outBy').value.trim();
   var note  = document.getElementById('outNote').value.trim();
 
@@ -641,10 +787,20 @@ function addJobOut() {
   if (!date)  { showToast('out','กรุณาระบุวันที่จ่าย','err'); return; }
   if (!qty)   { showToast('out','กรุณากรอกจำนวนที่จ่าย','err'); return; }
 
+  var job = jobItems.find(function(j){ return j.id===jobId; });
+  var isKg = job && job.unit==='kg';
   var b = calcJob(jobId);
-  if (qty > b.remain) { showToast('out','⚠️ จำนวนเกินคงเหลือ (เหลือ '+b.remain+' ชิ้น)','err'); return; }
 
-  jobRecords.unshift({ id:'R'+Date.now(), jobId, type:'out', date, qty, inv, by, note });
+  if (isKg) {
+    if (qty > b.remainKg) { showToast('out','⚠️ น้ำหนักเกินคงเหลือ (เหลือ '+b.remainKg.toFixed(2)+' กก.)','err'); return; }
+    jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'out', date:date,
+                         qty:0, qtyKg:qty, unit:'kg', inv:inv, by:by, note:note });
+  } else {
+    qty = parseInt(qty);
+    if (qty > b.remain) { showToast('out','⚠️ จำนวนเกินคงเหลือ (เหลือ '+b.remain+' ชิ้น)','err'); return; }
+    jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'out', date:date,
+                         qty:qty, qtyKg:0, unit:'pcs', inv:inv, by:by, note:note });
+  }
   saveLocal(); fbSave();
 
   ['outInv','outQty','outBy','outNote'].forEach(function(id){ document.getElementById(id).value=''; });
@@ -667,39 +823,90 @@ function renderHistFilter() {
     }).join('');
 }
 
+function getLineFromRecord(r) {
+  // ดึงชื่อไลน์จาก by field
+  var by = r.by || '';
+  if (by.includes('B1') || by.includes('b1')) return 'B1';
+  if (by.includes('B2') || by.includes('b2')) return 'B2';
+  if (by.includes('R1') || by.includes('r1')) return 'R1';
+  if (r.type === 'in') return '—';
+  return 'จ่ายมือ';
+}
+
+function lineBadge(line) {
+  var styles = {
+    'B1': 'background:#dbeafe;color:#1e40af;',
+    'B2': 'background:#ede9fe;color:#6d28d9;',
+    'R1': 'background:#fce7f3;color:#be185d;',
+    'จ่ายมือ': 'background:#f1f5f9;color:#64748b;',
+    '—': '',
+  };
+  var s = styles[line] || '';
+  if (!s) return '—';
+  return '<span style="'+s+'padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">'+line+'</span>';
+}
+
 function renderHistory() {
-  var jobFilter  = document.getElementById('histJobFilter').value;
-  var typeFilter = document.getElementById('histTypeFilter').value;
+  var jobFilter  = (document.getElementById('histJobFilter')||{}).value  || '';
+  var typeFilter = (document.getElementById('histTypeFilter')||{}).value || '';
+  var lineFilter = (document.getElementById('histLineFilter')||{}).value || '';
+  var dateFrom   = (document.getElementById('histDateFrom')||{}).value   || '';
+  var dateTo     = (document.getElementById('histDateTo')||{}).value     || '';
 
   var rows = jobRecords.filter(function(r){
-    if (jobFilter  && r.jobId !== jobFilter)  return false;
-    if (typeFilter && r.type  !== typeFilter)  return false;
+    if (jobFilter  && r.jobId !== jobFilter) return false;
+    if (typeFilter && r.type  !== typeFilter) return false;
+    if (dateFrom   && r.date  <  dateFrom)   return false;
+    if (dateTo     && r.date  >  dateTo)     return false;
+    if (lineFilter) {
+      var line = getLineFromRecord(r);
+      if (lineFilter === 'manual' && line !== 'จ่ายมือ') return false;
+      if (lineFilter !== 'manual' && line !== lineFilter) return false;
+    }
     return true;
   });
 
+  // เรียงล่าสุดก่อน
+  rows = rows.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
   var tbody = document.getElementById('histBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ</td></tr>';
     return;
   }
 
+  // สรุปยอด
+  var sumIn=0, sumOut=0;
+  rows.forEach(function(r){ if(r.type==='in') sumIn+=Number(r.qty||0); else sumOut+=Number(r.qty||0); });
+
   tbody.innerHTML = rows.map(function(r) {
     var job = jobItems.find(function(j){ return j.id===r.jobId; }) || {};
+    var line = getLineFromRecord(r);
+    var isAuto = (r.id||'').startsWith('AUTO-');
     var typeBadge = r.type==='in'
       ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับ</span>'
-      : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
+      : isAuto
+        ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">⚙️ ชุบ</span>'
+        : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
     return '<tr>' +
-      '<td class="td-l" style="font-size:10px;">'+fmtDate(r.date)+'</td>' +
+      '<td class="td-l" style="font-size:10px;white-space:nowrap;">'+fmtDate(r.date)+'</td>' +
       '<td>'+typeBadge+'</td>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+(job.bill||'—')+'</td>' +
-      '<td class="td-l" style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;">'+(job.partName||'—')+'</td>' +
-      '<td style="font-weight:700;color:'+(r.type==='in'?'var(--green)':'var(--orange)')+';">'+(r.qty||0)+'</td>' +
+      '<td class="td-l" style="font-size:10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;">'+(job.partName||'—')+'</td>' +
+      '<td style="font-weight:800;color:'+(r.type==='in'?'var(--green)':'var(--orange)')+';font-family:monospace;">'+(r.qty||0)+'</td>' +
+      '<td>'+lineBadge(line)+'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(r.inv||'—')+'</td>' +
       '<td class="td-l" style="font-size:10px;">'+(r.by||'—')+'</td>' +
-      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(r.note||'—')+'</td>' +
-      '<td><button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button></td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+(r.note||'—')+'</td>' +
+      '<td>'+(isAuto?'':('<button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>'))+'</td>' +
     '</tr>';
-  }).join('');
+  }).join('') +
+  '<tr style="background:#f8fafc;font-weight:700;">' +
+    '<td colspan="4" style="text-align:right;font-size:11px;color:var(--text-mid);">รวม '+rows.length+' รายการ</td>' +
+    '<td style="color:var(--green);">+'+sumIn+'</td>' +
+    '<td colspan="4" style="color:var(--orange);">-'+sumOut+'</td>' +
+    '<td></td>' +
+  '</tr>';
 }
 
 function deleteRecord(id) {
@@ -709,10 +916,11 @@ function deleteRecord(id) {
 }
 
 function exportHistoryCSV() {
-  var rows = [['วันที่','ประเภท','เลขบิล','ชิ้นงาน','จำนวน','INV','ผู้จ่าย','หมายเหตุ']];
+  var rows = [['วันที่','ประเภท','เลขบิล','ชิ้นงาน','จำนวน','ไลน์ชุบ','INV','ผู้จ่าย','หมายเหตุ']];
   jobRecords.forEach(function(r){
     var j = jobItems.find(function(x){ return x.id===r.jobId; })||{};
-    rows.push([r.date,r.type,j.bill||'',j.partName||'',r.qty||0,r.inv||'',r.by||'',r.note||'']);
+    var line = getLineFromRecord(r);
+    rows.push([r.date,r.type,j.bill||'',j.partName||'',r.qty||0,line,r.inv||'',r.by||'',r.note||'']);
   });
   dlCSV(rows, 'job_history_'+isoToday()+'.csv');
 }
@@ -737,12 +945,276 @@ function showToast(section, msg, type) {
 }
 
 // ══════════════════════════════════════
+//  AUTOCOMPLETE — ชื่อชิ้นงาน + ลูกค้า
+// ══════════════════════════════════════
+function acGetHistory() {
+  // ดึงประวัติจาก jobItems (pair: partName + customer)
+  var pairs = [];
+  var seen  = {};
+  jobItems.forEach(function(j) {
+    var key = (j.partName||'') + '|' + (j.customer||'');
+    if (!seen[key] && j.partName) {
+      seen[key] = true;
+      pairs.push({ partName: j.partName, customer: j.customer||'' });
+    }
+  });
+  return pairs;
+}
+
+function acShow(fieldId) {
+  var input = document.getElementById(fieldId);
+  var list  = document.getElementById('ac-' + fieldId);
+  if (!input || !list) return;
+  var val   = input.value.toLowerCase().trim();
+  var pairs = acGetHistory();
+
+  var filtered = pairs.filter(function(p) {
+    if (fieldId === 'inPartName') return !val || p.partName.toLowerCase().includes(val);
+    if (fieldId === 'inCustomer') return !val || p.customer.toLowerCase().includes(val);
+    return false;
+  });
+
+  if (!filtered.length) { list.classList.remove('open'); return; }
+
+  list.innerHTML = filtered.slice(0,12).map(function(p) {
+    var main = fieldId === 'inCustomer' ? (p.customer||'—') : p.partName;
+    var sub  = fieldId === 'inCustomer' ? p.partName : (p.customer||'');
+    return '<div class="ac-item" onmousedown="acPick(\''+fieldId+'\','+JSON.stringify(p)+')">' +
+      '<span class="ac-item-part">'+main+'</span>' +
+      (sub ? '<span class="ac-item-cust">· '+sub+'</span>' : '') +
+      '</div>';
+  }).join('');
+  list.classList.add('open');
+}
+
+function acHide(fieldId, delay) {
+  setTimeout(function() {
+    var list = document.getElementById('ac-' + fieldId);
+    if (list) list.classList.remove('open');
+  }, delay || 0);
+}
+
+function acPick(fieldId, pair) {
+  document.getElementById('inPartName').value = pair.partName || '';
+  document.getElementById('inCustomer').value = pair.customer || '';
+  var list = document.getElementById('ac-' + fieldId);
+  if (list) list.classList.remove('open');
+}
+
+// ══════════════════════════════════════
+//  EDIT JOB MODAL
+// ══════════════════════════════════════
+function openEditModal(jobId) {
+  var job = jobItems.find(function(j){ return j.id===jobId; });
+  if (!job) return;
+  document.getElementById('editJobId').value    = jobId;
+  document.getElementById('editBill').value     = job.bill    || '';
+  document.getElementById('editDate').value     = job.date    || '';
+  document.getElementById('editPartName').value = job.partName|| '';
+  document.getElementById('editCustomer').value = job.customer|| '';
+  document.getElementById('editUnit').value     = job.unit    || 'pcs';
+  document.getElementById('editQty').value      = job.qty     || 0;
+  document.getElementById('editQtyKg').value    = job.qtyKg   || '';
+  document.getElementById('editDueDate').value  = job.dueDate || '';
+  document.getElementById('editNote').value     = job.note    || '';
+  onEditUnitChange();
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+function onEditUnitChange() {
+  var unit = document.getElementById('editUnit').value;
+  var lbl  = document.getElementById('editQtyLabel');
+  if (lbl) lbl.textContent = unit==='kg' ? 'จำนวนรับเข้า (ชิ้น) — ไม่จำเป็น' : 'จำนวนรับเข้า (ชิ้น)';
+}
+
+function saveEditJob() {
+  var jobId    = document.getElementById('editJobId').value;
+  var bill     = document.getElementById('editBill').value.trim();
+  var date     = document.getElementById('editDate').value;
+  var partName = document.getElementById('editPartName').value.trim();
+  var customer = document.getElementById('editCustomer').value.trim();
+  var unit     = document.getElementById('editUnit').value || 'pcs';
+  var qty      = parseInt(document.getElementById('editQty').value)    || 0;
+  var qtyKg    = parseFloat(document.getElementById('editQtyKg').value)|| 0;
+  var dueDate  = document.getElementById('editDueDate').value;
+  var note     = document.getElementById('editNote').value.trim();
+
+  if (!bill)     { showToast('edit','กรุณากรอกเลขที่บิล','err'); return; }
+  if (!partName) { showToast('edit','กรุณากรอกชื่อชิ้นงาน','err'); return; }
+
+  var idx = jobItems.findIndex(function(j){ return j.id===jobId; });
+  if (idx < 0) return;
+  jobItems[idx] = Object.assign({}, jobItems[idx],
+    { bill:bill, date:date, partName:partName, customer:customer,
+      unit:unit, qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0,
+      dueDate:dueDate, note:note });
+
+  // อัปเดต record 'in' ตัวแรกด้วย (qty หลัก)
+  var firstIn = jobRecords.find(function(r){ return r.jobId===jobId && r.type==='in'; });
+  if (firstIn) {
+    firstIn.qty   = unit==='kg' ? 0    : qty;
+    firstIn.qtyKg = unit==='kg' ? qtyKg : 0;
+    firstIn.unit  = unit;
+    firstIn.date  = date;
+  }
+
+  saveLocal(); fbSave();
+  showToast('edit','✅ บันทึกสำเร็จ','ok');
+  setTimeout(function(){ closeEditModal(); renderBoard(); }, 800);
+}
+
+// ปิด modal เมื่อกดนอก
+document.addEventListener('click', function(e) {
+  var modal = document.getElementById('editModal');
+  if (modal && e.target === modal) closeEditModal();
+});
+
+// ══════════════════════════════════════
+//  UNIT TOGGLE
+// ══════════════════════════════════════
+function onUnitChange() {
+  var unit = document.getElementById('inUnit').value;
+  var qtyLabel = document.getElementById('inQtyLabel');
+  var kgWrap   = document.getElementById('inQtyKgWrap');
+  var qtyInput = document.getElementById('inQty');
+  if (unit === 'kg') {
+    qtyLabel.innerHTML = 'จำนวนรับเข้า (ชิ้น) <small style="color:var(--text-muted);font-weight:400;">(ถ้าทราบ)</small>';
+    qtyInput.placeholder = '0 (ไม่จำเป็น)';
+    qtyInput.required = false;
+    if (kgWrap) kgWrap.style.display = 'block';
+  } else {
+    qtyLabel.innerHTML = 'จำนวนรับเข้า (ชิ้น) <span style="color:var(--red);">*</span>';
+    qtyInput.placeholder = '0';
+    qtyInput.required = true;
+    if (kgWrap) kgWrap.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════
+//  AUTO-PULL จาก v4 (B1) / v5 (B2) / v6 (R1)
+//  ดึง roundEntries ที่ partName ตรงกัน แล้วตัดสต็อคอัตโนมัติ
+// ══════════════════════════════════════
+var LINE_FB_PATHS = {
+  B1: FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/b1',
+  B2: FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/b2',
+  R1: FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/r1',
+};
+
+// เก็บ ID ที่ตัดไปแล้วเพื่อไม่ให้ตัดซ้ำ
+var processedRoundIds = {};
+
+function normalizePartKey(s) {
+  return (s||'').toUpperCase().replace(/[\s\-]/g,'');
+}
+
+async function pullFromLines() {
+  // โหลด processedRoundIds จาก jobRecords
+  processedRoundIds = {};
+  jobRecords.forEach(function(r){
+    if (r.roundId) processedRoundIds[r.roundId] = true;
+  });
+
+  var changed = false;
+
+  for (var lineName in LINE_FB_PATHS) {
+    try {
+      var res = await fetch(LINE_FB_PATHS[lineName] + '.json');
+      if (!res.ok) continue;
+      var data = await res.json();
+      if (!data) continue;
+
+      // ดึง dayRecords — array ของรอบชุบ แต่ละรอบมี rows[]
+      var dayRecords = [];
+      if (Array.isArray(data.dayRecords)) {
+        dayRecords = data.dayRecords;
+      } else if (data.dayRecords && typeof data.dayRecords === 'object') {
+        dayRecords = Object.values(data.dayRecords);
+      }
+
+      dayRecords.forEach(function(rec) {
+        var rows = rec.rows || [];
+        rows.forEach(function(barrel) {
+          var roundEntryId = 'LINE-' + lineName + '-' + rec.id + '-' + barrel.id;
+          if (processedRoundIds[roundEntryId]) return; // ตัดไปแล้ว
+
+          var bPartKey = normalizePartKey(barrel.partName || barrel.name || '');
+          if (!bPartKey) return;
+
+          var bPcs = Number(barrel.pcs || 0);
+          var bKg  = Number(barrel.kg  || 0);
+
+          // หา job ที่ partName ตรงกัน และยังมี remain
+          jobItems.forEach(function(job) {
+            var jPartKey = normalizePartKey(job.partName || '');
+            if (!jPartKey || jPartKey !== bPartKey) return;
+
+            var b = calcJob(job.id);
+            var isKg = job.unit === 'kg';
+
+            if (isKg) {
+              if (!bKg || b.remainKg <= 0) return;
+              var outKg = Math.min(bKg, b.remainKg);
+              var newRec = {
+                id: 'AUTO-' + Date.now() + '-' + Math.random().toString(36).slice(2,5),
+                roundId: roundEntryId,
+                jobId: job.id,
+                type: 'out',
+                date: rec.date || new Date().toISOString().slice(0,10),
+                qty: 0, qtyKg: parseFloat(outKg.toFixed(3)), unit: 'kg',
+                inv: rec.lotNo || '',
+                by: lineName + ' Auto',
+                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '')
+              };
+              jobRecords.unshift(newRec);
+              processedRoundIds[roundEntryId] = true;
+              changed = true;
+            } else {
+              if (!bPcs || b.remain <= 0) return;
+              var outQty = Math.min(bPcs, b.remain);
+              var newRec2 = {
+                id: 'AUTO-' + Date.now() + '-' + Math.random().toString(36).slice(2,5),
+                roundId: roundEntryId,
+                jobId: job.id,
+                type: 'out',
+                date: rec.date || new Date().toISOString().slice(0,10),
+                qty: outQty, qtyKg: 0, unit: 'pcs',
+                inv: rec.lotNo || '',
+                by: lineName + ' Auto',
+                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '')
+              };
+              jobRecords.unshift(newRec2);
+              processedRoundIds[roundEntryId] = true;
+              changed = true;
+            }
+          });
+        });
+      });
+    } catch(e) {
+      console.warn('pullFromLines', lineName, e);
+    }
+  }
+
+  if (changed) {
+    saveLocal();
+    fbSave();
+    var active = document.querySelector('.view.active');
+    if (active) tab(active.id.replace('v-',''));
+  }
+}
+
+// ══════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════
 window.addEventListener('load', function(){
   // ตั้งวันที่ default
   var d = document.getElementById('inDate');
   if (d) d.value = isoToday();
+  // ตั้ง unit UI
+  onUnitChange();
 
   try {
     if (localStorage.getItem('job_pin')==='1') {
@@ -751,6 +1223,8 @@ window.addEventListener('load', function(){
       document.getElementById('appScreen').style.display='block';
       applyRole();
       loadLocal(); startPoll(); setTimeout(fbLoad, 500);
+      // ดึงข้อมูลจากไลน์ชุบหลังโหลด
+      setTimeout(pullFromLines, 2000);
     }
   } catch(e){}
 });
