@@ -1100,6 +1100,39 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
   </div>
 
+  <!-- ══ เบิกเคมีจาก Master Stock ══ -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">🔗 เบิกเคมีจาก Master Stock (Shared)</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
+      Stock กลางจาก <strong>Chem Master</strong> — เบิกที่นี่จะหักจาก stock ที่ใช้ร่วมกันทั้ง B1/B2/R1
+    </div>
+    <button class="btn btn-outline" onclick="masterLoad()" style="width:auto;margin-bottom:10px;font-size:11px;padding:6px 12px;">
+      🔄 รีเฟรช Stock Master
+    </button>
+    <div id="masterStockList">
+      <div style="text-align:center;color:var(--text-muted);padding:16px;">กำลังโหลด...</div>
+    </div>
+    <div style="margin-top:10px;padding:12px;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;">เบิกออก</div>
+      <div class="field" style="margin-bottom:8px;">
+        <label>รายการเคมี</label>
+        <select id="masterChemSel"><option value="">— เลือก —</option></select>
+      </div>
+      <div class="grid2" style="margin-bottom:8px;">
+        <div class="field" style="margin:0;">
+          <label>ปริมาณ (ลิตร)</label>
+          <input type="number" id="masterOutLiter" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>หมายเหตุ</label>
+          <input type="text" id="masterOutNote" placeholder="เช่น เติมบ่อ">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="doMasterOut()" style="margin-bottom:0;">📤 เบิกออก</button>
+      <div id="toast-master" class="toast"></div>
+    </div>
+  </div>
+
 </div>
 <!-- ══════════════════════════════════════ -->
 <!--  TAB: งานเข้า-ออก (Job)               -->
