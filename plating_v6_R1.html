@@ -727,7 +727,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <thead>
           <tr style="background:#1e3a5f;">
             <th style="padding:7px 8px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);">ชื่อเคมี</th>
-            <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">ปริมาณ<br>(ลิตร)</th>
+            <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ลิตร)</th>
             <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">ใช้ไป<br>(ลิตร)</th>
             <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:#fbbf24;">คงเหลือ<br>(ลิตร)</th>
           </tr>
@@ -991,7 +991,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <!-- สรุป 3 ตัวเลข -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
-          <div style="font-size:9px;color:var(--blue-light);">เบิกจาก Master Stock (ลิตร)</div>
+          <div style="font-size:9px;color:var(--blue-light);">รับเข้ารวม (ลิตร)</div>
           <div id="chemCardTotalIn" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#fff;margin-top:2px;">0</div>
         </div>
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
@@ -1072,15 +1072,15 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:660px;">
           <thead>
             <tr style="background:var(--navy);">
-              <th colspan="5" style="padding:6px 8px;text-align:center;color:var(--blue-light);font-size:9px;border-right:2px solid rgba(255,255,255,.2);">ประวัติการเบิกจาก Master</th>
+              <th colspan="5" style="padding:6px 8px;text-align:center;color:var(--blue-light);font-size:9px;border-right:2px solid rgba(255,255,255,.2);">จัดซื้อ (รับเข้า)</th>
               <th colspan="5" style="padding:6px 8px;text-align:center;color:#6ee7b7;font-size:9px;">ผลิต (เบิกใช้)</th>
             </tr>
             <tr style="background:#1e3a5f;">
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">ว.ด.ป.</th>
-              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">วันที่เบิก</th>
+              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">เลขที่ใบรับงาน</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ลิตร)</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">หมายเหตุ</th>
-              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้เบิก</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ถัง)</th>
+              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้บันทึก</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">ว.ด.ป.</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">เลขที่ใบสั่งผลิต</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">เบิก<br>(ลิตร)</th>
@@ -1093,39 +1093,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
-
-  <!-- ══ เบิกเคมีจาก Master Stock ══ -->
-  <div class="card" style="margin-top:0;">
-    <div class="card-label">🔗 เบิกเคมีจาก Master Stock (Shared)</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-      Stock กลางจาก <strong>Chem Master</strong> — เบิกที่นี่จะหักจาก stock ที่ใช้ร่วมกันทั้ง B1/B2/R1
-    </div>
-    <button class="btn btn-outline" onclick="masterLoad()" style="width:auto;margin-bottom:10px;font-size:11px;padding:6px 12px;">
-      🔄 รีเฟรช Stock Master
-    </button>
-    <div id="masterStockList">
-      <div style="text-align:center;color:var(--text-muted);padding:16px;">กำลังโหลด...</div>
-    </div>
-    <div style="margin-top:10px;padding:12px;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;">
-      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:8px;">เบิกออก</div>
-      <div class="field" style="margin-bottom:8px;">
-        <label>รายการเคมี</label>
-        <select id="masterChemSel"><option value="">— เลือก —</option></select>
-      </div>
-      <div class="grid2" style="margin-bottom:8px;">
-        <div class="field" style="margin:0;">
-          <label>ปริมาณ (ลิตร)</label>
-          <input type="number" id="masterOutLiter" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
-        </div>
-        <div class="field" style="margin:0;">
-          <label>หมายเหตุ</label>
-          <input type="text" id="masterOutNote" placeholder="เช่น เติมบ่อ">
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="doMasterOut()" style="margin-bottom:0;">📤 เบิกออก</button>
-      <div id="toast-master" class="toast"></div>
     </div>
   </div>
 
@@ -1833,12 +1800,102 @@ function persist(rec) {
   if (fbIsConfigured()) fbSave(); else gdriveSaveQuiet();
 }
 
+
+// ══ Auto Job Out — ตัดยอด Job Master อัตโนมัติเมื่อบันทึกรอบ ══
+async function autoJobOut(rec) {
+  if (!jobMasterItems || !jobMasterItems.length) return;
+
+  var qtyMap = {};
+
+  (rec.rows || []).forEach(function(barrel) {
+    var bPartKey = partNoFromName(barrel.partName || barrel.name || '');
+    if (!bPartKey) return;
+
+    var bLotKey = normalizePartKey(barrel.lotNo || rec.lotNo || '');
+
+    var bPcs = Number(barrel.pcs || 0);
+    if (!bPcs) {
+      var mp = partList.find(function(p) {
+        var pk = normalizePartKey(p.partNo);
+        return pk === bPartKey
+            || normalizePartKey(p.partNo + (p.partName ? ' '+p.partName : '')) === bPartKey;
+      });
+      var wg = mp ? Number(mp.weightG || 0) : 0;
+      if (!wg) {
+        var mj = jobMasterItems.find(function(j) {
+          return partNoFromName(j.name || '') === bPartKey;
+        });
+        if (mj) wg = Number(mj.weightG || 0);
+      }
+      if (wg > 0 && Number(barrel.kg || 0) > 0) {
+        bPcs = Math.round(Number(barrel.kg) * 1000 / wg);
+      } else if (Number(barrel.kg || 0) > 0) {
+        bPcs = Number(barrel.kg);
+      }
+    }
+    if (!bPcs) return;
+
+    jobMasterItems.forEach(function(job) {
+      var jobPartKey = partNoFromName(job.name || '');
+      var jobLotKey  = normalizePartKey(job.lot || '');
+
+      if (!jobPartKey || jobPartKey !== bPartKey) return;
+      if (jobLotKey && bLotKey && jobLotKey !== bLotKey) return;
+
+      var totalOut = 0;
+      jobMasterRecords.forEach(function(r) {
+        if (r.jobId === job.id && r.type === 'out') totalOut += Number(r.qty || 0);
+      });
+      if (qtyMap[job.id]) totalOut += qtyMap[job.id];
+      var remain = (job.qty || 0) - totalOut;
+      if (remain <= 0) return;
+
+      var outQty = Math.min(bPcs, remain);
+      qtyMap[job.id] = (qtyMap[job.id] || 0) + outQty;
+    });
+  });
+
+  var jobIds = Object.keys(qtyMap);
+  if (!jobIds.length) return;
+
+  var newOuts = jobIds.map(function(jobId) {
+    return {
+      id: 'A' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      jobId: jobId,
+      type: 'out',
+      date: rec.date || new Date().toISOString().slice(0,10),
+      qty: qtyMap[jobId],
+      inv: rec.lotNo || '',
+      by: rec.recorder || '',
+      note: 'Auto จากรอบชุบ ' + (rec.lotNo || '')
+    };
+  });
+
+  newOuts.forEach(function(o) { jobMasterRecords.unshift(o); });
+  try {
+    await fetch(FB_JOB_PATH + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() })
+    });
+    showToast('entry', '📦 ตัดยอด Job ' + newOuts.length + ' รายการอัตโนมัติ', 'ok');
+    if (typeof renderJobBoard === 'function') renderJobBoard();
+  } catch(e) {
+    console.warn('autoJobOut error:', e);
+  }
+}
 function saveDay() {
   if (!validateDay()) return;
   var rec = buildDayRecord();
   persist(rec);
   showToast('entry','บันทึกสรุปวันนี้สำเร็จ! ✓','ok');
   renderSummaryMonthTable();
+  // Auto ตัดยอด Job Master
+  if (typeof jobMasterLoad === 'function') {
+    jobMasterLoad().then(function(){ autoJobOut(rec); });
+  } else {
+    autoJobOut(rec);
+  }
 }
 
 async function saveDayAndDiscord() {
@@ -1953,6 +2010,13 @@ async function saveDayAndDiscord() {
 
   // Auto sync ขึ้น Cloud อัตโนมัติ
   if (fbIsConfigured()) fbSave(); else gdriveSaveQuiet();
+
+  // Auto ตัดยอด Job Master
+  if (typeof jobMasterLoad === 'function') {
+    jobMasterLoad().then(function(){ autoJobOut(rec); });
+  } else {
+    autoJobOut(rec);
+  }
 }
 
 function clearDay() {
@@ -4006,34 +4070,27 @@ function onChemSelect() {
 
 // ── คำนวณยอดคงเหลือ ─────────────────────────────────────────
 function calcChemBalance(chemId) {
-  var totalIn   = 0;
+  var totalIn   = 0;  // รับเข้าจากจัดซื้อ (ลิตร)
   var totalBucketIn = 0;
-  var masterIn  = 0;
-  var autoOut   = 0;
-  var manualOut = 0;
+  var autoOut   = 0;  // เบิกอัตโนมัติจากระบบ (ลิตร) คำนวณจาก dayRecords
+  var manualOut = 0;  // เบิกด้วยตนเอง (กรณีมีในอนาคต)
 
-  // รับเข้า (จัดซื้อโดยตรง)
+  // รับเข้า
   chemRecords.filter(function(r){ return r.chemId===chemId && r.type==='in'; })
     .forEach(function(r){ totalIn += Number(r.liter||0); totalBucketIn += Number(r.bucket||0); });
 
-  // รับเข้าจาก Master Stock
+  // เบิกอัตโนมัติจาก dayRecords — หา rate ของเคมีนี้จาก chemSettings
   var item = chemItems.find(function(c){ return c.id===chemId; });
-  if (item && typeof masterItems !== 'undefined' && masterItems.length) {
-    var mItem = masterItems.find(function(m){ return m.code === item.code; });
-    if (mItem && typeof masterRecords !== 'undefined') {
-      masterRecords.filter(function(r){ return r.chemId===mItem.id && r.type==='out-r1'; })
-        .forEach(function(r){ masterIn += Number(r.liter||0); });
-    }
+  if (item) {
+    autoOut = calcAutoChemUsed(item.name);
   }
-  totalIn += masterIn;
 
-  if (item) { autoOut = calcAutoChemUsed(item.name); }
-
+  // เบิกอื่นๆ จาก chemRecords
   chemRecords.filter(function(r){ return r.chemId===chemId && r.type==='out'; })
     .forEach(function(r){ manualOut += Number(r.liter||0); });
 
   var remain = totalIn - autoOut - manualOut;
-  return { totalIn:totalIn, totalBucketIn:totalBucketIn, autoOut:autoOut, manualOut:manualOut, masterIn:masterIn, remain:remain };
+  return { totalIn:totalIn, totalBucketIn:totalBucketIn, autoOut:autoOut, manualOut:manualOut, remain:remain };
 }
 
 // คำนวณปริมาณเคมีที่ใช้จริงจาก dayRecords (สะสมทั้งหมด) โดยใช้ AH × rate
@@ -4163,7 +4220,7 @@ function renderChemStockCard() {
   var bal = calcChemBalance(_selChemId);
   var fmt2 = function(n){ return Number(n).toFixed(2); };
   setTxt('chemCardRemain',  fmt2(bal.remain));
-  setTxt('chemCardTotalIn', fmt2(bal.masterIn||0));
+  setTxt('chemCardTotalIn', fmt2(bal.totalIn));
   setTxt('chemCardTotalOut', fmt2(bal.autoOut+bal.manualOut));
   setTxt('chemCardAutoOut', fmt2(bal.autoOut));
 
@@ -4210,70 +4267,52 @@ function renderChemStockCard() {
     return ml / 1000;
   }
 
-  // ─── แยก 2 array อิสระ ───
-  var masterRows = [];
-  var outRows    = [];
+  // รับเข้า
+  chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='in'; })
+    .sort(function(a,b){ return a.date.localeCompare(b.date); })
+    .forEach(function(r){
+      rows.push({ date:r.date, bill:r.bill||'–', inLiter:r.liter, inBucket:r.bucket||0,
+                  recorder:r.recorder||'–', outLiter:0, outRecorder:'', isIn:true });
+    });
 
-  // Master records เรียงตาม date
-  if (typeof masterItems !== 'undefined' && masterItems.length && typeof masterRecords !== 'undefined') {
-    var mItem2 = masterItems.find(function(m){ return m.code === item.code; });
-    if (mItem2) {
-      masterRecords.filter(function(r){ return r.chemId===mItem2.id && r.type==='out-r1'; })
-        .sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); })
-        .forEach(function(r){
-          masterRows.push({ date:r.date, liter:Number(r.liter||0), note:r.note||'–' });
-        });
-    }
-  }
-
-  // out rows เรียงตาม date
+  // auto-out จาก dayRecords — อ้างอิง Pro Lot No (day.lotNo) เป็น bill
   dayRecords.forEach(function(day){
     var used = calcDayChemUsedLiter(day);
     if (used > 0) {
-      outRows.push({ date:day.date, liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ' });
+      rows.push({ date:day.date, bill:day.lotNo||'–', inLiter:0, inBucket:0, recorder:'',
+                  outLiter:used, outRecorder:day.recorder||'ระบบ', isIn:false });
     }
   });
-  outRows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
-  // running balance คำนวณจาก outRows เทียบกับ masterRows
-  var runBal = 0;
-  masterRows.forEach(function(r){ runBal += r.liter; });
-  // pre-calc running per outRow
-  var outRunning = [];
-  var tmpBal = 0;
-  masterRows.forEach(function(r){ tmpBal += r.liter; });
-  var tmpBal2 = tmpBal;
-  outRows.forEach(function(r){
-    tmpBal2 -= r.liter;
-    outRunning.push(tmpBal2);
+  // sort by date
+  rows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  // คำนวณ running balance
+  var running = 0;
+  var html = '';
+  rows.forEach(function(r){
+    var inLiter  = Number(r.inLiter||0);
+    var outLiter = Number(r.outLiter||0);
+    if (r.isIn) running += inLiter; else running -= outLiter;
+    var dateStr = r.date ? r.date.split('-').reverse().join('/') : '–';
+    var rowBg = r.isIn ? '' : 'background:#f0fff4;';
+    html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
+      // จัดซื้อ
+      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?dateStr:'')+'</td>' +
+      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?r.bill:'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:var(--blue);">'+(r.isIn&&inLiter>0?inLiter.toFixed(2):'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;color:var(--text-muted);">'+(r.isIn&&r.inBucket?r.inBucket:'')+'</td>' +
+      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);border-right:2px solid #f0f0f0;">'+(r.isIn?r.recorder:'')+'</td>' +
+      // ผลิต
+      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?'':dateStr)+'</td>' +
+      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?'':r.bill)+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(r.isIn?'':outLiter.toFixed(2))+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(running<0?'#c0392b':'var(--navy)')+';">'+(running.toFixed(2))+'</td>' +
+      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(r.isIn?'':r.outRecorder)+'</td>' +
+    '</tr>';
   });
 
-  var maxRows = Math.max(masterRows.length, outRows.length);
-  var running2 = tmpBal; // final remain after all out
-  var html = '';
-  for (var i = 0; i < maxRows; i++) {
-    var mr = masterRows[i];
-    var or2 = outRows[i];
-    // running คือ balance หลัง out[i]
-    var bal2 = or2 ? outRunning[i] : null;
-    var mDateStr = mr ? (mr.date ? mr.date.split('-').reverse().join('/') : '–') : '';
-    var oDateStr = or2 ? (or2.date ? or2.date.split('-').reverse().join('/') : '–') : '';
-    var rowBg = mr ? 'background:#eff6ff;' : '';
-    html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
-      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(mr?mDateStr:'')+'</td>' +
-      '<td style="padding:7px 6px;font-size:10px;color:#1e40af;">'+(mr?mDateStr:'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:#1e40af;">'+(mr?mr.liter.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 4px;font-size:10px;color:var(--text-muted);">'+(mr?(mr.note||'–'):'')+'</td>' +
-      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);border-right:2px solid #f0f0f0;">'+(mr?'Master':'')+'</td>' +
-      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(or2?oDateStr:'')+'</td>' +
-      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(or2?or2.bill:'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(or2?or2.liter.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(bal2!==null&&bal2<0?'#c0392b':'var(--navy)')+';">'+(bal2!==null?bal2.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(or2?or2.recorder:'')+'</td>' +
-    '</tr>';
-  }
-
-    var tbody = document.getElementById('chemStockTbody');
+  var tbody = document.getElementById('chemStockTbody');
   if (tbody) tbody.innerHTML = html || '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
 }
 
@@ -5993,9 +6032,6 @@ function renderMasterStock() {
       '<div style="font-size:15px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+color+';">' + b.remain.toFixed(2) + ' L</div>' +
     '</div>';
   }).join('');
-  if (typeof renderChemStockCard === 'function' && typeof _selChemId !== 'undefined' && _selChemId) {
-    renderChemStockCard();
-  }
 }
 
 function doMasterOut() {

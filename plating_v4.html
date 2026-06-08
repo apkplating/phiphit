@@ -1714,12 +1714,111 @@ function persist(rec) {
   if (fbIsConfigured()) fbSave(); else gdriveSaveQuiet();
 }
 
+
+// ══ Auto Job Out — ตัดยอด Job Master อัตโนมัติเมื่อบันทึกรอบ ══
+async function autoJobOut(rec) {
+  if (!jobMasterItems || !jobMasterItems.length) return;
+
+  // รวม qty ต่อ jobId จากทุก barrel ในรอบนี้
+  var qtyMap = {}; // jobId -> qty
+
+  (rec.rows || []).forEach(function(barrel) {
+    var bPartKey = partNoFromName(barrel.partName || barrel.name || '');
+    if (!bPartKey) return;
+
+    var bLotKey = normalizePartKey(barrel.lotNo || rec.lotNo || '');
+
+    // คำนวณ pcs
+    var bPcs = Number(barrel.pcs || 0);
+    if (!bPcs) {
+      // หา weightG จาก partList
+      var mp = partList.find(function(p) {
+        var pk = normalizePartKey(p.partNo);
+        return pk === bPartKey
+            || normalizePartKey(p.partNo + (p.partName ? ' '+p.partName : '')) === bPartKey;
+      });
+      var wg = mp ? Number(mp.weightG || 0) : 0;
+      if (!wg) {
+        // หา weightG จาก job ที่ match
+        var mj = jobMasterItems.find(function(j) {
+          return partNoFromName(j.name || '') === bPartKey;
+        });
+        if (mj) wg = Number(mj.weightG || 0);
+      }
+      if (wg > 0 && Number(barrel.kg || 0) > 0) {
+        bPcs = Math.round(Number(barrel.kg) * 1000 / wg);
+      } else if (Number(barrel.kg || 0) > 0) {
+        // ถ้าไม่มี weightG ให้ใช้ kg เป็น qty (หน่วย kg)
+        bPcs = Number(barrel.kg);
+      }
+    }
+    if (!bPcs) return;
+
+    jobMasterItems.forEach(function(job) {
+      var jobPartKey = partNoFromName(job.name || '');
+      var jobLotKey  = normalizePartKey(job.lot || '');
+
+      // ต้อง match partNo
+      if (!jobPartKey || jobPartKey !== bPartKey) return;
+      // ถ้า job มี lot กำหนด ต้อง match lot ด้วย
+      if (jobLotKey && bLotKey && jobLotKey !== bLotKey) return;
+
+      // คงเหลือปัจจุบัน
+      var totalOut = 0;
+      jobMasterRecords.forEach(function(r) {
+        if (r.jobId === job.id && r.type === 'out') totalOut += Number(r.qty || 0);
+      });
+      // รวมที่กำลังจะตัดในรอบนี้
+      if (qtyMap[job.id]) totalOut += qtyMap[job.id];
+      var remain = (job.qty || 0) - totalOut;
+      if (remain <= 0) return;
+
+      var outQty = Math.min(bPcs, remain);
+      qtyMap[job.id] = (qtyMap[job.id] || 0) + outQty;
+    });
+  });
+
+  var jobIds = Object.keys(qtyMap);
+  if (!jobIds.length) return;
+
+  var newOuts = jobIds.map(function(jobId) {
+    return {
+      id: 'A' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      jobId: jobId,
+      type: 'out',
+      date: rec.date || new Date().toISOString().slice(0,10),
+      qty: qtyMap[jobId],
+      inv: rec.lotNo || '',
+      by: rec.recorder || '',
+      note: 'Auto จากรอบชุบ ' + (rec.lotNo || '')
+    };
+  });
+
+  newOuts.forEach(function(o) { jobMasterRecords.unshift(o); });
+  try {
+    await fetch(FB_JOB_PATH + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() })
+    });
+    showToast('entry', '📦 ตัดยอด Job ' + newOuts.length + ' รายการอัตโนมัติ', 'ok');
+    if (typeof renderJobBoard === 'function') renderJobBoard();
+  } catch(e) {
+    console.warn('autoJobOut error:', e);
+  }
+}
+
 function saveDay() {
   if (!validateDay()) return;
   var rec = buildDayRecord();
   persist(rec);
   showToast('entry','บันทึกสรุปวันนี้สำเร็จ! ✓','ok');
   renderSummaryMonthTable();
+  if (typeof jobMasterLoad === 'function') {
+    jobMasterLoad().then(function(){ autoJobOut(rec); });
+  } else {
+    autoJobOut(rec);
+  }
 }
 
 async function saveDayAndDiscord() {
@@ -1834,6 +1933,13 @@ async function saveDayAndDiscord() {
 
   // Auto sync ขึ้น Cloud อัตโนมัติ
   if (fbIsConfigured()) fbSave(); else gdriveSaveQuiet();
+
+  // Auto ตัดยอด Job Master
+  if (typeof jobMasterLoad === 'function') {
+    jobMasterLoad().then(function(){ autoJobOut(rec); });
+  } else {
+    autoJobOut(rec);
+  }
 }
 
 function clearDay() {
