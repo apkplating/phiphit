@@ -1496,6 +1496,8 @@ function init() {
   fbLoadConfig();       // โหลด Firebase config และเริ่ม poll
   thickInit();
   setTimeout(thickFbLoad, 2000);
+  setTimeout(qaFbLoadRecords, 2500);
+  setTimeout(qaFbLoadProcesses, 2800);
   setTimeout(masterLoad, 1500);
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
@@ -3271,6 +3273,8 @@ function fbStartPoll() {
     // ทุก 30 วิ (ทุก 6 รอบ) ดึง full data เพื่อตรวจ clearedAt
     if (_fbPollCount % 6 === 0) {
       fbLoad(true);
+      thickFbLoad(); // sync ความหนาทุก 30 วิ
+      qaFbLoadRecords(); // sync QA ทุก 30 วิ
     } else {
       fbLivePoll();
     }
@@ -6635,8 +6639,8 @@ async function confirmJobOut() {
 //  QA CONTROL CHART — v2 with Titration & Coefficient
 // ═══════════════════════════════════════════════
 
-var QA_PROCESSES_KEY = 'qa_processes_b1';
-var QA_RECORDS_KEY   = 'qa_records_b1';
+var QA_PROCESSES_KEY = 'qa_processes_r1';
+var QA_RECORDS_KEY   = 'qa_records_r1';
 var qaChartInst = null;
 
 function qaLoadProcesses() {
@@ -6647,6 +6651,60 @@ function qaLoadRecords() {
   try { return JSON.parse(localStorage.getItem(QA_RECORDS_KEY) || '[]'); } catch(e) { return []; }
 }
 function qaSaveRecords(arr) { localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(arr)); }
+
+// ── Firebase sync สำหรับ QA records ──
+async function qaFbSaveRecords() {
+  if (!fbIsConfigured()) return;
+  try {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qa.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: qaLoadRecords(), savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('qaFbSaveRecords:', e.message); }
+}
+async function qaFbLoadRecords() {
+  if (!fbIsConfigured()) return;
+  try {
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qa.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.records) && data.records.length > 0) {
+      var local = qaLoadRecords();
+      var localIds = {};
+      local.forEach(function(r){ localIds[r.id] = true; });
+      var merged = local.slice();
+      data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
+      merged.sort(function(a,b){ return b.ts - a.ts; });
+      localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(merged));
+      qaPopulateDateFilter();
+      qaRenderHistory();
+      qaRenderChart();
+    }
+  } catch(e) { console.warn('qaFbLoadRecords:', e.message); }
+}
+async function qaFbSaveProcesses() {
+  if (!fbIsConfigured()) return;
+  try {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qa-processes.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ processes: qaLoadProcesses(), savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('qaFbSaveProcesses:', e.message); }
+}
+async function qaFbLoadProcesses() {
+  if (!fbIsConfigured()) return;
+  try {
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qa-processes.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.processes) && data.processes.length > 0) {
+      localStorage.setItem(QA_PROCESSES_KEY, JSON.stringify(data.processes));
+      qaRenderProcessList && qaRenderProcessList();
+    }
+  } catch(e) { console.warn('qaFbLoadProcesses:', e.message); }
+}
 
 // ── Default processes (from Excel + paper forms) ──
 (function qaInitDefaults() {
@@ -6804,6 +6862,7 @@ function qaConfirmAddProcess() {
   var procs = qaLoadProcesses();
   procs.push(newP);
   qaSaveProcesses(procs);
+  qaFbSaveProcesses(); // sync ขึ้น Firebase
   document.getElementById('qaAddProcessForm').style.display='none';
   ['qaNewProcessName','qaNewPosNo','qaNewTankVol','qaNewProcessItem','qaNewStandard','qaNewProcessUnit','qaNewCoeff','qaNewUCL','qaNewCL','qaNewLCL'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   qaPopulateAll();
@@ -6855,6 +6914,7 @@ function qaConfirmEditProcess() {
     lcl:  parseFloat(document.getElementById('qaEditLCL').value) || 0,
   };
   qaSaveProcesses(procs);
+  qaFbSaveProcesses(); // sync ขึ้น Firebase
   document.getElementById('qaEditProcessForm').style.display = 'none';
   qaPopulateAll();
   document.getElementById('qaProcess').value = pid;
@@ -6866,6 +6926,7 @@ function qaDeleteProcess() {
   if (!confirm('ลบ Process นี้? (ประวัติที่บันทึกไว้จะยังคงอยู่)')) return;
   var procs = qaLoadProcesses().filter(function(x){return x.id!==pid;});
   qaSaveProcesses(procs);
+  qaFbSaveProcesses(); // sync ขึ้น Firebase
   document.getElementById('qaEditProcessForm').style.display='none';
   qaPopulateAll();
   document.getElementById('qaProcess').value = '';
@@ -6905,6 +6966,7 @@ function qaAddRecord() {
   var recs = qaLoadRecords();
   recs.push(rec);
   qaSaveRecords(recs);
+  qaFbSaveRecords(); // sync ขึ้น Firebase
 
   // clear form
   document.getElementById('qaResult').value = '';
@@ -6929,6 +6991,7 @@ function qaToast(msg, ok) {
 function qaDeleteRecord(id) {
   if (!confirm('ลบรายการนี้?')) return;
   qaSaveRecords(qaLoadRecords().filter(function(r){return r.id!==id;}));
+  qaFbSaveRecords(); // sync ขึ้น Firebase
   qaRenderHistory();
   qaRenderChart();
 }
