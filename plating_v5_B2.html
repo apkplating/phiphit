@@ -5568,16 +5568,20 @@ function applyRoleUI(role) {
   var isViewer   = role === 'viewer';
   var isOperator = role === 'operator';
 
-  // Tab bar — Viewer เห็นแค่ประวัติ+กราฟ, Operator เห็นแค่กรอกรายรอบ
+  // Tab bar
+  // Admin: เห็นทุก tab
+  // Operator (apk001): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
+  // Viewer (apk002): เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(btn) {
     var txt = btn.textContent.trim();
     if (isOperator) {
-      // Operator: เห็นแค่ "กรอกรายรอบ"
-      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ความหนา')) ? '' : 'none';
+      var show = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
+                 txt.includes('งาน') || txt.includes('บันทึกผล');
+      btn.style.display = show ? '' : 'none';
     } else if (isViewer) {
-      // Viewer: ซ่อน "กรอกรายรอบ" และ "ตั้งค่า"
-      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ตั้งค่า')) ? 'none' : '';
+      var hide = txt.includes('กรอกรายรอบ') || txt === 'ตั้งค่า';
+      btn.style.display = hide ? 'none' : '';
     }
     // Admin: เห็นทุก tab
   });

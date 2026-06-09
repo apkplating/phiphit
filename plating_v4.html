@@ -605,7 +605,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;margin-left:4px;">
         <div style="position:relative;width:36px;height:20px;flex-shrink:0;">
           <input type="checkbox" id="autoDiscordToggle"
-            onchange="localStorage.setItem('autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
+            onchange="localStorage.setItem('b1_autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
             style="opacity:0;width:0;height:0;position:absolute;">
           <span id="autoDiscordKnob" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:20px;transition:.3s;">
             <span style="position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;"></span>
@@ -1414,13 +1414,13 @@ function init() {
   tickTime();
   setInterval(tickTime, 1000);
 
-  try { dayRecords = JSON.parse(localStorage.getItem('dayRecords') || '[]'); } catch(e){ dayRecords=[]; }
-  try { todayBarrels = JSON.parse(localStorage.getItem('todayBarrels') || '[]'); } catch(e){ todayBarrels=[]; }
+  try { dayRecords = JSON.parse(localStorage.getItem('b1_dayRecords') || '[]'); } catch(e){ dayRecords=[]; }
+  try { todayBarrels = JSON.parse(localStorage.getItem('b1_todayBarrels') || '[]'); } catch(e){ todayBarrels=[]; }
   try {
-    discordWH = localStorage.getItem('discordWH') || '';
+    discordWH = localStorage.getItem('b1_discordWH') || '';
     if (discordWH) { document.getElementById('webhookUrl').value = discordWH; setBadge(true); }
-    var lr = localStorage.getItem('lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
-    var ll = localStorage.getItem('lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
+    var lr = localStorage.getItem('b1_lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
+    var ll = localStorage.getItem('b1_lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
   } catch(e){}
 
   renderBarrels();
@@ -1458,7 +1458,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','qa','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1549,7 +1549,7 @@ function addBarrel() {
               customer: document.getElementById('bCustomer').value.trim(),
               lotNo: lotNo };
   todayBarrels.push(row);
-  try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
 
   // ════ ตัดสต็อค Job Master อัตโนมัติ ════
@@ -1559,7 +1559,7 @@ function addBarrel() {
 
   // save last used for reuse button
   if (row.partName || row.customer) {
-    try { localStorage.setItem('lastBarrelPart', JSON.stringify({partName: row.partName, customer: row.customer})); } catch(e){}
+    try { localStorage.setItem('b1_lastBarrelPart', JSON.stringify({partName: row.partName, customer: row.customer})); } catch(e){}
     acAddHistory('partNames', row.partName);
     acAddHistory('customerNames', row.customer);
     renderReuseBar();
@@ -1583,7 +1583,7 @@ function delBarrel(id) {
   // คืนสต็อค Job Master ก่อนลบ
   var deleted = todayBarrels.find(function(r){ return r.id === id; });
   todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
   if (deleted && deleted.partName && deleted.pcs > 0) {
     restoreJobStock(deleted.partName, deleted.pcs, deleted.id);
@@ -1701,12 +1701,12 @@ function validateDay() {
 }
 
 function persist(rec) {
-  try { localStorage.setItem('lastRecorder', rec.recorder); } catch(e){}
-  try { localStorage.setItem('lastLot', rec.lotNo); } catch(e){}
+  try { localStorage.setItem('b1_lastRecorder', rec.recorder); } catch(e){}
+  try { localStorage.setItem('b1_lastLot', rec.lotNo); } catch(e){}
   dayRecords.unshift(rec);
-  try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   todayBarrels = [];
-  try { localStorage.setItem('todayBarrels', '[]'); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', '[]'); } catch(e){}
   renderBarrels();
   renderHistory();
   document.getElementById('histCount').textContent = dayRecords.length;
@@ -1823,7 +1823,7 @@ function saveDay() {
 
 async function saveDayAndDiscord() {
   if (!validateDay()) return;
-  var wh = discordWH || localStorage.getItem('discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
 
   var btn = document.getElementById('btnDiscordEntry');
@@ -1948,8 +1948,8 @@ function clearDay() {
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
   todayBarrels = [];
   manualDosings = [];
-  try { localStorage.setItem('todayBarrels','[]'); } catch(e){}
-  try { localStorage.setItem('manualDosings','[]'); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels','[]'); } catch(e){}
+  try { localStorage.setItem('b1_manualDosings','[]'); } catch(e){}
   renderBarrels();
   renderManualDosingList();
 }
@@ -2027,7 +2027,7 @@ function toggleDetail(id) {
 function delDay(id) {
   if (!confirm('ลบรายการนี้?')) return;
   dayRecords = dayRecords.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   renderHistory();
   if (fbIsConfigured()) fbSave();
 }
@@ -2092,8 +2092,8 @@ function deleteAllHistory() {
 
   dayRecords = [];
   var clearedAt = new Date().toISOString();
-  try { localStorage.setItem('dayRecords', '[]'); } catch(e){}
-  try { localStorage.setItem('dayRecordsCleared', clearedAt); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', '[]'); } catch(e){}
+  try { localStorage.setItem('b1_dayRecordsCleared', clearedAt); } catch(e){}
 
   // sync ขึ้น Firebase พร้อม clearedAt flag
   if (fbIsConfigured()) {
@@ -2104,9 +2104,9 @@ function deleteAllHistory() {
       chemSettings: chemSettings, chemItems: chemItems, chemRecords: chemRecords,
       discordWH: discordWH || ''
     };
-    try { body.partPresets   = JSON.parse(localStorage.getItem('partPresets')||'[]'); } catch(e){}
-    try { body.partNames     = JSON.parse(localStorage.getItem('partNames')||'[]'); } catch(e){}
-    try { body.customerNames = JSON.parse(localStorage.getItem('customerNames')||'[]'); } catch(e){}
+    try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
+    try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]'); } catch(e){}
+    try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
     fetch(fbDataUrl(), {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body)
@@ -2130,13 +2130,13 @@ function saveWebhook() {
   var wh = document.getElementById('webhookUrl').value.trim();
   if (!wh) { alert('กรุณากรอก Webhook URL'); return; }
   discordWH = wh;
-  try { localStorage.setItem('discordWH', wh); } catch(e){}
+  try { localStorage.setItem('b1_discordWH', wh); } catch(e){}
   setBadge(true);
   showToast('entry','บันทึก Webhook สำเร็จ! ✓','ok');
 }
 
 async function testDiscord() {
-  var wh = discordWH || localStorage.getItem('discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { alert('กรุณาบันทึก Webhook URL ก่อน'); return; }
   try {
     await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -2515,7 +2515,7 @@ function acBlur(dropId) {
 // ── Reuse last barrel ──
 function renderReuseBar() {
   try {
-    var last = JSON.parse(localStorage.getItem('lastBarrelPart') || 'null');
+    var last = JSON.parse(localStorage.getItem('b1_lastBarrelPart') || 'null');
     var bar = document.getElementById('reuseBar');
     var lbl = document.getElementById('reuseLabel');
     if (last && (last.partName || last.customer)) {
@@ -2528,7 +2528,7 @@ function renderReuseBar() {
 }
 function reuseLastBarrel() {
   try {
-    var last = JSON.parse(localStorage.getItem('lastBarrelPart') || 'null');
+    var last = JSON.parse(localStorage.getItem('b1_lastBarrelPart') || 'null');
     if (!last) return;
     document.getElementById('bPartName').value = last.partName || '';
     document.getElementById('bCustomer').value = last.customer || '';
@@ -2538,10 +2538,10 @@ function reuseLastBarrel() {
 
 // ── Preset ──
 function getPresets() {
-  try { return JSON.parse(localStorage.getItem('partPresets') || '[]'); } catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem('b1_partPresets') || '[]'); } catch(e) { return []; }
 }
 function savePresets(list) {
-  try { localStorage.setItem('partPresets', JSON.stringify(list)); } catch(e){}
+  try { localStorage.setItem('b1_partPresets', JSON.stringify(list)); } catch(e){}
 }
 function savePreset() {
   var pn = document.getElementById('bPartName').value.trim();
@@ -2598,8 +2598,8 @@ function initSmartInput() {
   pNames.forEach(function(v){ if (existP.indexOf(v) < 0) existP.push(v); });
   cNames.forEach(function(v){ if (existC.indexOf(v) < 0) existC.push(v); });
   try {
-    localStorage.setItem('partNames', JSON.stringify(existP.slice(0,30)));
-    localStorage.setItem('customerNames', JSON.stringify(existC.slice(0,30)));
+    localStorage.setItem('b1_partNames', JSON.stringify(existP.slice(0,30)));
+    localStorage.setItem('b1_customerNames', JSON.stringify(existC.slice(0,30)));
   } catch(e){}
 }
 
@@ -2613,7 +2613,7 @@ var chemSettings = [];
 function loadChemSettings() {
   // โหลดจาก localStorage ก่อน ถ้าไม่มีใช้ค่าที่ฝังในไฟล์
   try {
-    var stored = localStorage.getItem('chemSettings');
+    var stored = localStorage.getItem('b1_chemSettings');
     chemSettings = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(CHEM_DEFAULTS));
   } catch(e) { chemSettings = JSON.parse(JSON.stringify(CHEM_DEFAULTS)); }
 }
@@ -2653,7 +2653,7 @@ function loadChemSettingsToUI() {
 function saveChemSettings() {
   chemSettings = readChemFromUI();
   // บันทึกลง localStorage ด้วย
-  try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
   // บันทึกขึ้น Firebase ด้วย
   if (fbIsConfigured()) fbSave();
 
@@ -2698,7 +2698,7 @@ function importChemSettings(event) {
       var data = JSON.parse(e.target.result);
       if (!data.chemSettings || !Array.isArray(data.chemSettings)) throw new Error('format ไม่ถูกต้อง');
       chemSettings = data.chemSettings;
-      try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(err){}
+      try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(err){}
       // render ใหม่
       var list = document.getElementById('chemList');
       list.innerHTML = '';
@@ -2917,7 +2917,7 @@ function gdriveAutoLoad() {
         var parsed = JSON.parse(text);
         if (parsed.dayRecords && parsed.dayRecords.length > 0) {
           dayRecords = parsed.dayRecords;
-          try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+          try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
           renderHistory(); renderSummary();
           showToast('entry','☁️ โหลดจาก Drive แล้ว ('+dayRecords.length+' วัน)','ok');
         }
@@ -2961,7 +2961,7 @@ function fbSettingsUrl() {
 function fbLoadConfig() {
   // ใช้ URL ที่ฝังไว้ถาวร ไม่ต้องกรอกเอง
   FB_DB_URL = FB_DB_URL_DEFAULT;
-  try { localStorage.setItem('fbDbUrl', FB_DB_URL); } catch(e){}
+  try { localStorage.setItem('b1_fbDbUrl', FB_DB_URL); } catch(e){}
   var inp = document.getElementById('fbDbUrl');
   if (inp) inp.value = FB_DB_URL;
   fbSetBadge(true);
@@ -2975,7 +2975,7 @@ function saveFbConfig() {
   // ตรวจว่า URL ถูกต้อง
   if (!url.includes('firebaseio.com') && !url.includes('firebasedatabase.app')) { showToast('firebase','URL ไม่ถูกต้อง ต้องมี firebaseio.com หรือ firebasedatabase.app','err'); return; }
   FB_DB_URL = url;
-  try { localStorage.setItem('fbDbUrl', url); } catch(e){}
+  try { localStorage.setItem('b1_fbDbUrl', url); } catch(e){}
   fbSetBadge(true);
   fbStartPoll();
   showToast('firebase','เชื่อมต่อ Firebase สำเร็จ! กำลังโหลดข้อมูล...','ok');
@@ -2999,9 +2999,9 @@ async function fbSave() {
   // ── เพิ่ม chemItems และ chemRecords ──
   try { body.chemItems     = chemItems;    } catch(e){}
   try { body.chemRecords   = chemRecords;  } catch(e){}
-  try { body.partPresets   = JSON.parse(localStorage.getItem('partPresets')||'[]'); } catch(e){}
-  try { body.partNames     = JSON.parse(localStorage.getItem('partNames')||'[]');   } catch(e){}
-  try { body.customerNames = JSON.parse(localStorage.getItem('customerNames')||'[]'); } catch(e){}
+  try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
+  try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]');   } catch(e){}
+  try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
   try { body.discordWH     = discordWH || ''; } catch(e){}
   try {
     var res = await fetch(fbDataUrl(), {
@@ -3041,12 +3041,12 @@ async function fbLoad(silent) {
     // ── ตรวจ clearedAt flag — ถ้า cloud สั่งล้าง ให้ล้างทันที ──
     var cloudClearedAt = data.clearedAt || '';
     var localClearedAt = '';
-    try { localClearedAt = localStorage.getItem('dayRecordsCleared') || ''; } catch(e){}
+    try { localClearedAt = localStorage.getItem('b1_dayRecordsCleared') || ''; } catch(e){}
     if (cloudClearedAt && cloudClearedAt > localClearedAt) {
       // cloud สั่งลบ → ล้าง local
       dayRecords = [];
-      try { localStorage.setItem('dayRecords', '[]'); } catch(e){}
-      try { localStorage.setItem('dayRecordsCleared', cloudClearedAt); } catch(e){}
+      try { localStorage.setItem('b1_dayRecords', '[]'); } catch(e){}
+      try { localStorage.setItem('b1_dayRecordsCleared', cloudClearedAt); } catch(e){}
       renderHistory();
       renderSummary();
       renderSummaryMonthTable();
@@ -3055,7 +3055,7 @@ async function fbLoad(silent) {
       // โหลด settings ต่อ แต่ไม่ merge dayRecords
       if (data.chemSettings && Array.isArray(data.chemSettings) && data.chemSettings.length) {
         chemSettings = data.chemSettings;
-        try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+        try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
         loadChemSettingsToUI();
       }
       return;
@@ -3074,10 +3074,10 @@ async function fbLoad(silent) {
 
     if (cloudTodayBarrels.length > todayBarrels.length) {
       todayBarrels = cloudTodayBarrels;
-      try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+      try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
       renderBarrels();
     }
-    try { localStorage.setItem('dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+    try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
 
     // ── โหลด chemItems — Firebase เป็น source of truth เสมอ ──
     if (data.chemItems && Array.isArray(data.chemItems) && data.chemItems.length) {
@@ -3090,7 +3090,7 @@ async function fbLoad(silent) {
         seen[c.id] = true;
         return true;
       });
-      try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
+      try { localStorage.setItem('b1_chemItems', JSON.stringify(chemItems)); } catch(e){}
       renderChemStockSelect();
       renderChemAccum();
       updateChemStockCount();
@@ -3107,13 +3107,13 @@ async function fbLoad(silent) {
         seenR[r.id] = true;
         return true;
       });
-      try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+      try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
       renderChemStockCard();
       renderChemAccum();
       // ถ้า local ว่างและ cloud มีข้อมูล (compat)
       if (!chemRecords.length && data.chemRecords.length) {
         chemRecords = data.chemRecords;
-        try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+        try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
         renderChemStockCard();
         renderChemAccum();
       }
@@ -3122,15 +3122,15 @@ async function fbLoad(silent) {
     // โหลด settings
     if (data.chemSettings && Array.isArray(data.chemSettings) && data.chemSettings.length) {
       chemSettings = data.chemSettings;
-      try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+      try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
       loadChemSettingsToUI();
     }
-    if (data.partPresets)    { try { localStorage.setItem('partPresets',    JSON.stringify(data.partPresets));    } catch(e){} }
-    if (data.partNames)      { try { localStorage.setItem('partNames',      JSON.stringify(data.partNames));      } catch(e){} }
-    if (data.customerNames)  { try { localStorage.setItem('customerNames',  JSON.stringify(data.customerNames));  } catch(e){} }
+    if (data.partPresets)    { try { localStorage.setItem('b1_partPresets',    JSON.stringify(data.partPresets));    } catch(e){} }
+    if (data.partNames)      { try { localStorage.setItem('b1_partNames',      JSON.stringify(data.partNames));      } catch(e){} }
+    if (data.customerNames)  { try { localStorage.setItem('b1_customerNames',  JSON.stringify(data.customerNames));  } catch(e){} }
     if (data.discordWH) {
       discordWH = data.discordWH;
-      try { localStorage.setItem('discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
+      try { localStorage.setItem('b1_discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
     }
 
     renderHistory();
@@ -3208,7 +3208,7 @@ async function fbLivePoll() {
       if (isDiff) {
         var prevCount = todayBarrels.length;
         todayBarrels = data.rows;
-        try { localStorage.setItem('todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+        try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
         renderBarrels();
         // แจ้งเตือนถ้ามีรอบใหม่จากเครื่องอื่น
         if (todayBarrels.length > prevCount) {
@@ -3303,9 +3303,9 @@ async function livePushNow() {
   }
 
   // ── Auto Discord (ถ้าเปิด toggle) ──
-  var autoDisc = localStorage.getItem('autoDiscordOnAdd') === '1';
+  var autoDisc = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   if (autoDisc) {
-    var wh = discordWH || localStorage.getItem('discordWH') || '';
+    var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
     if (!wh) {
       showToast('entry','⚠️ Auto Discord: กรุณาตั้งค่า Webhook URL ก่อน','err');
     } else if (todayBarrels.length) {
@@ -3325,7 +3325,7 @@ async function livePushNow() {
 function updateLiveIndicator(ok) {
   var el = document.getElementById('liveIndicator');
   if (!el) return;
-  var autoOn = localStorage.getItem('autoDiscordOnAdd') === '1';
+  var autoOn = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   if (ok) {
     el.textContent = autoOn ? '🟢 Live + Auto Discord' : '🟢 Live';
     el.style.color = '#0d6e56';
@@ -3346,7 +3346,7 @@ function updateAutoDiscordUI() {
 }
 
 function loadAutoDiscordSetting() {
-  var on = localStorage.getItem('autoDiscordOnAdd') === '1';
+  var on = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   var chk = document.getElementById('autoDiscordToggle');
   if (chk) { chk.checked = on; updateAutoDiscordUI(); }
 }
@@ -3388,7 +3388,7 @@ async function sendLiveDiscordSilent(wh, s, liveData) {
 
 // ── ส่ง Live Report → Discord ────────────────────────────────
 async function sendLiveDiscord() {
-  var wh = discordWH || localStorage.getItem('discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
   if (!todayBarrels.length) { showToast('entry','ยังไม่มีรายรอบวันนี้','err'); return; }
 
@@ -3447,13 +3447,13 @@ var _alertCheckTimer = null;
 function saveIntakeWH() {
   var wh = (document.getElementById('intakeWH').value || '').trim();
   if (!wh) { showAlertMsg('❌ กรุณากรอก Webhook URL', false); return; }
-  try { localStorage.setItem('intakeWH', wh); } catch(e){}
+  try { localStorage.setItem('b1_intakeWH', wh); } catch(e){}
   updateIntakeWHBadge();
   showAlertMsg('✅ บันทึก Webhook สำเร็จ', true);
 }
 
 function updateIntakeWHBadge() {
-  var wh = ''; try { wh = localStorage.getItem('intakeWH') || ''; } catch(e){}
+  var wh = ''; try { wh = localStorage.getItem('b1_intakeWH') || ''; } catch(e){}
   var badge = document.getElementById('intakeWHBadge');
   if (!badge) return;
   if (wh) {
@@ -3471,9 +3471,9 @@ function saveAlertConfig() {
   var days = parseInt(document.getElementById('alertDays').value) || 5;
   var time = document.getElementById('alertTime').value || '08:00';
   try {
-    localStorage.setItem('alertAuto', auto ? '1' : '0');
-    localStorage.setItem('alertDays', days);
-    localStorage.setItem('alertTime', time);
+    localStorage.setItem('b1_alertAuto', auto ? '1' : '0');
+    localStorage.setItem('b1_alertDays', days);
+    localStorage.setItem('b1_alertTime', time);
   } catch(e){}
   // อัปเดต toggle style
   var knob = document.getElementById('alertToggleKnob');
@@ -3486,9 +3486,9 @@ function saveAlertConfig() {
 
 function loadAlertConfig() {
   try {
-    var days = localStorage.getItem('alertDays') || '5';
-    var time = localStorage.getItem('alertTime') || '08:00';
-    var auto = localStorage.getItem('alertAuto') === '1';
+    var days = localStorage.getItem('b1_alertDays') || '5';
+    var time = localStorage.getItem('b1_alertTime') || '08:00';
+    var auto = localStorage.getItem('b1_alertAuto') === '1';
     var el = document.getElementById('alertDays'); if(el) el.value = days;
     var el2 = document.getElementById('alertTime'); if(el2) el2.value = time;
     var chk = document.getElementById('alertAutoToggle'); if(chk) chk.checked = auto;
@@ -3508,8 +3508,8 @@ function scheduleAutoAlert() {
   if (_alertCheckTimer) clearInterval(_alertCheckTimer);
   _alertCheckTimer = setInterval(function() {
     try {
-      if (localStorage.getItem('alertAuto') !== '1') return;
-      var alertTime = localStorage.getItem('alertTime') || '08:00';
+      if (localStorage.getItem('b1_alertAuto') !== '1') return;
+      var alertTime = localStorage.getItem('b1_alertTime') || '08:00';
       var now = new Date();
       var hh = String(now.getHours()).padStart(2,'0');
       var mm = String(now.getMinutes()).padStart(2,'0');
@@ -3530,7 +3530,7 @@ function scheduleAutoAlert() {
 // สร้าง message สำหรับส่ง Discord
 function buildStockAlertMsg() {
   var days = parseInt((document.getElementById('alertDays')||{}).value) ||
-             parseInt(localStorage.getItem('alertDays') || '5') || 5;
+             parseInt(localStorage.getItem('b1_alertDays') || '5') || 5;
   var now = new Date();
   var todayStr = now.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' });
 
@@ -3604,7 +3604,7 @@ function sendStockAlert(doSend, silent) {
   if (!doSend) return; // แค่ preview
 
   // ส่งจริง
-  var wh = ''; try { wh = localStorage.getItem('intakeWH') || discordWH || ''; } catch(e){}
+  var wh = ''; try { wh = localStorage.getItem('b1_intakeWH') || discordWH || ''; } catch(e){}
   if (!wh) {
     showAlertMsg('❌ กรุณาตั้งค่า Webhook URL ก่อน', false);
     return;
@@ -3652,18 +3652,18 @@ var intakeColorVal = 'B';
 var intakeFilterVal = 'all';
 
 function loadIntakeJobs() {
-  try { intakeJobs = JSON.parse(localStorage.getItem('intakeJobs') || '[]'); } catch(e){ intakeJobs=[]; }
+  try { intakeJobs = JSON.parse(localStorage.getItem('b1_intakeJobs') || '[]'); } catch(e){ intakeJobs=[]; }
 }
 
 function saveIntakeJobs() {
-  try { localStorage.setItem('intakeJobs', JSON.stringify(intakeJobs)); } catch(e){}
+  try { localStorage.setItem('b1_intakeJobs', JSON.stringify(intakeJobs)); } catch(e){}
   var url = getStoredFbUrl();
   if (!url) return;
   fetch(url + '/intake.json', { method:'PUT', body:JSON.stringify(intakeJobs) }).catch(function(){});
 }
 
 function getStoredFbUrl() {
-  try { return localStorage.getItem('fbUrl') || ''; } catch(e){ return ''; }
+  try { return localStorage.getItem('b1_fbUrl') || ''; } catch(e){ return ''; }
 }
 
 function fbLoadIntake() {
@@ -3682,11 +3682,11 @@ function fbLoadIntake() {
 var manualDosings = []; // รายการเติมเคมีวันนี้ (ยังไม่บันทึก)
 
 function loadManualDosings() {
-  try { manualDosings = JSON.parse(localStorage.getItem('manualDosings') || '[]'); } catch(e){ manualDosings=[]; }
+  try { manualDosings = JSON.parse(localStorage.getItem('b1_manualDosings') || '[]'); } catch(e){ manualDosings=[]; }
 }
 
 function saveManualDosings() {
-  try { localStorage.setItem('manualDosings', JSON.stringify(manualDosings)); } catch(e){}
+  try { localStorage.setItem('b1_manualDosings', JSON.stringify(manualDosings)); } catch(e){}
 }
 
 function toggleManualDosing() {
@@ -3829,13 +3829,13 @@ var chemRecords = [];   // รายการเคลื่อนไหวท�
 var _selChemId  = null;
 
 function loadChemItems() {
-  try { chemItems   = JSON.parse(localStorage.getItem('chemItems')   || '[]'); } catch(e){ chemItems=[]; }
-  try { chemRecords = JSON.parse(localStorage.getItem('chemRecords') || '[]'); } catch(e){ chemRecords=[]; }
+  try { chemItems   = JSON.parse(localStorage.getItem('b1_chemItems')   || '[]'); } catch(e){ chemItems=[]; }
+  try { chemRecords = JSON.parse(localStorage.getItem('b1_chemRecords') || '[]'); } catch(e){ chemRecords=[]; }
 }
 
 function saveChemData() {
-  try { localStorage.setItem('chemItems',   JSON.stringify(chemItems));   } catch(e){}
-  try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  try { localStorage.setItem('b1_chemItems',   JSON.stringify(chemItems));   } catch(e){}
+  try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
   // sync ขึ้น Firebase (รวมกับข้อมูลทั้งหมดให้ tablet ดึงได้)
   if (fbIsConfigured()) {
     fbSave();
@@ -3919,7 +3919,7 @@ function confirmEditChemItem() {
     }
   });
   saveChemData();
-  try { localStorage.setItem('chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
   if (fbIsConfigured()) fbSave();
   document.getElementById('editChemItemForm').style.display='none';
   renderChemStockCard();
@@ -3938,8 +3938,8 @@ function deleteChemItem(itemId) {
   if (!confirm('ลบ "' + item.name + '" ออกจาก Stock Card?\n\n⚠️ ประวัติการรับเข้า/ใช้ไปของเคมีนี้จะถูกลบด้วย')) return;
   chemItems = chemItems.filter(function(c){ return c.id !== itemId; });
   chemRecords = chemRecords.filter(function(r){ return r.chemId !== itemId; });
-  try { localStorage.setItem('chemItems', JSON.stringify(chemItems)); } catch(e){}
-  try { localStorage.setItem('chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  try { localStorage.setItem('b1_chemItems', JSON.stringify(chemItems)); } catch(e){}
+  try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
   if (fbIsConfigured()) fbSave();
   renderChemStockSelect();
   renderChemStockCard();
@@ -4285,10 +4285,10 @@ var partList = [];
 var _plColor = 'B';
 
 function loadPartList() {
-  try { partList = JSON.parse(localStorage.getItem('partList') || '[]'); } catch(e){ partList=[]; }
+  try { partList = JSON.parse(localStorage.getItem('b1_partList') || '[]'); } catch(e){ partList=[]; }
 }
 function savePartListData() {
-  try { localStorage.setItem('partList', JSON.stringify(partList)); } catch(e){}
+  try { localStorage.setItem('b1_partList', JSON.stringify(partList)); } catch(e){}
   // sync to firebase if configured
   var url = getStoredFbUrl();
   if (url) fetch(url+'/partList.json',{method:'PUT',body:JSON.stringify(partList)}).catch(function(){});
@@ -4653,10 +4653,10 @@ function partNoFromName(fullName) {
   return n;
 }
 function getIntakePresets() {
-  try { return JSON.parse(localStorage.getItem('intakePresets') || '[]'); } catch(e){ return []; }
+  try { return JSON.parse(localStorage.getItem('b1_intakePresets') || '[]'); } catch(e){ return []; }
 }
 function saveIntakePresets(list) {
-  try { localStorage.setItem('intakePresets', JSON.stringify(list)); } catch(e){}
+  try { localStorage.setItem('b1_intakePresets', JSON.stringify(list)); } catch(e){}
 }
 
 function intakeSavePreset() {
@@ -4871,7 +4871,7 @@ function acIntake(inputId, dropId) {
   } else if (inputId === 'intakeCustomer') {
     intakeJobs.forEach(function(j){ if(j.customer && history.indexOf(j.customer)<0) history.push(j.customer); });
     // เพิ่มจาก barrel history ด้วย
-    try { var cn = JSON.parse(localStorage.getItem('customerNames')||'[]'); cn.forEach(function(c){ if(history.indexOf(c)<0) history.push(c); }); } catch(e){}
+    try { var cn = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); cn.forEach(function(c){ if(history.indexOf(c)<0) history.push(c); }); } catch(e){}
   }
   var matches = val ? history.filter(function(h){ return h.toLowerCase().includes(val); }) : history.slice(0,8);
   if (!matches.length) { drop.style.display='none'; return; }
@@ -5456,8 +5456,8 @@ function checkPin() {
   if (role) {
     currentRole = role;
     try {
-      localStorage.setItem('pinAuth', '1');
-      localStorage.setItem('pinRole', role);
+      localStorage.setItem('b1_pinAuth', '1');
+      localStorage.setItem('b1_pinRole', role);
     } catch(e){}
     showApp(role);
   } else {
@@ -5477,16 +5477,22 @@ function applyRoleUI(role) {
   var isViewer   = role === 'viewer';
   var isOperator = role === 'operator';
 
-  // Tab bar — Viewer เห็นแค่ประวัติ+กราฟ, Operator เห็นแค่กรอกรายรอบ
+  // Tab bar
+  // Admin: เห็นทุก tab
+  // Operator (apk001): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
+  // Viewer (apk002): เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(btn) {
     var txt = btn.textContent.trim();
     if (isOperator) {
-      // Operator: เห็นแค่ "กรอกรายรอบ"
-      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ความหนา')) ? '' : 'none';
+      // Operator: เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
+      var show = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
+                 txt.includes('งาน') || txt.includes('บันทึกผล');
+      btn.style.display = show ? '' : 'none';
     } else if (isViewer) {
-      // Viewer: ซ่อน "กรอกรายรอบ" และ "ตั้งค่า"
-      btn.style.display = (txt.includes('กรอกรายรอบ') || txt.includes('ตั้งค่า')) ? 'none' : '';
+      // Viewer: ซ่อน กรอกรายรอบ และ ตั้งค่า เท่านั้น
+      var hide = txt.includes('กรอกรายรอบ') || txt === 'ตั้งค่า';
+      btn.style.display = hide ? 'none' : '';
     }
     // Admin: เห็นทุก tab
   });
@@ -5544,8 +5550,8 @@ function doLogout() {
 
 function checkAutoLogin() {
   try {
-    if (localStorage.getItem('pinAuth') === '1') {
-      var role = localStorage.getItem('pinRole') || 'operator';
+    if (localStorage.getItem('b1_pinAuth') === '1') {
+      var role = localStorage.getItem('b1_pinRole') || 'operator';
       currentRole = role;
       showApp(role);
       return;
@@ -5565,7 +5571,7 @@ var thickRecords = [];
 
 function thickInit() {
   // โหลดจาก localStorage
-  try { thickRecords = JSON.parse(localStorage.getItem('thickRecords') || '[]'); } catch(e){ thickRecords=[]; }
+  try { thickRecords = JSON.parse(localStorage.getItem('b1_thickRecords') || '[]'); } catch(e){ thickRecords=[]; }
   // ตั้งวันที่และเวลา auto
   var now = new Date();
   var d = document.getElementById('thickDate');
@@ -5634,7 +5640,7 @@ function addThickRecord() {
     min: mn, max: mx };
 
   thickRecords.unshift(rec);
-  try { localStorage.setItem('thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+  try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
 
   // Sync Firebase
   thickFbSave();
@@ -5656,7 +5662,7 @@ function addThickRecord() {
 
 function delThickRecord(id) {
   thickRecords = thickRecords.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+  try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
   thickFbSave();
   renderThickHistory();
   renderThickChart();
@@ -5861,7 +5867,7 @@ async function thickFbLoad() {
     var data = await res.json();
     if (data && Array.isArray(data.records) && data.records.length > thickRecords.length) {
       thickRecords = data.records;
-      try { localStorage.setItem('thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+      try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
       renderThickHistory();
       renderThickChart();
       populateThickFilter();
