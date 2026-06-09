@@ -139,10 +139,10 @@ input:focus,select:focus{border-color:var(--blue2);}
       <select id="boardStatus" onchange="renderBoard()"
         style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
         <option value="">— ทุกสถานะ —</option>
-        <option value="กำลังผลิต">กำลังผลิต</option>
-        <option value="จ่ายบางส่วน">จ่ายบางส่วน</option>
-        <option value="จ่ายครบ">จ่ายครบแล้ว</option>
+        <option value="ปกติ">ปกติ</option>
+        <option value="ใกล้ครบกำหนด">ใกล้ครบกำหนด</option>
         <option value="เกินกำหนด">เกินกำหนด</option>
+        <option value="จ่ายครบ">จ่ายครบแล้ว</option>
       </select>
       <button onclick="exportBoardCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
     </div>
@@ -156,7 +156,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       <div style="font-size:9px;color:var(--text-muted);">บิล</div>
     </div>
     <div class="sum-chip" style="background:#fff7ed;border-color:#fed7aa;">
-      <div class="sum-chip-label">กำลังผลิต</div>
+      <div class="sum-chip-label">กำลังดำเนินการ</div>
       <div class="sum-chip-val" style="color:var(--orange);" id="sumActive">0</div>
       <div style="font-size:9px;color:var(--text-muted);">บิล</div>
     </div>
@@ -577,15 +577,21 @@ function daysSince(dateStr) {
 
 function getStatus(job) {
   var b = calcJob(job.id);
-  if (b.remain <= 0 && b.totalIn > 0) return 'จ่ายครบ';
+  // คงเหลือ = 0 → จ่ายครบ (ACER: วันค้าง 0)
+  var isKg = job.unit === 'kg';
+  var isDone = isKg ? (b.remainKg <= 0 && b.totalInKg > 0) : (b.remain <= 0 && b.totalIn > 0);
+  if (isDone) return 'จ่ายครบ';
   var days = daysSince(job.date);
-  if (b.totalOut > 0 && b.remain > 0) return 'จ่ายบางส่วน';
-  if (job.dueDate && new Date(job.dueDate) < new Date()) return 'เกินกำหนด';
-  return 'กำลังผลิต';
+  // ACER conditions: <5 ปกติ, 5<x≤7 ใกล้ครบกำหนด, >7 เกินกำหนด
+  if (days > 7) return 'เกินกำหนด';
+  if (days > 5) return 'ใกล้ครบกำหนด';
+  return 'ปกติ';
 }
 
 function statusBadge(status) {
-  var cls = { 'กำลังผลิต':'st-ok', 'จ่ายบางส่วน':'st-warn', 'จ่ายครบ':'st-done', 'เกินกำหนด':'st-over', 'รอจ่าย':'st-warn' };
+  var cls = { 'ปกติ':'st-ok', 'ใกล้ครบกำหนด':'st-warn', 'จ่ายครบ':'st-done', 'เกินกำหนด':'st-over',
+              // legacy
+              'กำลังผลิต':'st-ok', 'จ่ายบางส่วน':'st-warn', 'รอจ่าย':'st-warn' };
   return '<span class="'+(cls[status]||'st-ok')+'">'+status+'</span>';
 }
 
@@ -616,7 +622,7 @@ function renderBoard() {
   // summary
   var allStatus = jobItems.map(function(j){ return getStatus(j); });
   document.getElementById('sumTotal').textContent  = jobItems.length;
-  document.getElementById('sumActive').textContent = allStatus.filter(function(s){ return s==='กำลังผลิต'||s==='จ่ายบางส่วน'; }).length;
+  document.getElementById('sumActive').textContent = allStatus.filter(function(s){ return s==='ปกติ'||s==='ใกล้ครบกำหนด'; }).length;
   document.getElementById('sumOver').textContent   = allStatus.filter(function(s){ return s==='เกินกำหนด'; }).length;
   document.getElementById('sumDone').textContent   = allStatus.filter(function(s){ return s==='จ่ายครบ'; }).length;
 
@@ -626,15 +632,27 @@ function renderBoard() {
     return;
   }
 
-  // เรียงตาม วันรับ (ใหม่สุดก่อน)
-  rows = rows.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  // เรียง: งานที่ยังค้างอยู่ขึ้นก่อน (ใหม่สุดก่อน), จ่ายครบแล้วไปบันทัดสุดท้าย
+  rows = rows.slice().sort(function(a,b) {
+    var sa = getStatus(a), sb = getStatus(b);
+    var aDone = sa === 'จ่ายครบ', bDone = sb === 'จ่ายครบ';
+    if (aDone && !bDone) return 1;
+    if (!aDone && bDone) return -1;
+    return (b.date||'').localeCompare(a.date||'');
+  });
 
   tbody.innerHTML = rows.map(function(job) {
     var b = calcJob(job.id);
+    var isKg = job.unit === 'kg';
+    var isDone = isKg ? (b.remainKg <= 0 && b.totalInKg > 0) : (b.remain <= 0 && b.totalIn > 0);
     var days = daysSince(job.date);
     var status = getStatus(job);
-    var remainColor = b.remain <= 0 ? '#94a3b8' : b.remain < b.totalIn*0.2 ? 'var(--red)' : 'var(--green)';
-    var daysColor = days > 7 ? 'var(--red)' : days > 3 ? 'var(--amber)' : 'var(--text-muted)';
+    var remainColor = (isDone) ? '#94a3b8' : (b.remain < b.totalIn*0.2 ? 'var(--red)' : 'var(--green)');
+    var daysColor = days > 7 ? 'var(--red)' : days > 5 ? 'var(--amber)' : 'var(--text-muted)';
+    // วันค้าง: แสดง — เมื่อคงเหลือ = 0
+    var daysCell = isDone
+      ? '<td style="color:#94a3b8;">—</td>'
+      : '<td style="font-weight:700;color:'+daysColor+';">'+days+'</td>';
     var unitBadge = job.unit==='kg'
       ? '<span style="background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">กก.</span>'
       : '<span style="background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">ชิ้น</span>';
@@ -654,7 +672,7 @@ function renderBoard() {
       '<td style="color:var(--orange);font-weight:700;">'+b.totalOut+'</td>' +
       remainPcsCell +
       remainKgCell +
-      '<td style="font-weight:700;color:'+daysColor+';">'+days+'</td>' +
+      daysCell +
       '<td>'+statusBadge(status)+'</td>' +
       '<td style="white-space:nowrap;">' +
         '<button onclick="openEditModal(\''+job.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
