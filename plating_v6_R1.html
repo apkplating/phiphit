@@ -336,7 +336,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 <div id="appContent" style="display:none;">
 
 <!-- ── Live Sync Banner ── -->
-<div id="liveSyncBanner" style="display:none;position:sticky;top:0;z-index:200;background:linear-gradient(90deg,#0d6e56,#0d9488);color:#fff;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;font-family:'IBM Plex Sans Thai',sans-serif;">
+<div id="liveSyncBanner" style="display:none;position:sticky;top:0;z-index:200;background:linear-gradient(90deg,#0d6e56,#0d9488);color:#fff;padding:6px 14px;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;font-family:'IBM Plex Sans Thai',sans-serif;">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="width:8px;height:8px;border-radius:50%;background:#6ee7b7;display:inline-block;animation:pulse 1.5s infinite;"></span>
     <span id="liveBannerText">🔄 กำลังรับข้อมูล real-time...</span>
@@ -3279,10 +3279,9 @@ function fbStartPoll() {
       fbLivePoll();
     }
   }, 5000);
-  // Fast poll 3 วิ เฉพาะตอนอยู่ใน tab กรอกรายรอบ
+  // Fast poll 3 วิ ทุก tab (เพื่อให้เห็นข้อมูลแบบ real-time)
   setInterval(function(){
-    var activeEl = document.querySelector('.view.active');
-    if (activeEl && activeEl.id === 'v-entry') fbLivePoll();
+    fbLivePoll();
   }, 3000);
 }
 
@@ -3324,7 +3323,7 @@ async function fbLivePoll() {
       }
       // แสดง banner เสมอถ้าข้อมูลใหม่
       updateLiveBanner(data);
-      updateLiveIndicator(true);
+      updateLiveIndicator(true, data);
     }
   } catch(e) {}
 }
@@ -3345,17 +3344,12 @@ function updateLiveBanner(data) {
   var updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
   var timeStr  = updatedAt.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
 
-  if (txt) txt.textContent = '🔴 Live: ' + recorder + ' | ' + lotNo +
-    ' | ' + barrels + ' รอบ | ' + (totalKg%1===0?totalKg:totalKg.toFixed(2)) + ' Pcs';
-  if (time) time.textContent = 'อัปเดต ' + timeStr;
-
+  var kgStr = totalKg%1===0 ? totalKg : totalKg.toFixed(2);
+  if (txt) txt.textContent = '🟢 Live: ' + barrels + ' รอบ · ' + kgStr + ' Pcs · ' + recorder;
+  if (time) time.textContent = timeStr;
   banner.style.display = 'flex';
 
-  // ซ่อนหลัง 30 วิถ้าไม่มีการอัปเดตใหม่
-  clearTimeout(banner._hideTimer);
-  banner._hideTimer = setTimeout(function(){
-    banner.style.display = 'none';
-  }, 30000);
+  // ไม่ซ่อน banner อัตโนมัติ — แสดงค้างไว้ตลอด
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3404,7 +3398,7 @@ async function livePushNow() {
         body: JSON.stringify(todayBarrels)
       });
       _fbLiveUpdatedAt = liveData.updatedAt;
-      updateLiveIndicator(true);
+      updateLiveIndicator(true, liveData);
     } catch(e) { updateLiveIndicator(false); }
   }
 
@@ -3428,15 +3422,22 @@ async function livePushNow() {
   }
 }
 
-function updateLiveIndicator(ok) {
+function updateLiveIndicator(ok, data) {
   var el = document.getElementById('liveIndicator');
   if (!el) return;
   var autoOn = localStorage.getItem('r1_autoDiscordOnAdd') === '1';
   if (ok) {
-    el.textContent = autoOn ? '🟢 Live + Auto Discord' : '🟢 Live';
+    var barrels = data ? (data.barrels||todayBarrels.length) : todayBarrels.length;
+    var recorder = data ? (data.recorder||'') : '';
+    var timeStr = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+    var label = '🟢 Live ' + barrels + ' รอบ';
+    if (recorder && recorder !== '–') label += ' · ' + recorder;
+    label += ' · ' + timeStr;
+    if (autoOn) label += ' · Discord✓';
+    el.textContent = label;
     el.style.color = '#0d6e56';
   } else {
-    el.textContent = '🔴 ส่งไม่ได้';
+    el.textContent = '🔴 sync ไม่ได้ · ตรวจ internet';
     el.style.color = '#9b2c2c';
   }
 }
