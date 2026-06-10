@@ -823,19 +823,126 @@ function switchTab(name){
 // ══════════════════════════════════════════════════════
 //  SYNC STATUS
 // ══════════════════════════════════════════════════════
-function showDebug() {
-  var msg = [
-    'INTAKE_URL: ' + INTAKE_URL,
-    'JM_URL: ' + JM_URL,
-    'DEL_URL: ' + DEL_URL,
-    'jmItems: ' + jmItems.length + ' รายการ',
-    'jmRecords(out): ' + jmRecords.filter(function(r){return r.type==='out';}).length,
-    'blDel: ' + blDel.length,
-    'wipMap keys: ' + Object.keys(wipMap).length,
-    '',
-    'ตัวอย่าง jmItems[0]: ' + (jmItems[0] ? JSON.stringify(jmItems[0]).slice(0,120) : 'ไม่มีข้อมูล'),
-  ].join('\n');
-  alert(msg);
+async function showDebug() {
+  // สร้าง overlay modal
+  var overlay = document.createElement('div');
+  overlay.id = 'debugOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#0f172a;color:#e2e8f0;border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:14px;font-weight:700;color:#60a5fa;">🔍 Debug — BL Stock</div>
+        <button onclick="document.getElementById('debugOverlay').remove()"
+          style="background:#334155;border:none;color:#e2e8f0;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;">✕ ปิด</button>
+      </div>
+      <div id="debugBody" style="line-height:1.8;">⏳ กำลังทดสอบ...</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  var out = [];
+  function line(txt, color) {
+    out.push('<div style="color:' + (color||'#e2e8f0') + ';">' + txt + '</div>');
+    document.getElementById('debugBody').innerHTML = out.join('');
+  }
+  function head(txt) { line(''); line('── ' + txt + ' ──', '#60a5fa'); }
+  function ok(txt)   { line('✅ ' + txt, '#4ade80'); }
+  function warn(txt) { line('⚠️  ' + txt, '#fbbf24'); }
+  function err(txt)  { line('❌ ' + txt, '#f87171'); }
+  function info(txt) { line('   ' + txt, '#94a3b8'); }
+
+  // ── สถานะหน่วยความจำ ──
+  head('ข้อมูลในหน่วยความจำ (ตอนนี้)');
+  info('jmItems   : ' + jmItems.length + ' รายการ');
+  info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
+  info('blDel     : ' + blDel.length + ' รายการ');
+  info('wipMap    : ' + Object.keys(wipMap).length + ' P/No');
+  if (jmItems.length > 0) {
+    info('jmItems[0]: ' + JSON.stringify(jmItems[0]).slice(0,100) + '...');
+  }
+
+  // ── ทดสอบ Firebase URLs ──
+  var tests = [
+    { label:'Job Master (B1)', url: JM_URL },
+    { label:'Intake (B1)',     url: INTAKE_URL },
+    { label:'BL Delivery',    url: DEL_URL },
+    { label:'WIP B1',         url: DB_B1+'/plating-b1.json' },
+    { label:'WIP B2',         url: DB_B2+'/plating-b2.json' },
+    { label:'WIP R1',         url: DB_R1+'/plating-r1.json' },
+  ];
+
+  for (var i = 0; i < tests.length; i++) {
+    var t = tests[i];
+    head(t.label);
+    info('URL: ' + t.url);
+    try {
+      var t0 = Date.now();
+      var res = await fetch(t.url);
+      var ms = Date.now() - t0;
+      info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
+      if (!res.ok) {
+        err('HTTP ' + res.status + ' — fetch ไม่สำเร็จ');
+        try { var errTxt = await res.text(); info('body: ' + errTxt.slice(0,120)); } catch(e2){}
+        continue;
+      }
+      var raw = await res.text();
+      if (!raw || raw === 'null') {
+        warn('Response = null / empty — ยังไม่มีข้อมูลใน Firebase path นี้');
+        continue;
+      }
+      try {
+        var json = JSON.parse(raw);
+        // ตรวจสอบโครงสร้าง
+        if (t.url === JM_URL) {
+          var items   = Array.isArray(json && json.items)   ? json.items.length   : '(ไม่ใช่ array)';
+          var records = Array.isArray(json && json.records) ? json.records.length : '(ไม่ใช่ array)';
+          ok('โหลดสำเร็จ — items: ' + items + ', records: ' + records);
+          if (json && json.items && json.items[0]) info('items[0]: ' + JSON.stringify(json.items[0]).slice(0,100));
+        } else if (t.url === INTAKE_URL) {
+          var cnt = Array.isArray(json) ? json.length : '(ไม่ใช่ array — type: ' + typeof json + ')';
+          if (Array.isArray(json) && json.length > 0) {
+            ok('โหลดสำเร็จ — ' + cnt + ' รายการ');
+            info('intake[0]: ' + JSON.stringify(json[0]).slice(0,100));
+          } else if (Array.isArray(json)) {
+            warn('Array ว่าง — 0 รายการ');
+          } else {
+            warn('ข้อมูลไม่ใช่ Array: ' + JSON.stringify(json).slice(0,120));
+          }
+        } else if (t.url === DEL_URL) {
+          var delCnt = Array.isArray(json && json.records) ? json.records.length : '(ไม่มี records[])';
+          ok('โหลดสำเร็จ — records: ' + delCnt);
+        } else {
+          // WIP
+          var recs = Array.isArray(json) ? json
+                   : Array.isArray(json && json.dayRecords) ? json.dayRecords : null;
+          if (recs) {
+            var partCount = 0;
+            recs.forEach(function(dr){ if(dr.rows) partCount += dr.rows.length; });
+            ok('โหลดสำเร็จ — ' + recs.length + ' dayRecords, ' + partCount + ' rows');
+          } else {
+            warn('โครงสร้างไม่ตรง — ' + JSON.stringify(json).slice(0,120));
+          }
+        }
+      } catch(parseErr) {
+        err('JSON parse error: ' + parseErr.message);
+        info('raw: ' + raw.slice(0, 150));
+      }
+    } catch(fetchErr) {
+      err('fetch error: ' + fetchErr.message);
+      info('→ อาจเป็น CORS, network, หรือ Firebase rules ไม่อนุญาต');
+    }
+  }
+
+  head('สรุปการวินิจฉัย');
+  if (jmItems.length === 0) {
+    err('ไม่พบ jmItems → ตรวจ job-master.json และ intake.json ด้านบน');
+    info('วิธีแก้: ตรวจสอบ Firebase Rules ว่า read = true');
+    info('หรือ path ใน DB ไม่ตรงกับที่โค้ดดึง');
+  } else {
+    ok('มีข้อมูลใน jmItems — ถ้ายังไม่แสดงใน Stock Board');
+    info('ตรวจสอบว่า field ชื่อ "name" (partNo) ไม่ว่าง');
+  }
+  line('');
+  line('── เสร็จสิ้น ──', '#60a5fa');
 }
 
 function setSyncing(loading,ok,errMsg){
