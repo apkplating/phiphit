@@ -633,7 +633,7 @@ function populateDeliverySel() {
       var r=p.receive-p.delivery;
       var opt=document.createElement('option');
       opt.value=p.partNo+'||'+p.customer;
-      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
+      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')':'')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
       sel.appendChild(opt);
     });
   if(cur) sel.value=cur;
