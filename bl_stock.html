@@ -109,7 +109,7 @@ table.st td.tl{text-align:left;}
     <span class="sdot" id="sdot"></span>
     <span id="syncLbl">กำลังโหลด...</span>
     <div style="flex:1;"></div>
-    <button onclick="loadAll(true)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--navy);">🔄 รีเฟรช</button>
+    <button onclick="loadAll(true)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--navy);">🔄 รีเฟรช</button> <button onclick="showDebug()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff3cd;cursor:pointer;color:#856404;">🔍 Debug</button>
   </div>
 
   <!-- ══ STOCK BOARD ══ -->
@@ -252,7 +252,8 @@ var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedataba
 // Job Master อยู่ใน DB_B1 /job-master
 var JM_URL  = DB_B1 + '/job-master.json';
 // Delivery ที่บันทึกใน bl_stock เก็บที่ DB_B1 /bl-delivery
-var DEL_URL = DB_B1 + '/bl-delivery.json';
+var DEL_URL    = DB_B1 + '/bl-delivery.json';
+var INTAKE_URL = DB_B1 + '/intake.json';      // intakeJobs จาก v4
 
 // ── Data ──
 var jmItems   = [];  // Job Master items → รับเข้า (receive)
@@ -289,6 +290,11 @@ async function loadAll(manual) {
   setSyncing(true);
   try {
     await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP() ]);
+    // debug: แสดง path ที่ดึง
+    console.log('[BL Stock] intake:', INTAKE_URL);
+    console.log('[BL Stock] job-master:', JM_URL);
+    console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
+    console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
     setSyncing(false, true);
     renderStock();
     renderDHist();
@@ -300,13 +306,45 @@ async function loadAll(manual) {
   }
 }
 
-// ── Job Master ──────────────────────────────────────
+// ── Job Master + Intake ─────────────────────────────
 async function loadJobMaster() {
-  var res = await fetch(JM_URL);
-  if (!res.ok) throw new Error('Job Master โหลดไม่สำเร็จ');
-  var data = await res.json();
-  jmItems   = Array.isArray(data && data.items)   ? data.items   : [];
-  jmRecords = Array.isArray(data && data.records) ? data.records : [];
+  // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
+  var [jmRes, intakeRes] = await Promise.all([
+    fetch(JM_URL).catch(function(){ return {ok:false}; }),
+    fetch(INTAKE_URL).catch(function(){ return {ok:false}; }),
+  ]);
+
+  jmItems   = [];
+  jmRecords = [];
+
+  // /job-master.json → items[] + records[]
+  if (jmRes.ok) {
+    try {
+      var data = await jmRes.json();
+      if (data) {
+        jmItems   = Array.isArray(data.items)   ? data.items   : [];
+        jmRecords = Array.isArray(data.records) ? data.records : [];
+      }
+    } catch(e) {}
+  }
+
+  // /intake.json → intakeJobs[] (รับเข้าจาก Tab กรอกรายรอบ)
+  if (intakeRes.ok) {
+    try {
+      var intakeData = await intakeRes.json();
+      if (Array.isArray(intakeData)) {
+        // merge เข้า jmItems (ใช้ id เดิม ไม่ซ้ำ)
+        var existIds = new Set(jmItems.map(function(j){ return String(j.id); }));
+        intakeData.forEach(function(job) {
+          if (!existIds.has(String(job.id))) {
+            // intake job: {id,bill,date,customer,name,lot,qty,kg,color,note}
+            // แปลงให้ตรงกับ jmItems format (ใช้ name เป็น partNo)
+            jmItems.push(job);
+          }
+        });
+      }
+    } catch(e) {}
+  }
 }
 
 // ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
@@ -785,6 +823,21 @@ function switchTab(name){
 // ══════════════════════════════════════════════════════
 //  SYNC STATUS
 // ══════════════════════════════════════════════════════
+function showDebug() {
+  var msg = [
+    'INTAKE_URL: ' + INTAKE_URL,
+    'JM_URL: ' + JM_URL,
+    'DEL_URL: ' + DEL_URL,
+    'jmItems: ' + jmItems.length + ' รายการ',
+    'jmRecords(out): ' + jmRecords.filter(function(r){return r.type==='out';}).length,
+    'blDel: ' + blDel.length,
+    'wipMap keys: ' + Object.keys(wipMap).length,
+    '',
+    'ตัวอย่าง jmItems[0]: ' + (jmItems[0] ? JSON.stringify(jmItems[0]).slice(0,120) : 'ไม่มีข้อมูล'),
+  ].join('\n');
+  alert(msg);
+}
+
 function setSyncing(loading,ok,errMsg){
   var dot=document.getElementById('sdot');
   var lbl=document.getElementById('syncLbl');
@@ -792,7 +845,7 @@ function setSyncing(loading,ok,errMsg){
   if(ok){
     dot.className='sdot ok';
     var t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-    lbl.textContent='Job Master: '+jmItems.length+' รายการ · WIP: '+Object.keys(wipMap).length+' P/No · อัปเดต '+t;
+    lbl.textContent='รับเข้า: '+jmItems.length+' ล็อต · WIP: '+Object.keys(wipMap).length+' P/No · อัปเดต '+t+' (Job Master + Intake)';
   } else {
     dot.className='sdot err';
     lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
