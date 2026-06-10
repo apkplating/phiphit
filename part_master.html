@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part Master — APK Plating</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --blue:#1e40af; --blue2:#3b82f6;
+  --green:#16a34a; --red:#dc2626; --orange:#ea580c; --amber:#d97706;
+  --bg:#f1f5f9; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --sky-pale:#f0f9ff; --success-bg:#f0fdf4; --success:#16a34a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
+
+.app-header{background:linear-gradient(135deg,var(--navy) 0%,#1e3a5f 100%);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.sync-badge{font-size:10px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.12);color:#93c5fd;display:flex;align-items:center;gap:5px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#94a3b8;}
+.sync-dot.ok{background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s infinite;}
+.sync-dot.err{background:#f87171;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.tab-bar{display:flex;background:var(--navy);padding:0 8px 8px;gap:4px;overflow-x:auto;}
+.tab-btn{flex:1;padding:8px 6px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;color:#94a3b8;background:transparent;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;min-width:60px;transition:all .2s;}
+.tab-btn.active{background:var(--blue);color:#fff;}
+
+.main{padding:12px;max-width:960px;margin:0 auto;}
+.view{display:none;}.view.active{display:block;}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.card-label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+input[type=text],input[type=number],select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:#fff;outline:none;transition:border-color .2s;}
+input:focus,select:focus{border-color:var(--blue2);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.btn{padding:11px 16px;border-radius:10px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;width:100%;transition:all .2s;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:7px;width:auto;}
+
+/* Part table */
+.pt{width:100%;border-collapse:collapse;font-size:11px;min-width:620px;}
+.pt th{background:var(--navy);color:#fff;padding:7px 8px;text-align:center;font-size:10px;font-weight:600;white-space:nowrap;}
+.pt td{padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;}
+.pt tr:hover td{background:#f8fafc;}
+.td-l{text-align:left!important;}
+
+/* Color badge */
+.color-b{background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:7px;font-size:10px;font-weight:700;}
+.color-c{background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:7px;font-size:10px;font-weight:700;}
+.color-k{background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:7px;font-size:10px;font-weight:700;}
+
+/* summary chips */
+.sum-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;}
+.sum-chip{text-align:center;padding:8px;border-radius:10px;border:1px solid var(--border);}
+.sum-chip-label{font-size:9px;color:var(--text-muted);margin-bottom:2px;}
+.sum-chip-val{font-size:18px;font-weight:800;font-family:monospace;}
+
+.toast{margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;display:none;}
+.toast.ok{background:var(--success-bg);color:var(--success);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;}
+
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;display:none;align-items:center;justify-content:center;padding:12px;}
+.modal-bg.open{display:flex;}
+.modal-box{background:#fff;border-radius:18px;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.modal-title{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:14px;}
+.modal-footer{display:flex;gap:8px;margin-top:14px;}
+.modal-footer .btn{flex:1;}
+
+/* Calc preview */
+.calc-box{background:var(--sky-pale);border:1px solid #bae6fd;border-radius:10px;padding:12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.calc-result{font-size:22px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:var(--blue);}
+
+/* Search bar */
+.search-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.search-bar input{flex:1;min-width:160px;padding:9px 12px;}
+
+/* Color checkbox group */
+.color-checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.color-check{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;}
+.color-check input{width:auto;padding:0;margin:0;cursor:pointer;}
+
+@media(max-width:480px){
+  .sum-row{grid-template-columns:repeat(2,1fr);}
+  .grid3,.grid4{grid-template-columns:1fr 1fr;}
+  .grid2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ Login ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px;">🔩</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">Part Master</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — ทะเบียนชิ้นงาน</div>
+    <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
+    <button class="btn btn-primary" onclick="checkPin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ══ App ══ -->
+<div id="appScreen" style="display:none;">
+
+<div class="app-header">
+  <div>
+    <div style="font-size:10px;color:#93c5fd;letter-spacing:.5px;">APK PLATING</div>
+    <div style="font-size:16px;font-weight:700;">🔩 Part Master</div>
+  </div>
+  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="tab('list')">📋 รายการชิ้นงาน</button>
+  <button class="tab-btn" onclick="tab('add')">➕ เพิ่มชิ้นงาน</button>
+  <button class="tab-btn" onclick="tab('calc')">⚖️ คำนวณน้ำหนัก</button>
+</div>
+
+<div class="main">
+
+<!-- ══ TAB: รายการชิ้นงาน ══ -->
+<div id="v-list" class="view active">
+
+  <div class="sum-row">
+    <div class="sum-chip" style="background:#eff6ff;border-color:#bfdbfe;">
+      <div class="sum-chip-label">ชิ้นงานทั้งหมด</div>
+      <div class="sum-chip-val" style="color:var(--navy);" id="sumTotal">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">P/No</div>
+    </div>
+    <div class="sum-chip" style="background:#f0fdf4;border-color:#bbf7d0;">
+      <div class="sum-chip-label">ลูกค้า</div>
+      <div class="sum-chip-val" style="color:var(--green);" id="sumCustomers">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">ราย</div>
+    </div>
+    <div class="sum-chip" style="background:#fef9c3;border-color:#fde68a;">
+      <div class="sum-chip-label">มีน้ำหนัก/ชิ้น</div>
+      <div class="sum-chip-val" style="color:var(--amber);" id="sumHasWeight">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">P/No</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:10px 12px;">
+    <div class="search-bar">
+      <input type="text" id="listSearch" placeholder="🔍 ค้นหา P/No, ชื่อชิ้นงาน, ลูกค้า"
+        oninput="renderList()">
+      <select id="listColorFilter" onchange="renderList()"
+        style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;width:auto;">
+        <option value="">— ทุกสี —</option>
+        <option value="B">B (Black)</option>
+        <option value="C">C (Chrome)</option>
+        <option value="K">K (Color)</option>
+        <option value="BC">B+C</option>
+        <option value="BK">B+K</option>
+        <option value="CK">C+K</option>
+        <option value="BCK">B+C+K</option>
+      </select>
+      <button onclick="exportCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="pt">
+        <thead>
+          <tr>
+            <th class="td-l">P/No</th>
+            <th class="td-l" style="min-width:120px;">ชื่อชิ้นงาน</th>
+            <th class="td-l">ลูกค้า</th>
+            <th>สีที่ชุบ</th>
+            <th>น้ำหนัก/ชิ้น<br><span style="font-weight:400;font-size:9px;">(g)</span></th>
+            <th>ชิ้น/Rack<br><span style="font-weight:400;font-size:9px;">(optional)</span></th>
+            <th>หมายเหตุ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="listBody">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: เพิ่มชิ้นงาน ══ -->
+<div id="v-add" class="view">
+  <div class="card">
+    <div class="card-label">➕ เพิ่ม / อัปเดตชิ้นงาน</div>
+
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>P/No (Part Number) <span style="color:var(--red);">*</span></label>
+        <input type="text" id="addPartNo" placeholder="เช่น PE265199 / 0000023382"
+          oninput="onAddPartNoInput()" style="font-family:'IBM Plex Mono',monospace;font-weight:600;">
+        <div id="addDupWarn" style="display:none;font-size:10px;color:var(--amber);margin-top:3px;">
+          ⚠️ P/No นี้มีอยู่แล้ว — บันทึกจะ <strong>อัปเดต</strong> ข้อมูลเดิม
+        </div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชื่อชิ้นงาน</label>
+        <input type="text" id="addName" placeholder="เช่น BRACKET ASSY MAIN STAND">
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ลูกค้า</label>
+        <input type="text" id="addCustomer" placeholder="เช่น WISDOM / HONDA / GSC">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>สีที่ชุบ</label>
+        <div class="color-checks" id="colorChecks">
+          <label class="color-check"><input type="checkbox" id="chkB" value="B"> <span class="color-b">B</span> Black</label>
+          <label class="color-check"><input type="checkbox" id="chkC" value="C"> <span class="color-c">C</span> Chrome</label>
+          <label class="color-check"><input type="checkbox" id="chkK" value="K"> <span class="color-k">K</span> Color</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div class="field" style="margin:0;">
+        <label>น้ำหนักต่อชิ้น (g) <span style="color:var(--text-muted);font-weight:400;">สำหรับ kg→ชิ้น</span></label>
+        <input type="number" id="addWeight" placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+          oninput="previewCalc()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชิ้น/Rack <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+        <input type="number" id="addPcsPerRack" placeholder="เช่น 24" step="1" min="0" inputmode="numeric">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="addNote" placeholder="หมายเหตุ">
+      </div>
+    </div>
+
+    <!-- Preview การคำนวณ -->
+    <div class="calc-box" id="calcPreview" style="display:none;">
+      <div>
+        <div style="font-size:10px;color:var(--text-muted);">ตัวอย่าง: ถ้าชั่งได้ 1 kg</div>
+        <div style="font-size:11px;color:var(--text-mid);margin-top:2px;">1,000 g ÷ <span id="previewWt">–</span> g/ชิ้น</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:10px;color:var(--text-muted);">ได้ประมาณ</div>
+        <div class="calc-result"><span id="previewPcs">–</span> ชิ้น</div>
+      </div>
+    </div>
+
+    <button class="btn btn-green" onclick="savePart()">💾 บันทึกชิ้นงาน</button>
+    <div id="toast-add" class="toast"></div>
+  </div>
+</div>
+
+<!-- ══ TAB: คำนวณน้ำหนัก ══ -->
+<div id="v-calc" class="view">
+  <div class="card">
+    <div class="card-label">⚖️ แปลงน้ำหนัก → จำนวนชิ้น</div>
+
+    <div class="field">
+      <label>เลือก P/No <span style="color:var(--red);">*</span></label>
+      <select id="calcPartSel" onchange="onCalcPartSelect()">
+        <option value="">— เลือก P/No —</option>
+      </select>
+    </div>
+
+    <!-- ข้อมูล Part ที่เลือก -->
+    <div id="calcPartInfo" style="display:none;background:var(--sky-pale);border:1px solid #bae6fd;border-radius:10px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;" id="calcPartTitle">–</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+        <div>
+          <div style="font-size:9px;color:var(--text-muted);">น้ำหนัก/ชิ้น</div>
+          <div style="font-size:16px;font-weight:800;color:var(--blue);font-family:'IBM Plex Mono',monospace;" id="calcWtPerPc">–</div>
+          <div style="font-size:9px;color:var(--text-muted);">g/ชิ้น</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text-muted);">ชิ้น/Rack</div>
+          <div style="font-size:16px;font-weight:800;color:var(--navy);" id="calcPcsPerRack">–</div>
+          <div style="font-size:9px;color:var(--text-muted);">ชิ้น</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text-muted);">สีที่ชุบ</div>
+          <div style="font-size:14px;font-weight:700;" id="calcColor">–</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>น้ำหนักที่ชั่งได้ (g หรือ kg)</label>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;">
+        <input type="number" id="calcWt" placeholder="0.00" step="0.01" min="0" inputmode="decimal"
+          oninput="calcResult()">
+        <select id="calcUnit" onchange="calcResult()"
+          style="width:auto;padding:10px 8px;font-size:12px;">
+          <option value="g">กรัม (g)</option>
+          <option value="kg">กิโลกรัม (kg)</option>
+        </select>
+        <div style="text-align:center;font-size:11px;color:var(--text-muted);">= <span id="calcWtG">–</span> g</div>
+      </div>
+    </div>
+
+    <!-- ผลลัพธ์ -->
+    <div id="calcResultBox" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div class="calc-box" style="flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">จำนวนชิ้น (คำนวณ)</div>
+          <div class="calc-result" id="calcPcsOut">–</div>
+          <div style="font-size:10px;color:var(--text-muted);">ชิ้น</div>
+        </div>
+        <div class="calc-box" id="calcRackBox" style="flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;display:none!important;">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">จำนวน Rack</div>
+          <div class="calc-result" id="calcRacksOut" style="color:var(--green);">–</div>
+          <div style="font-size:10px;color:var(--text-muted);">rack</div>
+        </div>
+      </div>
+      <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px;font-size:11px;color:#854d0e;" id="calcFormula"></div>
+    </div>
+
+    <!-- ค้นหา P/No ไม่มีน้ำหนัก -->
+    <div id="calcNoWeight" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px;font-size:11px;color:var(--red);margin-top:8px;">
+      ❌ P/No นี้ยังไม่ได้บันทึกน้ำหนักต่อชิ้น — ไปแก้ที่แท็บ "เพิ่มชิ้นงาน"
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /appScreen -->
+
+<!-- ══ Edit Modal ══ -->
+<div class="modal-bg" id="editModal">
+  <div class="modal-box">
+    <div class="modal-title">✏️ แก้ไขชิ้นงาน</div>
+    <input type="hidden" id="editPartId">
+
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>P/No</label>
+        <input type="text" id="editPartNo" style="font-family:'IBM Plex Mono',monospace;font-weight:600;" readonly
+          style="background:#f8fafc;cursor:default;">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชื่อชิ้นงาน</label>
+        <input type="text" id="editName">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ลูกค้า</label>
+        <input type="text" id="editCustomer">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>สีที่ชุบ</label>
+        <div class="color-checks">
+          <label class="color-check"><input type="checkbox" id="editChkB" value="B"> <span class="color-b">B</span></label>
+          <label class="color-check"><input type="checkbox" id="editChkC" value="C"> <span class="color-c">C</span></label>
+          <label class="color-check"><input type="checkbox" id="editChkK" value="K"> <span class="color-k">K</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/ชิ้น (g)</label>
+        <input type="number" id="editWeight" step="0.01" min="0">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชิ้น/Rack</label>
+        <input type="number" id="editPcsPerRack" step="1" min="0">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="editNote">
+      </div>
+    </div>
+    <div id="toast-edit" class="toast"></div>
+    <div class="modal-footer">
+      <button class="btn btn-green" onclick="saveEdit()">💾 บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+//  CONFIG — ใช้ DB เดียวกับ job_master
+// ══════════════════════════════════════
+var PINS = { '010517':'admin', 'Apk002':'viewer' };
+var DB_URL  = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PM_PATH = DB_URL + '/part-master';   // /part-master.json
+
+// ══════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════
+// parts: { id, partNo, name, customer, colors:string('B'|'C'|'K'|'BC'|...), weightPerPc, pcsPerRack, note }
+var parts = [];
+var currentRole = '';
+
+// ══════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  currentRole = PINS[pin];
+  if (currentRole) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    try { localStorage.setItem('pm_pin','1'); localStorage.setItem('pm_role', currentRole); } catch(e){}
+    applyRole();
+    loadLocal();
+    renderAll();
+    fbLoad();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pinInput').value = '';
+  }
+}
+
+function applyRole() {
+  if (currentRole === 'viewer') {
+    var addBtn = document.querySelectorAll('.tab-btn')[1];
+    if (addBtn) addBtn.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════
+//  TAB
+// ══════════════════════════════════════
+function tab(t) {
+  ['list','add','calc'].forEach(function(n, i) {
+    var el = document.getElementById('v-'+n);
+    if (el) el.classList.toggle('active', n===t);
+    var btns = document.querySelectorAll('.tab-btn');
+    if (btns[i]) btns[i].classList.toggle('active', n===t);
+  });
+  if (t==='list') renderList();
+  if (t==='calc') renderCalcSel();
+}
+
+// ══════════════════════════════════════
+//  LOCAL STORAGE
+// ══════════════════════════════════════
+function loadLocal() {
+  try { parts = JSON.parse(localStorage.getItem('pm_parts') || '[]'); } catch(e){ parts=[]; }
+}
+function saveLocal() {
+  try { localStorage.setItem('pm_parts', JSON.stringify(parts)); } catch(e){}
+}
+
+// ══════════════════════════════════════
+//  FIREBASE
+// ══════════════════════════════════════
+function setSyncOk() {
+  document.getElementById('syncDot').className = 'sync-dot ok';
+  document.getElementById('syncLabel').textContent = 'ซิงค์แล้ว';
+}
+function setSyncErr() {
+  document.getElementById('syncDot').className = 'sync-dot err';
+  document.getElementById('syncLabel').textContent = 'ออฟไลน์';
+}
+
+async function fbSave() {
+  try {
+    var res = await fetch(PM_PATH+'.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ parts: parts, savedAt: new Date().toISOString() })
+    });
+    if (res.ok) setSyncOk(); else setSyncErr();
+  } catch(e) { setSyncErr(); }
+}
+
+async function fbLoad() {
+  try {
+    var res = await fetch(PM_PATH+'.json');
+    if (!res.ok) { setSyncErr(); return; }
+    var data = await res.json();
+    if (data && Array.isArray(data.parts)) {
+      parts = data.parts;
+      saveLocal();
+      setSyncOk();
+      renderAll();
+    } else {
+      setSyncOk(); // Firebase ยังไม่มีข้อมูล = ปกติ
+    }
+  } catch(e) { setSyncErr(); }
+}
+
+// ══════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════
+function normKey(s) { return (s||'').toUpperCase().replace(/[\s\-]/g,''); }
+
+function colorBadges(colors) {
+  if (!colors) return '–';
+  return colors.split('').filter(function(c){ return ['B','C','K'].includes(c); }).map(function(c) {
+    var cls = 'color-'+c.toLowerCase();
+    return '<span class="'+cls+'">'+c+'</span>';
+  }).join(' ');
+}
+
+function getColors() {
+  var c = '';
+  if (document.getElementById('chkB').checked) c += 'B';
+  if (document.getElementById('chkC').checked) c += 'C';
+  if (document.getElementById('chkK').checked) c += 'K';
+  return c;
+}
+
+function setColors(colors, prefix) {
+  prefix = prefix || '';
+  document.getElementById(prefix+'chkB').checked = (colors||'').includes('B');
+  document.getElementById(prefix+'chkC').checked = (colors||'').includes('C');
+  document.getElementById(prefix+'chkK').checked = (colors||'').includes('K');
+}
+
+// ══════════════════════════════════════
+//  RENDER ALL
+// ══════════════════════════════════════
+function renderAll() {
+  renderList();
+  renderCalcSel();
+  updateSummary();
+}
+
+function updateSummary() {
+  document.getElementById('sumTotal').textContent = parts.length;
+  var customers = new Set(parts.map(function(p){ return p.customer||''; }).filter(Boolean));
+  document.getElementById('sumCustomers').textContent = customers.size;
+  document.getElementById('sumHasWeight').textContent = parts.filter(function(p){ return p.weightPerPc>0; }).length;
+}
+
+// ══════════════════════════════════════
+//  RENDER LIST
+// ══════════════════════════════════════
+function renderList() {
+  var search = (document.getElementById('listSearch')||{}).value || '';
+  var colorF = (document.getElementById('listColorFilter')||{}).value || '';
+  search = search.toLowerCase();
+
+  var rows = parts.filter(function(p) {
+    if (search && !(
+      (p.partNo||'').toLowerCase().includes(search) ||
+      (p.name||'').toLowerCase().includes(search) ||
+      (p.customer||'').toLowerCase().includes(search)
+    )) return false;
+    if (colorF && !(p.colors||'').includes(colorF.replace(/\+/g,''))) return false;
+    return true;
+  });
+
+  rows = rows.slice().sort(function(a,b){ return (a.partNo||'').localeCompare(b.partNo||''); });
+
+  updateSummary();
+
+  var tbody = document.getElementById('listBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">' +
+      (parts.length ? 'ไม่พบชิ้นงาน — ลองเปลี่ยนคำค้นหา' : 'ยังไม่มีชิ้นงาน — ไปแท็บ "เพิ่มชิ้นงาน"') + '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(function(p) {
+    var wtCell = p.weightPerPc
+      ? '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;color:var(--blue);">'+p.weightPerPc.toFixed(2)+'</td>'
+      : '<td style="color:var(--text-muted);">–</td>';
+    var rackCell = p.pcsPerRack
+      ? '<td>'+p.pcsPerRack+'</td>'
+      : '<td style="color:var(--text-muted);">–</td>';
+    return '<tr>' +
+      '<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:12px;">'+esc(p.partNo)+'</td>' +
+      '<td class="td-l" style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'–')+'</td>' +
+      '<td class="td-l" style="font-size:11px;color:var(--text-mid);">'+esc(p.customer||'–')+'</td>' +
+      '<td style="white-space:nowrap;">'+colorBadges(p.colors)+'</td>' +
+      wtCell + rackCell +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+esc(p.note||'')+'</td>' +
+      '<td style="white-space:nowrap;">' +
+        (currentRole==='admin' ? '<button onclick="openEdit(\''+p.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
+        '<button onclick="deletePart(\''+p.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>' : '–') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════
+//  ADD PART
+// ══════════════════════════════════════
+function onAddPartNoInput() {
+  var pno = document.getElementById('addPartNo').value.trim();
+  var exists = parts.find(function(p){ return normKey(p.partNo) === normKey(pno); });
+  var warn = document.getElementById('addDupWarn');
+  if (exists && pno) {
+    warn.style.display = 'block';
+    // auto-fill fields
+    document.getElementById('addName').value       = exists.name     || '';
+    document.getElementById('addCustomer').value   = exists.customer || '';
+    document.getElementById('addWeight').value     = exists.weightPerPc || '';
+    document.getElementById('addPcsPerRack').value = exists.pcsPerRack || '';
+    document.getElementById('addNote').value       = exists.note     || '';
+    setColors(exists.colors||'');
+    previewCalc();
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+function previewCalc() {
+  var wt = parseFloat(document.getElementById('addWeight').value);
+  var box = document.getElementById('calcPreview');
+  if (!wt || wt <= 0) { box.style.display='none'; return; }
+  box.style.display='flex';
+  document.getElementById('previewWt').textContent  = wt.toFixed(2);
+  document.getElementById('previewPcs').textContent = Math.round(1000 / wt);
+}
+
+function savePart() {
+  var partNo = document.getElementById('addPartNo').value.trim().toUpperCase();
+  var name   = document.getElementById('addName').value.trim();
+  var cust   = document.getElementById('addCustomer').value.trim();
+  var colors = getColors();
+  var wt     = parseFloat(document.getElementById('addWeight').value) || 0;
+  var rack   = parseInt(document.getElementById('addPcsPerRack').value) || 0;
+  var note   = document.getElementById('addNote').value.trim();
+
+  if (!partNo) { showToast('add','กรุณากรอก P/No','err'); return; }
+
+  // upsert
+  var idx = parts.findIndex(function(p){ return normKey(p.partNo)===normKey(partNo); });
+  if (idx >= 0) {
+    parts[idx] = Object.assign({}, parts[idx], { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
+    showToast('add','✅ อัปเดต "'+partNo+'" สำเร็จ','ok');
+  } else {
+    parts.unshift({ id:'P'+Date.now(), partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, createdAt:new Date().toISOString() });
+    showToast('add','✅ เพิ่ม "'+partNo+'" สำเร็จ','ok');
+  }
+
+  saveLocal(); fbSave(); renderAll();
+
+  // clear form
+  ['addPartNo','addName','addCustomer','addWeight','addPcsPerRack','addNote'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
+  setColors('');
+  document.getElementById('addDupWarn').style.display='none';
+  document.getElementById('calcPreview').style.display='none';
+}
+
+// ══════════════════════════════════════
+//  DELETE
+// ══════════════════════════════════════
+function deletePart(id) {
+  var p = parts.find(function(x){ return x.id===id; });
+  if (!p || !confirm('ลบ "'+p.partNo+'" ออกจาก Part Master?')) return;
+  parts = parts.filter(function(x){ return x.id!==id; });
+  saveLocal(); fbSave(); renderAll();
+}
+
+// ══════════════════════════════════════
+//  EDIT MODAL
+// ══════════════════════════════════════
+function openEdit(id) {
+  var p = parts.find(function(x){ return x.id===id; });
+  if (!p) return;
+  document.getElementById('editPartId').value    = id;
+  document.getElementById('editPartNo').value    = p.partNo    || '';
+  document.getElementById('editName').value      = p.name      || '';
+  document.getElementById('editCustomer').value  = p.customer  || '';
+  document.getElementById('editWeight').value    = p.weightPerPc || '';
+  document.getElementById('editPcsPerRack').value= p.pcsPerRack || '';
+  document.getElementById('editNote').value      = p.note      || '';
+  setColors(p.colors||'', 'edit');
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+function saveEdit() {
+  var id     = document.getElementById('editPartId').value;
+  var name   = document.getElementById('editName').value.trim();
+  var cust   = document.getElementById('editCustomer').value.trim();
+  var colors = '';
+  if (document.getElementById('editChkB').checked) colors += 'B';
+  if (document.getElementById('editChkC').checked) colors += 'C';
+  if (document.getElementById('editChkK').checked) colors += 'K';
+  var wt     = parseFloat(document.getElementById('editWeight').value) || 0;
+  var rack   = parseInt(document.getElementById('editPcsPerRack').value) || 0;
+  var note   = document.getElementById('editNote').value.trim();
+
+  var idx = parts.findIndex(function(p){ return p.id===id; });
+  if (idx < 0) return;
+  parts[idx] = Object.assign({}, parts[idx], { name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
+
+  saveLocal(); fbSave();
+  showToast('edit','✅ บันทึกสำเร็จ','ok');
+  setTimeout(function(){ closeModal(); renderAll(); }, 700);
+}
+
+document.addEventListener('click', function(e) {
+  var modal = document.getElementById('editModal');
+  if (modal && e.target === modal) closeModal();
+});
+
+// ══════════════════════════════════════
+//  CALC TAB
+// ══════════════════════════════════════
+function renderCalcSel() {
+  var sel = document.getElementById('calcPartSel');
+  var cur = sel.value;
+  var withWeight = parts.filter(function(p){ return p.weightPerPc > 0; })
+                        .sort(function(a,b){ return (a.partNo||'').localeCompare(b.partNo||''); });
+  sel.innerHTML = '<option value="">— เลือก P/No —</option>' +
+    withWeight.map(function(p){
+      return '<option value="'+p.id+'"'+(p.id===cur?' selected':'')+'>'+p.partNo+(p.customer?' ('+p.customer+')':'')+'</option>';
+    }).join('');
+  // all parts for "no weight" display
+  parts.filter(function(p){ return !p.weightPerPc; })
+       .forEach(function(p){
+         sel.innerHTML += '<option value="'+p.id+'">'+p.partNo+(p.customer?' ('+p.customer+')':'')+' ⚠️ ไม่มีน้ำหนัก</option>';
+       });
+}
+
+function onCalcPartSelect() {
+  var id = document.getElementById('calcPartSel').value;
+  var p  = parts.find(function(x){ return x.id===id; });
+  var infoEl    = document.getElementById('calcPartInfo');
+  var noWtEl    = document.getElementById('calcNoWeight');
+  var resultEl  = document.getElementById('calcResultBox');
+
+  if (!p) {
+    infoEl.style.display='none'; noWtEl.style.display='none'; resultEl.style.display='none';
+    return;
+  }
+  infoEl.style.display='block';
+  document.getElementById('calcPartTitle').textContent = p.partNo + (p.name ? ' — '+p.name : '') + (p.customer ? ' ('+p.customer+')' : '');
+  document.getElementById('calcWtPerPc').textContent   = p.weightPerPc ? p.weightPerPc.toFixed(2) : '–';
+  document.getElementById('calcPcsPerRack').textContent= p.pcsPerRack  ? p.pcsPerRack : '–';
+  document.getElementById('calcColor').innerHTML       = colorBadges(p.colors);
+
+  if (!p.weightPerPc) {
+    noWtEl.style.display='block';
+    resultEl.style.display='none';
+  } else {
+    noWtEl.style.display='none';
+    calcResult();
+  }
+}
+
+function calcResult() {
+  var id  = document.getElementById('calcPartSel').value;
+  var p   = parts.find(function(x){ return x.id===id; });
+  var wtInput = parseFloat(document.getElementById('calcWt').value) || 0;
+  var unit    = document.getElementById('calcUnit').value;
+  var resultEl= document.getElementById('calcResultBox');
+  var wtGEl   = document.getElementById('calcWtG');
+
+  if (!p || !p.weightPerPc || !wtInput) { resultEl.style.display='none'; wtGEl.textContent='–'; return; }
+
+  var wtG = unit==='kg' ? wtInput*1000 : wtInput;
+  wtGEl.textContent = wtG.toLocaleString('th');
+
+  var pcs   = Math.round(wtG / p.weightPerPc);
+  var racks = p.pcsPerRack ? (wtG / p.weightPerPc / p.pcsPerRack) : 0;
+
+  resultEl.style.display='block';
+  document.getElementById('calcPcsOut').textContent = pcs.toLocaleString('th');
+
+  var rackBox = document.getElementById('calcRackBox');
+  if (p.pcsPerRack && racks > 0) {
+    rackBox.style.cssText = 'flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
+    document.getElementById('calcRacksOut').textContent = racks.toFixed(1);
+  } else {
+    rackBox.style.display='none';
+  }
+
+  document.getElementById('calcFormula').textContent =
+    wtG.toLocaleString('th') + ' g ÷ ' + p.weightPerPc.toFixed(2) + ' g/ชิ้น = ' + pcs.toLocaleString('th') + ' ชิ้น' +
+    (p.pcsPerRack ? ' (' + racks.toFixed(1) + ' rack × ' + p.pcsPerRack + ' ชิ้น/rack)' : '');
+}
+
+// ══════════════════════════════════════
+//  EXPORT CSV
+// ══════════════════════════════════════
+function exportCSV() {
+  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','น้ำหนัก/ชิ้น(g)','ชิ้น/Rack','หมายเหตุ']];
+  parts.forEach(function(p){
+    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.weightPerPc||'',p.pcsPerRack||'',p.note||'']);
+  });
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download = 'part_master_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════
+function showToast(id, msg, type) {
+  var el = document.getElementById('toast-'+id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast '+(type==='ok'?'ok':'err');
+  setTimeout(function(){ el.className='toast'; }, 3500);
+}
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+window.addEventListener('load', function(){
+  try {
+    if (localStorage.getItem('pm_pin')==='1') {
+      currentRole = localStorage.getItem('pm_role') || 'viewer';
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('appScreen').style.display='block';
+      applyRole();
+      loadLocal();
+      renderAll();
+      fbLoad();
+    }
+  } catch(e){}
+});
+</script>
+</body>
+</html>
