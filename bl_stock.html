@@ -861,7 +861,14 @@ async function showDebug() {
   info('jmItems   : ' + jmItems.length + ' รายการ');
   info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
   info('blDel     : ' + blDel.length + ' รายการ');
-  info('wipMap    : ' + Object.keys(wipMap).length + ' P/No');
+  var wipKeys = Object.keys(wipMap);
+  info('wipMap : ' + wipKeys.length + ' P/No');
+  if (wipKeys.length > 0) {
+    info('wipMap sample keys: ' + wipKeys.slice(0,5).join(', '));
+    var sampleKey = wipKeys[0];
+    info('wipMap["'+sampleKey+'"]: partName="'+wipMap[sampleKey].partName+'" pcs='+wipMap[sampleKey].pcs);
+  }
+  info('jmItems partNos: ' + jmItems.slice(0,5).map(function(j){ return jobPartNo(j); }).join(', '));
   if (jmItems.length > 0) {
     info('jmItems[0] FULL:');
     var fields = Object.keys(jmItems[0]);
