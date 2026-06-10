@@ -393,15 +393,19 @@ async function loadWIP() {
 //  receive  ← jmItems[].qty  (จำนวนรับเข้าจาก Job Master)
 //  delivery ← jmRecords[type:'out'].qty + blDel[].qty
 // ══════════════════════════════════════════════════════
+function jobPartNo(job) { return job.bill || job.name || job.partNo || ''; }
+function jobQty(job)   { return Number(job.qty || job.pcs || job.line || 0); }
+
 function buildMap() {
   var map = {};
 
   // รับเข้าจาก Job Master items
   jmItems.forEach(function(job){
-    var k = norm(job.name||'');
+    var pn = jobPartNo(job);
+    var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:job.name||'', customer:job.customer||'', receive:0, delivery:0, jobIds:[], dueDate:job.dueDate||'' };
-    map[k].receive += Number(job.qty||0);
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, delivery:0, jobIds:[], dueDate:job.dueDate||'' };
+    map[k].receive += jobQty(job);
     map[k].jobIds.push(job.id);
     if (!map[k].customer && job.customer) map[k].customer=job.customer;
     if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
@@ -413,7 +417,7 @@ function buildMap() {
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
     var job = jmItems.find(function(j){ return j.id===r.jobId; });
     if (!job) return;
-    var k = norm(job.name||'');
+    var k = norm(jobPartNo(job));
     if (!k || !map[k]) return;
     map[k].delivery += Number(r.qty||0);
   });
@@ -455,7 +459,7 @@ function renderStock() {
   if (fMonth!=='all') {
     var validKeys={};
     jmItems.filter(function(j){ return (j.date||'').slice(0,7)===fMonth; })
-           .forEach(function(j){ validKeys[norm(j.name||'')]=1; });
+           .forEach(function(j){ validKeys[norm(jobPartNo(j))]=1; });
     parts=parts.filter(function(p){ return validKeys[norm(p.partNo)]; });
   }
 
@@ -549,7 +553,7 @@ function buildDetail(p) {
   var remain=Math.max(0,p.receive-p.delivery);
 
   // Job master items ของ P/No นี้
-  var jobs=jmItems.filter(function(j){ return norm(j.name||'')===k; });
+  var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
   // Job master delivery records
   var jmDels=[];
   jobs.forEach(function(job){
@@ -593,7 +597,7 @@ function buildDetail(p) {
     jobs.forEach(function(j){
       html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(j.bill||'–')+'</td>'+
         '<td class="tl" style="font-size:10px;">'+esc(j.lot||'–')+'</td>'+
-        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||0).toLocaleString()+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||j.pcs||j.line||0).toLocaleString()+'</td>'+
         '<td style="color:var(--text-muted);">'+(j.kg?j.kg:'–')+'</td></tr>';
     });
     html+='</tbody></table></div>';
@@ -739,7 +743,7 @@ function buildHistFilters(){
   var sel=document.getElementById('hPartSel');
   var existing=new Set(Array.from(sel.options).map(function(o){return o.value;}));
   var parts=new Set();
-  jmItems.forEach(function(j){if(j.name)parts.add(j.name);});
+  jmItems.forEach(function(j){ var pn=jobPartNo(j); if(pn) parts.add(pn); });
   blDel.forEach(function(d){if(d.partNo)parts.add(d.partNo);});
   [...parts].sort().forEach(function(p){
     if(!existing.has(p)){
@@ -756,8 +760,9 @@ function renderHist(){
   // รับเข้า (job master items)
   if(tf==='all'||tf==='in'){
     jmItems.forEach(function(j){
-      if(pf!=='all'&&j.name!==pf) return;
-      all.push({date:j.date||'–',type:'in',partNo:j.name||'–',customer:j.customer||'–',qty:j.qty||0,ref:j.bill||'–'});
+      var pn=jobPartNo(j);
+      if(pf!=='all'&&pn!==pf) return;
+      all.push({date:j.date||'–',type:'in',partNo:pn||'–',customer:j.customer||'–',qty:jobQty(j),ref:j.bill||'–'});
     });
   }
 
@@ -776,8 +781,9 @@ function renderHist(){
     jmRecords.filter(function(r){return r.type==='out';}).forEach(function(r){
       var job=jmItems.find(function(j){return j.id===r.jobId;});
       if(!job) return;
-      if(pf!=='all'&&job.name!==pf) return;
-      all.push({date:r.date||'–',type:'out',partNo:job.name||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
+      var pn=jobPartNo(job);
+      if(pf!=='all'&&pn!==pf) return;
+      all.push({date:r.date||'–',type:'out',partNo:pn||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
     });
     blDel.forEach(function(d){
       if(pf!=='all'&&d.partNo!==pf) return;
@@ -857,7 +863,12 @@ async function showDebug() {
   info('blDel     : ' + blDel.length + ' รายการ');
   info('wipMap    : ' + Object.keys(wipMap).length + ' P/No');
   if (jmItems.length > 0) {
-    info('jmItems[0]: ' + JSON.stringify(jmItems[0]).slice(0,100) + '...');
+    info('jmItems[0] FULL:');
+    var fields = Object.keys(jmItems[0]);
+    fields.forEach(function(f){
+      info('  .' + f + ' = ' + JSON.stringify(jmItems[0][f]).slice(0,80));
+    });
+    info('→ jobPartNo: "' + jobPartNo(jmItems[0]) + '"  jobQty: ' + jobQty(jmItems[0]));
   }
 
   // ── ทดสอบ Firebase URLs ──
