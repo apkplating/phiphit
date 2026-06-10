@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B/L Stock — APK Plating</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --navy-light:#1e4976;
+  --blue:#2e75b6; --blue-light:#5ba3d9; --sky:#d6eaf8; --sky-pale:#eaf4fb;
+  --green:#065f46; --green-bg:#ecfdf5; --green-border:#86efac;
+  --amber:#92400e; --amber-bg:#fffbeb; --amber-border:#fcd34d;
+  --red:#9b2c2c; --red-bg:#fef2f2; --red-border:#fca5a5;
+  --orange:#c2410c; --orange-bg:#fff7ed; --orange-border:#fed7aa;
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --border:#d1dce8; --bg:#f4f8fb; --white:#fff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);}
+
+.app-header{background:var(--navy);padding:48px 20px 20px;position:relative;overflow:hidden;}
+.app-header::before{content:'';position:absolute;top:-60px;right:-60px;width:260px;height:260px;border-radius:50%;background:rgba(46,117,182,.12);pointer-events:none;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.02em;}
+.hdr-sub{font-size:11px;color:var(--blue-light);margin-top:4px;}
+
+.app-body{background:var(--bg);border-radius:20px 20px 0 0;min-height:calc(100vh - 120px);padding:14px 14px 40px;}
+
+.tab-bar{display:flex;gap:4px;overflow-x:auto;padding-bottom:10px;margin-bottom:12px;scrollbar-width:none;}
+.tab-bar::-webkit-scrollbar{display:none;}
+.tab-btn{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+.tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border);}
+
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.sum-card{text-align:center;padding:10px 4px;border-radius:10px;border:1px solid;}
+.sum-card .val{font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;line-height:1.1;}
+.sum-card .lbl{font-size:9px;color:var(--text-muted);margin-top:3px;}
+
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table.st{width:100%;border-collapse:collapse;min-width:580px;font-size:12px;}
+table.st thead tr{background:var(--navy);color:#fff;}
+table.st thead th{padding:8px 7px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.04em;white-space:nowrap;}
+table.st thead th.tl{text-align:left;}
+table.st tbody tr{border-bottom:1px solid #f0f0f0;}
+table.st tbody tr:hover{background:#f7fafd;}
+table.st td{padding:8px 7px;text-align:center;vertical-align:middle;}
+table.st td.tl{text-align:left;}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.ok   {background:#dcfce7;color:#15803d;}
+.wip  {background:#eff6ff;color:#1d4ed8;}
+.part {background:#fff7ed;color:#c2410c;}
+.done {background:#f1f5f9;color:#64748b;}
+.over {background:#fef2f2;color:#dc2626;}
+
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.filter-bar select,.filter-bar input{font-size:12px;padding:6px 10px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--navy);font-family:inherit;outline:none;}
+.filter-bar select:focus,.filter-bar input:focus{border-color:var(--blue);}
+
+.sync-bar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);padding:8px 12px;background:var(--sky-pale);border-radius:10px;border:1px solid var(--border);margin-bottom:12px;}
+.sdot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;}
+.sdot.ok{background:#22c55e;animation:pulse 2s infinite;}
+.sdot.err{background:#ef4444;}
+.sdot.spin{background:#f59e0b;animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.detail-box{background:#f7fafd;border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:6px;}
+.detail-box table{min-width:340px;}
+.detail-box th{background:var(--navy-mid);color:#fff;padding:5px 7px;font-size:10px;font-weight:600;}
+.detail-box td{padding:5px 7px;border-bottom:1px solid #eee;font-size:11px;}
+
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);font-size:14px;font-family:inherit;outline:none;}
+.field input:focus,.field select:focus{border-color:var(--blue);}
+
+.btn{padding:12px;border-radius:10px;border:none;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;width:100%;}
+.btn-navy{background:var(--navy);color:#fff;}
+.btn-green{background:#059669;color:#fff;}
+
+.toast{display:none;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:600;text-align:center;margin-top:8px;}
+.tok{display:block;background:#dcfce7;color:#15803d;}
+.terr{display:block;background:#fef2f2;color:#9b2c2c;}
+
+.info-box{padding:10px 12px;background:var(--sky-pale);border-radius:8px;border:1px solid var(--border);margin-bottom:12px;font-size:12px;display:none;}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="hdr-badge">APK Plating · Stock Control</div>
+  <div class="hdr-title">B/L Stock</div>
+  <div class="hdr-sub" id="hdrDate">—</div>
+</div>
+
+<div class="app-body">
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('stock')">📦 Stock Board</button>
+    <button class="tab-btn" onclick="switchTab('delivery')">📤 Delivery</button>
+    <button class="tab-btn" onclick="switchTab('history')">🗂 ประวัติ</button>
+  </div>
+
+  <!-- Sync bar -->
+  <div class="sync-bar">
+    <span class="sdot" id="sdot"></span>
+    <span id="syncLbl">กำลังโหลด...</span>
+    <div style="flex:1;"></div>
+    <button onclick="loadAll(true)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--navy);">🔄 รีเฟรช</button>
+  </div>
+
+  <!-- ══ STOCK BOARD ══ -->
+  <div id="tab-stock">
+    <div class="sum-grid">
+      <div class="sum-card" style="background:var(--green-bg);border-color:var(--green-border);">
+        <div class="val" style="color:var(--green);" id="sItems">0</div>
+        <div class="lbl">P/No ทั้งหมด</div>
+      </div>
+      <div class="sum-card" style="background:#eff6ff;border-color:#bfdbfe;">
+        <div class="val" style="color:var(--blue);" id="sRcv">0</div>
+        <div class="lbl">รับเข้า (ชิ้น)</div>
+      </div>
+      <div class="sum-card" style="background:var(--amber-bg);border-color:var(--amber-border);">
+        <div class="val" style="color:var(--amber);" id="sWip">0</div>
+        <div class="lbl">WIP ชุบแล้ว</div>
+      </div>
+      <div class="sum-card" style="background:var(--orange-bg);border-color:var(--orange-border);">
+        <div class="val" style="color:var(--orange);" id="sDel">0</div>
+        <div class="lbl">Delivery</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <select id="fStatus" onchange="renderStock()">
+        <option value="all">— ทุกสถานะ —</option>
+        <option value="active">กำลังผลิต</option>
+        <option value="partial">ส่งบางส่วน</option>
+        <option value="done">ส่งครบ</option>
+        <option value="over">เกินกำหนด</option>
+      </select>
+      <select id="fMonth" onchange="renderStock()"><option value="all">— ทุกเดือน —</option></select>
+      <input id="fSearch" type="text" placeholder="🔍 ค้นหา P/No ลูกค้า..." oninput="renderStock()" style="flex:1;min-width:120px;">
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="tbl-wrap">
+        <table class="st">
+          <thead><tr>
+            <th class="tl" style="min-width:130px;">P/No · ชิ้นงาน</th>
+            <th class="tl" style="min-width:70px;">ลูกค้า</th>
+            <th style="min-width:60px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:60px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชุบแล้ว)</span></th>
+            <th style="min-width:60px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:60px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:65px;">สถานะ</th>
+            <th style="width:28px;"></th>
+          </tr></thead>
+          <tbody id="stockBody">
+            <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DELIVERY ══ -->
+  <div id="tab-delivery" style="display:none;">
+    <div class="card">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">📤 บันทึก Delivery</div>
+      <div class="field">
+        <label>P/No · ชิ้นงาน *</label>
+        <select id="dPartSel">
+          <option value="">— เลือก P/No (เฉพาะที่มีคงเหลือ) —</option>
+        </select>
+      </div>
+      <div id="dInfoBox" class="info-box"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="field">
+          <label>จำนวนส่ง (ชิ้น) *</label>
+          <input type="number" id="dQty" placeholder="0" min="1" inputmode="numeric"
+            style="font-size:20px;text-align:center;" oninput="checkDQty()">
+        </div>
+        <div class="field">
+          <label>วันที่ส่ง</label>
+          <input type="date" id="dDate">
+        </div>
+      </div>
+      <div class="field">
+        <label>เลขที่ INV / ใบส่ง</label>
+        <input type="text" id="dInv" placeholder="เช่น INV-2606-001">
+      </div>
+      <div class="field">
+        <label>หมายเหตุ</label>
+        <input type="text" id="dNote" placeholder="(ไม่บังคับ)">
+      </div>
+      <button class="btn btn-green" onclick="saveDelivery()">📤 บันทึก Delivery</button>
+      <div id="dToast" class="toast"></div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">ประวัติ Delivery ล่าสุด</div>
+      <div class="tbl-wrap">
+        <table class="st" style="min-width:380px;">
+          <thead><tr>
+            <th class="tl">วันที่</th><th class="tl">P/No</th><th class="tl">ลูกค้า</th>
+            <th>จำนวน</th><th class="tl">INV</th><th></th>
+          </tr></thead>
+          <tbody id="dHistBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HISTORY ══ -->
+  <div id="tab-history" style="display:none;">
+    <div class="filter-bar">
+      <select id="hPartSel" onchange="renderHist()" style="flex:1;"><option value="all">— ทุก P/No —</option></select>
+      <select id="hTypeSel" onchange="renderHist()">
+        <option value="all">ทุกประเภท</option>
+        <option value="in">รับเข้า (Job Master)</option>
+        <option value="wip">WIP (ชุบแล้ว)</option>
+        <option value="out">Delivery</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="tbl-wrap">
+        <table class="st" style="min-width:420px;">
+          <thead><tr>
+            <th class="tl">วันที่</th><th>ประเภท</th>
+            <th class="tl">P/No</th><th class="tl">ลูกค้า</th>
+            <th>ชิ้น</th><th class="tl">อ้างอิง</th>
+          </tr></thead>
+          <tbody id="hBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- app-body -->
+
+<script>
+// ══════════════════════════════════════════════════════
+//  Firebase URLs
+// ══════════════════════════════════════════════════════
+var DB_B1   = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_B2   = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// Job Master อยู่ใน DB_B1 /job-master
+var JM_URL  = DB_B1 + '/job-master.json';
+// Delivery ที่บันทึกใน bl_stock เก็บที่ DB_B1 /bl-delivery
+var DEL_URL = DB_B1 + '/bl-delivery.json';
+
+// ── Data ──
+var jmItems   = [];  // Job Master items → รับเข้า (receive)
+var jmRecords = [];  // Job Master records (type:'out') → delivery จาก Job Master
+var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
+var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+window.addEventListener('load', function(){
+  document.getElementById('hdrDate').textContent =
+    new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('dDate').value = isoToday();
+  loadAll(false);
+  setInterval(function(){ loadAll(false); }, 30000);
+});
+
+function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function norm(s){ return String(s||'').trim().toLowerCase().replace(/[\s\-_\.]+/g,''); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtD(s){
+  if(!s||s==='–') return '–';
+  try{ var d=new Date(s+'T00:00:00');
+    var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return d.getDate()+' '+m[d.getMonth()+1]; }catch(e){return s;}
+}
+
+// ══════════════════════════════════════════════════════
+//  LOAD ALL
+// ══════════════════════════════════════════════════════
+async function loadAll(manual) {
+  setSyncing(true);
+  try {
+    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP() ]);
+    setSyncing(false, true);
+    renderStock();
+    renderDHist();
+    populateDeliverySel();
+    buildHistFilters();
+    renderHist();
+  } catch(e) {
+    setSyncing(false, false, e.message);
+  }
+}
+
+// ── Job Master ──────────────────────────────────────
+async function loadJobMaster() {
+  var res = await fetch(JM_URL);
+  if (!res.ok) throw new Error('Job Master โหลดไม่สำเร็จ');
+  var data = await res.json();
+  jmItems   = Array.isArray(data && data.items)   ? data.items   : [];
+  jmRecords = Array.isArray(data && data.records) ? data.records : [];
+}
+
+// ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
+async function loadBLDel() {
+  try {
+    var res = await fetch(DEL_URL);
+    var data = res.ok ? await res.json() : null;
+    blDel = Array.isArray(data && data.records) ? data.records : [];
+  } catch(e){ blDel=[]; }
+}
+
+// ── WIP จาก 3 lines ─────────────────────────────────
+async function loadWIP() {
+  wipMap = {};
+  var lines = [
+    { url: DB_B1+'/plating-b1.json', label:'B1' },
+    { url: DB_B2+'/plating-b2.json', label:'B2' },
+    { url: DB_R1+'/plating-r1.json', label:'R1' },
+  ];
+  await Promise.all(lines.map(async function(ln){
+    try {
+      var res = await fetch(ln.url);
+      if (!res.ok) return;
+      var data = await res.json();
+      // dayRecords อาจอยู่ใน data หรือ data.dayRecords
+      var recs = Array.isArray(data) ? data
+               : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
+      recs.forEach(function(dr){
+        if (!dr.rows) return;
+        dr.rows.forEach(function(row){
+          var pn = (row.partName||'').trim();
+          if (!pn) return;
+          var k = norm(pn);
+          if (!wipMap[k]) wipMap[k]={ partName:pn, pcs:0, kgs:0, lines:{} };
+          wipMap[k].pcs += Number(row.pcs||0);
+          wipMap[k].kgs += Number(row.kg||0);
+          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0)+Number(row.pcs||0);
+        });
+      });
+    } catch(e){}
+  }));
+}
+
+// ══════════════════════════════════════════════════════
+//  BUILD STOCK MAP (per P/No)
+//  receive  ← jmItems[].qty  (จำนวนรับเข้าจาก Job Master)
+//  delivery ← jmRecords[type:'out'].qty + blDel[].qty
+// ══════════════════════════════════════════════════════
+function buildMap() {
+  var map = {};
+
+  // รับเข้าจาก Job Master items
+  jmItems.forEach(function(job){
+    var k = norm(job.name||'');
+    if (!k) return;
+    if (!map[k]) map[k]={ partNo:job.name||'', customer:job.customer||'', receive:0, delivery:0, jobIds:[], dueDate:job.dueDate||'' };
+    map[k].receive += Number(job.qty||0);
+    map[k].jobIds.push(job.id);
+    if (!map[k].customer && job.customer) map[k].customer=job.customer;
+    if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
+  });
+
+  // Delivery จาก Job Master records (type:'out')
+  jmRecords.forEach(function(r){
+    if (r.type!=='out') return;
+    // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
+    var job = jmItems.find(function(j){ return j.id===r.jobId; });
+    if (!job) return;
+    var k = norm(job.name||'');
+    if (!k || !map[k]) return;
+    map[k].delivery += Number(r.qty||0);
+  });
+
+  // Delivery เพิ่มเติมที่บันทึกใน bl_stock
+  blDel.forEach(function(d){
+    var k = norm(d.partNo||'');
+    if (!k || !map[k]) return;
+    map[k].delivery += Number(d.qty||0);
+  });
+
+  return map;
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER STOCK BOARD
+// ══════════════════════════════════════════════════════
+function renderStock() {
+  var map    = buildMap();
+  var parts  = Object.values(map);
+  var fSt    = document.getElementById('fStatus').value;
+  var fMonth = document.getElementById('fMonth').value;
+  var fSrch  = norm(document.getElementById('fSearch').value||'');
+
+  // Month dropdown จาก job items
+  var months={};
+  jmItems.forEach(function(j){ if(j.date) months[j.date.slice(0,7)]=1; });
+  var mSorted=Object.keys(months).sort().reverse();
+  var mSel=document.getElementById('fMonth');
+  if (mSel.options.length<=1) {
+    var mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    mSorted.forEach(function(ym){
+      var p=ym.split('-');
+      mSel.innerHTML+='<option value="'+ym+'">'+mn[parseInt(p[1])]+' '+(parseInt(p[0])+543)+'</option>';
+    });
+  }
+
+  // Month filter (จาก job items ที่มีวันที่รับในเดือนนั้น)
+  if (fMonth!=='all') {
+    var validKeys={};
+    jmItems.filter(function(j){ return (j.date||'').slice(0,7)===fMonth; })
+           .forEach(function(j){ validKeys[norm(j.name||'')]=1; });
+    parts=parts.filter(function(p){ return validKeys[norm(p.partNo)]; });
+  }
+
+  if (fSrch) parts=parts.filter(function(p){
+    return norm(p.partNo).includes(fSrch)||norm(p.customer).includes(fSrch);
+  });
+
+  // Summary
+  var sumRcv=0,sumWip=0,sumDel=0;
+  parts.forEach(function(p){
+    var wip=(wipMap[norm(p.partNo)]||{}).pcs||0;
+    sumRcv+=p.receive; sumWip+=wip; sumDel+=p.delivery;
+  });
+  document.getElementById('sItems').textContent=parts.length;
+  document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
+  document.getElementById('sWip').textContent=sumWip.toLocaleString();
+  document.getElementById('sDel').textContent=sumDel.toLocaleString();
+
+  // Filter by status
+  var mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var filtParts = parts.filter(function(p){
+    if (fSt==='all') return true;
+    var st = getStatus(p);
+    if (fSt==='active')  return st==='กำลังผลิต';
+    if (fSt==='partial') return st==='จ่ายบางส่วน';
+    if (fSt==='done')    return st==='จ่ายครบ';
+    if (fSt==='over')    return st==='เกินกำหนด';
+    return true;
+  });
+
+  filtParts.sort(function(a,b){ return (b.receive-b.delivery)-(a.receive-a.delivery); });
+  window._parts = filtParts;
+
+  var tbody=document.getElementById('stockBody');
+  if (!filtParts.length) {
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">ไม่มีข้อมูล — ตรวจสอบ Job Master</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtParts.map(function(p,i){
+    var wip    = (wipMap[norm(p.partNo)]||{}).pcs||0;
+    var wipKg  = (wipMap[norm(p.partNo)]||{}).kgs||0;
+    var remain = Math.max(0, p.receive - p.delivery);
+    var st     = getStatus(p);
+
+    var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
+    var wipStr = wip>0
+      ? wip.toLocaleString()+(wipKg>0?' <span style="font-size:9px;color:var(--text-muted);">('+wipKg.toFixed(1)+'kg)</span>':'')
+      : '<span style="color:var(--text-muted);">–</span>';
+    var remColor = remain===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
+
+    return '<tr id="sr'+i+'">' +
+      '<td class="tl" style="font-weight:600;font-size:12px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.partNo)+'</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.customer||'–')+'</td>'+
+      '<td style="font-weight:700;color:var(--blue);">'+p.receive.toLocaleString()+'</td>'+
+      '<td>'+wipStr+'</td>'+
+      '<td style="color:#059669;font-weight:700;">'+p.delivery.toLocaleString()+'</td>'+
+      '<td style="font-weight:800;color:'+remColor+';">'+remain.toLocaleString()+'</td>'+
+      '<td><span class="badge '+badgeCls+'">'+st+'</span></td>'+
+      '<td><button onclick="toggleDetail('+i+')" id="chv'+i+'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);">›</button></td>'+
+    '</tr>'+
+    '<tr id="dr'+i+'" style="display:none;"><td colspan="8" style="padding:0 6px 10px;"><div id="dc'+i+'"></div></td></tr>';
+  }).join('');
+}
+
+function getStatus(p) {
+  var wip = (wipMap[norm(p.partNo)]||{}).pcs||0;
+  if (p.delivery >= p.receive && p.receive>0) return 'จ่ายครบ';
+  if (p.delivery > 0) return 'จ่ายบางส่วน';
+  if (p.dueDate && new Date(p.dueDate)<new Date()) return 'เกินกำหนด';
+  if (wip>0 || p.receive>0) return 'กำลังผลิต';
+  return 'กำลังผลิต';
+}
+
+function toggleDetail(i) {
+  var dr=document.getElementById('dr'+i);
+  var isOpen=dr.style.display!=='none';
+  // close all
+  document.querySelectorAll('[id^="dr"]').forEach(function(r){r.style.display='none';});
+  document.querySelectorAll('[id^="chv"]').forEach(function(c){c.textContent='›';});
+  if(isOpen){return;}
+  document.getElementById('chv'+i).textContent='⌄';
+  dr.style.display='';
+  var p=(window._parts||[])[i]; if(!p)return;
+  document.getElementById('dc'+i).innerHTML=buildDetail(p);
+}
+
+function buildDetail(p) {
+  var k=norm(p.partNo);
+  var wip=wipMap[k]||{};
+  var remain=Math.max(0,p.receive-p.delivery);
+
+  // Job master items ของ P/No นี้
+  var jobs=jmItems.filter(function(j){ return norm(j.name||'')===k; });
+  // Job master delivery records
+  var jmDels=[];
+  jobs.forEach(function(job){
+    jmRecords.filter(function(r){ return r.jobId===job.id && r.type==='out'; }).forEach(function(r){
+      jmDels.push({date:r.date||'–',qty:r.qty,ref:r.bill||r.inv||'–',src:'Job Master'});
+    });
+  });
+  // BL delivery
+  blDel.filter(function(d){ return norm(d.partNo||'')===k; }).forEach(function(d){
+    jmDels.push({date:d.date||'–',qty:d.qty,ref:d.inv||'–',src:'BL Stock',id:d.id});
+  });
+  jmDels.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  var html='<div class="detail-box">';
+
+  // Summary row
+  html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">';
+  html+='<div style="padding:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">รับเข้ารวม</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--blue);">'+p.receive.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น ('+jobs.length+' ล็อต)</div></div>';
+
+  html+='<div style="padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">WIP ชุบแล้ว</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--amber);">'+(wip.pcs||0).toLocaleString()+'</div>';
+  if(wip.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wip.kgs.toFixed(1)+' Kgs · '+Object.keys(wip.lines||{}).join('/')+'</div>';
+  else html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น</div>';
+  html+='</div>';
+
+  html+='<div style="padding:8px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">คงเหลือ</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:'+(remain===0?'#94a3b8':'var(--green)')+';">'+remain.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">ส่งแล้ว '+p.delivery+'</div></div>';
+  html+='</div>';
+
+  // Job lots (รับเข้า)
+  if (jobs.length) {
+    html+='<div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px;">📥 รับเข้า (จาก Job Master · '+jobs.length+' ล็อต)</div>';
+    html+='<div class="tbl-wrap"><table class="st" style="min-width:340px;"><thead><tr>';
+    html+='<th class="tl">วันที่รับ</th><th class="tl">Bill No</th><th class="tl">Lot No</th><th>จำนวน (ชิ้น)</th><th>น้ำหนัก (Kg)</th></tr></thead><tbody>';
+    jobs.forEach(function(j){
+      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(j.bill||'–')+'</td>'+
+        '<td class="tl" style="font-size:10px;">'+esc(j.lot||'–')+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||0).toLocaleString()+'</td>'+
+        '<td style="color:var(--text-muted);">'+(j.kg?j.kg:'–')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  // Delivery
+  if (jmDels.length) {
+    html+='<div style="font-size:10px;font-weight:700;color:#059669;margin:8px 0 4px;">📤 Delivery ('+jmDels.length+' ครั้ง)</div>';
+    html+='<div class="tbl-wrap"><table class="st" style="min-width:320px;"><thead><tr>';
+    html+='<th class="tl">วันที่</th><th>จำนวน</th><th class="tl">INV/อ้างอิง</th><th class="tl">แหล่ง</th><th></th></tr></thead><tbody>';
+    jmDels.forEach(function(d){
+      html+='<tr><td class="tl">'+fmtD(d.date)+'</td>'+
+        '<td style="font-weight:700;color:#059669;">'+Number(d.qty||0).toLocaleString()+'</td>'+
+        '<td class="tl" style="font-size:10px;">'+esc(d.ref)+'</td>'+
+        '<td class="tl" style="font-size:10px;color:var(--text-muted);">'+esc(d.src)+'</td>'+
+        '<td>'+(d.id?'<button onclick="deleteBLDel(\''+d.id+'\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑</button>':'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  html+='</div>';
+  return html;
+}
+
+// ══════════════════════════════════════════════════════
+//  DELIVERY (บันทึกเพิ่มเติม)
+// ══════════════════════════════════════════════════════
+function populateDeliverySel() {
+  var map=buildMap();
+  var sel=document.getElementById('dPartSel');
+  var cur=sel.value;
+  sel.innerHTML='<option value="">— เลือก P/No (เฉพาะที่มีคงเหลือ) —</option>';
+  Object.values(map)
+    .filter(function(p){ return p.receive>p.delivery; })
+    .sort(function(a,b){ return a.partNo.localeCompare(b.partNo); })
+    .forEach(function(p){
+      var r=p.receive-p.delivery;
+      var opt=document.createElement('option');
+      opt.value=p.partNo+'||'+p.customer;
+      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
+      sel.appendChild(opt);
+    });
+  if(cur) sel.value=cur;
+  sel.onchange=showDInfo;
+}
+
+function showDInfo(){
+  var val=document.getElementById('dPartSel').value;
+  var box=document.getElementById('dInfoBox');
+  if(!val){box.style.display='none';return;}
+  var pn=val.split('||')[0], cu=val.split('||')[1]||'';
+  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+  var wip=(wipMap[norm(pn)]||{}).pcs||0;
+  var remain=item.receive-item.delivery;
+  box.style.display='block';
+  box.innerHTML='<strong>'+esc(pn)+'</strong>'+(cu?' · <span style="color:var(--text-muted)">'+esc(cu)+'</span>':'')+
+    ' &nbsp;|&nbsp; รับ <strong style="color:var(--blue)">'+item.receive+'</strong>'+
+    ' &nbsp;WIP <strong style="color:var(--amber)">'+wip+'</strong>'+
+    ' &nbsp;ส่งแล้ว <strong style="color:#059669">'+item.delivery+'</strong>'+
+    ' &nbsp;→ <strong style="color:'+(remain<=0?'#94a3b8':'var(--navy)')+'">'+remain+' ชิ้น</strong>';
+}
+
+function checkDQty(){
+  var val=document.getElementById('dPartSel').value; if(!val)return;
+  var pn=val.split('||')[0];
+  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+  var remain=item.receive-item.delivery;
+  var qty=parseInt(document.getElementById('dQty').value)||0;
+  document.getElementById('dQty').style.borderColor=qty>remain?'#ef4444':'var(--border)';
+}
+
+async function saveDelivery(){
+  var val=document.getElementById('dPartSel').value;
+  var qty=parseInt(document.getElementById('dQty').value)||0;
+  var date=document.getElementById('dDate').value;
+  var inv=document.getElementById('dInv').value.trim();
+  var note=document.getElementById('dNote').value.trim();
+  var toast=document.getElementById('dToast');
+
+  if(!val||!qty||!date){
+    toast.className='toast terr'; toast.textContent='❌ กรุณาเลือก P/No, จำนวน และวันที่';
+    setTimeout(function(){toast.className='toast';},2500); return;
+  }
+  var pn=val.split('||')[0], cu=val.split('||')[1]||'';
+  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+  var remain=item.receive-item.delivery;
+  if(qty>remain){
+    toast.className='toast terr'; toast.textContent='⚠️ เกินคงเหลือ ['+remain.toLocaleString()+' ชิ้น]';
+    setTimeout(function(){toast.className='toast';},3000); return;
+  }
+
+  var rec={id:'DEL'+Date.now(),date:date,partNo:pn,customer:cu,qty:qty,inv:inv,note:note};
+  blDel.unshift(rec);
+  try{
+    await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({records:blDel,savedAt:new Date().toISOString()})});
+    toast.className='toast tok'; toast.textContent='✅ บันทึก Delivery '+qty.toLocaleString()+' ชิ้น';
+    setTimeout(function(){toast.className='toast';},2500);
+    document.getElementById('dQty').value='';
+    document.getElementById('dInv').value='';
+    document.getElementById('dNote').value='';
+    document.getElementById('dInfoBox').style.display='none';
+    renderStock(); renderDHist(); populateDeliverySel();
+  }catch(e){
+    blDel.shift();
+    toast.className='toast terr'; toast.textContent='❌ บันทึกไม่สำเร็จ: '+e.message;
+    setTimeout(function(){toast.className='toast';},3000);
+  }
+}
+
+async function deleteBLDel(id){
+  if(!confirm('ลบรายการ Delivery นี้?')) return;
+  blDel=blDel.filter(function(d){return d.id!==id;});
+  await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({records:blDel,savedAt:new Date().toISOString()})});
+  renderStock(); renderDHist(); populateDeliverySel();
+  // re-render open detail if any
+  document.querySelectorAll('[id^="dr"]').forEach(function(r){r.style.display='none';});
+}
+
+function renderDHist(){
+  var tbody=document.getElementById('dHistBody');
+  if(!blDel.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
+    return;
+  }
+  tbody.innerHTML=blDel.slice(0,40).map(function(d){
+    return '<tr>'+
+      '<td class="tl" style="font-size:11px;">'+fmtD(d.date)+'</td>'+
+      '<td class="tl" style="font-weight:600;font-size:12px;">'+esc(d.partNo)+'</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);">'+esc(d.customer||'–')+'</td>'+
+      '<td style="font-weight:700;color:#059669;">'+Number(d.qty).toLocaleString()+'</td>'+
+      '<td class="tl" style="font-size:11px;">'+esc(d.inv||'–')+'</td>'+
+      '<td><button onclick="deleteBLDel(\''+d.id+'\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════════
+function buildHistFilters(){
+  var sel=document.getElementById('hPartSel');
+  var existing=new Set(Array.from(sel.options).map(function(o){return o.value;}));
+  var parts=new Set();
+  jmItems.forEach(function(j){if(j.name)parts.add(j.name);});
+  blDel.forEach(function(d){if(d.partNo)parts.add(d.partNo);});
+  [...parts].sort().forEach(function(p){
+    if(!existing.has(p)){
+      var opt=document.createElement('option'); opt.value=p; opt.textContent=p; sel.appendChild(opt);
+    }
+  });
+}
+
+function renderHist(){
+  var pf=document.getElementById('hPartSel').value;
+  var tf=document.getElementById('hTypeSel').value;
+  var all=[];
+
+  // รับเข้า (job master items)
+  if(tf==='all'||tf==='in'){
+    jmItems.forEach(function(j){
+      if(pf!=='all'&&j.name!==pf) return;
+      all.push({date:j.date||'–',type:'in',partNo:j.name||'–',customer:j.customer||'–',qty:j.qty||0,ref:j.bill||'–'});
+    });
+  }
+
+  // WIP
+  if(tf==='all'||tf==='wip'){
+    Object.values(wipMap).forEach(function(w){
+      if(!w.pcs&&!w.kgs) return;
+      if(pf!=='all'&&norm(w.partName)!==norm(pf)) return;
+      var lineStr=Object.entries(w.lines||{}).filter(function(e){return e[1]>0;}).map(function(e){return e[0]+':'+e[1];}).join('/');
+      all.push({date:'–',type:'wip',partNo:w.partName,customer:'',qty:w.pcs,ref:lineStr+(w.kgs?' ('+w.kgs.toFixed(1)+'kg)':'')});
+    });
+  }
+
+  // Delivery จาก Job Master
+  if(tf==='all'||tf==='out'){
+    jmRecords.filter(function(r){return r.type==='out';}).forEach(function(r){
+      var job=jmItems.find(function(j){return j.id===r.jobId;});
+      if(!job) return;
+      if(pf!=='all'&&job.name!==pf) return;
+      all.push({date:r.date||'–',type:'out',partNo:job.name||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
+    });
+    blDel.forEach(function(d){
+      if(pf!=='all'&&d.partNo!==pf) return;
+      all.push({date:d.date||'–',type:'out',partNo:d.partNo,customer:d.customer||'–',qty:d.qty||0,ref:d.inv||'–'});
+    });
+  }
+
+  all.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+
+  var typeMap={in:'📥 รับ',wip:'🔧 WIP',out:'📤 ส่ง'};
+  var badgeMap={in:'ok',wip:'wip',out:'part'};
+  var tbody=document.getElementById('hBody');
+  if(!all.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML=all.slice(0,120).map(function(r){
+    return '<tr>'+
+      '<td class="tl" style="font-size:11px;">'+(r.date!=='–'?fmtD(r.date):'–')+'</td>'+
+      '<td><span class="badge '+badgeMap[r.type]+'">'+typeMap[r.type]+'</span></td>'+
+      '<td class="tl" style="font-weight:600;font-size:12px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.partNo)+'</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);">'+esc(r.customer)+'</td>'+
+      '<td style="font-weight:700;">'+Number(r.qty).toLocaleString()+'</td>'+
+      '<td class="tl" style="font-size:10px;color:var(--text-muted);">'+esc(r.ref)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  TAB SWITCH
+// ══════════════════════════════════════════════════════
+function switchTab(name){
+  ['stock','delivery','history'].forEach(function(t){
+    document.getElementById('tab-'+t).style.display=t===name?'':'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(function(btn,i){
+    btn.classList.toggle('active',['stock','delivery','history'][i]===name);
+  });
+  if(name==='delivery'){ populateDeliverySel(); showDInfo(); }
+  if(name==='history') { buildHistFilters(); renderHist(); }
+}
+
+// ══════════════════════════════════════════════════════
+//  SYNC STATUS
+// ══════════════════════════════════════════════════════
+function setSyncing(loading,ok,errMsg){
+  var dot=document.getElementById('sdot');
+  var lbl=document.getElementById('syncLbl');
+  if(loading){ dot.className='sdot spin'; lbl.textContent='กำลังโหลด...'; return; }
+  if(ok){
+    dot.className='sdot ok';
+    var t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+    lbl.textContent='Job Master: '+jmItems.length+' รายการ · WIP: '+Object.keys(wipMap).length+' P/No · อัปเดต '+t;
+  } else {
+    dot.className='sdot err';
+    lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
+  }
+}
+</script>
+</body>
+</html>
