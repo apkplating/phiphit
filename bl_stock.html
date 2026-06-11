@@ -276,7 +276,11 @@ window.addEventListener('load', function(){
 
 function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function pad(n){ return String(n).padStart(2,'0'); }
-function norm(s){ return String(s||'').trim().toLowerCase().replace(/[\s\-_\.]+/g,''); }
+function norm(s){
+  return String(s||'').trim().toUpperCase()
+    .replace(/[\s\-_\.]+/g,'')  // ลบ space, dash, underscore, dot
+    .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
+}
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtD(s){
   if(!s||s==='–') return '–';
@@ -532,8 +536,14 @@ function renderStock() {
   // Summary
   var sumRcv=0,sumWip=0,sumDel=0;
   parts.forEach(function(p){
-    var wip=(getWip(p.partNo)||{}).pcs||0;
-    sumRcv+=p.receive; sumWip+=wip; sumDel+=p.delivery;
+    var wo=getWip(p.partNo)||{};
+    var wpcs=wo.pcs||0;
+    var wkg=wo.kgs||0;
+    if (!wpcs && wkg>0) {
+      var pmw=pmLookup(p.partNo);
+      if (pmw && pmw.weightPerPc>0) wpcs=Math.round(wkg*1000/pmw.weightPerPc);
+    }
+    sumRcv+=p.receive; sumWip+=wpcs; sumDel+=p.delivery;
   });
   document.getElementById('sItems').textContent=parts.length;
   document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
@@ -562,15 +572,26 @@ function renderStock() {
   }
 
   tbody.innerHTML = filtParts.map(function(p,i){
-    var wip    = (getWip(p.partNo)||{}).pcs||0;
-    var wipKg  = (getWip(p.partNo)||{}).kgs||0;
+    var wipObj = getWip(p.partNo)||{};
+    var wip    = wipObj.pcs||0;
+    var wipKg  = wipObj.kgs||0;
+
+    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
+    if (!wip && wipKg > 0) {
+      var pmW = pmLookup(p.partNo);
+      if (pmW && pmW.weightPerPc > 0) {
+        wip = Math.round(wipKg * 1000 / pmW.weightPerPc);
+      }
+    }
+
     var remain = Math.max(0, p.receive - p.delivery);
     var st     = getStatus(p);
     var pm     = pmLookup(p.partNo);
 
     var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
-    var wipStr = wip>0
-      ? wip.toLocaleString()+(wipKg>0?' <span style="font-size:9px;color:var(--text-muted);">('+wipKg.toFixed(1)+'kg)</span>':'')
+    var wipStr = (wip>0 || wipKg>0)
+      ? (wip>0 ? wip.toLocaleString() : '~'+Math.round(wipKg*1000/(pm&&pm.weightPerPc||1)).toLocaleString()) +
+        (wipKg>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+wipKg.toFixed(2)+'kg)</span>' : '')
       : '<span style="color:var(--text-muted);">–</span>';
     var remColor = remain===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
 
@@ -605,7 +626,8 @@ function renderStock() {
 }
 
 function getStatus(p) {
-  var wip = (getWip(p.partNo)||{}).pcs||0;
+  var wipObj = getWip(p.partNo)||{};
+  var wip = (wipObj.pcs||0) + (wipObj.kgs||0);  // ถ้ามี pcs หรือ kgs ถือว่ามี WIP
   if (p.delivery >= p.receive && p.receive>0) return 'จ่ายครบ';
   if (p.delivery > 0) return 'จ่ายบางส่วน';
   if (p.dueDate && new Date(p.dueDate)<new Date()) return 'เกินกำหนด';
@@ -628,7 +650,14 @@ function toggleDetail(i) {
 
 function buildDetail(p) {
   var k=norm(p.partNo);
-  var wip=getWip(p.partNo)||{};
+  var wipObj = getWip(p.partNo)||{};
+  var wipPcs = wipObj.pcs||0;
+  var wipKg2 = wipObj.kgs||0;
+  // แปลง kg→ชิ้น ถ้ามี weightPerPc
+  if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
+    wipPcs = Math.round(wipKg2 * 1000 / pm.weightPerPc);
+  }
+  var wip = wipPcs;
   var remain=Math.max(0,p.receive-p.delivery);
   var pm=pmLookup(p.partNo); // Part Master data
 
