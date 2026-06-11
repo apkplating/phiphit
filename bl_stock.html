@@ -400,8 +400,17 @@ async function loadWIP() {
       // dayRecords อาจอยู่ใน data หรือ data.dayRecords
       var recs = Array.isArray(data) ? data
                : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
+      var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
       recs.forEach(function(dr){
         if (!dr.rows) return;
+        // กรองเฉพาะรอบที่ยังไม่จ่ายครบ
+        // ถ้ามี status==='done' → ข้ามได้เลย (จ่ายครบแล้ว)
+        if (dr.status === 'done') return;
+        // ถ้าไม่มี status field → ดูจากวันที่ (เก่ากว่า 30 วัน ถือว่าจ่ายไปแล้ว)
+        if (!dr.status && dr.date) {
+          var drDate = new Date(dr.date);
+          if (drDate < cutoff) return;
+        }
         dr.rows.forEach(function(row){
           var pn = (row.partName||'').trim();
           if (!pn) return;
@@ -426,26 +435,25 @@ function jobQty(job)   { return Number(job.qty || job.pcs || job.line || 0); }
 // jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
 function jobBill(job)  { return job.bill || job.id || ''; }
 
-// getWip — ค้นหา WIP ด้วย partNo (job.bill) โดย:
+// getWip — ค้นหา WIP ด้วย partNo โดย:
 // 1. ตรง key ตรงๆ (norm partNo)
 // 2. ถ้าไม่เจอ → ลองหาผ่าน Part Master name field
+// 3. fuzzy match
+// คืนค่า net WIP = wipMap - delivery ที่จ่ายออกแล้ว
 function getWip(partNo) {
   var k = norm(partNo);
-  if (wipMap[k]) return wipMap[k];
-  // ลอง Part Master name
-  var pm = pmLookup(partNo);
-  if (pm && pm.name) {
-    var kn = norm(pm.name);
-    if (wipMap[kn]) return wipMap[kn];
+  var wo = wipMap[k];
+  if (!wo) {
+    var pm = pmLookup(partNo);
+    if (pm && pm.name) { var kn = norm(pm.name); if (wipMap[kn]) wo = wipMap[kn]; }
   }
-  // ลอง partName ที่คล้ายกัน (wipMap key ที่ contains partNo หรือ partNo contains key)
-  var keys = Object.keys(wipMap);
-  for (var i=0; i<keys.length; i++) {
-    if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) {
-      return wipMap[keys[i]];
+  if (!wo) {
+    var keys = Object.keys(wipMap);
+    for (var i=0; i<keys.length; i++) {
+      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { wo = wipMap[keys[i]]; break; }
     }
   }
-  return null;
+  return wo || null;
 }
 
 function buildMap() {
