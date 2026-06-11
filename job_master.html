@@ -460,7 +460,7 @@ function checkPin() {
     loadLocal();
     startPoll();
     setTimeout(fbLoad, 800);
-    setTimeout(pullFromLines, 3000);
+    setTimeout(function(){ loadPartMaster().then(function(){ pullFromLines(); }); }, 3000);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -1116,6 +1116,34 @@ function onUnitChange() {
 //  AUTO-PULL จาก v4 (B1) / v5 (B2) / v6 (R1)
 //  ดึง roundEntries ที่ partName ตรงกัน แล้วตัดสต็อคอัตโนมัติ
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+//  PART MASTER — ทะเบียนชิ้นงานกลาง
+// ══════════════════════════════════════
+var PM_URL   = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/part-master.json';
+var pmParts  = [];
+
+async function loadPartMaster() {
+  try {
+    var res = await fetch(PM_URL);
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.parts)) {
+      pmParts = data.parts;
+      try { localStorage.setItem('jm_pmParts', JSON.stringify(pmParts)); } catch(e){}
+    }
+  } catch(e) {
+    try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e2){ pmParts=[]; }
+  }
+}
+
+function pmLookup(partName) {
+  var k = (partName||'').toUpperCase().replace(/[\s\-]/g,'');
+  return pmParts.find(function(p){
+    return (p.partNo||'').toUpperCase().replace(/[\s\-]/g,'') === k ||
+           (p.name||'').toUpperCase().replace(/[\s\-]/g,'') === k;
+  }) || null;
+}
+
 var LINE_FB_PATHS = {
   B1: FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/b1',
   B2: FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/b2',
@@ -1165,6 +1193,15 @@ async function pullFromLines() {
           var bPcs = Number(barrel.pcs || 0);
           var bKg  = Number(barrel.kg  || 0);
 
+          // ── แปลง kg → ชิ้น ผ่าน Part Master ──
+          // กรณี: job บันทึกหน่วย "ชิ้น" แต่สายชุบบันทึกเป็น kg
+          if (!bPcs && bKg > 0) {
+            var pmPart = pmLookup(barrel.partName || barrel.name || '');
+            if (pmPart && pmPart.weightPerPc && pmPart.weightPerPc > 0) {
+              bPcs = Math.round(bKg * 1000 / pmPart.weightPerPc);
+            }
+          }
+
           // หา job ที่ partName ตรงกัน และยังมี remain
           jobItems.forEach(function(job) {
             var jPartKey = normalizePartKey(job.partName || '');
@@ -1193,6 +1230,9 @@ async function pullFromLines() {
             } else {
               if (!bPcs || b.remain <= 0) return;
               var outQty = Math.min(bPcs, b.remain);
+              // ตรวจว่าแปลงจาก kg หรือไม่ (เพื่อแสดงใน note)
+              var convNote = (!Number(barrel.pcs||0) && bKg > 0)
+                ? ' [แปลงจาก ' + bKg.toFixed(3) + ' kg]' : '';
               var newRec2 = {
                 id: 'AUTO-' + Date.now() + '-' + Math.random().toString(36).slice(2,5),
                 roundId: roundEntryId,
@@ -1202,7 +1242,7 @@ async function pullFromLines() {
                 qty: outQty, qtyKg: 0, unit: 'pcs',
                 inv: rec.lotNo || '',
                 by: lineName + ' Auto',
-                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '')
+                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '') + convNote
               };
               jobRecords.unshift(newRec2);
               processedRoundIds[roundEntryId] = true;
