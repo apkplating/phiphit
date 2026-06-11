@@ -417,8 +417,10 @@ async function loadWIP() {
 //  receive  ← jmItems[].qty  (จำนวนรับเข้าจาก Job Master)
 //  delivery ← jmRecords[type:'out'].qty + blDel[].qty
 // ══════════════════════════════════════════════════════
-function jobPartNo(job) { return job.bill || job.name || job.partNo || ''; }
+function jobPartNo(job) { return job.partName || job.name || job.partNo || job.bill || ''; }
 function jobQty(job)   { return Number(job.qty || job.pcs || job.line || 0); }
+// jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
+function jobBill(job)  { return job.bill || job.id || ''; }
 
 // getWip — ค้นหา WIP ด้วย partNo (job.bill) โดย:
 // 1. ตรง key ตรงๆ (norm partNo)
@@ -700,7 +702,7 @@ function buildDetail(p) {
     html+='<div class="tbl-wrap"><table class="st" style="min-width:340px;"><thead><tr>';
     html+='<th class="tl">วันที่รับ</th><th class="tl">Bill No</th><th class="tl">Lot No</th><th>จำนวน (ชิ้น)</th><th>น้ำหนัก (Kg)</th></tr></thead><tbody>';
     jobs.forEach(function(j){
-      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(j.bill||'–')+'</td>'+
+      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(jobBill(j))+'</td>'+
         '<td class="tl" style="font-size:10px;">'+esc(j.lot||'–')+'</td>'+
         '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||j.pcs||j.line||0).toLocaleString()+'</td>'+
         '<td style="color:var(--text-muted);">'+(j.kg?j.kg:'–')+'</td></tr>';
@@ -867,7 +869,7 @@ function renderHist(){
     jmItems.forEach(function(j){
       var pn=jobPartNo(j);
       if(pf!=='all'&&pn!==pf) return;
-      all.push({date:j.date||'–',type:'in',partNo:pn||'–',customer:j.customer||'–',qty:jobQty(j),ref:j.bill||'–'});
+      all.push({date:j.date||'–',type:'in',partNo:pn||'–',customer:j.customer||'–',qty:jobQty(j),ref:jobBill(j)||'–'});
     });
   }
 
