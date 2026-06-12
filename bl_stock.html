@@ -121,14 +121,17 @@ table.st td.tl{text-align:left;}
       </div>
       <div class="sum-card" style="background:#eff6ff;border-color:#bfdbfe;">
         <div class="val" style="color:var(--blue);" id="sRcv">0</div>
+        <div id="sRcvKg" style="font-size:10px;color:#60a5fa;margin-top:1px;"></div>
         <div class="lbl">รับเข้า (ชิ้น)</div>
       </div>
       <div class="sum-card" style="background:var(--amber-bg);border-color:var(--amber-border);">
         <div class="val" style="color:var(--amber);" id="sWip">0</div>
+        <div id="sWipKg" style="font-size:10px;color:#d97706;margin-top:1px;"></div>
         <div class="lbl">WIP ชุบแล้ว</div>
       </div>
       <div class="sum-card" style="background:var(--orange-bg);border-color:var(--orange-border);">
         <div class="val" style="color:var(--orange);" id="sDel">0</div>
+        <div id="sDelKg" style="font-size:10px;color:#f97316;margin-top:1px;"></div>
         <div class="lbl">Delivery</div>
       </div>
     </div>
@@ -151,10 +154,10 @@ table.st td.tl{text-align:left;}
           <thead><tr>
             <th class="tl" style="min-width:130px;">P/No · ชิ้นงาน</th>
             <th class="tl" style="min-width:70px;">ลูกค้า</th>
-            <th style="min-width:60px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
-            <th style="min-width:60px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชุบแล้ว)</span></th>
-            <th style="min-width:60px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
-            <th style="min-width:60px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:80px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:70px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:80px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:80px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
             <th style="min-width:65px;">สถานะ</th>
             <th style="width:28px;"></th>
           </tr></thead>
@@ -464,8 +467,9 @@ function buildMap() {
     var pn = jobPartNo(job);
     var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, delivery:0, jobIds:[], dueDate:job.dueDate||'' };
-    map[k].receive += jobQty(job);
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    map[k].receive    += jobQty(job);
+    map[k].receiveKg  += Number(job.qtyKg||0);
     map[k].jobIds.push(job.id);
     if (!map[k].customer && job.customer) map[k].customer=job.customer;
     if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
@@ -479,14 +483,16 @@ function buildMap() {
     if (!job) return;
     var k = norm(jobPartNo(job));
     if (!k || !map[k]) return;
-    map[k].delivery += Number(r.qty||0);
+    map[k].delivery    += Number(r.qty||0);
+    map[k].deliveryKg  += Number(r.qtyKg||0);
   });
 
   // Delivery เพิ่มเติมที่บันทึกใน bl_stock
   blDel.forEach(function(d){
     var k = norm(d.partNo||'');
     if (!k || !map[k]) return;
-    map[k].delivery += Number(d.qty||0);
+    map[k].delivery   += Number(d.qty||0);
+    map[k].deliveryKg += Number(d.qtyKg||0);
   });
 
   // ── เติมข้อมูลจาก Part Master ──
@@ -542,7 +548,7 @@ function renderStock() {
   });
 
   // Summary
-  var sumRcv=0,sumWip=0,sumDel=0;
+  var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
     var wo=getWip(p.partNo)||{};
     var wpcs=wo.pcs||0;
@@ -551,8 +557,16 @@ function renderStock() {
       var pmw=pmLookup(p.partNo);
       if (pmw && pmw.weightPerPc>0) wpcs=Math.round(wkg*1000/pmw.weightPerPc);
     }
-    sumRcv+=p.receive; sumWip+=wpcs; sumDel+=p.delivery;
+    sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
+    sumWip+=wpcs;      sumWipKg+=wkg;
+    sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
   });
+  document.getElementById('sItems').textContent=parts.length;
+  document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
+  // แสดง kg ใต้ตัวเลขชิ้น ถ้ามี
+  var rcvKgEl=document.getElementById('sRcvKg'); if(rcvKgEl) rcvKgEl.textContent=sumRcvKg>0?sumRcvKg.toFixed(1)+' kg':'';
+  var wipKgEl=document.getElementById('sWipKg'); if(wipKgEl) wipKgEl.textContent=sumWipKg>0?sumWipKg.toFixed(1)+' kg':'';
+  var delKgEl=document.getElementById('sDelKg'); if(delKgEl) delKgEl.textContent=sumDelKg>0?sumDelKg.toFixed(1)+' kg':'';
   document.getElementById('sItems').textContent=parts.length;
   document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
   document.getElementById('sWip').textContent=sumWip.toLocaleString();
@@ -583,27 +597,34 @@ function renderStock() {
     var wipObj = getWip(p.partNo)||{};
     var wip    = wipObj.pcs||0;
     var wipKg  = wipObj.kgs||0;
-
-    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
-    if (!wip && wipKg > 0) {
-      var pmW = pmLookup(p.partNo);
-      if (pmW && pmW.weightPerPc > 0) {
-        wip = Math.round(wipKg * 1000 / pmW.weightPerPc);
-      }
-    }
-
-    var remain = Math.max(0, p.receive - p.delivery);
-    var st     = getStatus(p);
     var pm     = pmLookup(p.partNo);
 
-    var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
-    var wipStr = (wip>0 || wipKg>0)
-      ? (wip>0 ? wip.toLocaleString() : '~'+Math.round(wipKg*1000/(pm&&pm.weightPerPc||1)).toLocaleString()) +
-        (wipKg>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+wipKg.toFixed(2)+'kg)</span>' : '')
-      : '<span style="color:var(--text-muted);">–</span>';
-    var remColor = remain===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
+    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
+    if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
+      wip = Math.round(wipKg * 1000 / pm.weightPerPc);
+    }
 
-    // สีชุบจาก Part Master
+    var remain   = Math.max(0, p.receive - p.delivery);
+    var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
+    var st       = getStatus(p);
+
+    var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
+
+    // helper: แสดง ชิ้น + kg ซ้อนกัน
+    function dualCell(pcs, kg, color) {
+      var pcsStr = pcs > 0 ? '<div style="font-weight:700;color:'+(color||'var(--navy)')+';">'+pcs.toLocaleString()+'</div>' : '<div style="color:#94a3b8;">–</div>';
+      var kgStr  = kg  > 0 ? '<div style="font-size:9px;color:var(--text-muted);">'+kg.toFixed(2)+' kg</div>' : '';
+      return pcsStr + kgStr;
+    }
+
+    var wipStr = (wip>0||wipKg>0)
+      ? '<div style="font-weight:700;">'+wip.toLocaleString()+'</div>'+
+        '<div style="font-size:9px;color:var(--text-muted);">'+wipKg.toFixed(2)+' kg</div>'
+      : '<div style="color:#94a3b8;">–</div>';
+
+    var remColor = remain===0&&remainKg===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
+
+    // สีชุบ + ชื่อจาก Part Master
     var colorStr = '';
     if (pm && pm.colors) {
       colorStr = pm.colors.split('').filter(function(c){ return 'BCK'.includes(c); }).map(function(c){
@@ -611,8 +632,6 @@ function renderStock() {
         return '<span style="'+s+';padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;">'+c+'</span>';
       }).join('');
     }
-
-    // ชื่อชิ้นงาน (จาก PM หรือ fallback customer)
     var nameStr = pm && pm.name
       ? '<div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+esc(pm.name)+'</div>'
       : '';
@@ -622,10 +641,10 @@ function renderStock() {
         esc(p.partNo)+(colorStr?' <span>'+colorStr+'</span>':'')+nameStr+
       '</td>'+
       '<td class="tl" style="font-size:11px;color:var(--text-muted);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.customer||'–')+'</td>'+
-      '<td style="font-weight:700;color:var(--blue);">'+p.receive.toLocaleString()+'</td>'+
+      '<td>'+dualCell(p.receive, p.receiveKg||0, 'var(--blue)')+'</td>'+
       '<td>'+wipStr+'</td>'+
-      '<td style="color:#059669;font-weight:700;">'+p.delivery.toLocaleString()+'</td>'+
-      '<td style="font-weight:800;color:'+remColor+';">'+remain.toLocaleString()+'</td>'+
+      '<td>'+dualCell(p.delivery, p.deliveryKg||0, '#059669')+'</td>'+
+      '<td>'+dualCell(remain, remainKg, remColor)+'</td>'+
       '<td><span class="badge '+badgeCls+'">'+st+'</span></td>'+
       '<td><button onclick="toggleDetail('+i+')" id="chv'+i+'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);">›</button></td>'+
     '</tr>'+
