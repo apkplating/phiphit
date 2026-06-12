@@ -360,6 +360,25 @@ async function loadBLDel() {
   } catch(e){ blDel=[]; }
 }
 
+// ── Part Master (weightG g/ชิ้น) ─────────────────────
+async function loadPartMaster() {
+  partMap = {};
+  try {
+    var res = await fetch(PM_URL);
+    if (!res.ok) return;
+    var list = await res.json();
+    if (!Array.isArray(list)) return;
+    list.forEach(function(p) {
+      var k = norm(p.partNo || '');
+      if (!k) return;
+      var wg = Number(p.weightG || 0);
+      if (wg > 0) partMap[k] = { weightG: wg, partName: p.partName||'', color: p.color||'' };
+      var kn = norm(p.partName || '');
+      if (kn && wg > 0 && !partMap[kn]) partMap[kn] = { weightG: wg, partNo: p.partNo||'', color: p.color||'' };
+    });
+  } catch(e) { console.warn('loadPartMaster:', e.message); }
+}
+
 // ── WIP จาก 3 lines ─────────────────────────────────
 async function loadWIP() {
   // เก็บ raw rows ไว้ก่อน (ยังไม่ sum) เพื่อ filter ตามวันที่รับเข้าทีหลัง
