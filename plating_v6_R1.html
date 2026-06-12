@@ -4757,7 +4757,7 @@ function onIntakeNameChange() {
 
 // ─── แก้ calcIssuedForLot ให้จับคู่ด้วย partNo ด้วย ─────────
 function normalizePartKey(s) {
-  return (s||'').trim().toUpperCase().replace(/[\s\-_\.]+/g,'').replace(/O/g,'0');
+  return (s||'').trim().toLowerCase().replace(/\s+/g,' ');
 }
 
 function partNoFromName(fullName) {

@@ -4296,15 +4296,45 @@ function exportChemCSV() {
 
 var partList = [];
 var _plColor = 'B';
+var PM_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
+
+function pmToPartList(pm) {
+  // แปลง Part Master format → partList format ที่ v4/v5/v6 ใช้
+  return (pm.parts || []).map(function(p) {
+    return {
+      id: p.id || ('P'+p.partNo),
+      partNo: p.partNo || '',
+      partName: p.name || p.partName || '',
+      customer: p.customer || '',
+      weightG: p.weightPerPc || p.weightG || 0,
+      color: (p.colors || p.color || '').charAt(0) || 'B',
+      colors: p.colors || p.color || '',
+      note: p.note || ''
+    };
+  });
+}
 
 function loadPartList() {
+  // โหลดจาก localStorage ก่อน (ใช้ได้ทันที)
   try { partList = JSON.parse(localStorage.getItem('b1_partList') || '[]'); } catch(e){ partList=[]; }
+  // แล้วโหลดจาก Part Master (async, อัปเดตเมื่อได้รับ)
+  fetch(PM_URL)
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (data && Array.isArray(data.parts) && data.parts.length > 0) {
+        partList = pmToPartList(data);
+        try { localStorage.setItem('b1_partList', JSON.stringify(partList)); } catch(e){}
+        if (typeof renderPartList === 'function') renderPartList();
+        if (typeof renderPartPickerList === 'function') renderPartPickerList();
+        if (document.getElementById('plPartBadge')) document.getElementById('plPartBadge').textContent = partList.length;
+        console.log('[Part Master] loaded', partList.length, 'parts');
+      }
+    })
+    .catch(function(e){ console.warn('[Part Master] load failed, using cache'); });
 }
 function savePartListData() {
-  try { localStorage.setItem('b1_partList', JSON.stringify(partList)); } catch(e){}
-  // sync to firebase if configured
-  var url = getStoredFbUrl();
-  if (url) fetch(url+'/partList.json',{method:'PUT',body:JSON.stringify(partList)}).catch(function(){});
+  // Part Master เป็น source of truth — ไม่ save local list อีกต่อไป
+  console.warn('[Part Master] savePartListData: skipped — edit via part_master.html');
 }
 
 function plSelColor(c) {
