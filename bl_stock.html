@@ -121,17 +121,14 @@ table.st td.tl{text-align:left;}
       </div>
       <div class="sum-card" style="background:#eff6ff;border-color:#bfdbfe;">
         <div class="val" style="color:var(--blue);" id="sRcv">0</div>
-        <div id="sRcvKg" style="font-size:10px;color:#60a5fa;margin-top:1px;"></div>
         <div class="lbl">รับเข้า (ชิ้น)</div>
       </div>
       <div class="sum-card" style="background:var(--amber-bg);border-color:var(--amber-border);">
         <div class="val" style="color:var(--amber);" id="sWip">0</div>
-        <div id="sWipKg" style="font-size:10px;color:#d97706;margin-top:1px;"></div>
         <div class="lbl">WIP ชุบแล้ว</div>
       </div>
       <div class="sum-card" style="background:var(--orange-bg);border-color:var(--orange-border);">
         <div class="val" style="color:var(--orange);" id="sDel">0</div>
-        <div id="sDelKg" style="font-size:10px;color:#f97316;margin-top:1px;"></div>
         <div class="lbl">Delivery</div>
       </div>
     </div>
@@ -154,10 +151,10 @@ table.st td.tl{text-align:left;}
           <thead><tr>
             <th class="tl" style="min-width:130px;">P/No · ชิ้นงาน</th>
             <th class="tl" style="min-width:70px;">ลูกค้า</th>
-            <th style="min-width:80px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
-            <th style="min-width:70px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
-            <th style="min-width:80px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
-            <th style="min-width:80px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:60px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:60px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชุบแล้ว)</span></th>
+            <th style="min-width:60px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
+            <th style="min-width:60px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">(ชิ้น)</span></th>
             <th style="min-width:65px;">สถานะ</th>
             <th style="width:28px;"></th>
           </tr></thead>
@@ -254,17 +251,17 @@ var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedataba
 
 // Job Master อยู่ใน DB_B1 /job-master
 var JM_URL  = DB_B1 + '/job-master.json';
-var PM_URL     = DB_B1 + '/part-master.json';  // Part Master — ทะเบียนชิ้นงานกลาง
 // Delivery ที่บันทึกใน bl_stock เก็บที่ DB_B1 /bl-delivery
 var DEL_URL    = DB_B1 + '/bl-delivery.json';
 var INTAKE_URL = DB_B1 + '/intake.json';      // intakeJobs จาก v4
+var PM_URL     = DB_B1 + '/partList.json';    // Part Master (weightG g/ชิ้น)
 
 // ── Data ──
 var jmItems   = [];  // Job Master items → รับเข้า (receive)
+var partMap   = {};  // normKey → weightG (g/ชิ้น) จาก Part Master
 var jmRecords = [];  // Job Master records (type:'out') → delivery จาก Job Master
 var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
 var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
-var pmParts   = [];  // Part Master [{id,partNo,name,customer,colors,weightPerPc,pcsPerRack}]
 
 // ══════════════════════════════════════════════════════
 //  INIT
@@ -279,11 +276,7 @@ window.addEventListener('load', function(){
 
 function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function pad(n){ return String(n).padStart(2,'0'); }
-function norm(s){
-  return String(s||'').trim().toUpperCase()
-    .replace(/[\s\-_\.]+/g,'')  // ลบ space, dash, underscore, dot
-    .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
-}
+function norm(s){ return String(s||'').trim().toLowerCase().replace(/[\s\-_\.]+/g,''); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtD(s){
   if(!s||s==='–') return '–';
@@ -298,7 +291,9 @@ function fmtD(s){
 async function loadAll(manual) {
   setSyncing(true);
   try {
-    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster() ]);
+    await loadPartMaster();   // โหลด PM ก่อน เพื่อให้ WIP แปลง Kgs→ชิ้นได้
+    await loadJobMaster();    // โหลด Job Master ก่อน เพื่อรู้วันที่รับเข้าแต่ละ P/No
+    await Promise.all([ loadBLDel(), loadWIP() ]);
     // debug: แสดง path ที่ดึง
     console.log('[BL Stock] intake:', INTAKE_URL);
     console.log('[BL Stock] job-master:', JM_URL);
@@ -356,28 +351,6 @@ async function loadJobMaster() {
   }
 }
 
-// ── Part Master — ทะเบียนชิ้นงานกลาง ───────────────
-async function loadPartMaster() {
-  try {
-    var res = await fetch(PM_URL);
-    if (!res.ok) return;
-    var data = await res.json();
-    if (data && Array.isArray(data.parts)) {
-      pmParts = data.parts;
-      try { localStorage.setItem('bl_pmParts', JSON.stringify(pmParts)); } catch(e){}
-    }
-  } catch(e){
-    // fallback จาก localStorage
-    try { pmParts = JSON.parse(localStorage.getItem('bl_pmParts')||'[]'); } catch(e2){ pmParts=[]; }
-  }
-}
-
-// lookup Part Master ด้วย P/No → return object หรือ null
-function pmLookup(partNo) {
-  var k = norm(partNo);
-  return pmParts.find(function(p){ return norm(p.partNo)===k; }) || null;
-}
-
 // ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
 async function loadBLDel() {
   try {
@@ -389,7 +362,8 @@ async function loadBLDel() {
 
 // ── WIP จาก 3 lines ─────────────────────────────────
 async function loadWIP() {
-  wipMap = {};
+  // เก็บ raw rows ไว้ก่อน (ยังไม่ sum) เพื่อ filter ตามวันที่รับเข้าทีหลัง
+  window._wipRawRows = []; // [{partName,date,kg,pcs,line}]
   var lines = [
     { url: DB_B1+'/plating-b1.json', label:'B1' },
     { url: DB_B2+'/plating-b2.json', label:'B2' },
@@ -403,29 +377,53 @@ async function loadWIP() {
       // dayRecords อาจอยู่ใน data หรือ data.dayRecords
       var recs = Array.isArray(data) ? data
                : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
-      var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
       recs.forEach(function(dr){
-        if (!dr.rows) return;
-        // กรองเฉพาะรอบที่ยังไม่จ่ายครบ
-        // ถ้ามี status==='done' → ข้ามได้เลย (จ่ายครบแล้ว)
-        if (dr.status === 'done') return;
-        // ถ้าไม่มี status field → ดูจากวันที่ (เก่ากว่า 30 วัน ถือว่าจ่ายไปแล้ว)
-        if (!dr.status && dr.date) {
-          var drDate = new Date(dr.date);
-          if (drDate < cutoff) return;
-        }
+        if (!dr.rows || !dr.date) return;
         dr.rows.forEach(function(row){
           var pn = (row.partName||'').trim();
           if (!pn) return;
-          var k = norm(pn);
-          if (!wipMap[k]) wipMap[k]={ partName:pn, pcs:0, kgs:0, lines:{} };
-          wipMap[k].pcs += Number(row.pcs||0);
-          wipMap[k].kgs += Number(row.kg||0);
-          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0)+Number(row.pcs||0);
+          window._wipRawRows.push({
+            partName: pn, date: dr.date,
+            kg: Number(row.kg||0), pcs: Number(row.pcs||0), line: ln.label
+          });
         });
       });
     } catch(e){}
   }));
+  rebuildWipMap();
+}
+
+// สร้าง wipMap จาก _wipRawRows โดย filter เฉพาะวันที่ >= วันที่รับเข้าแรกสุดของ P/No นั้น
+// (ป้องกัน WIP สะสมข้ามล็อต/ข้ามรอบการรับเข้าเก่า ที่ไม่เกี่ยวกับสต็อคปัจจุบัน)
+function rebuildWipMap() {
+  wipMap = {};
+  var rows = window._wipRawRows || [];
+
+  // หา earliest receive date ต่อ P/No จาก jmItems (Job Master)
+  var earliestDate = {};
+  jmItems.forEach(function(j){
+    var k = norm(j.name||'');
+    if (!k || !j.date) return;
+    if (!earliestDate[k] || j.date < earliestDate[k]) earliestDate[k] = j.date;
+  });
+
+  rows.forEach(function(row){
+    var k = norm(row.partName);
+    var minDate = earliestDate[k];
+    // ถ้า P/No นี้ไม่มีรายการรับเข้าใน Job Master เลย → ไม่นับ (ไม่อยู่ใน stock board)
+    if (!minDate) return;
+    // นับเฉพาะวันที่ชุบ >= วันที่รับเข้าแรกสุด ของ P/No นี้
+    if (row.date < minDate) return;
+
+    if (!wipMap[k]) wipMap[k] = { partName:row.partName, pcs:0, rawPcs:0, kgs:0, lines:{} };
+    wipMap[k].kgs += row.kg;
+    wipMap[k].rawPcs += row.pcs;
+    var pm = partMap[k];
+    var calcPcs = (pm && pm.weightG > 0) ? Math.round(row.kg * 1000 / pm.weightG) : 0;
+    var usePcs = row.pcs > 0 ? row.pcs : calcPcs;
+    wipMap[k].pcs += usePcs;
+    wipMap[k].lines[row.line] = (wipMap[k].lines[row.line]||0) + usePcs;
+  });
 }
 
 // ══════════════════════════════════════════════════════
@@ -433,46 +431,32 @@ async function loadWIP() {
 //  receive  ← jmItems[].qty  (จำนวนรับเข้าจาก Job Master)
 //  delivery ← jmRecords[type:'out'].qty + blDel[].qty
 // ══════════════════════════════════════════════════════
-function jobPartNo(job) { return job.partName || job.name || job.partNo || job.bill || ''; }
-function jobQty(job)   { return Number(job.qty || job.pcs || job.line || 0); }
-// jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
-function jobBill(job)  { return job.bill || job.id || ''; }
-
-// getWip — ค้นหา WIP ด้วย partNo โดย:
-// 1. ตรง key ตรงๆ (norm partNo)
-// 2. ถ้าไม่เจอ → ลองหาผ่าน Part Master name field
-// 3. fuzzy match
-// คืนค่า net WIP = wipMap - delivery ที่จ่ายออกแล้ว
-function getWip(partNo) {
-  var k = norm(partNo);
-  var wo = wipMap[k];
-  if (!wo) {
-    var pm = pmLookup(partNo);
-    if (pm && pm.name) { var kn = norm(pm.name); if (wipMap[kn]) wo = wipMap[kn]; }
-  }
-  if (!wo) {
-    var keys = Object.keys(wipMap);
-    for (var i=0; i<keys.length; i++) {
-      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { wo = wipMap[keys[i]]; break; }
-    }
-  }
-  return wo || null;
-}
-
 function buildMap() {
   var map = {};
 
   // รับเข้าจาก Job Master items
   jmItems.forEach(function(job){
-    var pn = jobPartNo(job);
-    var k  = norm(pn);
+    var k = norm(job.name||'');
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, jobIds:[], dueDate:job.dueDate||'' };
-    map[k].receive    += jobQty(job);
-    map[k].receiveKg  += Number(job.qtyKg||0);
+    if (!map[k]) map[k]={ partNo:job.name||'', customer:job.customer||'', receive:0, delivery:0, jobIds:[], dueDate:job.dueDate||'' };
+    map[k].receive += Number(job.qty||0);
     map[k].jobIds.push(job.id);
     if (!map[k].customer && job.customer) map[k].customer=job.customer;
     if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
+  });
+
+  // เพิ่ม WIP per P/No (match partName เท่านั้น รวมทุก lot)
+  Object.values(map).forEach(function(item) {
+    var w = wipMap[norm(item.partNo)] || {};
+    item.wipPcs   = w.pcs   || 0;
+    item.wipKgs   = w.kgs   || 0;
+    item.wipLines = w.lines || {};
+    // breakdown: สต็อครับเข้า(รอชุบ) + สต็อคชุบแล้ว(รอส่ง)
+    item.overWip        = item.wipPcs > item.receive;
+    item.pendingPlating = Math.max(0, item.receive - item.wipPcs);
+    item.readyToShip    = item.overWip
+      ? Math.max(0, item.receive - item.delivery)   // ถ้า WIP เกิน ใช้รับเข้า-ส่ง แทน
+      : Math.max(0, item.wipPcs - item.delivery);
   });
 
   // Delivery จาก Job Master records (type:'out')
@@ -481,32 +465,16 @@ function buildMap() {
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
     var job = jmItems.find(function(j){ return j.id===r.jobId; });
     if (!job) return;
-    var k = norm(jobPartNo(job));
+    var k = norm(job.name||'');
     if (!k || !map[k]) return;
-    map[k].delivery    += Number(r.qty||0);
-    map[k].deliveryKg  += Number(r.qtyKg||0);
+    map[k].delivery += Number(r.qty||0);
   });
 
   // Delivery เพิ่มเติมที่บันทึกใน bl_stock
   blDel.forEach(function(d){
     var k = norm(d.partNo||'');
     if (!k || !map[k]) return;
-    map[k].delivery   += Number(d.qty||0);
-    map[k].deliveryKg += Number(d.qtyKg||0);
-  });
-
-  // ── เติมข้อมูลจาก Part Master ──
-  // 1. ถ้า map[k] มีอยู่แล้ว → เติม customer/colors/weightPerPc จาก PM (PM มีสิทธิ์สูงกว่า job)
-  // 2. ถ้า PM มี P/No ที่ไม่อยู่ใน map (ยังไม่มี job) → ไม่สร้าง row ใหม่ (ไม่แสดงของที่ยังไม่รับเข้า)
-  Object.keys(map).forEach(function(k) {
-    var pm = pmLookup(map[k].partNo);
-    if (pm) {
-      if (pm.customer)    map[k].customer    = pm.customer;
-      if (pm.name)        map[k].name        = pm.name;
-      if (pm.colors)      map[k].colors      = pm.colors;
-      if (pm.weightPerPc) map[k].weightPerPc = pm.weightPerPc;
-      if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
-    }
+    map[k].delivery += Number(d.qty||0);
   });
 
   return map;
@@ -539,7 +507,7 @@ function renderStock() {
   if (fMonth!=='all') {
     var validKeys={};
     jmItems.filter(function(j){ return (j.date||'').slice(0,7)===fMonth; })
-           .forEach(function(j){ validKeys[norm(jobPartNo(j))]=1; });
+           .forEach(function(j){ validKeys[norm(j.name||'')]=1; });
     parts=parts.filter(function(p){ return validKeys[norm(p.partNo)]; });
   }
 
@@ -548,25 +516,10 @@ function renderStock() {
   });
 
   // Summary
-  var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
+  var sumRcv=0,sumWip=0,sumDel=0;
   parts.forEach(function(p){
-    var wo=getWip(p.partNo)||{};
-    var wpcs=wo.pcs||0;
-    var wkg=wo.kgs||0;
-    if (!wpcs && wkg>0) {
-      var pmw=pmLookup(p.partNo);
-      if (pmw && pmw.weightPerPc>0) wpcs=Math.round(wkg*1000/pmw.weightPerPc);
-    }
-    sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
-    sumWip+=wpcs;      sumWipKg+=wkg;
-    sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
+    sumRcv+=p.receive; sumWip+=(p.wipPcs||0); sumDel+=p.delivery;
   });
-  document.getElementById('sItems').textContent=parts.length;
-  document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
-  // แสดง kg ใต้ตัวเลขชิ้น ถ้ามี
-  var rcvKgEl=document.getElementById('sRcvKg'); if(rcvKgEl) rcvKgEl.textContent=sumRcvKg>0?sumRcvKg.toFixed(1)+' kg':'';
-  var wipKgEl=document.getElementById('sWipKg'); if(wipKgEl) wipKgEl.textContent=sumWipKg>0?sumWipKg.toFixed(1)+' kg':'';
-  var delKgEl=document.getElementById('sDelKg'); if(delKgEl) delKgEl.textContent=sumDelKg>0?sumDelKg.toFixed(1)+' kg':'';
   document.getElementById('sItems').textContent=parts.length;
   document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
   document.getElementById('sWip').textContent=sumWip.toLocaleString();
@@ -594,57 +547,33 @@ function renderStock() {
   }
 
   tbody.innerHTML = filtParts.map(function(p,i){
-    var wipObj = getWip(p.partNo)||{};
-    var wip    = wipObj.pcs||0;
-    var wipKg  = wipObj.kgs||0;
-    var pm     = pmLookup(p.partNo);
-
-    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
-    if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
-      wip = Math.round(wipKg * 1000 / pm.weightPerPc);
-    }
-
-    var remain   = Math.max(0, p.receive - p.delivery);
-    var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
-    var st       = getStatus(p);
+    var wip    = p.wipPcs || 0;
+    var wipKg  = p.wipKgs || 0;
+    var remain = Math.max(0, p.receive - p.delivery);
+    var st     = getStatus(p);
 
     var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
+    var wipLineStr = Object.entries(p.wipLines||{}).filter(function(e){return e[1]>0;})
+      .map(function(e){return e[0]+':'+e[1];}).join('/');
+    var wipStr = wip>0
+      ? wip.toLocaleString()
+        +(wipKg>0?' <span style="font-size:9px;color:var(--text-muted);">('+wipKg.toFixed(1)+'kg)</span>':'')
+        +(wipLineStr?' <span style="font-size:9px;color:var(--text-muted);">'+wipLineStr+'</span>':'')
+      : '<span style="color:var(--text-muted);">–</span>';
+    var remColor = remain===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
 
-    // helper: แสดง ชิ้น + kg ซ้อนกัน
-    function dualCell(pcs, kg, color) {
-      var pcsStr = pcs > 0 ? '<div style="font-weight:700;color:'+(color||'var(--navy)')+';">'+pcs.toLocaleString()+'</div>' : '<div style="color:#94a3b8;">–</div>';
-      var kgStr  = kg  > 0 ? '<div style="font-size:9px;color:var(--text-muted);">'+kg.toFixed(2)+' kg</div>' : '';
-      return pcsStr + kgStr;
-    }
-
-    var wipStr = (wip>0||wipKg>0)
-      ? '<div style="font-weight:700;">'+wip.toLocaleString()+'</div>'+
-        '<div style="font-size:9px;color:var(--text-muted);">'+wipKg.toFixed(2)+' kg</div>'
-      : '<div style="color:#94a3b8;">–</div>';
-
-    var remColor = remain===0&&remainKg===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
-
-    // สีชุบ + ชื่อจาก Part Master
-    var colorStr = '';
-    if (pm && pm.colors) {
-      colorStr = pm.colors.split('').filter(function(c){ return 'BCK'.includes(c); }).map(function(c){
-        var s = c==='B'?'background:#dbeafe;color:#1e40af':c==='C'?'background:#dcfce7;color:#15803d':'background:#fef9c3;color:#854d0e';
-        return '<span style="'+s+';padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;">'+c+'</span>';
-      }).join('');
-    }
-    var nameStr = pm && pm.name
-      ? '<div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+esc(pm.name)+'</div>'
-      : '';
-
+    var overBadge = p.overWip ? ' <span class="badge over" style="font-size:8px;">WIP เกินรับเข้า</span>' : '';
+    var breakdownStr = '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">'+
+        '📥รอชุบ <b style="color:var(--navy)">'+p.pendingPlating.toLocaleString()+'</b>'+
+        ' · 📦รอส่ง <b style="color:var(--amber)">'+p.readyToShip.toLocaleString()+'</b>'+
+      '</div>';
     return '<tr id="sr'+i+'">' +
-      '<td class="tl" style="font-weight:600;font-size:12px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+
-        esc(p.partNo)+(colorStr?' <span>'+colorStr+'</span>':'')+nameStr+
-      '</td>'+
+      '<td class="tl" style="font-weight:600;font-size:12px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.partNo)+'</td>'+
       '<td class="tl" style="font-size:11px;color:var(--text-muted);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.customer||'–')+'</td>'+
-      '<td>'+dualCell(p.receive, p.receiveKg||0, 'var(--blue)')+'</td>'+
-      '<td>'+wipStr+'</td>'+
-      '<td>'+dualCell(p.delivery, p.deliveryKg||0, '#059669')+'</td>'+
-      '<td>'+dualCell(remain, remainKg, remColor)+'</td>'+
+      '<td style="font-weight:700;color:var(--blue);">'+p.receive.toLocaleString()+'</td>'+
+      '<td>'+wipStr+overBadge+'</td>'+
+      '<td style="color:#059669;font-weight:700;">'+p.delivery.toLocaleString()+'</td>'+
+      '<td style="font-weight:800;color:'+remColor+';">'+remain.toLocaleString()+breakdownStr+'</td>'+
       '<td><span class="badge '+badgeCls+'">'+st+'</span></td>'+
       '<td><button onclick="toggleDetail('+i+')" id="chv'+i+'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);">›</button></td>'+
     '</tr>'+
@@ -653,8 +582,7 @@ function renderStock() {
 }
 
 function getStatus(p) {
-  var wipObj = getWip(p.partNo)||{};
-  var wip = (wipObj.pcs||0) + (wipObj.kgs||0);  // ถ้ามี pcs หรือ kgs ถือว่ามี WIP
+  var wip = (wipMap[norm(p.partNo)]||{}).pcs||0;
   if (p.delivery >= p.receive && p.receive>0) return 'จ่ายครบ';
   if (p.delivery > 0) return 'จ่ายบางส่วน';
   if (p.dueDate && new Date(p.dueDate)<new Date()) return 'เกินกำหนด';
@@ -677,19 +605,11 @@ function toggleDetail(i) {
 
 function buildDetail(p) {
   var k=norm(p.partNo);
-  var wipObj = getWip(p.partNo)||{};
-  var wipPcs = wipObj.pcs||0;
-  var wipKg2 = wipObj.kgs||0;
-  // แปลง kg→ชิ้น ถ้ามี weightPerPc
-  if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
-    wipPcs = Math.round(wipKg2 * 1000 / pm.weightPerPc);
-  }
-  var wip = wipPcs;
+  var wip={ pcs:p.wipPcs||0, kgs:p.wipKgs||0, lines:p.wipLines||{} };
   var remain=Math.max(0,p.receive-p.delivery);
-  var pm=pmLookup(p.partNo); // Part Master data
 
   // Job master items ของ P/No นี้
-  var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  var jobs=jmItems.filter(function(j){ return norm(j.name||'')===k; });
   // Job master delivery records
   var jmDels=[];
   jobs.forEach(function(job){
@@ -704,33 +624,6 @@ function buildDetail(p) {
   jmDels.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
   var html='<div class="detail-box">';
-
-  // ── Part Master info bar ──
-  if (pm) {
-    var colorBadges = (pm.colors||'').split('').filter(function(c){ return 'BCK'.includes(c); }).map(function(c){
-      var s = c==='B'?'background:#dbeafe;color:#1e40af':c==='C'?'background:#dcfce7;color:#15803d':'background:#fef9c3;color:#854d0e';
-      return '<span style="'+s+';padding:1px 6px;border-radius:5px;font-size:10px;font-weight:700;">'+c+'</span>';
-    }).join(' ');
-    html += '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">';
-    html += '<div style="font-size:10px;font-weight:700;color:#0369a1;">📦 Part Master</div>';
-    if (pm.name)    html += '<div style="font-size:11px;color:var(--navy);font-weight:600;">'+esc(pm.name)+'</div>';
-    if (pm.colors)  html += '<div>'+colorBadges+'</div>';
-    if (pm.weightPerPc) {
-      html += '<div style="font-size:10px;color:var(--text-muted);">⚖️ '+pm.weightPerPc.toFixed(2)+' g/ชิ้น';
-      if (pm.pcsPerRack) html += ' · '+pm.pcsPerRack+' ชิ้น/rack';
-      // คำนวณ kg ที่ควรได้
-      if (wip.kgs) {
-        var calcPcs = Math.round(wip.kgs * 1000 / pm.weightPerPc);
-        html += ' → WIP '+wip.kgs.toFixed(2)+'kg ≈ <strong>'+calcPcs.toLocaleString()+' ชิ้น</strong>';
-      }
-      html += '</div>';
-    }
-    html += '</div>';
-  } else {
-    html += '<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;margin-bottom:10px;font-size:10px;color:#854d0e;">'+
-      '⚠️ P/No นี้ยังไม่อยู่ใน Part Master — <a href="part_master.html" target="_blank" style="color:#1e40af;font-weight:600;">เพิ่มที่นี่</a> เพื่อให้ WIP match อัตโนมัติ'+
-      '</div>';
-  }
 
   // Summary row
   html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">';
@@ -752,15 +645,33 @@ function buildDetail(p) {
   html+='<div style="font-size:9px;color:var(--text-muted);">ส่งแล้ว '+p.delivery+'</div></div>';
   html+='</div>';
 
+  if (p.overWip) {
+    html+='<div style="padding:8px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;margin-bottom:10px;font-size:11px;color:var(--red);">';
+    html+='⚠️ WIP ('+p.wipPcs.toLocaleString()+' ชิ้น) มากกว่ารับเข้า ('+p.receive.toLocaleString()+' ชิ้น) — ผลิตเกินยอดรับเข้าปัจจุบัน (อาจเป็นยอดผลิตล็อตใหม่ที่ยังไม่ได้บันทึกรับเข้า หรือยอดค้างจากล็อตก่อนหน้า)';
+    html+='</div>';
+  }
+
+  // breakdown สต็อค: รอชุบ vs รอส่ง
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">';
+  html+='<div style="padding:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">📥 สต็อครับเข้า (รอชุบ)</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:var(--blue);">'+p.pendingPlating.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">= รับเข้า '+p.receive+' − WIP '+Math.min(p.wipPcs,p.receive)+'</div></div>';
+  html+='<div style="padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">📦 สต็อคชุบแล้ว (รอส่ง)</div>';
+  html+='<div style="font-size:18px;font-weight:800;color:var(--amber);">'+p.readyToShip.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">= WIP − ส่งแล้ว '+p.delivery+'</div></div>';
+  html+='</div>';
+
   // Job lots (รับเข้า)
   if (jobs.length) {
     html+='<div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px;">📥 รับเข้า (จาก Job Master · '+jobs.length+' ล็อต)</div>';
     html+='<div class="tbl-wrap"><table class="st" style="min-width:340px;"><thead><tr>';
     html+='<th class="tl">วันที่รับ</th><th class="tl">Bill No</th><th class="tl">Lot No</th><th>จำนวน (ชิ้น)</th><th>น้ำหนัก (Kg)</th></tr></thead><tbody>';
     jobs.forEach(function(j){
-      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(jobBill(j))+'</td>'+
+      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(j.bill||'–')+'</td>'+
         '<td class="tl" style="font-size:10px;">'+esc(j.lot||'–')+'</td>'+
-        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||j.pcs||j.line||0).toLocaleString()+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||0).toLocaleString()+'</td>'+
         '<td style="color:var(--text-muted);">'+(j.kg?j.kg:'–')+'</td></tr>';
     });
     html+='</tbody></table></div>';
@@ -800,7 +711,7 @@ function populateDeliverySel() {
       var r=p.receive-p.delivery;
       var opt=document.createElement('option');
       opt.value=p.partNo+'||'+p.customer;
-      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')':'')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
+      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
       sel.appendChild(opt);
     });
   if(cur) sel.value=cur;
@@ -813,7 +724,7 @@ function showDInfo(){
   if(!val){box.style.display='none';return;}
   var pn=val.split('||')[0], cu=val.split('||')[1]||'';
   var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
-  var wip=(getWip(pn)||{}).pcs||0;
+  var wip=(wipMap[norm(pn)]||{}).pcs||0;
   var remain=item.receive-item.delivery;
   box.style.display='block';
   box.innerHTML='<strong>'+esc(pn)+'</strong>'+(cu?' · <span style="color:var(--text-muted)">'+esc(cu)+'</span>':'')+
@@ -906,7 +817,7 @@ function buildHistFilters(){
   var sel=document.getElementById('hPartSel');
   var existing=new Set(Array.from(sel.options).map(function(o){return o.value;}));
   var parts=new Set();
-  jmItems.forEach(function(j){ var pn=jobPartNo(j); if(pn) parts.add(pn); });
+  jmItems.forEach(function(j){if(j.name)parts.add(j.name);});
   blDel.forEach(function(d){if(d.partNo)parts.add(d.partNo);});
   [...parts].sort().forEach(function(p){
     if(!existing.has(p)){
@@ -923,9 +834,8 @@ function renderHist(){
   // รับเข้า (job master items)
   if(tf==='all'||tf==='in'){
     jmItems.forEach(function(j){
-      var pn=jobPartNo(j);
-      if(pf!=='all'&&pn!==pf) return;
-      all.push({date:j.date||'–',type:'in',partNo:pn||'–',customer:j.customer||'–',qty:jobQty(j),ref:jobBill(j)||'–'});
+      if(pf!=='all'&&j.name!==pf) return;
+      all.push({date:j.date||'–',type:'in',partNo:j.name||'–',customer:j.customer||'–',qty:j.qty||0,ref:j.bill||'–'});
     });
   }
 
@@ -944,9 +854,8 @@ function renderHist(){
     jmRecords.filter(function(r){return r.type==='out';}).forEach(function(r){
       var job=jmItems.find(function(j){return j.id===r.jobId;});
       if(!job) return;
-      var pn=jobPartNo(job);
-      if(pf!=='all'&&pn!==pf) return;
-      all.push({date:r.date||'–',type:'out',partNo:pn||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
+      if(pf!=='all'&&job.name!==pf) return;
+      all.push({date:r.date||'–',type:'out',partNo:job.name||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
     });
     blDel.forEach(function(d){
       if(pf!=='all'&&d.partNo!==pf) return;
@@ -992,139 +901,21 @@ function switchTab(name){
 // ══════════════════════════════════════════════════════
 //  SYNC STATUS
 // ══════════════════════════════════════════════════════
-async function showDebug() {
-  // สร้าง overlay modal
-  var overlay = document.createElement('div');
-  overlay.id = 'debugOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  overlay.innerHTML = `
-    <div style="background:#0f172a;color:#e2e8f0;border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div style="font-size:14px;font-weight:700;color:#60a5fa;">🔍 Debug — BL Stock</div>
-        <button onclick="document.getElementById('debugOverlay').remove()"
-          style="background:#334155;border:none;color:#e2e8f0;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;">✕ ปิด</button>
-      </div>
-      <div id="debugBody" style="line-height:1.8;">⏳ กำลังทดสอบ...</div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  var out = [];
-  function line(txt, color) {
-    out.push('<div style="color:' + (color||'#e2e8f0') + ';">' + txt + '</div>');
-    document.getElementById('debugBody').innerHTML = out.join('');
-  }
-  function head(txt) { line(''); line('── ' + txt + ' ──', '#60a5fa'); }
-  function ok(txt)   { line('✅ ' + txt, '#4ade80'); }
-  function warn(txt) { line('⚠️  ' + txt, '#fbbf24'); }
-  function err(txt)  { line('❌ ' + txt, '#f87171'); }
-  function info(txt) { line('   ' + txt, '#94a3b8'); }
-
-  // ── สถานะหน่วยความจำ ──
-  head('ข้อมูลในหน่วยความจำ (ตอนนี้)');
-  info('jmItems   : ' + jmItems.length + ' รายการ');
-  info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
-  info('blDel     : ' + blDel.length + ' รายการ');
-  info('pmParts   : ' + pmParts.length + ' P/No ใน Part Master' + (pmParts.length===0?' ⚠️ ยังไม่มีข้อมูล':''));
-  var wipKeys = Object.keys(wipMap);
-  info('wipMap : ' + wipKeys.length + ' P/No');
-  if (wipKeys.length > 0) {
-    info('wipMap sample keys: ' + wipKeys.slice(0,5).join(', '));
-    var sampleKey = wipKeys[0];
-    info('wipMap["'+sampleKey+'"]: partName="'+wipMap[sampleKey].partName+'" pcs='+wipMap[sampleKey].pcs);
-  }
-  info('jmItems partNos: ' + jmItems.slice(0,5).map(function(j){ return jobPartNo(j); }).join(', '));
-  if (jmItems.length > 0) {
-    info('jmItems[0] FULL:');
-    var fields = Object.keys(jmItems[0]);
-    fields.forEach(function(f){
-      info('  .' + f + ' = ' + JSON.stringify(jmItems[0][f]).slice(0,80));
-    });
-    info('→ jobPartNo: "' + jobPartNo(jmItems[0]) + '"  jobQty: ' + jobQty(jmItems[0]));
-  }
-
-  // ── ทดสอบ Firebase URLs ──
-  var tests = [
-    { label:'Job Master (B1)', url: JM_URL },
-    { label:'Intake (B1)',     url: INTAKE_URL },
-    { label:'BL Delivery',    url: DEL_URL },
-    { label:'WIP B1',         url: DB_B1+'/plating-b1.json' },
-    { label:'WIP B2',         url: DB_B2+'/plating-b2.json' },
-    { label:'WIP R1',         url: DB_R1+'/plating-r1.json' },
-  ];
-
-  for (var i = 0; i < tests.length; i++) {
-    var t = tests[i];
-    head(t.label);
-    info('URL: ' + t.url);
-    try {
-      var t0 = Date.now();
-      var res = await fetch(t.url);
-      var ms = Date.now() - t0;
-      info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
-      if (!res.ok) {
-        err('HTTP ' + res.status + ' — fetch ไม่สำเร็จ');
-        try { var errTxt = await res.text(); info('body: ' + errTxt.slice(0,120)); } catch(e2){}
-        continue;
-      }
-      var raw = await res.text();
-      if (!raw || raw === 'null') {
-        warn('Response = null / empty — ยังไม่มีข้อมูลใน Firebase path นี้');
-        continue;
-      }
-      try {
-        var json = JSON.parse(raw);
-        // ตรวจสอบโครงสร้าง
-        if (t.url === JM_URL) {
-          var items   = Array.isArray(json && json.items)   ? json.items.length   : '(ไม่ใช่ array)';
-          var records = Array.isArray(json && json.records) ? json.records.length : '(ไม่ใช่ array)';
-          ok('โหลดสำเร็จ — items: ' + items + ', records: ' + records);
-          if (json && json.items && json.items[0]) info('items[0]: ' + JSON.stringify(json.items[0]).slice(0,100));
-        } else if (t.url === INTAKE_URL) {
-          var cnt = Array.isArray(json) ? json.length : '(ไม่ใช่ array — type: ' + typeof json + ')';
-          if (Array.isArray(json) && json.length > 0) {
-            ok('โหลดสำเร็จ — ' + cnt + ' รายการ');
-            info('intake[0]: ' + JSON.stringify(json[0]).slice(0,100));
-          } else if (Array.isArray(json)) {
-            warn('Array ว่าง — 0 รายการ');
-          } else {
-            warn('ข้อมูลไม่ใช่ Array: ' + JSON.stringify(json).slice(0,120));
-          }
-        } else if (t.url === DEL_URL) {
-          var delCnt = Array.isArray(json && json.records) ? json.records.length : '(ไม่มี records[])';
-          ok('โหลดสำเร็จ — records: ' + delCnt);
-        } else {
-          // WIP
-          var recs = Array.isArray(json) ? json
-                   : Array.isArray(json && json.dayRecords) ? json.dayRecords : null;
-          if (recs) {
-            var partCount = 0;
-            recs.forEach(function(dr){ if(dr.rows) partCount += dr.rows.length; });
-            ok('โหลดสำเร็จ — ' + recs.length + ' dayRecords, ' + partCount + ' rows');
-          } else {
-            warn('โครงสร้างไม่ตรง — ' + JSON.stringify(json).slice(0,120));
-          }
-        }
-      } catch(parseErr) {
-        err('JSON parse error: ' + parseErr.message);
-        info('raw: ' + raw.slice(0, 150));
-      }
-    } catch(fetchErr) {
-      err('fetch error: ' + fetchErr.message);
-      info('→ อาจเป็น CORS, network, หรือ Firebase rules ไม่อนุญาต');
-    }
-  }
-
-  head('สรุปการวินิจฉัย');
-  if (jmItems.length === 0) {
-    err('ไม่พบ jmItems → ตรวจ job-master.json และ intake.json ด้านบน');
-    info('วิธีแก้: ตรวจสอบ Firebase Rules ว่า read = true');
-    info('หรือ path ใน DB ไม่ตรงกับที่โค้ดดึง');
-  } else {
-    ok('มีข้อมูลใน jmItems — ถ้ายังไม่แสดงใน Stock Board');
-    info('ตรวจสอบว่า field ชื่อ "name" (partNo) ไม่ว่าง');
-  }
-  line('');
-  line('── เสร็จสิ้น ──', '#60a5fa');
+function showDebug() {
+  var msg = [
+    'INTAKE_URL: ' + INTAKE_URL,
+    'JM_URL: ' + JM_URL,
+    'DEL_URL: ' + DEL_URL,
+    'jmItems: ' + jmItems.length + ' รายการ',
+    'jmRecords(out): ' + jmRecords.filter(function(r){return r.type==='out';}).length,
+    'blDel: ' + blDel.length,
+    'wipMap keys: ' + Object.keys(wipMap).length,
+    'partMap keys: ' + Object.keys(partMap).length,
+    'ตัวอย่าง partMap entry: ' + JSON.stringify(Object.values(partMap)[0]||{}).slice(0,80),
+    '',
+    'ตัวอย่าง jmItems[0]: ' + (jmItems[0] ? JSON.stringify(jmItems[0]).slice(0,120) : 'ไม่มีข้อมูล'),
+  ].join('\n');
+  alert(msg);
 }
 
 function setSyncing(loading,ok,errMsg){
@@ -1134,7 +925,7 @@ function setSyncing(loading,ok,errMsg){
   if(ok){
     dot.className='sdot ok';
     var t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-    lbl.textContent='รับเข้า: '+jmItems.length+' ล็อต · WIP: '+Object.keys(wipMap).length+' P/No · อัปเดต '+t+' (Job Master + Intake)';
+    lbl.textContent='รับเข้า: '+jmItems.length+' ล็อต · PM: '+Object.keys(partMap).length+' รายการ · อัปเดต '+t;
   } else {
     dot.className='sdot err';
     lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
