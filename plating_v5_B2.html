@@ -522,11 +522,15 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="grid2" style="margin-bottom:0;">
       <div class="field" style="margin:0;">
         <label>น้ำหนัก (Kgs)</label>
-        <input type="number" id="bKg" placeholder="0.0" min="0" step="0.1" inputmode="decimal" oninput="if(_barrelPartWeightG&&this.value){document.getElementById('bPcs').value=Math.round(this.value*1000/_barrelPartWeightG);}">
+        <input type="number" id="bKg" placeholder="0.0" min="0" step="0.1" inputmode="decimal" oninput="calcBPcsFromKg()">
+        <div id="barrelWeightHint" style="font-size:10px;color:#f59e0b;margin-top:3px;display:none;"></div>
       </div>
       <div class="field" style="margin:0;">
-        <label>จำนวนชิ้น (Pcs)</label>
-        <input type="number" id="bPcs" placeholder="0" min="0" inputmode="numeric" oninput="onBarrelPcsChange()">
+        <label>จำนวนชิ้น (Pcs)
+          <span id="bPcsAutoLabel" style="display:none;font-size:9px;font-weight:400;color:#10b981;margin-left:4px;">⚡ คำนวณจาก PM</span>
+        </label>
+        <input type="number" id="bPcs" placeholder="0" min="0" inputmode="numeric"
+          oninput="onBarrelPcsChange()" style="transition:background .2s;">
       </div>
     </div>
 
@@ -4388,10 +4392,9 @@ function exportChemCSV() {
 
 var partList = [];
 var _plColor = 'B';
-var PM_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
+var PM_URL_B2 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
 
-function pmToPartList(pm) {
-  // แปลง Part Master format → partList format ที่ v4/v5/v6 ใช้
+function pmToPartList_b2(pm) {
   return (pm.parts || []).map(function(p) {
     return {
       id: p.id || ('P'+p.partNo),
@@ -4407,26 +4410,22 @@ function pmToPartList(pm) {
 }
 
 function loadPartList() {
-  // โหลดจาก localStorage ก่อน (ใช้ได้ทันที)
   try { partList = JSON.parse(localStorage.getItem('b2_partList') || '[]'); } catch(e){ partList=[]; }
-  // แล้วโหลดจาก Part Master (async, อัปเดตเมื่อได้รับ)
-  fetch(PM_URL)
+  fetch(PM_URL_B2)
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data) {
       if (data && Array.isArray(data.parts) && data.parts.length > 0) {
-        partList = pmToPartList(data);
+        partList = pmToPartList_b2(data);
         try { localStorage.setItem('b2_partList', JSON.stringify(partList)); } catch(e){}
         if (typeof renderPartList === 'function') renderPartList();
         if (typeof renderPartPickerList === 'function') renderPartPickerList();
-        if (document.getElementById('plPartBadge')) document.getElementById('plPartBadge').textContent = partList.length;
-        console.log('[Part Master] loaded', partList.length, 'parts');
+        console.log('[Part Master] b2 loaded', partList.length, 'parts');
       }
     })
-    .catch(function(e){ console.warn('[Part Master] load failed, using cache'); });
+    .catch(function(e){ console.warn('[Part Master] offline, using cache'); });
 }
 function savePartListData() {
-  // Part Master เป็น source of truth — ไม่ save local list อีกต่อไป
-  console.warn('[Part Master] savePartListData: skipped — edit via part_master.html');
+  console.info('[Part Master] ข้อมูลชิ้นงานจัดการที่ part_master.html');
 }
 
 function plSelColor(c) {
@@ -4642,6 +4641,27 @@ function renderPartPickerList() {
 
 // store selected part weight for KGs calc
 var _barrelPartWeightG = 0;
+
+function calcBPcsFromKg() {
+  var kg = parseFloat(document.getElementById('bKg').value) || 0;
+  var pcsEl = document.getElementById('bPcs');
+  var label = document.getElementById('bPcsAutoLabel');
+  if (_barrelPartWeightG > 0 && kg > 0) {
+    pcsEl.value = Math.round(kg * 1000 / _barrelPartWeightG);
+    pcsEl.style.background = '#f0fdf4';
+    if (label) label.style.display = 'inline';
+  } else {
+    pcsEl.style.background = '';
+    if (label) label.style.display = 'none';
+  }
+}
+
+function showWeightHint(hintId, inputId, wg) {
+  var el = document.getElementById(hintId);
+  if (!el || !wg) return;
+  el.style.display = 'block';
+  el.innerHTML = '⚖️ ' + wg + ' g/ชิ้น — กรอก kg แล้วระบบคำนวณ Pcs ให้อัตโนมัติ';
+}
 var _intakePartWeightG = 0;
 
 function applyPartPicker(partId) {
@@ -4698,18 +4718,6 @@ function applyPartPicker(partId) {
 }
 
 // แสดง hint น้ำหนัก/ตัว ใต้ช่อง input
-function showWeightHint(hintId, nearId, weightG) {
-  var hint = document.getElementById(hintId);
-  if (!hint) {
-    hint = document.createElement('div');
-    hint.id = hintId;
-    hint.style.cssText = 'font-size:10px;color:var(--blue);margin-top:3px;padding:3px 6px;background:var(--sky-pale);border-radius:5px;display:inline-block;';
-    var nearEl = document.getElementById(nearId);
-    if (nearEl && nearEl.parentNode) nearEl.parentNode.appendChild(hint);
-  }
-  hint.textContent = '⚖️ '+weightG+' g/ตัว — กรอก Pcs แล้วระบบคำนวณ Kgs อัตโนมัติ';
-}
-
 // helper เซ็ตสีชุบใน barrel form
 function selTypeColor(c) {
   selColorVal = c;
