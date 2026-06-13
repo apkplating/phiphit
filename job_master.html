@@ -792,7 +792,7 @@ function checkPin() {
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(fbLoad, 800);
-    setTimeout(function(){ loadPartMaster().then(function(){ updatePmStatusHint(); pullFromLines(); }); }, 500);
+    loadPartMaster().then(function(){ updatePmStatusHint(); pullFromLines(); });
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -2751,16 +2751,22 @@ function onUnitChange() {
 var PM_URL   = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/part-master.json';
 var pmParts  = [];
 
+var pmLoadError = null; // เก็บ error ล่าสุดจาก loadPartMaster (ถ้ามี) เพื่อแสดง debug
+
 async function loadPartMaster() {
+  pmLoadError = null;
   try {
     var res = await fetch(PM_URL);
-    if (!res.ok) return;
+    if (!res.ok) { pmLoadError = 'HTTP '+res.status; return; }
     var data = await res.json();
     if (data && Array.isArray(data.parts)) {
       pmParts = data.parts;
       try { localStorage.setItem('jm_pmParts', JSON.stringify(pmParts)); } catch(e){}
+    } else {
+      pmLoadError = 'รูปแบบข้อมูลไม่ถูกต้อง (ไม่มี parts array)';
     }
   } catch(e) {
+    pmLoadError = (e && e.message) ? e.message : String(e);
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e2){ pmParts=[]; }
   }
 }
@@ -2769,9 +2775,27 @@ async function loadPartMaster() {
 function updatePmStatusHint() {
   var hint = document.getElementById('pmStatusHint');
   if (!hint) return;
-  hint.textContent = pmParts.length
-    ? '🔗 Part Master: โหลดแล้ว ' + pmParts.length + ' รายการ'
-    : '⚠️ Part Master: ยังไม่มีข้อมูล (กดปุ่ม "ดึงจาก PM" หลังกรอก P/No เพื่อลองใหม่)';
+  if (pmParts.length) {
+    hint.innerHTML = '🔗 Part Master: โหลดแล้ว ' + pmParts.length + ' รายการ'
+      + (pmLoadError ? ' (ใช้ข้อมูล cache เดิม — โหลดใหม่ล้มเหลว: '+esc(pmLoadError)+')' : '')
+      + ' <button type="button" class="icon-btn" style="font-size:10px;" onclick="reloadPartMaster()">🔄 โหลดใหม่</button>';
+  } else {
+    hint.innerHTML = '⚠️ Part Master: ยังไม่มีข้อมูล'
+      + (pmLoadError ? ' — '+esc(pmLoadError) : '')
+      + ' <button type="button" class="icon-btn" style="font-size:10px;" onclick="reloadPartMaster()">🔄 โหลดใหม่</button>';
+  }
+}
+
+// ปุ่มโหลด Part Master ใหม่เอง (เผื่อโหลดครั้งแรกไม่สำเร็จ)
+function reloadPartMaster() {
+  updatePmStatusHint();
+  var hint = document.getElementById('pmStatusHint');
+  if (hint) hint.innerHTML = '⏳ กำลังโหลด Part Master...';
+  loadPartMaster().then(function(){
+    updatePmStatusHint();
+    if (pmParts.length) showToast('in','✅ โหลด Part Master สำเร็จ ('+pmParts.length+' รายการ)','ok');
+    else showToast('in','❌ โหลด Part Master ไม่สำเร็จ: '+(pmLoadError||'ไม่ทราบสาเหตุ'),'err');
+  });
 }
 
 function pmLookup(partName) {
