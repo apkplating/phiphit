@@ -1376,10 +1376,10 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 //  พิกัดวัดจากฟอร์มจริงที่พิมพ์ตรงกล่องแล้ว (A4: 210 x 297mm)
 // ══════════════════════════════════════
 var FORM_POS = {
-  invNo:   { x:139, y:54 },
-  date:    { x:134, y:64 },
+  invNo:   { x:126, y:54 },
+  date:    { x:121, y:64 },
   po:      { x:134, y:78 },
-  term:    { x:134, y:84 },
+  term:    { x:138, y:80 },
   // ชื่อลูกค้า/ที่อยู่: แต่ละบรรทัดของ textarea จะวางตามตำแหน่ง y นี้ตามลำดับ
   custX: 21, custLines: [62, 67.5, 73, 80],
   // ตารางรายการ
@@ -1392,7 +1392,7 @@ var FORM_POS = {
   rowY0: 107, rowH: 11.4, subLineDy: 5.2,
   maxRows: 10, // จำนวนแถวสูงสุดที่ฟอร์มรองรับ (ประมาณ)
   // ยอดรวม (ชิดขวาที่ amountRightX)
-  grandY: 219, vatY: 227, netY: 234,
+  grandY: 221, vatY: 229, netY: 236,
 };
 
 function getFormOffset() {
