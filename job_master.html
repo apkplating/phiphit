@@ -227,12 +227,13 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label>ลูกค้า</label>
+        <label>ลูกค้า <button type="button" class="icon-btn" title="ดึงลูกค้าจาก Part Master" onclick="acAutoFillCustomerFromPM(true)" style="font-size:11px;">🔄 ดึงจาก PM</button></label>
         <div class="ac-wrap">
           <input type="text" id="inCustomer" placeholder="เช่น HONDA / OTC"
             autocomplete="off" oninput="acShow('inCustomer')" onblur="acHide('inCustomer',300)" onfocus="acShow('inCustomer')">
           <div class="ac-list" id="ac-inCustomer"></div>
         </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;" id="pmStatusHint"></div>
       </div>
       <div class="field" style="margin:0;">
         <label>หน่วยนับ <span style="color:var(--red);">*</span></label>
@@ -791,7 +792,7 @@ function checkPin() {
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(fbLoad, 800);
-    setTimeout(function(){ loadPartMaster().then(function(){ pullFromLines(); }); }, 500);
+    setTimeout(function(){ loadPartMaster().then(function(){ updatePmStatusHint(); pullFromLines(); }); }, 500);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -817,6 +818,7 @@ function tab(t) {
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
   if (t==='board')   renderBoard();
+  if (t==='in')      { updatePmStatusHint(); }
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
@@ -2584,13 +2586,25 @@ function acGetHistory() {
 }
 
 // auto-fill ลูกค้า จาก Part Master เมื่อกรอก/เลือก P/No ตรงเป๊ะ (ถ้าช่องลูกค้ายังว่าง)
-function acAutoFillCustomerFromPM() {
+// manual=true: ผู้ใช้กดปุ่ม "ดึงจาก PM" เอง — แสดง toast บอกผล และทับค่าได้แม้มีอยู่แล้ว
+function acAutoFillCustomerFromPM(manual) {
   var partInput = document.getElementById('inPartName');
   var custInput = document.getElementById('inCustomer');
   if (!partInput || !custInput) return;
-  if (custInput.value.trim()) return; // ไม่ทับถ้ามีค่าอยู่แล้ว
-  var pm = pmLookup(partInput.value);
-  if (pm && pm.customer) custInput.value = pm.customer;
+  if (!manual && custInput.value.trim()) return; // auto-mode: ไม่ทับถ้ามีค่าอยู่แล้ว
+
+  var pn = partInput.value.trim();
+  if (!pn) {
+    if (manual) showToast('in','กรุณากรอกชื่อชิ้นงาน (P/No) ก่อน','err');
+    return;
+  }
+  var pm = pmLookup(pn);
+  if (pm && pm.customer) {
+    custInput.value = pm.customer;
+    if (manual) showToast('in','✅ ดึงลูกค้า "'+pm.customer+'" จาก Part Master แล้ว','ok');
+  } else if (manual) {
+    showToast('in','⚠️ ไม่พบ "'+pn+'" ใน Part Master (มีข้อมูล '+pmParts.length+' รายการ) หรือยังไม่ได้ระบุลูกค้าไว้','err');
+  }
 }
 
 function acShow(fieldId) {
@@ -2749,6 +2763,15 @@ async function loadPartMaster() {
   } catch(e) {
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e2){ pmParts=[]; }
   }
+}
+
+// แสดงสถานะจำนวนข้อมูลที่ดึงมาจาก Part Master ใต้ช่องลูกค้า
+function updatePmStatusHint() {
+  var hint = document.getElementById('pmStatusHint');
+  if (!hint) return;
+  hint.textContent = pmParts.length
+    ? '🔗 Part Master: โหลดแล้ว ' + pmParts.length + ' รายการ'
+    : '⚠️ Part Master: ยังไม่มีข้อมูล (กดปุ่ม "ดึงจาก PM" หลังกรอก P/No เพื่อลองใหม่)';
 }
 
 function pmLookup(partName) {
