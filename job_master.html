@@ -218,6 +218,12 @@ input:focus,select:focus{border-color:var(--blue2);}
       </div>
     </div>
     <div class="field">
+      <label>กรองตามลูกค้า <span style="font-size:10px;color:var(--text-muted);">(เลือกก่อนเพื่อลดรายการ P/No ที่ต้องเลือก — ไม่บังคับ)</span></label>
+      <select id="inCustomerFilter" onchange="onCustomerFilterChange()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;">
+        <option value="">— ทุกลูกค้า —</option>
+      </select>
+    </div>
+    <div class="field">
       <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
       <div class="ac-wrap">
         <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND"
@@ -792,7 +798,7 @@ function checkPin() {
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(fbLoad, 800);
-    loadPartMaster().then(function(){ updatePmStatusHint(); pullFromLines(); });
+    loadPartMaster().then(function(){ updatePmStatusHint(); renderCustomerFilter(); pullFromLines(); });
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -818,7 +824,7 @@ function tab(t) {
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
   if (t==='board')   renderBoard();
-  if (t==='in')      { updatePmStatusHint(); }
+  if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); }
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
@@ -1096,6 +1102,7 @@ function addJobIn() {
   });
   inDueDateManual = false;
   onInDateChange(); // ตั้งกำหนดส่งกลับเป็นค่า default (วันที่รับเข้า + 7) สำหรับรายการถัดไป
+  renderCustomerFilter();
   showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+displayQty+(unit==='kg'?' กก.':" ชิ้น"),'ok');
 }
 
@@ -2584,6 +2591,40 @@ function showToast(section, msg, type) {
 // ══════════════════════════════════════
 //  AUTOCOMPLETE — ชื่อชิ้นงาน + ลูกค้า
 // ══════════════════════════════════════
+// แสดงรายชื่อลูกค้าทั้งหมด (จาก Part Master + ประวัติ) ในช่อง "กรองตามลูกค้า"
+function renderCustomerFilter() {
+  var sel = document.getElementById('inCustomerFilter');
+  if (!sel) return;
+  var cur = sel.value;
+
+  var counts = {};
+  acGetHistory().forEach(function(p){
+    var c = (p.customer||'').trim();
+    if (!c) return;
+    counts[c] = (counts[c]||0) + 1;
+  });
+  var names = Object.keys(counts).sort(function(a,b){ return a.localeCompare(b,'th'); });
+
+  sel.innerHTML = '<option value="">— ทุกลูกค้า —</option>' +
+    names.map(function(c){
+      return '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+' ('+counts[c]+')</option>';
+    }).join('');
+}
+
+// เมื่อเลือกลูกค้าในช่อง "กรองตามลูกค้า" — เติมช่องลูกค้าให้ (แก้ไขได้) และกรอง autocomplete ของ P/No
+function onCustomerFilterChange() {
+  var sel = document.getElementById('inCustomerFilter');
+  var custInput = document.getElementById('inCustomer');
+  if (sel && sel.value && custInput) custInput.value = sel.value;
+  // เคลียร์ P/No เดิม แล้วเปิด autocomplete ที่กรองแล้วให้เลือกใหม่
+  var partInput = document.getElementById('inPartName');
+  if (partInput) {
+    partInput.value = '';
+    partInput.focus();
+    acShow('inPartName');
+  }
+}
+
 function acGetHistory() {
   var pairs = [];
   var seen  = {};
@@ -2637,6 +2678,13 @@ function acShow(fieldId) {
   var val   = input.value.toLowerCase().trim();
   var pairs = acGetHistory();
 
+  // ถ้าเลือก "กรองตามลูกค้า" ไว้ ให้กรอง P/No เฉพาะของลูกค้านั้นก่อน
+  var custFilterEl = document.getElementById('inCustomerFilter');
+  var custFilter = custFilterEl ? custFilterEl.value : '';
+  if (fieldId === 'inPartName' && custFilter) {
+    pairs = pairs.filter(function(p){ return (p.customer||'') === custFilter; });
+  }
+
   var filtered = pairs.filter(function(p) {
     if (fieldId === 'inPartName') return !val || p.partName.toLowerCase().includes(val);
     if (fieldId === 'inCustomer') return !val || p.customer.toLowerCase().includes(val);
@@ -2645,7 +2693,8 @@ function acShow(fieldId) {
 
   if (!filtered.length) { list.classList.remove('open'); return; }
 
-  acCurrentItems[fieldId] = filtered.slice(0,12);
+  var limit = (fieldId === 'inPartName' && custFilter) ? 50 : 12;
+  acCurrentItems[fieldId] = filtered.slice(0,limit);
   list.innerHTML = acCurrentItems[fieldId].map(function(p, i) {
     var main = fieldId === 'inCustomer' ? (p.customer||'—') : p.partName;
     var sub  = fieldId === 'inCustomer' ? p.partName : (p.customer||'');
