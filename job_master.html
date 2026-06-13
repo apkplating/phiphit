@@ -129,6 +129,7 @@ input:focus,select:focus{border-color:var(--blue2);}
   <button class="tab-btn" onclick="tab('out')">📤 ออก INV ขาย</button>
   <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
   <button class="tab-btn" onclick="tab('sales')">📊 ยอดขาย</button>
+  <button class="tab-btn" onclick="tab('pricelist')">💲 ทะเบียนราคา</button>
 </div>
 
 <div class="main">
@@ -600,6 +601,69 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 </div>
 
+<!-- ══ TAB: ทะเบียนราคา ══ -->
+<div id="v-pricelist" class="view">
+
+  <!-- ── เพิ่ม/แก้ไขราคา ── -->
+  <div class="card">
+    <div class="card-label">💲 เพิ่ม/แก้ไขราคา (ต่อ P/No + ลูกค้า)</div>
+    <input type="hidden" id="plEditId">
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>P/No <span style="color:var(--red);">*</span></label>
+        <input type="text" id="plPartName" list="plPartList" placeholder="เช่น BR10241-01000D">
+        <datalist id="plPartList"></datalist>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ลูกค้า <span style="color:var(--red);">*</span></label>
+        <input type="text" id="plCustomer" list="plCustList" placeholder="เช่น CASH">
+        <datalist id="plCustList"></datalist>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="plPrice" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/หน่วย (กก.) <span style="color:var(--text-muted);">(ไม่บังคับ)</span></label>
+        <input type="number" id="plWeight" step="0.01" min="0" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <input type="text" id="plNote" placeholder="(ไม่บังคับ)">
+    </div>
+    <div class="grid2" style="margin-bottom:0;">
+      <button class="btn btn-outline" onclick="resetPriceForm()">↺ ล้างฟอร์ม</button>
+      <button class="btn btn-primary" onclick="savePriceEntry()">💾 บันทึกราคา</button>
+    </div>
+    <div id="toast-pl" class="toast"></div>
+  </div>
+
+  <!-- ── รายการราคา ── -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px;">
+      <input type="text" id="plSearch" placeholder="🔍 ค้นหา P/No หรือลูกค้า..." oninput="renderPriceList()">
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:480px;">
+        <thead><tr>
+          <th class="td-l">P/No</th>
+          <th class="td-l">ลูกค้า</th>
+          <th>ราคา/หน่วย</th>
+          <th>น้ำหนัก</th>
+          <th style="min-width:70px;">จัดการ</th>
+        </tr></thead>
+        <tbody id="plBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
@@ -687,6 +751,7 @@ var invoices   = [];   // ใบส่งสินค้า/INV ที่ออ�
 var invDraft   = [];   // รายการสินค้าในบิล INV ที่กำลังสร้าง (ยังไม่บันทึก)
 var customers  = [];   // ทะเบียนลูกค้า {id, name, addressText}
 var billStatements = []; // ใบวางบิลที่ออกแล้ว {id, billNo, date, customer, invoiceIds, total}
+var priceList  = [];   // ทะเบียนราคา {id, partName, customer, price, weight, note}
 var _pollTimer = null, _pollCount = 0;
 var currentRole = '';
 
@@ -723,7 +788,7 @@ function applyRole() {
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['board','in','out','history','sales'].forEach(function(n, i) {
+  ['board','in','out','history','sales','pricelist'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -733,6 +798,7 @@ function tab(t) {
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
+  if (t==='pricelist') { renderPriceList(); renderPriceFormHints(); }
 }
 
 // ══════════════════════════════════════
@@ -744,6 +810,7 @@ function loadLocal() {
   try { invoices   = JSON.parse(localStorage.getItem('job_invoices') || '[]'); } catch(e){ invoices=[]; }
   try { customers  = JSON.parse(localStorage.getItem('job_customers') || '[]'); } catch(e){ customers=[]; }
   try { billStatements = JSON.parse(localStorage.getItem('job_bill_statements') || '[]'); } catch(e){ billStatements=[]; }
+  try { priceList = JSON.parse(localStorage.getItem('job_price_list') || '[]'); } catch(e){ priceList=[]; }
 }
 function saveLocal() {
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
@@ -751,6 +818,7 @@ function saveLocal() {
   try { localStorage.setItem('job_invoices', JSON.stringify(invoices)); } catch(e){}
   try { localStorage.setItem('job_customers', JSON.stringify(customers)); } catch(e){}
   try { localStorage.setItem('job_bill_statements', JSON.stringify(billStatements)); } catch(e){}
+  try { localStorage.setItem('job_price_list', JSON.stringify(priceList)); } catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -760,7 +828,7 @@ async function fbSave() {
   try {
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, savedAt:new Date().toISOString() })
+      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, savedAt:new Date().toISOString() })
     });
     if (res.ok) setSyncOk();
   } catch(e) { setSyncErr(); }
@@ -777,6 +845,7 @@ async function fbLoad() {
       if (Array.isArray(data.invoices)) invoices   = data.invoices;
       if (Array.isArray(data.customers)) customers = data.customers;
       if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
+      if (Array.isArray(data.priceList)) priceList = data.priceList;
       saveLocal();
       setSyncOk();
       // refresh UI
@@ -1046,19 +1115,45 @@ function onInvLineJobSelect() {
   var custEl = document.getElementById('invCustomer');
   if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
 
-  // auto-fill ราคา/หน่วย + น้ำหนัก จากประวัติ INV ล่าสุดของ P/No นี้ (ถ้าช่องยังว่าง/เป็น 0)
-  var last = getLastPriceForPart(job.partName, job.customer);
+  // auto-fill ราคา/หน่วย + น้ำหนัก — เช็คทะเบียนราคาก่อน ถ้าไม่มีค่อย fallback ไป INV ล่าสุด
+  var found = getPriceForPart(job.partName, job.customer);
   var priceInput  = document.getElementById('invLinePrice');
   var weightInput = document.getElementById('invLineWeight');
-  if (last) {
-    infoText += '<br>💡 ราคาล่าสุด: <b>'+last.price.toFixed(2)+'</b> บาท/หน่วย'+
-      (last.weight ? ' · น้ำหนัก '+last.weight.toFixed(2)+' กก.' : '') +
-      ' (จาก '+esc(last.invNo)+' วันที่ '+esc(last.date)+')';
-    priceInput.value = last.price;
-    if (last.weight) weightInput.value = last.weight;
+  if (found) {
+    infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/หน่วย'+
+      (found.weight ? ' · น้ำหนัก '+found.weight.toFixed(2)+' กก.' : '') +
+      ' ('+esc(found.source)+')';
+    priceInput.value = found.price;
+    if (found.weight) weightInput.value = found.weight;
   }
   infoEl.innerHTML = infoText;
   infoEl.style.display = 'block';
+}
+
+// หาราคา/น้ำหนัก: 1) ทะเบียนราคา (ตรง P/No+ลูกค้า) 2) ทะเบียนราคา (P/No ทุกลูกค้า)
+// 3) fallback ไปประวัติ INV ล่าสุด
+function getPriceForPart(partName, customer) {
+  var k = String(partName||'').trim().toLowerCase();
+  var custTrim = String(customer||'').trim().toLowerCase();
+
+  // 1) ตรง P/No + ลูกค้า
+  var exact = priceList.find(function(p){
+    return String(p.partName||'').trim().toLowerCase()===k &&
+           String(p.customer||'').trim().toLowerCase()===custTrim && custTrim;
+  });
+  if (exact) return { price:Number(exact.price)||0, weight:Number(exact.weight)||0, source:'ทะเบียนราคา: '+exact.customer };
+
+  // 2) P/No เดียวกัน ลูกค้าอื่น (ใช้รายการแรกที่เจอเป็นตัวอย่าง)
+  var anyCust = priceList.find(function(p){
+    return String(p.partName||'').trim().toLowerCase()===k;
+  });
+  if (anyCust) return { price:Number(anyCust.price)||0, weight:Number(anyCust.weight)||0, source:'ทะเบียนราคา (ลูกค้า '+anyCust.customer+')' };
+
+  // 3) fallback: ประวัติ INV ล่าสุด
+  var last = getLastPriceForPart(partName, customer);
+  if (last) return { price:last.price, weight:last.weight, source:'INV '+last.invNo+' วันที่ '+last.date };
+
+  return null;
 }
 
 // ค้นหาราคา/น้ำหนักล่าสุดที่เคยขาย P/No นี้ จากประวัติ INV (เรียงตามวันที่ล่าสุดก่อน)
@@ -1080,6 +1175,120 @@ function getLastPriceForPart(partName, customer) {
     }
   }
   return fallback;
+}
+
+// ══════════════════════════════════════
+//  ทะเบียนราคา (priceList) — จัดการราคาต่อ P/No + ลูกค้า
+// ══════════════════════════════════════
+
+// เติม datalist สำหรับ P/No และลูกค้า (จาก jobItems + priceList ที่มีอยู่)
+function renderPriceFormHints() {
+  var partSeen = {}; var custSeen = {};
+  jobItems.forEach(function(j){ if(j.partName) partSeen[j.partName]=1; if(j.customer) custSeen[j.customer]=1; });
+  priceList.forEach(function(p){ if(p.partName) partSeen[p.partName]=1; if(p.customer) custSeen[p.customer]=1; });
+
+  var partDL = document.getElementById('plPartList');
+  var custDL = document.getElementById('plCustList');
+  if (partDL) partDL.innerHTML = Object.keys(partSeen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+  if (custDL) custDL.innerHTML = Object.keys(custSeen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+}
+
+function resetPriceForm() {
+  document.getElementById('plEditId').value = '';
+  document.getElementById('plPartName').value = '';
+  document.getElementById('plCustomer').value = '';
+  document.getElementById('plPrice').value = '';
+  document.getElementById('plWeight').value = '';
+  document.getElementById('plNote').value = '';
+}
+
+function savePriceEntry() {
+  var id       = document.getElementById('plEditId').value;
+  var partName = document.getElementById('plPartName').value.trim();
+  var customer = document.getElementById('plCustomer').value.trim();
+  var price    = parseFloat(document.getElementById('plPrice').value);
+  var weight   = parseFloat(document.getElementById('plWeight').value)||0;
+  var note     = document.getElementById('plNote').value.trim();
+
+  if (!partName) { showToast('pl','กรุณากรอก P/No','err'); return; }
+  if (!customer) { showToast('pl','กรุณากรอกชื่อลูกค้า','err'); return; }
+  if (!(price>=0)) { showToast('pl','กรุณากรอกราคา/หน่วย','err'); return; }
+
+  // ตรวจซ้ำ (P/No + ลูกค้า เดียวกัน) ยกเว้นรายการที่กำลังแก้ไข
+  var dupKey = partName.trim().toLowerCase()+'|'+customer.trim().toLowerCase();
+  var dup = priceList.find(function(p){
+    return p.id!==id && (p.partName||'').trim().toLowerCase()+'|'+(p.customer||'').trim().toLowerCase()===dupKey;
+  });
+  if (dup) {
+    if (!confirm('มีราคาของ '+partName+' / '+customer+' อยู่แล้ว ('+Number(dup.price).toFixed(2)+' บาท) — ต้องการอัปเดตทับหรือไม่?')) return;
+    dup.price = price; dup.weight = weight; dup.note = note;
+    if (id) priceList = priceList.filter(function(p){ return p.id!==id; }); // ลบรายการเดิมที่แก้ไขอยู่ (ถ้าต่างจาก dup)
+  } else if (id) {
+    var entry = priceList.find(function(p){ return p.id===id; });
+    if (entry) { entry.partName=partName; entry.customer=customer; entry.price=price; entry.weight=weight; entry.note=note; }
+  } else {
+    priceList.unshift({ id:'PL'+Date.now(), partName:partName, customer:customer, price:price, weight:weight, note:note });
+  }
+
+  saveLocal(); fbSave();
+  showToast('pl','💾 บันทึกราคาแล้ว','ok');
+  resetPriceForm();
+  renderPriceList();
+  renderPriceFormHints();
+}
+
+function editPriceEntry(id) {
+  var p = priceList.find(function(x){ return x.id===id; });
+  if (!p) return;
+  document.getElementById('plEditId').value   = p.id;
+  document.getElementById('plPartName').value = p.partName;
+  document.getElementById('plCustomer').value = p.customer;
+  document.getElementById('plPrice').value    = p.price;
+  document.getElementById('plWeight').value   = p.weight||'';
+  document.getElementById('plNote').value     = p.note||'';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function deletePriceEntry(id) {
+  var p = priceList.find(function(x){ return x.id===id; });
+  if (!p) return;
+  if (!confirm('ลบราคา '+p.partName+' / '+p.customer+'?')) return;
+  priceList = priceList.filter(function(x){ return x.id!==id; });
+  saveLocal(); fbSave();
+  showToast('pl','🗑️ ลบแล้ว','ok');
+  renderPriceList();
+}
+
+function renderPriceList() {
+  var tbody = document.getElementById('plBody');
+  if (!tbody) return;
+  var q = (document.getElementById('plSearch').value||'').trim().toLowerCase();
+
+  var rows = priceList.filter(function(p){
+    if (!q) return true;
+    return (p.partName||'').toLowerCase().indexOf(q)>=0 || (p.customer||'').toLowerCase().indexOf(q)>=0;
+  }).slice().sort(function(a,b){
+    return (a.partName||'').localeCompare(b.partName||'') || (a.customer||'').localeCompare(b.customer||'');
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">'+
+      (q?'ไม่พบรายการที่ค้นหา':'ยังไม่มีข้อมูล — เพิ่มราคาจากด้านบน')+'</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(function(p){
+    return '<tr>'+
+      '<td class="td-l" style="font-weight:700;">'+esc(p.partName)+(p.note?'<br><span style="font-size:10px;color:var(--text-muted);">'+esc(p.note)+'</span>':'')+'</td>'+
+      '<td class="td-l">'+esc(p.customer)+'</td>'+
+      '<td style="font-weight:700;color:var(--blue);text-align:right;">'+Number(p.price).toFixed(2)+'</td>'+
+      '<td style="text-align:right;">'+(p.weight?Number(p.weight).toFixed(2):'–')+'</td>'+
+      '<td class="td-l" style="white-space:nowrap;">'+
+        '<button class="icon-btn" title="แก้ไข" onclick="editPriceEntry(\''+p.id+'\')">✏️</button>'+
+        '<button class="icon-btn" title="ลบ" onclick="deletePriceEntry(\''+p.id+'\')">🗑️</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
 }
 
 // เพิ่มรายการสินค้าลงในบิล INV (draft)
@@ -1198,20 +1407,47 @@ function renderCustomerSelect() {
   var sel = document.getElementById('invCustomerSel');
   if (!sel) return;
   var cur = sel.value;
+
+  var seen = {}; var opts = [];
+  // 1) จากทะเบียนลูกค้าที่บันทึกไว้ (มีที่อยู่/เลขผู้เสียภาษีครบ)
+  customers.forEach(function(c){
+    var key = (c.addressText||'').split('\n')[0].trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    opts.push({ value:'reg:'+c.id, label:c.name });
+  });
+  // 2) จากประวัติ INV ที่เคยออก — ลูกค้าที่ยังไม่ได้บันทึกในทะเบียน
+  invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
+    .forEach(function(inv){
+      var key = (inv.customer||'').split('\n')[0].trim();
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      opts.push({ value:'hist:'+key, label:key });
+    });
+  opts.sort(function(a,b){ return a.label.localeCompare(b.label,'th'); });
+
   sel.innerHTML = '<option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>' +
-    customers.map(function(c){
-      return '<option value="'+esc(c.id)+'"'+(c.id===cur?' selected':'')+'>'+esc(c.name)+'</option>';
+    opts.map(function(o){
+      return '<option value="'+esc(o.value)+'"'+(o.value===cur?' selected':'')+'>'+esc(o.label)+'</option>';
     }).join('');
 }
 
 function onInvCustomerSelect() {
-  var id = document.getElementById('invCustomerSel').value;
-  if (!id) return;
-  var c = customers.find(function(x){ return x.id===id; });
-  if (!c) return;
-  document.getElementById('invCustomer').value = c.addressText;
-  // ถ้ามี term ที่บันทึกไว้ ให้เติมด้วย
-  if (c.term) document.getElementById('invTerm').value = c.term;
+  var val = document.getElementById('invCustomerSel').value;
+  if (!val) return;
+  if (val.indexOf('reg:')===0) {
+    var c = customers.find(function(x){ return x.id===val.slice(4); });
+    if (!c) return;
+    document.getElementById('invCustomer').value = c.addressText;
+    if (c.term) document.getElementById('invTerm').value = c.term;
+  } else if (val.indexOf('hist:')===0) {
+    var key = val.slice(5);
+    var src = invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
+      .find(function(i){ return (i.customer||'').split('\n')[0].trim()===key; });
+    if (!src) return;
+    document.getElementById('invCustomer').value = src.customer||'';
+    if (src.term) document.getElementById('invTerm').value = src.term;
+  }
 }
 
 // บันทึกชื่อ/ที่อยู่ลูกค้าปัจจุบันเป็น preset (ไม่ต้องคีย์ใหม่ครั้งหน้า)
@@ -1410,12 +1646,12 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 //  พิกัดวัดจากฟอร์มจริงที่พิมพ์ตรงกล่องแล้ว (A4: 210 x 297mm)
 // ══════════════════════════════════════
 var FORM_POS = {
-  invNo:   { x:126, y:54 },
+  invNo:   { x:121, y:54 },
   date:    { x:121, y:64 },
   po:      { x:134, y:78 },
   term:    { x:138, y:86 },
   // ชื่อลูกค้า/ที่อยู่: แต่ละบรรทัดของ textarea จะวางตามตำแหน่ง y นี้ตามลำดับ
-  custX: 21, custLines: [54, 59.5, 65, 72],
+  custX: 21, custLines: [58, 63.5, 69, 76],
   // ตารางรายการ
   itemX: 10,        // เลขที่ลำดับ (กึ่งกลางประมาณ)
   descX: 21.5,      // รายการสินค้า
@@ -1515,7 +1751,7 @@ function buildFormOverlayBody(inv) {
     var wStr   = l.weight ? Number(l.weight).toFixed(2) : '';
     html += fldC(P.itemX, y, (i+1));
     html += fld(P.descX, y, esc(l.partName));
-    if (l.lot) html += fld(P.descX, y+P.subLineDy, esc(l.lot), 'small');
+    if (l.lot) html += fld(P.descX, y+P.subLineDy, esc(l.lot));
     html += fldR(P.qtyRightX, y, qtyStr);
     if (wStr) html += fldC(P.weightCenterX, y, wStr);
     html += fld(P.priceX, y, Number(l.price).toFixed(2));
