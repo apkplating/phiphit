@@ -283,12 +283,13 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="field">
       <label>ชื่อลูกค้า / ที่อยู่ <span style="color:var(--red);">*</span></label>
-      <div style="display:flex;gap:6px;margin-bottom:6px;">
+      <div style="display:flex;gap:6px;margin-bottom:4px;">
         <select id="invCustomerSel" onchange="onInvCustomerSelect()" style="flex:1;">
           <option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>
         </select>
         <button type="button" class="btn btn-outline btn-sm" style="white-space:nowrap;" onclick="saveCustomerPreset()">💾 บันทึกลูกค้านี้</button>
       </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">เลือกจาก dropdown เพื่อ auto-fill ชื่อ/ที่อยู่ด้านล่าง — หรือพิมพ์/แก้ไขในช่องด้านล่างได้เลย</div>
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
     </div>
     <div class="grid2">
