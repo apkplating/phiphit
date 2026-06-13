@@ -376,9 +376,37 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="grid2" style="margin-bottom:0;">
       <button class="btn btn-outline" onclick="saveInvoice(false)">💾 บันทึก (ไม่พิมพ์)</button>
-      <button class="btn btn-primary" onclick="saveInvoice(true)">🖨️ บันทึก + พิมพ์</button>
+      <button class="btn btn-primary" onclick="saveInvoice(true)">🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)</button>
     </div>
+    <button class="btn btn-green" style="margin-top:8px;" onclick="saveInvoice('form')">🖨️ บันทึก + พิมพ์ลงฟอร์มสำเร็จรูป</button>
     <div id="toast-out" class="toast"></div>
+  </div>
+
+  <!-- ── ตั้งค่าตำแหน่งพิมพ์ฟอร์มสำเร็จรูป ── -->
+  <div class="card">
+    <div class="card-label" style="cursor:pointer;" onclick="toggleFormCalib()">
+      ⚙️ ตั้งค่าตำแหน่งพิมพ์ฟอร์มสำเร็จรูป <span id="formCalibArrow">▾</span>
+    </div>
+    <div id="formCalibBody" style="display:none;">
+      <p style="font-size:11px;color:var(--text-mid);margin-bottom:8px;">
+        ถ้าพิมพ์แล้วข้อความเลื่อนซ้าย/ขวา/บน/ล่างจากกล่องในฟอร์ม ให้ปรับค่าด้านล่าง (มิลลิเมตร)
+        แล้วกด "🧪 พิมพ์ทดสอบกริด" เพื่อตรวจตำแหน่งก่อนพิมพ์จริง
+      </p>
+      <div class="grid2">
+        <div class="field" style="margin:0;">
+          <label>เลื่อนแนวนอน X (mm) <span style="color:var(--text-muted);">(+ = ขวา)</span></label>
+          <input type="number" id="formOffsetX" step="0.5" value="0">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>เลื่อนแนวตั้ง Y (mm) <span style="color:var(--text-muted);">(+ = ลง)</span></label>
+          <input type="number" id="formOffsetY" step="0.5" value="0">
+        </div>
+      </div>
+      <div class="grid2" style="margin-bottom:0;">
+        <button class="btn btn-outline" onclick="printCalibrationGrid()">🧪 พิมพ์ทดสอบกริด</button>
+        <button class="btn btn-outline" onclick="saveFormOffset()">💾 บันทึกค่า</button>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1122,6 +1150,7 @@ function initInvTab() {
   if (invNoEl && !invNoEl.value) invNoEl.value = genInvNo(dateEl ? dateEl.value : null);
   renderInvLineSelect();
   renderInvLines();
+  loadFormOffsetUI();
   renderCustomerSelect();
 }
 
@@ -1238,7 +1267,9 @@ function saveInvoice(doPrint) {
 
   showToast('out','✅ บันทึก INV '+invNo+' สำเร็จ','ok');
 
-  if (doPrint) {
+  if (doPrint==='form') {
+    printInvoiceOnForm(invObj);
+  } else if (doPrint) {
     printInvoice(invObj);
   }
 
@@ -1334,6 +1365,189 @@ function printInvoice(inv) {
 
 // HTML-escape helper
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════════════════════════════════
+//  พิมพ์ลงฟอร์มสำเร็จรูป (ตำแหน่ง absolute, mm)
+//  พิกัดวัดจากฟอร์มจริงที่พิมพ์ตรงกล่องแล้ว (A4: 210 x 297mm)
+// ══════════════════════════════════════
+var FORM_POS = {
+  invNo:   { x:139, y:50 },
+  date:    { x:134, y:60 },
+  po:      { x:134, y:74 },
+  term:    { x:134, y:80 },
+  // ชื่อลูกค้า/ที่อยู่: แต่ละบรรทัดของ textarea จะวางตามตำแหน่ง y นี้ตามลำดับ
+  custX: 21, custLines: [58, 63.5, 69, 76],
+  // ตารางรายการ
+  itemX: 10,        // เลขที่ลำดับ (กึ่งกลางประมาณ)
+  descX: 21.5,      // รายการสินค้า
+  qtyRightX: 136,   // จำนวน (ชิดขวา)
+  weightCenterX: 145, // น้ำหนัก (กึ่งกลาง)
+  priceX: 152,      // ราคา/หน่วย
+  amountRightX: 196, // จำนวนเงิน (ชิดขวา)
+  rowY0: 103, rowH: 11.4, subLineDy: 5.2,
+  maxRows: 10, // จำนวนแถวสูงสุดที่ฟอร์มรองรับ (ประมาณ)
+  // ยอดรวม (ชิดขวาที่ amountRightX)
+  grandY: 219, vatY: 227, netY: 234,
+};
+
+function getFormOffset() {
+  var x = parseFloat(localStorage.getItem('jm_form_offset_x')) || 0;
+  var y = parseFloat(localStorage.getItem('jm_form_offset_y')) || 0;
+  return { x:x, y:y };
+}
+function saveFormOffset() {
+  var x = parseFloat(document.getElementById('formOffsetX').value)||0;
+  var y = parseFloat(document.getElementById('formOffsetY').value)||0;
+  localStorage.setItem('jm_form_offset_x', x);
+  localStorage.setItem('jm_form_offset_y', y);
+  showToast('out','💾 บันทึกค่าตำแหน่งพิมพ์แล้ว (X='+x+'mm, Y='+y+'mm)','ok');
+}
+function loadFormOffsetUI() {
+  var off = getFormOffset();
+  var ex = document.getElementById('formOffsetX');
+  var ey = document.getElementById('formOffsetY');
+  if (ex) ex.value = off.x;
+  if (ey) ey.value = off.y;
+}
+function toggleFormCalib() {
+  var body = document.getElementById('formCalibBody');
+  var arrow = document.getElementById('formCalibArrow');
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  arrow.textContent = open ? '▾' : '▴';
+}
+
+// HTML wrapper สำหรับหน้ากระดาษ A4 + offset
+function formPageHtml(bodyHtml, title) {
+  var off = getFormOffset();
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>'+esc(title)+'</title>'+
+    '<style>'+
+    '@page{ size:A4; margin:0; }'+
+    'html,body{ margin:0; padding:0; }'+
+    'body{ width:210mm; height:297mm; position:relative; font-family:"IBM Plex Sans Thai","Sarabun",sans-serif; font-size:10pt; color:#000; }'+
+    '.f{ position:absolute; white-space:nowrap; line-height:1.15; }'+
+    '.r{ text-align:right; }'+
+    '.c{ text-align:center; }'+
+    '.b{ font-weight:700; }'+
+    '.small{ font-size:7pt; color:#444; }'+
+    '@media print{ body{ -webkit-print-color-adjust:exact; } }'+
+    '</style></head><body>'+
+    '<div style="position:absolute; left:'+off.x+'mm; top:'+off.y+'mm; width:210mm; height:297mm;">'+
+      bodyHtml +
+    '</div>'+
+    '</body></html>';
+}
+
+function fld(x, y, text, cls) {
+  return '<div class="f'+(cls?(' '+cls):'')+'" style="left:'+x+'mm; top:'+y+'mm;">'+text+'</div>';
+}
+// fld สำหรับชิดขวา: กำหนด right edge ที่ x (mm จากซ้าย) → ใช้ right:(210-x)mm
+function fldR(xRight, y, text, cls) {
+  return '<div class="f r'+(cls?(' '+cls):'')+'" style="right:'+(210-xRight)+'mm; top:'+y+'mm;">'+text+'</div>';
+}
+function fldC(xCenter, y, text, cls) {
+  return '<div class="f c'+(cls?(' '+cls):'')+'" style="left:'+(xCenter-10)+'mm; top:'+y+'mm; width:20mm;">'+text+'</div>';
+}
+
+// สร้างเนื้อหาข้อมูล (ไม่มีกรอบ/หัวกระดาษ) สำหรับวางทับฟอร์มสำเร็จรูป
+function buildFormOverlayBody(inv) {
+  var P = FORM_POS;
+  var d = new Date(inv.date+'T00:00:00');
+  var dateStr = String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+
+  var html = '';
+  html += fld(P.invNo.x, P.invNo.y, esc(inv.invNo), 'b');
+  html += fld(P.date.x, P.date.y, dateStr);
+  if (inv.po)   html += fld(P.po.x, P.po.y, esc(inv.po));
+  if (inv.term) html += fld(P.term.x, P.term.y, esc(inv.term));
+
+  // ชื่อลูกค้า/ที่อยู่ — แต่ละบรรทัดตามตำแหน่งที่กำหนด
+  var custLines = (inv.customer||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  custLines.forEach(function(line, i){
+    if (i < P.custLines.length) html += fld(P.custX, P.custLines[i], esc(line));
+  });
+
+  // รายการสินค้า
+  var items = inv.items.slice(0, P.maxRows);
+  items.forEach(function(l, i){
+    var y = P.rowY0 + i*P.rowH;
+    var qtyStr = l.unit==='kg' ? Number(l.qty).toFixed(2) : Number(l.qty).toLocaleString();
+    var wStr   = l.weight ? Number(l.weight).toFixed(2) : '';
+    html += fldC(P.itemX, y, (i+1));
+    html += fld(P.descX, y, esc(l.partName));
+    if (l.lot) html += fld(P.descX, y+P.subLineDy, esc(l.lot), 'small');
+    html += fldR(P.qtyRightX, y, qtyStr);
+    if (wStr) html += fldC(P.weightCenterX, y, wStr);
+    html += fld(P.priceX, y, Number(l.price).toFixed(2));
+    html += fldR(P.amountRightX, y, Number(l.amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+  });
+
+  // ยอดรวม
+  html += fldR(P.amountRightX, P.grandY, inv.grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), 'b');
+  html += fldR(P.amountRightX, P.vatY, inv.vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+  html += fldR(P.amountRightX, P.netY, inv.netTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}), 'b');
+
+  return html;
+}
+
+// พิมพ์ INV ลงฟอร์มสำเร็จรูป (เฉพาะข้อมูล ไม่มีกรอบ/หัวกระดาษ)
+function printInvoiceOnForm(inv) {
+  if (inv.items.length > FORM_POS.maxRows) {
+    showToast('out','⚠️ รายการมากกว่า '+FORM_POS.maxRows+' แถว อาจล้นกรอบฟอร์ม','err');
+  }
+  var body = buildFormOverlayBody(inv);
+  var html = formPageHtml(body, 'ใบส่งสินค้า (ฟอร์ม) '+inv.invNo);
+  var w = window.open('', '_blank');
+  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+}
+
+// พิมพ์กริดทดสอบ — เส้นไม้บรรทัด mm + จุด crosshair ที่ตำแหน่งฟอร์มทุกจุด
+// ใช้สำหรับทาบกับฟอร์มเปล่าเพื่อหาค่า offset ที่เหมาะสม
+function printCalibrationGrid() {
+  var P = FORM_POS;
+  var html = '';
+  // เส้นแนวตั้งทุก 10mm + ตัวเลข
+  for (var x=0; x<=210; x+=10) {
+    html += '<div style="position:absolute; left:'+x+'mm; top:0; width:0.2mm; height:297mm; background:#999;"></div>';
+    html += '<div style="position:absolute; left:'+(x+0.5)+'mm; top:0.5mm; font-size:6pt; color:#999;">'+x+'</div>';
+  }
+  // เส้นแนวนอนทุก 10mm + ตัวเลข
+  for (var y=0; y<=297; y+=10) {
+    html += '<div style="position:absolute; left:0; top:'+y+'mm; width:210mm; height:0.2mm; background:#999;"></div>';
+    html += '<div style="position:absolute; left:0.5mm; top:'+(y+0.5)+'mm; font-size:6pt; color:#999;">'+y+'</div>';
+  }
+  // crosshair ที่จุดอ้างอิงสำคัญของฟอร์ม (สีแดง)
+  var points = [
+    [P.invNo.x,P.invNo.y,'เลขที่ INV'], [P.date.x,P.date.y,'วันที่'],
+    [P.po.x,P.po.y,'PO'], [P.term.x,P.term.y,'เงื่อนไข'],
+    [P.custX,P.custLines[0],'ลูกค้า บรรทัด1'], [P.custX,P.custLines[3],'เลขผู้เสียภาษี'],
+    [P.descX,P.rowY0,'รายการแถว1'], [P.amountRightX,P.rowY0,'จำนวนเงินแถว1'],
+    [P.amountRightX,P.grandY,'GRAND TOTAL'], [P.amountRightX,P.netY,'NET VALUE'],
+  ];
+  points.forEach(function(p){
+    var x=p[0], y=p[1], label=p[2];
+    html += '<div style="position:absolute; left:'+(x-3)+'mm; top:'+y+'mm; width:6mm; height:0.3mm; background:#e11;"></div>';
+    html += '<div style="position:absolute; left:'+x+'mm; top:'+(y-3)+'mm; width:0.3mm; height:6mm; background:#e11;"></div>';
+    html += '<div style="position:absolute; left:'+(x+1)+'mm; top:'+(y-3.5)+'mm; font-size:6pt; color:#e11; white-space:nowrap;">'+esc(label)+'</div>';
+  });
+
+  var off = getFormOffset();
+  var fullHtml = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ทดสอบกริด</title>'+
+    '<style>@page{size:A4;margin:0;} html,body{margin:0;padding:0;} body{width:210mm;height:297mm;position:relative;font-family:sans-serif;}</style>'+
+    '</head><body>'+
+    '<div style="position:absolute; left:'+off.x+'mm; top:'+off.y+'mm; width:210mm; height:297mm;">'+html+'</div>'+
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  w.document.write(fullHtml);
+  w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+}
 
 // ══════════════════════════════════════
 //  ยอดขาย (รายลูกค้า / รายเดือน)
