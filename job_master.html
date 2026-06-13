@@ -221,7 +221,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
       <div class="ac-wrap">
         <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND"
-          autocomplete="off" oninput="acShow('inPartName')" onblur="acHide('inPartName',300)" onfocus="acShow('inPartName')">
+          autocomplete="off" oninput="acShow('inPartName')" onblur="acHide('inPartName',300); acAutoFillCustomerFromPM()" onfocus="acShow('inPartName')">
         <div class="ac-list" id="ac-inPartName"></div>
       </div>
     </div>
@@ -788,9 +788,10 @@ function checkPin() {
     try { localStorage.setItem('job_pin','1'); localStorage.setItem('job_role', currentRole); } catch(e){}
     applyRole();
     loadLocal();
+    try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(fbLoad, 800);
-    setTimeout(function(){ loadPartMaster().then(function(){ pullFromLines(); }); }, 3000);
+    setTimeout(function(){ loadPartMaster().then(function(){ pullFromLines(); }); }, 500);
   } else {
     document.getElementById('loginError').style.display = 'block';
     document.getElementById('pinInput').value = '';
@@ -2559,9 +2560,9 @@ function showToast(section, msg, type) {
 //  AUTOCOMPLETE — ชื่อชิ้นงาน + ลูกค้า
 // ══════════════════════════════════════
 function acGetHistory() {
-  // ดึงประวัติจาก jobItems (pair: partName + customer)
   var pairs = [];
   var seen  = {};
+  // 1) จากประวัติ jobItems ของ Job Master เอง (ใช้บ่อย/ล่าสุดมาก่อน)
   jobItems.forEach(function(j) {
     var key = (j.partName||'') + '|' + (j.customer||'');
     if (!seen[key] && j.partName) {
@@ -2569,7 +2570,27 @@ function acGetHistory() {
       pairs.push({ partName: j.partName, customer: j.customer||'' });
     }
   });
+  // 2) จาก Part Master (ทะเบียนกลาง) — เผื่อ P/No ที่ยังไม่เคยรับเข้า Job Master มาก่อน
+  pmParts.forEach(function(p) {
+    var partName = p.partNo || p.name || '';
+    var customer = p.customer || '';
+    if (!partName) return;
+    var key = partName + '|' + customer;
+    if (seen[key]) return;
+    seen[key] = true;
+    pairs.push({ partName: partName, customer: customer });
+  });
   return pairs;
+}
+
+// auto-fill ลูกค้า จาก Part Master เมื่อกรอก/เลือก P/No ตรงเป๊ะ (ถ้าช่องลูกค้ายังว่าง)
+function acAutoFillCustomerFromPM() {
+  var partInput = document.getElementById('inPartName');
+  var custInput = document.getElementById('inCustomer');
+  if (!partInput || !custInput) return;
+  if (custInput.value.trim()) return; // ไม่ทับถ้ามีค่าอยู่แล้ว
+  var pm = pmLookup(partInput.value);
+  if (pm && pm.customer) custInput.value = pm.customer;
 }
 
 function acShow(fieldId) {
@@ -2608,6 +2629,7 @@ function acHide(fieldId, delay) {
 function acPick(fieldId, pair) {
   document.getElementById('inPartName').value = pair.partName || '';
   document.getElementById('inCustomer').value = pair.customer || '';
+  if (!pair.customer) acAutoFillCustomerFromPM();
   var list = document.getElementById('ac-' + fieldId);
   if (list) list.classList.remove('open');
 }
