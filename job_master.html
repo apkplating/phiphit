@@ -37,6 +37,8 @@ input:focus,select:focus{border-color:var(--blue2);}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
 .btn{padding:11px 16px;border-radius:10px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;width:100%;transition:all .2s;}
+.icon-btn{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;}
+.icon-btn:hover{background:#f1f5f9;}
 .btn-primary{background:var(--blue);color:#fff;}
 .btn-green{background:var(--green);color:#fff;}
 .btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue);}
@@ -457,6 +459,8 @@ input:focus,select:focus{border-color:var(--blue2);}
 <!-- ══ TAB: ยอดขาย ══ -->
 <div id="v-sales" class="view">
 
+  <div id="toast-sales" class="toast"></div>
+
   <!-- Filter -->
   <div class="card">
     <div class="card-label">📊 รายงานยอดขาย</div>
@@ -526,16 +530,17 @@ input:focus,select:focus{border-color:var(--blue2);}
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:10px 12px 6px;" class="card-label">🧾 รายการ INV</div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table class="jt" style="min-width:480px;">
+      <table class="jt" style="min-width:560px;">
         <thead><tr>
           <th class="td-l">เลข INV</th>
           <th class="td-l">วันที่</th>
           <th class="td-l">ลูกค้า</th>
           <th>รายการ</th>
           <th>ยอดขาย (NET)</th>
+          <th style="min-width:130px;">จัดการ</th>
         </tr></thead>
         <tbody id="salesInvBody">
-          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+          <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
         </tbody>
       </table>
     </div>
@@ -1657,23 +1662,92 @@ function renderSales() {
   var invSorted = list.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); });
   var invBody = document.getElementById('salesInvBody');
   if (!invSorted.length) {
-    invBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
+    invBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
   } else {
     invBody.innerHTML = invSorted.map(function(inv){
       var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
       var d = inv.date ? new Date(inv.date+'T00:00:00') : null;
       var dStr = d ? (d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()) : '-';
+      var billed = !!inv.billNo;
+      var editDelBtns = billed
+        ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ลบไม่ได้">🔒 วางบิลแล้ว</span>'
+        : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
+          '<button class="icon-btn" title="ลบ INV" onclick="deleteInvoice(\''+inv.id+'\')">🗑️</button>';
       return '<tr>'+
         '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
         '<td class="td-l">'+dStr+'</td>'+
         '<td class="td-l">'+esc(cust)+'</td>'+
         '<td>'+(inv.items?inv.items.length:0)+'</td>'+
         '<td style="font-weight:700;color:var(--green);text-align:right;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td class="td-l" style="white-space:nowrap;">'+
+          '<button class="icon-btn" title="พิมพ์ซ้ำ (กระดาษเปล่า)" onclick="reprintInvoice(\''+inv.id+'\')">🖨️</button>'+
+          '<button class="icon-btn" title="พิมพ์ซ้ำ (ฟอร์มสำเร็จรูป)" onclick="reprintInvoiceOnForm(\''+inv.id+'\')">📄</button>'+
+          editDelBtns+
+        '</td>'+
       '</tr>';
     }).join('');
   }
 
   renderStatementCustomers();
+}
+
+// ══════════════════════════════════════
+//  จัดการ INV ที่ออกแล้ว: พิมพ์ซ้ำ / แก้ไข / ลบ
+// ══════════════════════════════════════
+function reprintInvoice(invId) {
+  var inv = invoices.find(function(i){ return i.id===invId; });
+  if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  printInvoice(inv);
+}
+
+function reprintInvoiceOnForm(invId) {
+  var inv = invoices.find(function(i){ return i.id===invId; });
+  if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  printInvoiceOnForm(inv);
+}
+
+// แก้ไข INV: คืนสต็อกของรายการเดิม (ลบ jobRecords type:out ที่ผูกกับ INV นี้)
+// แล้วโหลดข้อมูลกลับเข้า Tab "ออก INV ขาย" เพื่อแก้ไข — กดบันทึกใหม่อีกครั้ง
+function editInvoice(invId) {
+  var idx = invoices.findIndex(function(i){ return i.id===invId; });
+  if (idx<0) { showToast('out','ไม่พบ INV นี้','err'); return; }
+  var inv = invoices[idx];
+  if (inv.billNo) { showToast('sales','⚠️ INV นี้วางบิลแล้ว ('+inv.billNo+') — แก้ไขไม่ได้','err'); return; }
+  if (!confirm('แก้ไข INV '+inv.invNo+'?\n\nระบบจะคืนสต็อกของรายการเดิม และนำข้อมูลไปแสดงที่ Tab "ออก INV ขาย" ให้แก้ไข — เมื่อกดบันทึกใหม่ จะตัดสต็อกอีกครั้งตามค่าที่แก้')) return;
+
+  // คืนสต็อก: ลบ jobRecords type:out ที่ผูกกับ INV นี้
+  jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
+  // เอา invoice ออกจากรายการ (ชั่วคราว — จะถูกสร้างใหม่ตอนบันทึก)
+  invoices.splice(idx,1);
+  saveLocal(); fbSave();
+
+  // โหลดข้อมูลกลับเข้าฟอร์ม
+  invDraft = inv.items.slice();
+  tab('out');
+  document.getElementById('invNo').value       = inv.invNo;
+  document.getElementById('invDate').value     = inv.date;
+  document.getElementById('invCustomer').value = inv.customer||'';
+  document.getElementById('invPO').value       = inv.po||'';
+  document.getElementById('invTerm').value     = inv.term||'';
+  document.getElementById('invNote').value     = inv.note||'';
+  renderInvLineSelect();
+  renderInvLines();
+  showToast('out','✏️ กำลังแก้ไข INV '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง','ok');
+}
+
+// ลบ INV: คืนสต็อกของรายการที่ตัดไป แล้วลบ invoice ออก
+function deleteInvoice(invId) {
+  var idx = invoices.findIndex(function(i){ return i.id===invId; });
+  if (idx<0) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  var inv = invoices[idx];
+  if (inv.billNo) { showToast('sales','⚠️ INV นี้วางบิลแล้ว ('+inv.billNo+') — ลบไม่ได้','err'); return; }
+  if (!confirm('ลบ INV '+inv.invNo+'?\n\nระบบจะคืนสต็อกของรายการที่ตัดไปทั้งหมด การลบนี้ไม่สามารถย้อนกลับได้')) return;
+
+  jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
+  invoices.splice(idx,1);
+  saveLocal(); fbSave();
+  showToast('sales','🗑️ ลบ INV '+inv.invNo+' และคืนสต็อกแล้ว','ok');
+  renderSales();
 }
 
 // ══════════════════════════════════════
