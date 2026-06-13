@@ -519,9 +519,10 @@ function getColors() {
 
 function setColors(colors, prefix) {
   prefix = prefix || '';
-  document.getElementById(prefix+'chkB').checked = (colors||'').includes('B');
-  document.getElementById(prefix+'chkC').checked = (colors||'').includes('C');
-  document.getElementById(prefix+'chkK').checked = (colors||'').includes('K');
+  var p = prefix ? prefix + 'Chk' : 'chk';
+  document.getElementById(p+'B').checked = (colors||'').includes('B');
+  document.getElementById(p+'C').checked = (colors||'').includes('C');
+  document.getElementById(p+'K').checked = (colors||'').includes('K');
 }
 
 // ══════════════════════════════════════
