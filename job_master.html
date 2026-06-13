@@ -1038,14 +1038,48 @@ function onInvLineJobSelect() {
   var b = calcJob(jobId);
   var isKg = job.unit==='kg';
   var rem = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
-  infoEl.textContent = '📦 ' + job.partName + ' · ลูกค้า: ' + (job.customer||'–') + ' · คงเหลือ: ' + rem;
-  infoEl.style.display = 'block';
+  var infoText = '📦 ' + job.partName + ' · ลูกค้า: ' + (job.customer||'–') + ' · คงเหลือ: ' + rem;
   qtyLabel.innerHTML = (isKg ? 'น้ำหนัก (กก.)' : 'จำนวน (ชิ้น)') + ' <span style="color:var(--red);">*</span>';
   qtyInput.step = isKg ? '0.01' : '1';
   qtyInput.placeholder = isKg ? '0.00' : '0';
   // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
   var custEl = document.getElementById('invCustomer');
   if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
+
+  // auto-fill ราคา/หน่วย + น้ำหนัก จากประวัติ INV ล่าสุดของ P/No นี้ (ถ้าช่องยังว่าง/เป็น 0)
+  var last = getLastPriceForPart(job.partName, job.customer);
+  var priceInput  = document.getElementById('invLinePrice');
+  var weightInput = document.getElementById('invLineWeight');
+  if (last) {
+    infoText += '<br>💡 ราคาล่าสุด: <b>'+last.price.toFixed(2)+'</b> บาท/หน่วย'+
+      (last.weight ? ' · น้ำหนัก '+last.weight.toFixed(2)+' กก.' : '') +
+      ' (จาก '+esc(last.invNo)+' วันที่ '+esc(last.date)+')';
+    priceInput.value = last.price;
+    if (last.weight) weightInput.value = last.weight;
+  }
+  infoEl.innerHTML = infoText;
+  infoEl.style.display = 'block';
+}
+
+// ค้นหาราคา/น้ำหนักล่าสุดที่เคยขาย P/No นี้ จากประวัติ INV (เรียงตามวันที่ล่าสุดก่อน)
+// ให้ความสำคัญกับ INV ของลูกค้าเดียวกันก่อน ถ้าไม่เจอจะใช้ของลูกค้าใดก็ได้
+function getLastPriceForPart(partName, customer) {
+  var k = String(partName||'').trim().toLowerCase();
+  var sorted = invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  var fallback = null;
+  for (var i=0;i<sorted.length;i++) {
+    var inv = sorted[i];
+    if (!inv.items) continue;
+    for (var j=0;j<inv.items.length;j++) {
+      var it = inv.items[j];
+      if (String(it.partName||'').trim().toLowerCase()!==k) continue;
+      var entry = { price: Number(it.price)||0, weight: Number(it.weight)||0, invNo: inv.invNo, date: inv.date };
+      var itCust = (it.customer||'').trim();
+      if (customer && itCust && itCust===customer) return entry; // ตรงลูกค้า — ใช้เลย
+      if (!fallback) fallback = entry; // เก็บไว้เผื่อไม่เจอที่ตรงลูกค้า
+    }
+  }
+  return fallback;
 }
 
 // เพิ่มรายการสินค้าลงในบิล INV (draft)
@@ -1379,9 +1413,9 @@ var FORM_POS = {
   invNo:   { x:126, y:54 },
   date:    { x:121, y:64 },
   po:      { x:134, y:78 },
-  term:    { x:138, y:80 },
+  term:    { x:138, y:86 },
   // ชื่อลูกค้า/ที่อยู่: แต่ละบรรทัดของ textarea จะวางตามตำแหน่ง y นี้ตามลำดับ
-  custX: 21, custLines: [62, 67.5, 73, 80],
+  custX: 21, custLines: [54, 59.5, 65, 72],
   // ตารางรายการ
   itemX: 10,        // เลขที่ลำดับ (กึ่งกลางประมาณ)
   descX: 21.5,      // รายการสินค้า
@@ -1392,7 +1426,7 @@ var FORM_POS = {
   rowY0: 107, rowH: 11.4, subLineDy: 5.2,
   maxRows: 10, // จำนวนแถวสูงสุดที่ฟอร์มรองรับ (ประมาณ)
   // ยอดรวม (ชิดขวาที่ amountRightX)
-  grandY: 221, vatY: 229, netY: 236,
+  grandY: 224, vatY: 232, netY: 239,
 };
 
 function getFormOffset() {
