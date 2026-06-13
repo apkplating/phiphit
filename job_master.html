@@ -293,7 +293,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
 
       <!-- ── จัดการทะเบียนลูกค้า (แก้ไข/ลบ) ── -->
-      <details style="margin-top:8px;">
+      <details id="custRegDetails" style="margin-top:8px;">
         <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--navy);">
           👤 จัดการลูกค้าที่บันทึกไว้ (<span id="custRegCount">0</span>)
         </summary>
@@ -1501,6 +1501,9 @@ function saveCustomerPreset() {
   var sel = document.getElementById('invCustomerSel');
   sel.value = 'reg:' + (existing ? existing.id : customers[0].id);
   renderCustomerRegistryTable();
+  // เปิดตารางจัดการลูกค้าให้เห็นทันที เพื่อแก้ไข/ลบได้ในตัว
+  var det = document.getElementById('custRegDetails');
+  if (det) det.open = true;
   showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว','ok');
 }
 
