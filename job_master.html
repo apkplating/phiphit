@@ -2622,16 +2622,19 @@ function acShow(fieldId) {
 
   if (!filtered.length) { list.classList.remove('open'); return; }
 
-  list.innerHTML = filtered.slice(0,12).map(function(p) {
+  acCurrentItems[fieldId] = filtered.slice(0,12);
+  list.innerHTML = acCurrentItems[fieldId].map(function(p, i) {
     var main = fieldId === 'inCustomer' ? (p.customer||'—') : p.partName;
     var sub  = fieldId === 'inCustomer' ? p.partName : (p.customer||'');
-    return '<div class="ac-item" onmousedown="acPick(\''+fieldId+'\','+JSON.stringify(p)+')">' +
-      '<span class="ac-item-part">'+main+'</span>' +
-      (sub ? '<span class="ac-item-cust">· '+sub+'</span>' : '') +
+    return '<div class="ac-item" onmousedown="acPick(\''+fieldId+'\','+i+')">' +
+      '<span class="ac-item-part">'+esc(main)+'</span>' +
+      (sub ? '<span class="ac-item-cust">· '+esc(sub)+'</span>' : '') +
       '</div>';
   }).join('');
   list.classList.add('open');
 }
+
+var acCurrentItems = {}; // เก็บรายการ autocomplete ล่าสุดของแต่ละ field (กันปัญหา JSON ใน HTML attribute)
 
 function acHide(fieldId, delay) {
   setTimeout(function() {
@@ -2640,7 +2643,9 @@ function acHide(fieldId, delay) {
   }, delay || 0);
 }
 
-function acPick(fieldId, pair) {
+function acPick(fieldId, idx) {
+  var pair = (acCurrentItems[fieldId] || [])[idx];
+  if (!pair) return;
   document.getElementById('inPartName').value = pair.partName || '';
   document.getElementById('inCustomer').value = pair.customer || '';
   if (!pair.customer) acAutoFillCustomerFromPM();
