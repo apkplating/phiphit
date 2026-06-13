@@ -403,13 +403,10 @@ async function loadWIP() {
       // dayRecords อาจอยู่ใน data หรือ data.dayRecords
       var recs = Array.isArray(data) ? data
                : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
-      var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
+      var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-60); // ขยายเป็น 60 วัน
       recs.forEach(function(dr){
         if (!dr.rows) return;
-        // กรองเฉพาะรอบที่ยังไม่จ่ายครบ
-        // ถ้ามี status==='done' → ข้ามได้เลย (จ่ายครบแล้ว)
         if (dr.status === 'done') return;
-        // ถ้าไม่มี status field → ดูจากวันที่ (เก่ากว่า 30 วัน ถือว่าจ่ายไปแล้ว)
         if (!dr.status && dr.date) {
           var drDate = new Date(dr.date);
           if (drDate < cutoff) return;
@@ -496,8 +493,6 @@ function buildMap() {
   });
 
   // ── เติมข้อมูลจาก Part Master ──
-  // 1. ถ้า map[k] มีอยู่แล้ว → เติม customer/colors/weightPerPc จาก PM (PM มีสิทธิ์สูงกว่า job)
-  // 2. ถ้า PM มี P/No ที่ไม่อยู่ใน map (ยังไม่มี job) → ไม่สร้าง row ใหม่ (ไม่แสดงของที่ยังไม่รับเข้า)
   Object.keys(map).forEach(function(k) {
     var pm = pmLookup(map[k].partNo);
     if (pm) {
@@ -506,6 +501,26 @@ function buildMap() {
       if (pm.colors)      map[k].colors      = pm.colors;
       if (pm.weightPerPc) map[k].weightPerPc = pm.weightPerPc;
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
+    }
+
+    // ── cap WIP ไม่ให้เกิน (receive - delivery) ──
+    // WIP จริงต้องไม่มากกว่างานที่ยังค้างอยู่
+    var maxWip = Math.max(0, map[k].receive - map[k].delivery);
+    var wo = getWip(map[k].partNo);
+    if (wo && maxWip >= 0) {
+      var pm2 = pmLookup(map[k].partNo);
+      var wipPcs = wo.pcs || 0;
+      var wipKg  = wo.kgs || 0;
+      // แปลง kg→ชิ้นเพื่อ cap ถ้ายังไม่มี pcs
+      if (!wipPcs && wipKg > 0 && pm2 && pm2.weightPerPc > 0) {
+        wipPcs = Math.round(wipKg * 1000 / pm2.weightPerPc);
+      }
+      if (wipPcs > maxWip) {
+        // cap ทั้ง pcs และ kgs ตาม ratio
+        var ratio = maxWip / wipPcs;
+        wo.pcs = maxWip;
+        wo.kgs = parseFloat((wipKg * ratio).toFixed(3));
+      }
     }
   });
 
