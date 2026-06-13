@@ -293,11 +293,11 @@ input:focus,select:focus{border-color:var(--blue2);}
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
 
       <!-- ── จัดการทะเบียนลูกค้า (แก้ไข/ลบ) ── -->
-      <div style="margin-top:8px;">
-        <div style="cursor:pointer;font-size:11px;font-weight:700;color:var(--navy);" onclick="toggleCustReg()">
-          👤 จัดการลูกค้าที่บันทึกไว้ (<span id="custRegCount">0</span>) <span id="custRegArrow">▾</span>
-        </div>
-        <div id="custRegBox" style="display:none;margin-top:6px;overflow-x:auto;">
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--navy);">
+          👤 จัดการลูกค้าที่บันทึกไว้ (<span id="custRegCount">0</span>)
+        </summary>
+        <div style="margin-top:6px;overflow-x:auto;">
           <table class="jt" style="min-width:300px;">
             <thead><tr>
               <th class="td-l">ชื่อย่อ</th>
@@ -309,7 +309,7 @@ input:focus,select:focus{border-color:var(--blue2);}
             </tbody>
           </table>
         </div>
-      </div>
+      </details>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
@@ -1760,13 +1760,6 @@ function loadFormOffsetUI() {
 function toggleFormCalib() {
   var body = document.getElementById('formCalibBody');
   var arrow = document.getElementById('formCalibArrow');
-  var open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  arrow.textContent = open ? '▾' : '▴';
-}
-function toggleCustReg() {
-  var body = document.getElementById('custRegBox');
-  var arrow = document.getElementById('custRegArrow');
   var open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   arrow.textContent = open ? '▾' : '▴';
