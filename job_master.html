@@ -124,8 +124,9 @@ input:focus,select:focus{border-color:var(--blue2);}
 <div class="tab-bar">
   <button class="tab-btn active" onclick="tab('board')">📊 ภาพรวม</button>
   <button class="tab-btn" onclick="tab('in')">📥 รับงานเข้า</button>
-  <button class="tab-btn" onclick="tab('out')">📤 จ่ายงานออก</button>
+  <button class="tab-btn" onclick="tab('out')">📤 ออก INV ขาย</button>
   <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
+  <button class="tab-btn" onclick="tab('sales')">📊 ยอดขาย</button>
 </div>
 
 <div class="main">
@@ -263,60 +264,125 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 <!-- ══ TAB: จ่ายงานออก ══ -->
 <div id="v-out" class="view">
+
+  <!-- ── หัวบิล INV ── -->
   <div class="card">
-    <div class="card-label">📤 บันทึกจ่ายงานออก</div>
+    <div class="card-label">📤 ออก INV ขาย (ใบส่งสินค้า)</div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>เลขที่ INV <span style="color:var(--red);">*</span></label>
+        <input type="text" id="invNo" placeholder="เช่น IV2606031">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>วันที่ออก INV <span style="color:var(--red);">*</span></label>
+        <input type="date" id="invDate" onchange="onInvDateChange()">
+      </div>
+    </div>
     <div class="field">
-      <label>เลือกบิลที่ต้องการจ่าย <span style="color:var(--red);">*</span></label>
-      <select id="outJobSel" onchange="onOutJobSelect()">
-        <option value="">— เลือกเลขที่บิล —</option>
+      <label>ชื่อลูกค้า / ที่อยู่ <span style="color:var(--red);">*</span></label>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <select id="invCustomerSel" onchange="onInvCustomerSelect()" style="flex:1;">
+          <option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>
+        </select>
+        <button type="button" class="btn btn-outline btn-sm" style="white-space:nowrap;" onclick="saveCustomerPreset()">💾 บันทึกลูกค้านี้</button>
+      </div>
+      <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>เลขที่ใบสั่งซื้อ (PO)</label>
+        <input type="text" id="invPO" placeholder="เช่น PO708289">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>กำหนดชำระเงิน</label>
+        <input type="text" id="invTerm" placeholder="เช่น 30 วัน" value="30 วัน">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── เพิ่มรายการสินค้า ── -->
+  <div class="card">
+    <div class="card-label">➕ เพิ่มรายการสินค้า (P/No)</div>
+    <div class="field">
+      <label>เลือกบิลรับเข้า (เฉพาะที่มีคงเหลือ)</label>
+      <select id="invLineJobSel" onchange="onInvLineJobSelect()">
+        <option value="">— เลือกเลขที่บิล / P.No —</option>
       </select>
     </div>
-    <!-- info บิลที่เลือก -->
-    <div id="outJobInfo" style="display:none;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">
-      <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;" id="outJobInfoTitle"></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:var(--text-muted);">รับเข้า</div>
-          <div style="font-size:16px;font-weight:800;color:var(--navy);" id="outInfoIn">0</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:var(--text-muted);">จ่ายแล้ว</div>
-          <div style="font-size:16px;font-weight:800;color:var(--orange);" id="outInfoOut">0</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:9px;color:var(--text-muted);">คงเหลือ</div>
-          <div style="font-size:16px;font-weight:800;color:var(--green);" id="outInfoRemain">0</div>
-        </div>
+    <div id="invLineRemainInfo" style="display:none;font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label id="invLineQtyLabel">จำนวน (ชิ้น) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="invLineQty" placeholder="0" min="0" step="1" inputmode="numeric">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/หน่วย (กก.) <span style="color:var(--text-muted);">(ไม่บังคับ)</span></label>
+        <input type="number" id="invLineWeight" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
       </div>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label>วันที่จ่าย <span style="color:var(--red);">*</span></label>
-        <input type="date" id="outDate">
+        <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="invLinePrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
       </div>
       <div class="field" style="margin:0;">
-        <label>เลขที่ INV</label>
-        <input type="text" id="outInv" placeholder="เช่น 2606004">
+        <label>เลขที่ LOT / อ้างอิง</label>
+        <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02">
       </div>
     </div>
-    <div class="grid2">
-      <div class="field" style="margin:0;">
-        <label for="outQty">จำนวนจ่าย (ชิ้น) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="outQty" placeholder="0" min="0" step="1" inputmode="numeric">
+    <button class="btn btn-outline" onclick="addInvLine()">➕ เพิ่มลงในบิล INV</button>
+    <div id="toast-invline" class="toast"></div>
+  </div>
+
+  <!-- ── รายการในบิล INV ── -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label" style="margin:0;">📋 รายการในใบส่งสินค้า</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" id="invLineTable">
+        <thead><tr>
+          <th class="td-l" style="min-width:140px;">รายการ / P.No</th>
+          <th>จำนวน</th>
+          <th>น้ำหนัก</th>
+          <th>ราคา/หน่วย</th>
+          <th>จำนวนเงิน</th>
+          <th style="width:30px;"></th>
+        </tr></thead>
+        <tbody id="invLineBody">
+          <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีรายการ — เพิ่มจากด้านบน</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ยอดรวม ── -->
+  <div class="card">
+    <div class="sum-row" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="sum-chip" style="background:#f0f9ff;">
+        <div class="sum-chip-label">GRAND TOTAL</div>
+        <div class="sum-chip-val" style="color:var(--blue);" id="invGrandTotal">0.00</div>
       </div>
-      <div class="field" style="margin:0;">
-        <label>ผู้จ่าย</label>
-        <input type="text" id="outBy" placeholder="เช่น สมชาย">
+      <div class="sum-chip" style="background:#fffbeb;">
+        <div class="sum-chip-label">VAT 7%</div>
+        <div class="sum-chip-val" style="color:var(--amber);" id="invVat">0.00</div>
+      </div>
+      <div class="sum-chip" style="background:#f0fdf4;">
+        <div class="sum-chip-label">NET VALUE</div>
+        <div class="sum-chip-val" style="color:var(--green);" id="invNetTotal">0.00</div>
       </div>
     </div>
     <div class="field">
       <label>หมายเหตุ</label>
-      <input type="text" id="outNote" placeholder="เช่น ส่งบางส่วน / ส่งคืนลูกค้า">
+      <input type="text" id="invNote" placeholder="(ไม่บังคับ)">
     </div>
-    <button class="btn btn-primary" onclick="addJobOut()">📤 บันทึกจ่ายออก</button>
+    <div class="grid2" style="margin-bottom:0;">
+      <button class="btn btn-outline" onclick="saveInvoice(false)">💾 บันทึก (ไม่พิมพ์)</button>
+      <button class="btn btn-primary" onclick="saveInvoice(true)">🖨️ บันทึก + พิมพ์</button>
+    </div>
     <div id="toast-out" class="toast"></div>
   </div>
+
 </div>
+
 
 <!-- ══ TAB: ประวัติ ══ -->
 <div id="v-history" class="view">
@@ -358,6 +424,147 @@ input:focus,select:focus{border-color:var(--blue2);}
       </table>
     </div>
   </div>
+</div>
+
+<!-- ══ TAB: ยอดขาย ══ -->
+<div id="v-sales" class="view">
+
+  <!-- Filter -->
+  <div class="card">
+    <div class="card-label">📊 รายงานยอดขาย</div>
+    <div class="field" style="margin:0;">
+      <label>เลือกเดือน</label>
+      <select id="salesMonthFilter" onchange="renderSales()">
+        <option value="all">— ทุกเดือน —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="card">
+    <div class="sum-row" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="sum-chip" style="background:#f0f9ff;">
+        <div class="sum-chip-label">ยอดขายรวม (NET)</div>
+        <div class="sum-chip-val" style="color:var(--blue);font-size:14px;" id="salesSumNet">0.00</div>
+      </div>
+      <div class="sum-chip" style="background:#fffbeb;">
+        <div class="sum-chip-label">ยอดขายก่อน VAT</div>
+        <div class="sum-chip-val" style="color:var(--amber);font-size:14px;" id="salesSumGrand">0.00</div>
+      </div>
+      <div class="sum-chip" style="background:#f0fdf4;">
+        <div class="sum-chip-label">จำนวน INV</div>
+        <div class="sum-chip-val" style="color:var(--green);" id="salesSumCount">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- สรุปตามลูกค้า -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">👤 สรุปตามลูกค้า</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:480px;">
+        <thead><tr>
+          <th class="td-l">ลูกค้า</th>
+          <th>จำนวน INV</th>
+          <th>ยอดขาย (NET)</th>
+          <th>สัดส่วน</th>
+        </tr></thead>
+        <tbody id="salesByCustomerBody">
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- สรุปตามเดือน -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">📅 สรุปตามเดือน</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:380px;">
+        <thead><tr>
+          <th class="td-l">เดือน</th>
+          <th>จำนวน INV</th>
+          <th>ยอดขาย (NET)</th>
+          <th style="min-width:120px;">แนวโน้ม</th>
+        </tr></thead>
+        <tbody id="salesByMonthBody">
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- รายการ INV -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">🧾 รายการ INV</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:480px;">
+        <thead><tr>
+          <th class="td-l">เลข INV</th>
+          <th class="td-l">วันที่</th>
+          <th class="td-l">ลูกค้า</th>
+          <th>รายการ</th>
+          <th>ยอดขาย (NET)</th>
+        </tr></thead>
+        <tbody id="salesInvBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ใบวางบิล (Statement) ── -->
+  <div class="card">
+    <div class="card-label">📑 สร้างใบวางบิล (Statement)</div>
+    <div class="field" style="margin:0;">
+      <label>เลือกลูกค้า</label>
+      <select id="stmCustomerSel" onchange="renderStatementInv()">
+        <option value="">— เลือกลูกค้า —</option>
+      </select>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:var(--text-mid);margin:8px 0;">
+      <input type="checkbox" id="stmShowAll" onchange="renderStatementInv()" style="width:auto;">
+      แสดง INV ที่วางบิลแล้วด้วย
+    </label>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;display:none;" id="stmListCard">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:460px;">
+        <thead><tr>
+          <th style="width:30px;"></th>
+          <th class="td-l">เลขที่บิล</th>
+          <th class="td-l">วันที่</th>
+          <th class="td-l">ครบกำหนด</th>
+          <th>จำนวนเงิน</th>
+          <th>สถานะ</th>
+        </tr></thead>
+        <tbody id="stmInvBody">
+          <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">เลือกลูกค้าด้านบน</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:12px;font-weight:700;color:var(--navy);">รวมที่เลือก</span>
+      <span style="font-size:16px;font-weight:800;color:var(--blue);" id="stmTotal">0.00</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>เลขที่ใบวางบิล</label>
+        <input type="text" id="stmNo" placeholder="เช่น 26107">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>วันที่ออกใบวางบิล</label>
+        <input type="date" id="stmDate">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="printStatement()">🖨️ พิมพ์ใบวางบิล</button>
+    <div id="toast-stm" class="toast"></div>
+  </div>
+
 </div>
 
 </div><!-- /main -->
@@ -443,6 +650,10 @@ var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master';
 // jobRecords: { id, jobId, type:'in'|'out', date, qty, inv, by, note }
 var jobItems   = [];
 var jobRecords = [];
+var invoices   = [];   // ใบส่งสินค้า/INV ที่ออกแล้ว
+var invDraft   = [];   // รายการสินค้าในบิล INV ที่กำลังสร้าง (ยังไม่บันทึก)
+var customers  = [];   // ทะเบียนลูกค้า {id, name, addressText}
+var billStatements = []; // ใบวางบิลที่ออกแล้ว {id, billNo, date, customer, invoiceIds, total}
 var _pollTimer = null, _pollCount = 0;
 var currentRole = '';
 
@@ -479,15 +690,16 @@ function applyRole() {
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['board','in','out','history'].forEach(function(n, i) {
+  ['board','in','out','history','sales'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
   if (t==='board')   renderBoard();
-  if (t==='out')     { renderOutSelect(); initOutDate(); }
+  if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
+  if (t==='sales')   { renderSales(); }
 }
 
 // ══════════════════════════════════════
@@ -496,10 +708,16 @@ function tab(t) {
 function loadLocal() {
   try { jobItems   = JSON.parse(localStorage.getItem('job_items')   || '[]'); } catch(e){ jobItems=[]; }
   try { jobRecords = JSON.parse(localStorage.getItem('job_records') || '[]'); } catch(e){ jobRecords=[]; }
+  try { invoices   = JSON.parse(localStorage.getItem('job_invoices') || '[]'); } catch(e){ invoices=[]; }
+  try { customers  = JSON.parse(localStorage.getItem('job_customers') || '[]'); } catch(e){ customers=[]; }
+  try { billStatements = JSON.parse(localStorage.getItem('job_bill_statements') || '[]'); } catch(e){ billStatements=[]; }
 }
 function saveLocal() {
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
   try { localStorage.setItem('job_records', JSON.stringify(jobRecords)); } catch(e){}
+  try { localStorage.setItem('job_invoices', JSON.stringify(invoices)); } catch(e){}
+  try { localStorage.setItem('job_customers', JSON.stringify(customers)); } catch(e){}
+  try { localStorage.setItem('job_bill_statements', JSON.stringify(billStatements)); } catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -509,7 +727,7 @@ async function fbSave() {
   try {
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobItems, records:jobRecords, savedAt:new Date().toISOString() })
+      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, savedAt:new Date().toISOString() })
     });
     if (res.ok) setSyncOk();
   } catch(e) { setSyncErr(); }
@@ -521,8 +739,11 @@ async function fbLoad() {
     if (!res.ok) { setSyncErr(); return; }
     var data = await res.json();
     if (data) {
-      if (Array.isArray(data.items))   jobItems   = data.items;
-      if (Array.isArray(data.records)) jobRecords = data.records;
+      if (Array.isArray(data.items))    jobItems   = data.items;
+      if (Array.isArray(data.records))  jobRecords = data.records;
+      if (Array.isArray(data.invoices)) invoices   = data.invoices;
+      if (Array.isArray(data.customers)) customers = data.customers;
+      if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
       saveLocal();
       setSyncOk();
       // refresh UI
@@ -749,85 +970,777 @@ function addJobIn() {
 // ══════════════════════════════════════
 //  จ่ายออก
 // ══════════════════════════════════════
-function renderOutSelect() {
-  var sel = document.getElementById('outJobSel');
+// ══════════════════════════════════════
+//  ออก INV ขาย (ใบส่งสินค้า — รวมหลาย P/No)
+// ══════════════════════════════════════
+
+// เติม dropdown เลือกบิลที่มีของคงเหลือ
+function renderInvLineSelect() {
+  var sel = document.getElementById('invLineJobSel');
+  if (!sel) return;
   var cur = sel.value;
-  // เฉพาะงานที่ยังมีคงเหลือ
   var active = jobItems.filter(function(j){
     var b = calcJob(j.id);
     return j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
   });
-  sel.innerHTML = '<option value="">— เลือกเลขที่บิล —</option>' +
+  sel.innerHTML = '<option value="">— เลือกเลขที่บิล / P.No —</option>' +
     active.map(function(j){
       var b = calcJob(j.id);
       var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
-      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' | '+j.partName.slice(0,25)+'... [เหลือ '+rem+']</option>';
+      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' | '+j.partName.slice(0,25)+' [เหลือ '+rem+']</option>';
     }).join('');
   if (cur !== sel.value) {
-    document.getElementById('outJobInfo').style.display='none';
+    document.getElementById('invLineRemainInfo').style.display='none';
   }
 }
 
-function initOutDate() {
-  var d = document.getElementById('outDate');
-  if (d && !d.value) d.value = isoToday();
-}
-
-function onOutJobSelect() {
-  var jobId = document.getElementById('outJobSel').value;
-  var infoEl = document.getElementById('outJobInfo');
+function onInvLineJobSelect() {
+  var jobId = document.getElementById('invLineJobSel').value;
+  var infoEl = document.getElementById('invLineRemainInfo');
+  var qtyLabel = document.getElementById('invLineQtyLabel');
+  var qtyInput = document.getElementById('invLineQty');
   if (!jobId) { infoEl.style.display='none'; return; }
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { infoEl.style.display='none'; return; }
   var b = calcJob(jobId);
   var isKg = job.unit==='kg';
-  document.getElementById('outJobInfoTitle').textContent = job.bill + ' — ' + job.partName + (isKg?' [หน่วย: กก.]':' [หน่วย: ชิ้น]');
-  document.getElementById('outInfoIn').textContent     = isKg ? b.totalInKg.toFixed(2)  : b.totalIn;
-  document.getElementById('outInfoOut').textContent    = isKg ? b.totalOutKg.toFixed(2) : b.totalOut;
-  document.getElementById('outInfoRemain').textContent = isKg ? b.remainKg.toFixed(2)   : b.remain;
-  // ปรับ label จำนวนจ่าย
-  var qtyLabel = document.querySelector('label[for="outQty"]');
-  if (qtyLabel) qtyLabel.textContent = isKg ? 'น้ำหนักจ่าย (กก.) *' : 'จำนวนจ่าย (ชิ้น) *';
-  var qtyInput = document.getElementById('outQty');
-  if (qtyInput) { qtyInput.step = isKg?'0.01':'1'; qtyInput.placeholder = isKg?'0.00':'0'; }
+  var rem = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
+  infoEl.textContent = '📦 ' + job.partName + ' · ลูกค้า: ' + (job.customer||'–') + ' · คงเหลือ: ' + rem;
   infoEl.style.display = 'block';
+  qtyLabel.innerHTML = (isKg ? 'น้ำหนัก (กก.)' : 'จำนวน (ชิ้น)') + ' <span style="color:var(--red);">*</span>';
+  qtyInput.step = isKg ? '0.01' : '1';
+  qtyInput.placeholder = isKg ? '0.00' : '0';
+  // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
+  var custEl = document.getElementById('invCustomer');
+  if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
 }
 
-function addJobOut() {
-  var jobId = document.getElementById('outJobSel').value;
-  var date  = document.getElementById('outDate').value;
-  var inv   = document.getElementById('outInv').value.trim();
-  var qty   = parseFloat(document.getElementById('outQty').value)||0;
-  var by    = document.getElementById('outBy').value.trim();
-  var note  = document.getElementById('outNote').value.trim();
+// เพิ่มรายการสินค้าลงในบิล INV (draft)
+function addInvLine() {
+  var jobId  = document.getElementById('invLineJobSel').value;
+  var qty    = parseFloat(document.getElementById('invLineQty').value)||0;
+  var weight = parseFloat(document.getElementById('invLineWeight').value)||0;
+  var price  = parseFloat(document.getElementById('invLinePrice').value)||0;
+  var lot    = document.getElementById('invLineLot').value.trim();
 
-  if (!jobId) { showToast('out','กรุณาเลือกบิล','err'); return; }
-  if (!date)  { showToast('out','กรุณาระบุวันที่จ่าย','err'); return; }
-  if (!qty)   { showToast('out','กรุณากรอกจำนวนที่จ่าย','err'); return; }
+  if (!jobId) { showToast('invline','กรุณาเลือกบิล/P.No','err'); return; }
+  if (!qty)   { showToast('invline','กรุณากรอกจำนวน','err'); return; }
+  if (!price) { showToast('invline','กรุณากรอกราคา/หน่วย','err'); return; }
 
   var job = jobItems.find(function(j){ return j.id===jobId; });
-  var isKg = job && job.unit==='kg';
+  if (!job) { showToast('invline','ไม่พบรายการบิลนี้','err'); return; }
+  var isKg = job.unit==='kg';
   var b = calcJob(jobId);
 
-  if (isKg) {
-    if (qty > b.remainKg) { showToast('out','⚠️ น้ำหนักเกินคงเหลือ (เหลือ '+b.remainKg.toFixed(2)+' กก.)','err'); return; }
-    jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'out', date:date,
-                         qty:0, qtyKg:qty, unit:'kg', inv:inv, by:by, note:note });
+  // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย)
+  var alreadyInDraft = invDraft
+    .filter(function(l){ return l.jobId===jobId; })
+    .reduce(function(s,l){ return s + l.qty; }, 0);
+  var remain = isKg ? b.remainKg : b.remain;
+  if (qty + alreadyInDraft > remain) {
+    showToast('invline','⚠️ เกินคงเหลือ ('+(remain-alreadyInDraft)+(isKg?' กก.':' ชิ้น')+')','err');
+    return;
+  }
+
+  invDraft.push({
+    jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
+    unit: job.unit||'pcs', qty: qty, weight: weight, price: price, lot: lot,
+    amount: qty * price
+  });
+
+  // clear inputs
+  ['invLineQty','invLineWeight','invLinePrice','invLineLot'].forEach(function(id){
+    document.getElementById(id).value='';
+  });
+  showToast('invline','✅ เพิ่มรายการแล้ว','ok');
+  renderInvLines();
+  renderInvLineSelect(); // refresh คงเหลือ
+}
+
+function removeInvLine(idx) {
+  invDraft.splice(idx,1);
+  renderInvLines();
+  renderInvLineSelect();
+}
+
+// แสดงตารางรายการในบิล INV + คำนวณยอดรวม
+function renderInvLines() {
+  var tbody = document.getElementById('invLineBody');
+  if (!invDraft.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีรายการ — เพิ่มจากด้านบน</td></tr>';
   } else {
-    qty = parseInt(qty);
-    if (qty > b.remain) { showToast('out','⚠️ จำนวนเกินคงเหลือ (เหลือ '+b.remain+' ชิ้น)','err'); return; }
-    jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'out', date:date,
-                         qty:qty, qtyKg:0, unit:'pcs', inv:inv, by:by, note:note });
+    tbody.innerHTML = invDraft.map(function(l,idx){
+      var qtyStr = l.unit==='kg' ? l.qty.toFixed(2)+' กก.' : l.qty.toLocaleString()+' ชิ้น';
+      var wStr   = l.weight ? l.weight.toFixed(2) : '–';
+      return '<tr>'+
+        '<td class="td-l">'+esc(l.partName)+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
+        '<td>'+qtyStr+'</td>'+
+        '<td>'+wStr+'</td>'+
+        '<td>'+l.price.toFixed(2)+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+l.amount.toFixed(2)+'</td>'+
+        '<td><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button></td>'+
+      '</tr>';
+    }).join('');
+  }
+  recalcInvTotals();
+}
+
+function recalcInvTotals() {
+  var grand = invDraft.reduce(function(s,l){ return s + l.amount; }, 0);
+  var vat   = grand * 0.07;
+  var net   = grand + vat;
+  document.getElementById('invGrandTotal').textContent = grand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('invVat').textContent        = vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('invNetTotal').textContent   = net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// สร้างเลขที่ INV อัตโนมัติ รูปแบบ IV{YY}{MM}{seq 3 หลัก}
+function genInvNo(dateStr) {
+  var d = dateStr ? new Date(dateStr+'T00:00:00') : new Date();
+  var yy = String(d.getFullYear()+543-2500).padStart(2,'0'); // ปี พ.ศ. 2 หลักท้าย (เช่น 2569 → 69... แต่ตัวอย่างใช้ ค.ศ. 26)
+  // จากตัวอย่างจริง IV2606031 = ปี 2026 (ค.ศ.) เดือน 06 → ใช้ ค.ศ. 2 หลักท้าย
+  yy = String(d.getFullYear()).slice(-2);
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var prefix = 'IV' + yy + mm;
+  // หา running number สูงสุดของเดือนนี้ จาก invoices ที่มีอยู่
+  var maxSeq = 0;
+  invoices.forEach(function(inv){
+    if (inv.invNo && inv.invNo.indexOf(prefix)===0) {
+      var seqStr = inv.invNo.slice(prefix.length);
+      var seq = parseInt(seqStr)||0;
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  });
+  var next = String(maxSeq+1).padStart(3,'0');
+  return prefix + next;
+}
+
+function initInvTab() {
+  var dateEl = document.getElementById('invDate');
+  if (dateEl && !dateEl.value) dateEl.value = isoToday();
+  var invNoEl = document.getElementById('invNo');
+  if (invNoEl && !invNoEl.value) invNoEl.value = genInvNo(dateEl ? dateEl.value : null);
+  renderInvLineSelect();
+  renderInvLines();
+  renderCustomerSelect();
+}
+
+// ── ทะเบียนลูกค้า (ไม่ต้องคีย์ที่อยู่ซ้ำทุกครั้ง) ──
+function renderCustomerSelect() {
+  var sel = document.getElementById('invCustomerSel');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>' +
+    customers.map(function(c){
+      return '<option value="'+esc(c.id)+'"'+(c.id===cur?' selected':'')+'>'+esc(c.name)+'</option>';
+    }).join('');
+}
+
+function onInvCustomerSelect() {
+  var id = document.getElementById('invCustomerSel').value;
+  if (!id) return;
+  var c = customers.find(function(x){ return x.id===id; });
+  if (!c) return;
+  document.getElementById('invCustomer').value = c.addressText;
+  // ถ้ามี term ที่บันทึกไว้ ให้เติมด้วย
+  if (c.term) document.getElementById('invTerm').value = c.term;
+}
+
+// บันทึกชื่อ/ที่อยู่ลูกค้าปัจจุบันเป็น preset (ไม่ต้องคีย์ใหม่ครั้งหน้า)
+function saveCustomerPreset() {
+  var text = document.getElementById('invCustomer').value.trim();
+  if (!text) { showToast('out','กรุณากรอกชื่อ/ที่อยู่ลูกค้าก่อนบันทึก','err'); return; }
+  var firstLine = text.split('\n')[0].trim() || 'ลูกค้าใหม่';
+
+  var selId = document.getElementById('invCustomerSel').value;
+  var existing = selId ? customers.find(function(c){ return c.id===selId; }) : null;
+
+  var name = prompt('ชื่อย่อสำหรับเรียกลูกค้านี้ (สำหรับเลือกครั้งถัดไป):', existing ? existing.name : firstLine);
+  if (name===null) return; // cancel
+  name = name.trim() || firstLine;
+
+  var term = document.getElementById('invTerm').value.trim();
+
+  if (existing) {
+    existing.name = name;
+    existing.addressText = text;
+    existing.term = term;
+  } else {
+    customers.unshift({ id:'C'+Date.now(), name:name, addressText:text, term:term });
   }
   saveLocal(); fbSave();
-
-  ['outInv','outQty','outBy','outNote'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('outJobSel').value='';
-  document.getElementById('outJobInfo').style.display='none';
-
-  showToast('out','✅ บันทึกจ่ายออกสำเร็จ — '+qty+' ชิ้น','ok');
-  renderOutSelect();
+  renderCustomerSelect();
+  // เลือก preset ที่บันทึกล่าสุดให้ทันที
+  var sel = document.getElementById('invCustomerSel');
+  sel.value = existing ? existing.id : customers[0].id;
+  showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว','ok');
 }
+
+// อัปเดตเลขที่ INV อัตโนมัติเมื่อเปลี่ยนวันที่ (เฉพาะถ้ายังไม่ได้แก้เอง)
+function onInvDateChange() {
+  var invNoEl = document.getElementById('invNo');
+  var dateEl  = document.getElementById('invDate');
+  if (!invNoEl || !dateEl) return;
+  // ถ้า invNo ยังเป็นรูปแบบ auto-gen เดิม (IV+YYMM+seq) ให้ gen ใหม่ตามวันที่ใหม่
+  var auto = /^IV\d{7}$/.test(invNoEl.value);
+  if (auto || !invNoEl.value.trim()) invNoEl.value = genInvNo(dateEl.value);
+}
+
+// บันทึก INV — สร้าง jobRecords (type:out) ทุกรายการ + เก็บ invoice + เลือกพิมพ์
+function saveInvoice(doPrint) {
+  var invNo   = document.getElementById('invNo').value.trim();
+  var date    = document.getElementById('invDate').value;
+  var customer= document.getElementById('invCustomer').value.trim();
+  var po      = document.getElementById('invPO').value.trim();
+  var term    = document.getElementById('invTerm').value.trim();
+  var note    = document.getElementById('invNote').value.trim();
+
+  if (!invNo)    { showToast('out','กรุณากรอกเลขที่ INV','err'); return; }
+  if (!date)     { showToast('out','กรุณาระบุวันที่ออก INV','err'); return; }
+  if (!customer) { showToast('out','กรุณากรอกชื่อลูกค้า','err'); return; }
+  if (!invDraft.length) { showToast('out','กรุณาเพิ่มรายการสินค้าก่อนบันทึก','err'); return; }
+
+  // ตรวจ remain อีกครั้งก่อนบันทึกจริง (ป้องกัน race condition)
+  for (var i=0;i<invDraft.length;i++) {
+    var l = invDraft[i];
+    var b = calcJob(l.jobId);
+    var remain = l.unit==='kg' ? b.remainKg : b.remain;
+    var sameJobQty = invDraft.filter(function(x){return x.jobId===l.jobId;}).reduce(function(s,x){return s+x.qty;},0);
+    if (sameJobQty > remain + 0.0001) {
+      showToast('out','⚠️ '+l.partName+' เกินคงเหลือ','err'); return;
+    }
+  }
+
+  // สร้าง jobRecords (type:out) — ตัดสต็อกทุกรายการ ผูกเลขที่ INV เดียวกัน
+  invDraft.forEach(function(l){
+    var isKg = l.unit==='kg';
+    jobRecords.unshift({
+      id: 'R'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      jobId: l.jobId, type:'out', date: date,
+      qty: isKg?0:l.qty, qtyKg: isKg?l.qty:0, unit: l.unit,
+      inv: invNo, by:'', note: note,
+      price: l.price, weight: l.weight, lot: l.lot
+    });
+  });
+
+  // เก็บ invoice
+  var invObj = {
+    id: 'INV'+Date.now(), invNo: invNo, date: date, customer: customer,
+    po: po, term: term, note: note, printed: !!doPrint,
+    items: invDraft.slice(),
+    grandTotal: invDraft.reduce(function(s,l){return s+l.amount;},0),
+  };
+  invObj.vat = invObj.grandTotal*0.07;
+  invObj.netTotal = invObj.grandTotal + invObj.vat;
+  invoices.unshift(invObj);
+
+  saveLocal(); fbSave();
+
+  showToast('out','✅ บันทึก INV '+invNo+' สำเร็จ','ok');
+
+  if (doPrint) {
+    printInvoice(invObj);
+  }
+
+  // reset draft form สำหรับ INV ใหม่
+  invDraft = [];
+  document.getElementById('invNo').value = genInvNo();
+  document.getElementById('invCustomer').value = '';
+  document.getElementById('invPO').value = '';
+  document.getElementById('invNote').value = '';
+  renderInvLines();
+  renderInvLineSelect();
+}
+
+// สร้าง HTML ใบส่งสินค้า แล้วเปิดหน้าต่างพิมพ์
+function printInvoice(inv) {
+  var monthNames=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var d = new Date(inv.date+'T00:00:00');
+  var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
+
+  var rowsHtml = inv.items.map(function(l,i){
+    var qtyStr = l.unit==='kg' ? l.qty.toFixed(2) : l.qty.toLocaleString();
+    var wStr   = l.weight ? l.weight.toFixed(2) : '';
+    return '<tr>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+(i+1)+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:6px;">'+esc(l.partName)+
+        (l.lot?'<br><span style="font-size:10px;color:#64748b;">'+esc(l.lot)+'</span>':'')+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+qtyStr+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+wStr+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+l.price.toFixed(2)+'</td>'+
+      '<td style="text-align:right;border:1px solid #94a3b8;padding:6px;">'+l.amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>ใบส่งสินค้า '+esc(inv.invNo)+'</title>'+
+    '<style>'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1e40af;padding-bottom:10px;margin-bottom:10px;}'+
+    '.title{text-align:center;background:#1e40af;color:#fff;padding:8px;border-radius:6px;font-weight:700;margin-bottom:10px;}'+
+    '.box{border:1px solid #94a3b8;border-radius:8px;padding:10px;display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}'+
+    '.totals{margin-top:6px;width:280px;margin-left:auto;}'+
+    '.totals div{display:flex;justify-content:space-between;padding:4px 8px;border:1px solid #94a3b8;border-top:none;}'+
+    '.totals div:first-child{border-top:1px solid #94a3b8;}'+
+    '.sign{display:flex;justify-content:space-between;margin-top:60px;text-align:center;font-size:11px;}'+
+    '.sign div{width:30%;border-top:1px solid #94a3b8;padding-top:4px;}'+
+    '@media print{ body{padding:0;} }'+
+    '</style></head><body>'+
+    '<div class="hdr">'+
+      '<div><div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+      '<div>APK PLATING SERVICE CO., LTD. (HEAD OFFICE)</div>'+
+      '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
+      '<div>โทรศัพท์ : 086-0711616 E-mail : apk.plating@gmail.com</div></div>'+
+      '<div style="text-align:right;font-size:11px;">เลขประจำตัวผู้เสียภาษี<br>0115559006989</div>'+
+    '</div>'+
+    '<div class="title">ใบกำกับภาษี/ใบส่งสินค้า — Tax Invoice / Delivery Order</div>'+
+    '<div class="box">'+
+      '<div style="white-space:pre-line;flex:2;"><b>ชื่อลูกค้า / Customer Name</b><br>'+esc(inv.customer)+'</div>'+
+      '<div style="flex:1;font-size:12px;">'+
+        '<b>เลขที่ No.</b> '+esc(inv.invNo)+'<br>'+
+        '<b>วันที่ Date</b> '+dateStr+'<br>'+
+        (inv.po?('<b>เลขที่ใบสั่งซื้อ PO</b> '+esc(inv.po)+'<br>'):'')+
+        '<b>กำหนดชำระเงิน</b> '+esc(inv.term||'-')+
+      '</div>'+
+    '</div>'+
+    '<table><thead><tr>'+
+      '<th style="width:30px;">ลำดับ<br>ITEM</th>'+
+      '<th>รายการสินค้า<br>DESCRIPTION</th>'+
+      '<th style="width:70px;">จำนวน<br>QUANTITY</th>'+
+      '<th style="width:60px;">น้ำหนัก<br>Weight</th>'+
+      '<th style="width:70px;">หน่วยละ<br>PRICE/UNIT</th>'+
+      '<th style="width:90px;">จำนวนเงิน<br>AMOUNT</th>'+
+    '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    '<div class="totals">'+
+      '<div><span>จำนวนเงินรวม GRAND TOTAL</span><span>'+inv.grandTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'+
+      '<div><span>ภาษีมูลค่าเพิ่ม VAT 7%</span><span>'+inv.vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'+
+      '<div style="font-weight:700;"><span>รวมเงินสุทธิ NET VALUE</span><span>'+inv.netTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>'+
+    '</div>'+
+    '<div class="sign">'+
+      '<div>ผู้รับของ<br>RECEIVER<br>วันที่.../.../...</div>'+
+      '<div>ผู้นำส่ง<br>DELIVERER<br>วันที่.../.../...</div>'+
+      '<div>ผู้รับเงิน<br>COLLECTOR<br>วันที่.../.../...</div>'+
+    '</div>'+
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+}
+
+// HTML-escape helper
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════════════════════════════════
+//  ยอดขาย (รายลูกค้า / รายเดือน)
+// ══════════════════════════════════════
+var monthNamesTH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function ymLabel(ym) {
+  var p = ym.split('-');
+  var mIdx = parseInt(p[1],10)-1;
+  return (monthNamesTH[mIdx]||p[1]) + ' ' + p[0];
+}
+
+function renderSales() {
+  // ── เติม dropdown เดือน ──
+  var monthSel = document.getElementById('salesMonthFilter');
+  var curMonth = monthSel.value || 'all';
+  var months = {};
+  invoices.forEach(function(inv){ if (inv.date) months[inv.date.slice(0,7)] = true; });
+  var sortedMonths = Object.keys(months).sort().reverse();
+  monthSel.innerHTML = '<option value="all">— ทุกเดือน —</option>' +
+    sortedMonths.map(function(ym){
+      return '<option value="'+ym+'"'+(ym===curMonth?' selected':'')+'>'+ymLabel(ym)+'</option>';
+    }).join('');
+  if (curMonth!=='all' && !months[curMonth]) curMonth='all';
+
+  // ── filter invoices ──
+  var list = invoices.filter(function(inv){
+    return curMonth==='all' || (inv.date && inv.date.slice(0,7)===curMonth);
+  });
+
+  // ── summary ──
+  var sumNet=0, sumGrand=0;
+  list.forEach(function(inv){ sumNet += Number(inv.netTotal||0); sumGrand += Number(inv.grandTotal||0); });
+  document.getElementById('salesSumNet').textContent   = sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('salesSumGrand').textContent = sumGrand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('salesSumCount').textContent = list.length;
+
+  // ── สรุปตามลูกค้า ──
+  var byCustomer = {};
+  list.forEach(function(inv){
+    var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
+    if (!byCustomer[cust]) byCustomer[cust] = { count:0, net:0 };
+    byCustomer[cust].count++;
+    byCustomer[cust].net += Number(inv.netTotal||0);
+  });
+  var custRows = Object.keys(byCustomer).map(function(c){
+    return { customer:c, count:byCustomer[c].count, net:byCustomer[c].net };
+  }).sort(function(a,b){ return b.net-a.net; });
+
+  var custBody = document.getElementById('salesByCustomerBody');
+  if (!custRows.length) {
+    custBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
+  } else {
+    custBody.innerHTML = custRows.map(function(r){
+      var pct = sumNet>0 ? (r.net/sumNet*100) : 0;
+      return '<tr>'+
+        '<td class="td-l">'+esc(r.customer)+'</td>'+
+        '<td>'+r.count+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+r.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td>'+
+          '<div style="display:flex;align-items:center;gap:6px;">'+
+            '<div style="flex:1;background:#e2e8f0;border-radius:6px;height:8px;overflow:hidden;">'+
+              '<div style="height:8px;background:var(--blue2);width:'+pct.toFixed(1)+'%;"></div>'+
+            '</div>'+
+            '<span style="font-size:10px;color:var(--text-muted);min-width:36px;text-align:right;">'+pct.toFixed(1)+'%</span>'+
+          '</div>'+
+        '</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  // ── สรุปตามเดือน (ใช้ invoices ทั้งหมด ไม่ filter ตามเดือนที่เลือก เพื่อดูแนวโน้ม) ──
+  var byMonth = {};
+  invoices.forEach(function(inv){
+    if (!inv.date) return;
+    var ym = inv.date.slice(0,7);
+    if (!byMonth[ym]) byMonth[ym] = { count:0, net:0 };
+    byMonth[ym].count++;
+    byMonth[ym].net += Number(inv.netTotal||0);
+  });
+  var monthRows = Object.keys(byMonth).map(function(ym){
+    return { ym:ym, count:byMonth[ym].count, net:byMonth[ym].net };
+  }).sort(function(a,b){ return b.ym.localeCompare(a.ym); });
+  var maxMonthNet = monthRows.reduce(function(m,r){ return Math.max(m,r.net); }, 0);
+
+  var monthBody = document.getElementById('salesByMonthBody');
+  if (!monthRows.length) {
+    monthBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
+  } else {
+    monthBody.innerHTML = monthRows.map(function(r){
+      var pct = maxMonthNet>0 ? (r.net/maxMonthNet*100) : 0;
+      var hi = (curMonth!=='all' && r.ym===curMonth);
+      return '<tr style="'+(hi?'background:#eff6ff;':'')+'">'+
+        '<td class="td-l" style="font-weight:'+(hi?'700':'400')+';">'+ymLabel(r.ym)+'</td>'+
+        '<td>'+r.count+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+r.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td>'+
+          '<div style="background:#e2e8f0;border-radius:6px;height:8px;overflow:hidden;">'+
+            '<div style="height:8px;background:var(--green);width:'+pct.toFixed(1)+'%;"></div>'+
+          '</div>'+
+        '</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  // ── รายการ INV ──
+  var invSorted = list.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); });
+  var invBody = document.getElementById('salesInvBody');
+  if (!invSorted.length) {
+    invBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
+  } else {
+    invBody.innerHTML = invSorted.map(function(inv){
+      var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
+      var d = inv.date ? new Date(inv.date+'T00:00:00') : null;
+      var dStr = d ? (d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()) : '-';
+      return '<tr>'+
+        '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
+        '<td class="td-l">'+dStr+'</td>'+
+        '<td class="td-l">'+esc(cust)+'</td>'+
+        '<td>'+(inv.items?inv.items.length:0)+'</td>'+
+        '<td style="font-weight:700;color:var(--green);text-align:right;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  renderStatementCustomers();
+}
+
+// ══════════════════════════════════════
+//  ใบวางบิล (Statement)
+// ══════════════════════════════════════
+function parseTermDays(termStr) {
+  var m = String(termStr||'').match(/\d+/);
+  return m ? parseInt(m[0],10) : 30;
+}
+
+function addDays(dateStr, days) {
+  var d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function fmtDateTH(dateStr) {
+  if (!dateStr) return '-';
+  var d = new Date(dateStr+'T00:00:00');
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+}
+
+// เติม dropdown ลูกค้าสำหรับใบวางบิล (รวมจากทะเบียนลูกค้า + ลูกค้าที่มีใน invoices)
+function renderStatementCustomers() {
+  var sel = document.getElementById('stmCustomerSel');
+  if (!sel) return;
+  var cur = sel.value;
+
+  var seen = {}; var opts = [];
+  customers.forEach(function(c){
+    var key = c.addressText.split('\n')[0].trim();
+    if (seen[key]) return;
+    seen[key] = true;
+    opts.push({ key:key, label:c.name });
+  });
+  invoices.forEach(function(inv){
+    var key = (inv.customer||'').split('\n')[0].trim();
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    opts.push({ key:key, label:key });
+  });
+  opts.sort(function(a,b){ return a.label.localeCompare(b.label,'th'); });
+
+  sel.innerHTML = '<option value="">— เลือกลูกค้า —</option>' +
+    opts.map(function(o){
+      return '<option value="'+esc(o.key)+'"'+(o.key===cur?' selected':'')+'>'+esc(o.label)+'</option>';
+    }).join('');
+
+  if (sel.value) renderStatementInv();
+}
+
+// แสดงรายการ INV ของลูกค้าที่เลือก พร้อม checkbox
+function renderStatementInv() {
+  var custKey = document.getElementById('stmCustomerSel').value;
+  var showAll = document.getElementById('stmShowAll').checked;
+  var card = document.getElementById('stmListCard');
+  var tbody = document.getElementById('stmInvBody');
+
+  if (!custKey) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  var list = invoices.filter(function(inv){
+    var key = (inv.customer||'').split('\n')[0].trim();
+    if (key !== custKey) return false;
+    if (!showAll && inv.billNo) return false; // ซ่อนที่วางบิลแล้ว
+    return true;
+  }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">'+
+      (showAll ? 'ไม่มี INV ของลูกค้านี้' : 'ไม่มี INV ที่ยังไม่วางบิล') + '</td></tr>';
+    recalcStmTotal();
+    return;
+  }
+
+  var today = isoToday();
+  tbody.innerHTML = list.map(function(inv){
+    var days = parseTermDays(inv.term);
+    var due = inv.date ? addDays(inv.date, days) : '';
+    var overdue = due && due < today && !inv.billNo;
+    var billed = !!inv.billNo;
+    var statusHtml = billed
+      ? '<span class="st-done">วางบิลแล้ว '+esc(inv.billNo)+'</span>'
+      : (overdue ? '<span class="st-over">เกินกำหนด</span>' : '<span class="st-ok">ยังไม่วางบิล</span>');
+    return '<tr>'+
+      '<td><input type="checkbox" class="stm-chk" data-inv="'+esc(inv.invNo)+'" data-net="'+(inv.netTotal||0)+'" onchange="recalcStmTotal()" '+(billed?'':'checked')+' style="width:auto;"></td>'+
+      '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
+      '<td class="td-l">'+fmtDateTH(inv.date)+'</td>'+
+      '<td class="td-l">'+fmtDateTH(due)+'</td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--blue);">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td>'+statusHtml+'</td>'+
+    '</tr>';
+  }).join('');
+
+  recalcStmTotal();
+
+  // ตั้งค่า default วันที่/เลขที่ใบวางบิล ถ้ายังไม่กรอก
+  var dateEl = document.getElementById('stmDate');
+  if (dateEl && !dateEl.value) dateEl.value = isoToday();
+  var noEl = document.getElementById('stmNo');
+  if (noEl && !noEl.value) noEl.value = genBillNo();
+}
+
+function recalcStmTotal() {
+  var total = 0;
+  document.querySelectorAll('.stm-chk').forEach(function(chk){
+    if (chk.checked) total += Number(chk.dataset.net||0);
+  });
+  document.getElementById('stmTotal').textContent = total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// เลขที่ใบวางบิล อัตโนมัติ รูปแบบ {ปี ค.ศ. 2 หลัก}{running 3 หลัก} เช่น 26107
+function genBillNo() {
+  var yy = String(new Date().getFullYear()).slice(-2);
+  var maxSeq = 0;
+  billStatements.forEach(function(b){
+    if (b.billNo && b.billNo.indexOf(yy)===0) {
+      var seq = parseInt(b.billNo.slice(yy.length))||0;
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  });
+  return yy + String(maxSeq+1).padStart(3,'0');
+}
+
+// ── เลขไทยเป็นคำอ่าน (บาท/สตางค์) ──
+function thaiBahtText(amount) {
+  var numTH = ['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  var unitTH = ['','สิบ','ร้อย','พัน','หมื่น','แสน','ล้าน'];
+  function readNumber(numStr) {
+    var len = numStr.length;
+    var result = '';
+    for (var i=0;i<len;i++) {
+      var digit = parseInt(numStr[i],10);
+      var pos = len - i - 1;
+      if (digit===0) continue;
+      if (pos===0 && digit===1 && len>1) { result += 'เอ็ด'; continue; }
+      if (pos===1 && digit===2) { result += 'ยี่'; continue; }
+      if (pos===1 && digit===1) { result += unitTH[1]; continue; }
+      result += numTH[digit] + unitTH[pos];
+    }
+    return result;
+  }
+  amount = Math.round(amount*100)/100;
+  var baht = Math.floor(amount);
+  var satang = Math.round((amount - baht)*100);
+
+  var bahtText = '';
+  if (baht===0) bahtText='ศูนย์';
+  else {
+    // แยกหลักล้าน
+    var bahtStr = String(baht);
+    var chunks = [];
+    while (bahtStr.length>6) {
+      chunks.unshift(bahtStr.slice(-6));
+      bahtStr = bahtStr.slice(0,-6);
+    }
+    chunks.unshift(bahtStr);
+    bahtText = chunks.map(function(c,i){
+      return readNumber(c) + (i<chunks.length-1 ? 'ล้าน' : '');
+    }).join('');
+  }
+  var satangText = satang>0 ? readNumber(String(satang).padStart(2,'0')) + 'สตางค์' : 'ถ้วน';
+  return bahtText + 'บาท' + satangText;
+}
+
+// พิมพ์ใบวางบิล
+function printStatement() {
+  var custKey = document.getElementById('stmCustomerSel').value;
+  if (!custKey) { showToast('stm','กรุณาเลือกลูกค้า','err'); return; }
+
+  var checked = Array.from(document.querySelectorAll('.stm-chk')).filter(function(c){ return c.checked; });
+  if (!checked.length) { showToast('stm','กรุณาเลือก INV อย่างน้อย 1 รายการ','err'); return; }
+
+  var billNo = document.getElementById('stmNo').value.trim() || genBillNo();
+  var date   = document.getElementById('stmDate').value || isoToday();
+
+  // หาที่อยู่เต็มจาก customers หรือจาก invoice แรก
+  var custAddr = custKey;
+  var presetCust = customers.find(function(c){ return c.addressText.split('\n')[0].trim()===custKey; });
+  if (presetCust) custAddr = presetCust.addressText;
+  else {
+    var firstInv = invoices.find(function(inv){ return (inv.customer||'').split('\n')[0].trim()===custKey; });
+    if (firstInv) custAddr = firstInv.customer;
+  }
+
+  var rows = checked.map(function(chk){
+    var invNo = chk.dataset.inv;
+    var inv = invoices.find(function(i){ return i.invNo===invNo; });
+    return inv;
+  }).filter(Boolean).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  var total = rows.reduce(function(s,inv){ return s+Number(inv.netTotal||0); }, 0);
+
+  // mark invoices as billed
+  rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
+  // save statement record
+  billStatements = billStatements.filter(function(b){ return b.billNo!==billNo; });
+  billStatements.unshift({
+    id:'ST'+Date.now(), billNo:billNo, date:date, customer:custKey,
+    invoiceIds: rows.map(function(r){return r.invNo;}), total: total
+  });
+  saveLocal(); fbSave();
+
+  // ── สร้าง HTML ใบวางบิล ──
+  var rowsHtml = rows.map(function(inv,i){
+    var days = parseTermDays(inv.term);
+    var due = inv.date ? addDays(inv.date, days) : '';
+    return '<tr>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+(i+1)+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+esc(inv.invNo)+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(inv.date)+'</td>'+
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(due)+'</td>'+
+      '<td style="text-align:right;border:1px solid #94a3b8;padding:5px;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:5px;"></td>'+
+    '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>ใบวางบิล '+esc(billNo)+'</title>'+
+    '<style>'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
+    '.hdr{text-align:center;margin-bottom:10px;}'+
+    '.title{text-align:center;font-weight:700;font-size:16px;margin:10px 0;}'+
+    '.box{border:1px solid #94a3b8;border-radius:8px;padding:10px;display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}'+
+    '.total-row{font-weight:700;}'+
+    '.baht-text{margin-top:8px;font-weight:700;}'+
+    '.sign{display:flex;justify-content:space-between;margin-top:60px;text-align:center;font-size:11px;}'+
+    '.sign div{width:30%;}'+
+    '.sign .line{border-top:1px solid #94a3b8;padding-top:4px;margin-top:30px;}'+
+    '@media print{ body{padding:0;} }'+
+    '</style></head><body>'+
+    '<div class="hdr">'+
+      '<div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+      '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
+      '<div>Tel : 086-0711616  Fax . :  fax  E-mail : apk.plating@gmail.com</div>'+
+    '</div>'+
+    '<div class="title">ใบวางบิล</div>'+
+    '<div class="box">'+
+      '<div style="white-space:pre-line;flex:2;"><b>นามลูกค้า / ที่อยู่</b><br>'+esc(custAddr)+'</div>'+
+      '<div style="flex:1;font-size:12px;">'+
+        '<b>เลขที่</b> '+esc(billNo)+'<br>'+
+        '<b>วันที่</b> '+fmtDateTH(date)+'<br>'+
+        '<b>เงื่อนไขการชำระ</b> '+esc(rows[0]&&rows[0].term||'30 วัน')+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:12px;margin-bottom:4px;">รับบิลไว้ตรวจสอบตามรายละเอียดรายการข้างล่างนี้ถูกต้องแล้ว</div>'+
+    '<table><thead><tr>'+
+      '<th style="width:40px;">ลำดับที่</th>'+
+      '<th>เลขที่บิล</th>'+
+      '<th>วันที่</th>'+
+      '<th>วันครบกำหนด</th>'+
+      '<th style="width:100px;">จำนวนเงิน</th>'+
+      '<th>หมายเหตุ</th>'+
+    '</tr></thead><tbody>'+rowsHtml+
+    '<tr class="total-row"><td colspan="4" style="text-align:right;border:1px solid #94a3b8;padding:6px;">รวม</td>'+
+    '<td style="text-align:right;border:1px solid #94a3b8;padding:6px;">'+total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="border:1px solid #94a3b8;padding:6px;"></td></tr>'+
+    '</tbody></table>'+
+    '<div class="baht-text">( '+thaiBahtText(total)+' )</div>'+
+    '<div class="sign">'+
+      '<div><div class="line">ผู้รับวางบิล<br>วันที่............/............/............</div></div>'+
+      '<div><div class="line">วันที่นัดชำระ<br>วันที่............/............/............</div></div>'+
+      '<div><div class="line">ผู้วางบิล<br>วันที่............/............/............</div></div>'+
+    '</div>'+
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) { showToast('stm','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+
+  showToast('stm','✅ สร้างใบวางบิล '+billNo+' สำเร็จ ('+rows.length+' INV)','ok');
+  renderStatementInv();
+}
+
 
 // ══════════════════════════════════════
 //  HISTORY
