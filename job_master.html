@@ -291,6 +291,25 @@ input:focus,select:focus{border-color:var(--blue2);}
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">เลือกจาก dropdown เพื่อ auto-fill ชื่อ/ที่อยู่ด้านล่าง — หรือพิมพ์/แก้ไขในช่องด้านล่างได้เลย</div>
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
+
+      <!-- ── จัดการทะเบียนลูกค้า (แก้ไข/ลบ) ── -->
+      <div style="margin-top:8px;">
+        <div style="cursor:pointer;font-size:11px;font-weight:700;color:var(--navy);" onclick="toggleCustReg()">
+          👤 จัดการลูกค้าที่บันทึกไว้ (<span id="custRegCount">0</span>) <span id="custRegArrow">▾</span>
+        </div>
+        <div id="custRegBox" style="display:none;margin-top:6px;overflow-x:auto;">
+          <table class="jt" style="min-width:300px;">
+            <thead><tr>
+              <th class="td-l">ชื่อย่อ</th>
+              <th class="td-l">ที่อยู่ (บรรทัดแรก)</th>
+              <th style="width:60px;">จัดการ</th>
+            </tr></thead>
+            <tbody id="custRegBody">
+              <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px;">ยังไม่มีลูกค้าที่บันทึกไว้</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
@@ -1401,6 +1420,7 @@ function initInvTab() {
   renderInvLines();
   loadFormOffsetUI();
   renderCustomerSelect();
+  renderCustomerRegistryTable();
 }
 
 // ── ทะเบียนลูกค้า (ไม่ต้องคีย์ที่อยู่ซ้ำทุกครั้ง) ──
@@ -1458,7 +1478,9 @@ function saveCustomerPreset() {
   var firstLine = text.split('\n')[0].trim() || 'ลูกค้าใหม่';
 
   var selId = document.getElementById('invCustomerSel').value;
-  var existing = selId ? customers.find(function(c){ return c.id===selId; }) : null;
+  var existing = (selId && selId.indexOf('reg:')===0)
+    ? customers.find(function(c){ return c.id===selId.slice(4); })
+    : null;
 
   var name = prompt('ชื่อย่อสำหรับเรียกลูกค้านี้ (สำหรับเลือกครั้งถัดไป):', existing ? existing.name : firstLine);
   if (name===null) return; // cancel
@@ -1477,8 +1499,58 @@ function saveCustomerPreset() {
   renderCustomerSelect();
   // เลือก preset ที่บันทึกล่าสุดให้ทันที
   var sel = document.getElementById('invCustomerSel');
-  sel.value = existing ? existing.id : customers[0].id;
+  sel.value = 'reg:' + (existing ? existing.id : customers[0].id);
+  renderCustomerRegistryTable();
   showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว','ok');
+}
+
+// แก้ไขรายการลูกค้าในทะเบียน — โหลดเข้าช่องชื่อ/ที่อยู่เพื่อแก้ แล้วกด "บันทึกลูกค้านี้" อีกครั้งเพื่ออัปเดตทับ
+function editCustomerEntry(id) {
+  var c = customers.find(function(x){ return x.id===id; });
+  if (!c) return;
+  document.getElementById('invCustomerSel').value = 'reg:'+id;
+  document.getElementById('invCustomer').value = c.addressText;
+  if (c.term) document.getElementById('invTerm').value = c.term;
+  document.getElementById('invCustomer').focus();
+  showToast('out','📝 แก้ไขข้อมูลด้านบนแล้วกด "บันทึกลูกค้านี้" เพื่ออัปเดต','ok');
+}
+
+// ลบรายการลูกค้าออกจากทะเบียน
+function deleteCustomerEntry(id) {
+  var c = customers.find(function(x){ return x.id===id; });
+  if (!c) return;
+  if (!confirm('ลบลูกค้า "'+c.name+'" ออกจากทะเบียน?')) return;
+  customers = customers.filter(function(x){ return x.id!==id; });
+  // ถ้า select กำลังเลือกรายการนี้อยู่ ให้เคลียร์
+  var sel = document.getElementById('invCustomerSel');
+  if (sel.value === 'reg:'+id) sel.value = '';
+  saveLocal(); fbSave();
+  renderCustomerSelect();
+  renderCustomerRegistryTable();
+  showToast('out','🗑️ ลบลูกค้า "'+c.name+'" แล้ว','ok');
+}
+
+// แสดงตารางทะเบียนลูกค้าที่บันทึกไว้ (แก้ไข/ลบได้)
+function renderCustomerRegistryTable() {
+  var body = document.getElementById('custRegBody');
+  var countEl = document.getElementById('custRegCount');
+  if (!body) return;
+  if (countEl) countEl.textContent = customers.length;
+  if (!customers.length) {
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px;">ยังไม่มีลูกค้าที่บันทึกไว้</td></tr>';
+    return;
+  }
+  body.innerHTML = customers.map(function(c){
+    var firstLine = (c.addressText||'').split('\n')[0].trim();
+    return '<tr>'+
+      '<td class="td-l" style="font-weight:700;">'+esc(c.name)+'</td>'+
+      '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+esc(firstLine)+'</td>'+
+      '<td class="td-l" style="white-space:nowrap;">'+
+        '<button class="icon-btn" title="แก้ไข" onclick="editCustomerEntry(\''+c.id+'\')">✏️</button>'+
+        '<button class="icon-btn" title="ลบ" onclick="deleteCustomerEntry(\''+c.id+'\')">🗑️</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
 }
 
 // อัปเดตเลขที่ INV อัตโนมัติเมื่อเปลี่ยนวันที่ (เฉพาะถ้ายังไม่ได้แก้เอง)
@@ -1688,6 +1760,13 @@ function loadFormOffsetUI() {
 function toggleFormCalib() {
   var body = document.getElementById('formCalibBody');
   var arrow = document.getElementById('formCalibArrow');
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  arrow.textContent = open ? '▾' : '▴';
+}
+function toggleCustReg() {
+  var body = document.getElementById('custRegBox');
+  var arrow = document.getElementById('custRegArrow');
   var open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   arrow.textContent = open ? '▾' : '▴';
