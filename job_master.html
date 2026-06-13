@@ -214,7 +214,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       </div>
       <div class="field" style="margin:0;">
         <label>วันที่รับเข้า <span style="color:var(--red);">*</span></label>
-        <input type="date" id="inDate">
+        <input type="date" id="inDate" onchange="onInDateChange()">
       </div>
     </div>
     <div class="field">
@@ -255,7 +255,7 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="field">
       <label>กำหนดส่ง</label>
-      <input type="date" id="inDueDate">
+      <input type="date" id="inDueDate" oninput="inDueDateManual=true">
     </div>
     <div class="field">
       <label>หมายเหตุ</label>
@@ -1070,6 +1070,8 @@ function addJobIn() {
   var partName = document.getElementById('inPartName').value.trim();
   var customer = document.getElementById('inCustomer').value.trim();
   var unit     = document.getElementById('inUnit').value || 'pcs';
+  var qty      = parseInt(document.getElementById('inQty').value)    || 0;
+  var qtyKg    = parseFloat(document.getElementById('inQtyKg').value)|| 0;
   var dueDate  = document.getElementById('inDueDate').value;
   var note     = document.getElementById('inNote').value.trim();
 
@@ -1092,7 +1094,8 @@ function addJobIn() {
   ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
-  document.getElementById('inDueDate').value='';
+  inDueDateManual = false;
+  onInDateChange(); // ตั้งกำหนดส่งกลับเป็นค่า default (วันที่รับเข้า + 7) สำหรับรายการถัดไป
   showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+displayQty+(unit==='kg'?' กก.':" ชิ้น"),'ok');
 }
 
@@ -2544,6 +2547,26 @@ function exportHistoryCSV() {
 // ══════════════════════════════════════
 function isoToday() { return new Date().toISOString().slice(0,10); }
 
+// บวกจำนวนวันให้กับวันที่ในรูปแบบ YYYY-MM-DD
+function addDaysISO(isoDate, days) {
+  var d = new Date(isoDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+
+var inDueDateManual = false; // true เมื่อผู้ใช้แก้ "กำหนดส่ง" เองแล้ว — จะไม่ auto เปลี่ยนทับ
+
+// เมื่อเปลี่ยน "วันที่รับเข้า" — ตั้ง "กำหนดส่ง" = วันที่รับเข้า + 7 วัน อัตโนมัติ
+// (ยกเว้นผู้ใช้แก้ "กำหนดส่ง" เองแล้ว จะไม่ทับ)
+function onInDateChange() {
+  if (inDueDateManual) return;
+  var dateEl = document.getElementById('inDate');
+  var dueEl  = document.getElementById('inDueDate');
+  if (!dateEl || !dueEl || !dateEl.value) return;
+  dueEl.value = addDaysISO(dateEl.value, 7);
+}
+
 function dlCSV(rows, filename) {
   var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
@@ -2938,6 +2961,7 @@ window.addEventListener('load', function(){
   // ตั้งวันที่ default
   var d = document.getElementById('inDate');
   if (d) d.value = isoToday();
+  onInDateChange(); // ตั้งกำหนดส่ง = วันที่รับเข้า + 7 วัน เป็นค่าเริ่มต้น
   // ตั้ง unit UI
   onUnitChange();
 
