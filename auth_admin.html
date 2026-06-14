@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จัดการผู้ใช้ — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue2:#3b82f6; --green:#16a34a; --red:#dc2626; --amber:#d97706;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{ font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+header{
+  background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color:#fff; padding:16px 20px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+}
+.brand{display:flex; align-items:center; gap:10px;}
+.brand-mark{
+  width:36px; height:36px; border-radius:9px;
+  background:linear-gradient(135deg, var(--steel-1), var(--steel-3) 45%, var(--steel-2));
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+.brand h1{font-size:15px; font-weight:700;}
+.brand p{font-size:10.5px; color:#b9c4de; margin-top:1px;}
+.back-link{ color:#b9c4de; font-size:12px; text-decoration:none; }
+.back-link:hover{ color:#fff; }
+
+.shimmer{ height:4px; width:100%;
+  background:linear-gradient(90deg, var(--steel-2) 0%, var(--steel-3) 25%, var(--steel-1) 50%, var(--steel-3) 75%, var(--steel-2) 100%);
+  background-size:200% 100%; animation:shimmer 6s linear infinite; }
+@keyframes shimmer{ from{background-position:0% 0;} to{background-position:-200% 0;} }
+@media (prefers-reduced-motion: reduce){ .shimmer{ animation:none; } }
+
+main{ max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+
+/* ── Login screen ── */
+#loginScreen{
+  max-width:360px; margin:60px auto; background:var(--card);
+  border:1px solid var(--border); border-radius:14px; padding:28px; text-align:center;
+}
+#loginScreen h2{ font-size:16px; margin-bottom:6px; }
+#loginScreen p{ font-size:12px; color:var(--text-mid); margin-bottom:18px; }
+#loginScreen input{
+  width:100%; padding:12px; font-size:18px; text-align:center; letter-spacing:4px;
+  border:1.5px solid var(--border); border-radius:8px; font-family:'IBM Plex Mono',monospace;
+  margin-bottom:12px;
+}
+#loginScreen button{
+  width:100%; padding:11px; font-size:13px; font-weight:600; color:#fff;
+  background:var(--navy); border:none; border-radius:8px; cursor:pointer;
+}
+#loginScreen button:hover{ background:var(--navy-2); }
+#loginError{ font-size:12px; color:var(--red); margin-top:10px; display:none; }
+
+/* ── App ── */
+#appScreen{ display:none; }
+.toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.toolbar h2{ font-size:16px; }
+.toolbar .who{ font-size:11.5px; color:var(--text-mid); }
+.btn{
+  padding:9px 16px; font-size:12.5px; font-weight:600; border:none; border-radius:8px;
+  cursor:pointer; background:var(--navy); color:#fff;
+}
+.btn:hover{ background:var(--navy-2); }
+.btn.secondary{ background:var(--card); color:var(--navy); border:1.5px solid var(--border); }
+.btn.secondary:hover{ border-color:var(--steel-2); }
+.btn.danger{ background:#fff1f0; color:var(--red); border:1.5px solid #fecaca; }
+.btn.danger:hover{ background:#fee2e2; }
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+#syncStatus{ font-size:11px; color:var(--text-muted); }
+#syncStatus.ok{ color:var(--green); }
+#syncStatus.err{ color:var(--red); }
+
+/* ── Table card ── */
+.card{ background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:18px; }
+.card-head{ padding:14px 16px; border-bottom:1px solid var(--border); }
+.card-head h3{ font-size:13px; font-weight:700; }
+.card-head p{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+.table-wrap{ overflow-x:auto; }
+table{ width:100%; border-collapse:collapse; font-size:12px; min-width:780px; }
+th, td{ padding:10px 10px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+th{ background:var(--steel-3); font-weight:700; color:var(--navy); font-size:11px; text-transform:uppercase; letter-spacing:.5px; position:sticky; top:0; }
+th.sys-col, td.sys-col{ text-align:center; min-width:92px; }
+tr:hover td{ background:#fafcff; }
+td.name-cell{ font-weight:600; }
+td.pin-cell{ font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--navy); }
+
+select.role-select{
+  width:100%; padding:5px 4px; font-size:11px; border:1px solid var(--border); border-radius:6px;
+  background:var(--card); font-family:'IBM Plex Sans Thai',sans-serif; cursor:pointer;
+}
+select.role-select.role-none{ color:var(--text-muted); }
+select.role-select.role-viewer{ color:var(--blue2); border-color:#bfdbfe; background:#eff6ff; }
+select.role-select.role-operator{ color:var(--amber); border-color:#fde68a; background:#fffbeb; }
+select.role-select.role-admin{ color:var(--green); border-color:#bbf7d0; background:#f0fdf4; }
+
+.row-actions{ display:flex; gap:6px; }
+.icon-btn{
+  background:none; border:1px solid var(--border); border-radius:6px; padding:4px 8px;
+  font-size:12px; cursor:pointer; color:var(--text-mid);
+}
+.icon-btn:hover{ background:var(--steel-3); }
+.icon-btn.danger{ color:var(--red); border-color:#fecaca; }
+.icon-btn.danger:hover{ background:#fee2e2; }
+
+/* ── Add user form ── */
+.add-form{ padding:14px 16px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.add-form .field{ display:flex; flex-direction:column; gap:4px; }
+.add-form label{ font-size:11px; font-weight:600; color:var(--text-mid); }
+.add-form input{
+  padding:9px 10px; font-size:12.5px; border:1.5px solid var(--border); border-radius:8px;
+  font-family:'IBM Plex Sans Thai',sans-serif;
+}
+.add-form input.pin-input{ font-family:'IBM Plex Mono',monospace; width:110px; }
+.add-form input.name-input{ width:180px; }
+
+/* ── Toast ── */
+#toast{
+  position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--navy); color:#fff; padding:10px 18px; border-radius:8px; font-size:12.5px;
+  opacity:0; transition:opacity .2s ease, transform .2s ease; pointer-events:none; z-index:999;
+  max-width:90vw; text-align:center;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.err{ background:var(--red); }
+
+.empty-note{ padding:24px; text-align:center; color:var(--text-muted); font-size:12.5px; }
+
+@media (max-width:640px){
+  th.sys-col, td.sys-col{ min-width:78px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">🔐</div>
+    <div>
+      <h1>จัดการผู้ใช้ — APK Plating</h1>
+      <p>Central Auth · กำหนดสิทธิ์ผู้ใช้ทุกระบบจากที่เดียว</p>
+    </div>
+  </div>
+  <a class="back-link" href="index.html">← กลับหน้า Portal</a>
+</header>
+<div class="shimmer"></div>
+
+<main>
+
+  <!-- ── LOGIN ── -->
+  <div id="loginScreen">
+    <h2>เข้าสู่ระบบจัดการผู้ใช้</h2>
+    <p>กรอก PIN ของคุณ — ต้องมีสิทธิ์ "จัดการผู้ใช้" จึงเข้าได้</p>
+    <input type="password" id="pinInput" inputmode="numeric" placeholder="••••" maxlength="8" autofocus>
+    <button onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div id="loginError">PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าหน้านี้</div>
+  </div>
+
+  <!-- ── APP ── -->
+  <div id="appScreen">
+    <div class="toolbar">
+      <div>
+        <h2>ผู้ใช้และสิทธิ์การเข้าถึง</h2>
+        <div class="who" id="whoAmI"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span id="syncStatus">●</span>
+        <button class="btn secondary" onclick="reloadUsers()">🔄 โหลดใหม่</button>
+        <button class="btn secondary" onclick="logout()">ออกจากระบบ</button>
+      </div>
+    </div>
+
+    <!-- เพิ่มผู้ใช้ใหม่ -->
+    <div class="card">
+      <div class="card-head">
+        <h3>➕ เพิ่มผู้ใช้ใหม่</h3>
+        <p>กำหนด PIN และชื่อ — ตั้งค่าสิทธิ์แต่ละระบบได้ในตารางด้านล่างหลังเพิ่มแล้ว</p>
+      </div>
+      <div class="add-form">
+        <div class="field">
+          <label>PIN</label>
+          <input type="text" id="newPin" class="pin-input" inputmode="numeric" placeholder="เช่น 1234" maxlength="8">
+        </div>
+        <div class="field">
+          <label>ชื่อผู้ใช้</label>
+          <input type="text" id="newName" class="name-input" placeholder="เช่น สมชาย คนงาน">
+        </div>
+        <button class="btn" onclick="addUser()">เพิ่มผู้ใช้</button>
+      </div>
+    </div>
+
+    <!-- ตารางสิทธิ์ -->
+    <div class="card">
+      <div class="card-head">
+        <h3>👥 รายชื่อผู้ใช้ (<span id="userCount">0</span>)</h3>
+        <p>เปลี่ยนสิทธิ์ได้ทันที — บันทึกอัตโนมัติเมื่อเปลี่ยนค่าใน dropdown</p>
+      </div>
+      <div class="table-wrap">
+        <table id="usersTable">
+          <thead>
+            <tr id="tableHeadRow">
+              <th>PIN</th>
+              <th>ชื่อผู้ใช้</th>
+              <!-- system columns generated by JS -->
+              <th class="sys-col">จัดการผู้ใช้</th>
+              <th>ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-note" id="emptyNote" style="display:none;">ยังไม่มีผู้ใช้ในระบบ — เพิ่มผู้ใช้แรกด้านบน</div>
+    </div>
+
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="auth-central.js"></script>
+<script>
+var SYSTEM_KEY = 'auth_admin';
+var currentUserPin = null;
+var users = {}; // { pin: { name, permissions:{...} } }
+
+// ══════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════
+var toastTimer = null;
+function showToast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type === 'err' ? ' err' : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.className = ''; }, 2600);
+}
+
+// ══════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════
+function doLogin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  var btn = document.querySelector('#loginScreen button');
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+  document.getElementById('loginError').style.display = 'none';
+
+  CentralAuth.fetchUsers().then(function(result){
+    btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+    if (!result.ok) {
+      document.getElementById('loginError').textContent =
+        'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+    var user = result.users[pin];
+    var perms = user ? (user.permissions || {}) : {};
+    if (!user || perms.auth_admin !== 'admin') {
+      document.getElementById('loginError').textContent = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าหน้านี้';
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+    currentUserPin = pin;
+    users = result.users;
+    try { sessionStorage.setItem('authAdminPin', pin); } catch(e){}
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    document.getElementById('whoAmI').textContent =
+      'เข้าสู่ระบบในชื่อ: ' + (user.name || '(ไม่มีชื่อ)') + ' · PIN ' + pin;
+    renderTable();
+  });
+}
+
+function logout() {
+  currentUserPin = null;
+  try { sessionStorage.removeItem('authAdminPin'); } catch(e){}
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'block';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinInput').focus();
+}
+
+document.getElementById('pinInput').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') doLogin();
+});
+
+// ══════════════════════════════════════
+//  SYNC STATUS
+// ══════════════════════════════════════
+function setSyncStatus(state, msg) {
+  var el = document.getElementById('syncStatus');
+  el.className = state;
+  el.textContent = (state === 'ok' ? '● ' : state === 'err' ? '● ' : '○ ') + (msg || '');
+}
+
+function reloadUsers() {
+  setSyncStatus('', 'กำลังโหลด...');
+  CentralAuth.fetchUsers().then(function(result){
+    if (!result.ok) {
+      setSyncStatus('err', 'โหลดไม่สำเร็จ: ' + result.error);
+      showToast('โหลดข้อมูลไม่สำเร็จ: ' + result.error, 'err');
+      return;
+    }
+    users = result.users;
+    setSyncStatus('ok', 'อัปเดตล่าสุด ' + nowTimeStr());
+    renderTable();
+    showToast('โหลดข้อมูลล่าสุดแล้ว');
+  });
+}
+
+function nowTimeStr() {
+  var d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// ══════════════════════════════════════
+//  RENDER TABLE
+// ══════════════════════════════════════
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+function renderTable() {
+  // ── หัวตาราง: PIN, ชื่อ, [ระบบทั้งหมด...], จัดการผู้ใช้, ลบ ──
+  var headRow = document.getElementById('tableHeadRow');
+  var headHtml = '<th>PIN</th><th>ชื่อผู้ใช้</th>';
+  CentralAuth.SYSTEM_LIST.forEach(function(sys){
+    headHtml += '<th class="sys-col">' + esc(sys.label) + '</th>';
+  });
+  headHtml += '<th class="sys-col">จัดการผู้ใช้</th><th>ลบ</th>';
+  headRow.innerHTML = headHtml;
+
+  var pins = Object.keys(users).sort();
+  var body = document.getElementById('usersBody');
+  document.getElementById('userCount').textContent = pins.length;
+  document.getElementById('emptyNote').style.display = pins.length ? 'none' : 'block';
+
+  body.innerHTML = pins.map(function(pin){
+    var u = users[pin] || {};
+    var perms = u.permissions || {};
+    var isSelf = (pin === currentUserPin);
+
+    var cells = '<td class="pin-cell">' + esc(pin) + (isSelf ? ' <span style="color:var(--text-muted);font-size:10px;">(คุณ)</span>' : '') + '</td>';
+    cells += '<td class="name-cell">' + esc(u.name || '—') + '</td>';
+
+    CentralAuth.SYSTEM_LIST.forEach(function(sys){
+      var role = perms[sys.key] || 'none';
+      cells += '<td class="sys-col">' + roleSelectHtml(pin, sys.key, role) + '</td>';
+    });
+
+    // auth_admin — boolean toggle
+    var isAdmin = perms.auth_admin === 'admin';
+    cells += '<td class="sys-col">' +
+      '<label style="display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-size:11px;">' +
+        '<input type="checkbox" ' + (isAdmin?'checked':'') + ' onchange="onAuthAdminToggle(\'' + pin + '\', this.checked)"' +
+          (isSelf ? ' disabled title="ไม่สามารถถอนสิทธิ์ตัวเองได้"' : '') + '>' +
+        (isAdmin ? 'เห็น' : 'ไม่เห็น') +
+      '</label>' +
+    '</td>';
+
+    cells += '<td><button class="icon-btn danger" title="ลบผู้ใช้นี้"'
+      + (isSelf ? ' disabled title="ไม่สามารถลบตัวเองได้"' : ' onclick="deleteUser(\'' + pin + '\')"')
+      + '>🗑️</button></td>';
+
+    return '<tr>' + cells + '</tr>';
+  }).join('');
+}
+
+function roleSelectHtml(pin, sysKey, currentRole) {
+  var opts = CentralAuth.ROLE_LEVELS.map(function(r){
+    var labelMap = { none:'ไม่เห็น', viewer:'ดูอย่างเดียว', operator:'ใช้งาน', admin:'แอดมิน' };
+    return '<option value="'+r+'"' + (r===currentRole?' selected':'') + '>' + labelMap[r] + '</option>';
+  }).join('');
+  return '<select class="role-select role-'+currentRole+'" onchange="onRoleChange(\''+pin+'\',\''+sysKey+'\',this)">' + opts + '</select>';
+}
+
+// ══════════════════════════════════════
+//  ACTIONS — เปลี่ยนสิทธิ์ / เพิ่ม / ลบ ผู้ใช้
+// ══════════════════════════════════════
+function onRoleChange(pin, sysKey, selectEl) {
+  var newRole = selectEl.value;
+  selectEl.className = 'role-select role-' + newRole;
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  users[pin].permissions[sysKey] = newRole;
+  persistUsers('อัปเดตสิทธิ์ ' + (users[pin].name || pin) + ' → ' + labelForSystem(sysKey));
+}
+
+function onAuthAdminToggle(pin, checked) {
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  users[pin].permissions.auth_admin = checked ? 'admin' : 'none';
+  persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์จัดการผู้ใช้ — ' + (users[pin].name || pin));
+  renderTable();
+}
+
+function labelForSystem(sysKey) {
+  var s = CentralAuth.SYSTEM_LIST.find(function(s){ return s.key===sysKey; });
+  return s ? s.label : sysKey;
+}
+
+function addUser() {
+  var pin = document.getElementById('newPin').value.trim();
+  var name = document.getElementById('newName').value.trim();
+
+  if (!pin) { showToast('กรุณากรอก PIN', 'err'); return; }
+  if (!/^[0-9]{2,8}$/.test(pin)) { showToast('PIN ต้องเป็นตัวเลข 2-8 หลัก', 'err'); return; }
+  if (users[pin]) { showToast('PIN นี้มีผู้ใช้อยู่แล้ว', 'err'); return; }
+
+  var perms = {};
+  CentralAuth.SYSTEM_LIST.forEach(function(sys){ perms[sys.key] = 'none'; });
+  perms.auth_admin = 'none';
+
+  users[pin] = { name: name, permissions: perms };
+  document.getElementById('newPin').value = '';
+  document.getElementById('newName').value = '';
+  renderTable();
+  persistUsers('เพิ่มผู้ใช้ใหม่: ' + (name || pin));
+}
+
+function deleteUser(pin) {
+  var u = users[pin];
+  if (!u) return;
+  if (pin === currentUserPin) { showToast('ไม่สามารถลบบัญชีของตัวเองได้', 'err'); return; }
+  if (!confirm('ลบผู้ใช้ "' + (u.name || pin) + '" (PIN ' + pin + ') ออกจากระบบ?\nการกระทำนี้ไม่สามารถย้อนกลับได้')) return;
+  delete users[pin];
+  renderTable();
+  persistUsers('ลบผู้ใช้: ' + (u.name || pin));
+}
+
+// ══════════════════════════════════════
+//  PERSIST — เขียนกลับ Firebase
+// ══════════════════════════════════════
+var saveTimer = null;
+function persistUsers(toastMsg) {
+  setSyncStatus('', 'กำลังบันทึก...');
+  // debounce เล็กน้อยกันยิงซ้ำถ้าเปลี่ยนหลายช่องติดกัน
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    CentralAuth.saveUsers(users).then(function(result){
+      if (!result.ok) {
+        setSyncStatus('err', 'บันทึกไม่สำเร็จ: ' + result.error);
+        showToast('บันทึกไม่สำเร็จ: ' + result.error, 'err');
+        return;
+      }
+      setSyncStatus('ok', 'บันทึกแล้ว ' + nowTimeStr());
+      if (toastMsg) showToast('✅ ' + toastMsg);
+    });
+  }, 250);
+}
+
+// ══════════════════════════════════════
+//  INIT — auto-login ถ้ามี session อยู่แล้ว
+// ══════════════════════════════════════
+window.addEventListener('load', function(){
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('authAdminPin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    doLogin();
+  }
+});
+</script>
+
+</body>
+</html>

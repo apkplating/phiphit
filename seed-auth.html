@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seed ข้อมูลผู้ใช้เริ่มต้น — APK Plating</title>
+<style>
+body{font-family:'IBM Plex Sans Thai',sans-serif; max-width:480px; margin:60px auto; padding:0 16px; color:#0f172a;}
+h1{font-size:18px;}
+p{font-size:13px; color:#475569; line-height:1.6;}
+pre{background:#f1f5f9; padding:12px; border-radius:8px; font-size:12px; overflow-x:auto;}
+button{padding:12px 20px; font-size:14px; font-weight:600; color:#fff; background:#0f2044; border:none; border-radius:8px; cursor:pointer; margin-top:12px;}
+button:disabled{opacity:.5; cursor:not-allowed;}
+#result{margin-top:14px; font-size:13px; padding:10px; border-radius:8px; display:none;}
+#result.ok{background:#f0fdf4; color:#16a34a; display:block;}
+#result.err{background:#fff1f0; color:#dc2626; display:block;}
+</style>
+</head>
+<body>
+<h1>🔐 Seed ข้อมูลผู้ใช้เริ่มต้น (ใช้ครั้งเดียว)</h1>
+<p>
+  หน้านี้จะเขียนข้อมูลผู้ใช้เริ่มต้น 1 รายการลง Firebase ที่
+  <code>/auth-central.json</code>:
+</p>
+<pre>PIN: 9999
+ชื่อ: Admin
+สิทธิ์: admin ทุกระบบ (รวมหน้าจัดการผู้ใช้)</pre>
+<p>
+  <strong>คำเตือน:</strong> การกดปุ่มนี้จะ<strong>เขียนทับ</strong>ข้อมูลผู้ใช้ทั้งหมดที่มีอยู่ใน
+  <code>/auth-central.json</code> (ถ้ามี) ด้วยข้อมูลด้านบนเท่านั้น —
+  ใช้สำหรับตั้งค่าครั้งแรกเท่านั้น หลังจากนั้นให้ใช้หน้า
+  <a href="auth_admin.html">auth_admin.html</a> ในการเพิ่ม/แก้ไขผู้ใช้แทน
+  แล้วลบไฟล์นี้ออกจาก repo เพื่อความปลอดภัย
+</p>
+<button id="seedBtn" onclick="doSeed()">เขียนข้อมูลเริ่มต้น</button>
+<div id="result"></div>
+
+<script>
+var AUTH_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/auth-central.json';
+
+function doSeed() {
+  var btn = document.getElementById('seedBtn');
+  var result = document.getElementById('result');
+  if (!confirm('ยืนยันเขียนทับข้อมูลผู้ใช้ทั้งหมดด้วยค่าเริ่มต้น (PIN 9999, admin ทุกระบบ)?')) return;
+
+  btn.disabled = true;
+  btn.textContent = 'กำลังเขียนข้อมูล...';
+  result.className = '';
+  result.style.display = 'none';
+
+  var data = {
+    users: {
+      '9999': {
+        name: 'Admin',
+        permissions: {
+          job_master: 'admin',
+          bl_stock: 'admin',
+          part_master: 'admin',
+          chem_master: 'admin',
+          plating_v4: 'admin',
+          plating_v5_b2: 'admin',
+          plating_v6_r1: 'admin',
+          auth_admin: 'admin'
+        }
+      }
+    },
+    savedAt: new Date().toISOString()
+  };
+
+  fetch(AUTH_PATH, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(function(res){
+    btn.disabled = false;
+    btn.textContent = 'เขียนข้อมูลเริ่มต้น';
+    if (!res.ok) {
+      result.className = 'err';
+      result.textContent = '❌ เขียนข้อมูลไม่สำเร็จ: HTTP ' + res.status;
+      return;
+    }
+    result.className = 'ok';
+    result.innerHTML = '✅ สำเร็จ! สร้างผู้ใช้ PIN <strong>9999</strong> (admin ทุกระบบ) แล้ว — ' +
+      'ไปที่ <a href="auth_admin.html">หน้าจัดการผู้ใช้</a> เพื่อเพิ่ม/แก้ไขผู้ใช้ต่อไป ' +
+      'จากนั้นลบไฟล์ <code>seed-auth.html</code> นี้ออกจาก repo';
+  }).catch(function(e){
+    btn.disabled = false;
+    btn.textContent = 'เขียนข้อมูลเริ่มต้น';
+    result.className = 'err';
+    result.textContent = '❌ เชื่อมต่อไม่สำเร็จ: ' + e.message;
+  });
+}
+</script>
+</body>
+</html>
