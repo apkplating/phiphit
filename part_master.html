@@ -123,7 +123,10 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div style="font-size:10px;color:#93c5fd;letter-spacing:.5px;">APK PLATING</div>
     <div style="font-size:16px;font-weight:700;">🔩 Part Master</div>
   </div>
-  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+    <button onclick="logoutPM()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
+  </div>
 </div>
 
 <div class="tab-bar">
@@ -392,11 +395,13 @@ input:focus,select:focus{border-color:var(--blue2);}
   </div>
 </div>
 
+<script src="auth-central.js"></script>
 <script>
 // ══════════════════════════════════════
 //  CONFIG — ใช้ DB เดียวกับ job_master
 // ══════════════════════════════════════
-var PINS = { '010517':'admin', 'Apk002':'viewer' };
+var SYSTEM_KEY = 'part_master';
+var TAB_IDS = ['list','add','calc'];
 var DB_URL  = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
 var PM_PATH = DB_URL + '/part-master';   // /part-master.json
 
@@ -406,31 +411,65 @@ var PM_PATH = DB_URL + '/part-master';   // /part-master.json
 // parts: { id, partNo, name, customer, colors:string('B'|'C'|'K'|'BC'|...), weightPerPc, pcsPerRack, note }
 var parts = [];
 var currentRole = '';
+var currentTabs = null;
 
 // ══════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════
 function checkPin() {
   var pin = document.getElementById('pinInput').value.trim();
-  currentRole = PINS[pin];
-  if (currentRole) {
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
-    try { localStorage.setItem('pm_pin','1'); localStorage.setItem('pm_role', currentRole); } catch(e){}
+    try { sessionStorage.setItem('part_master_pin', pin); } catch(e){}
     applyRole();
     loadLocal();
     renderAll();
     fbLoad();
-  } else {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('pinInput').value = '';
-  }
+  });
+}
+
+function logoutPM() {
+  try { sessionStorage.removeItem('part_master_pin'); } catch(e){}
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
 }
 
 function applyRole() {
-  if (currentRole === 'viewer') {
-    var addBtn = document.querySelectorAll('.tab-btn')[1];
-    if (addBtn) addBtn.style.display = 'none';
+  // viewer: ซ่อนแท็บ "เพิ่มชิ้นงาน" — operator/admin ใช้งานได้เต็มที่
+  var isViewer = currentRole === 'viewer';
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+    var tabId = TAB_IDS[i];
+    var hideByRole = isViewer && i === 1;
+    var hideByTabs = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = (hideByRole || hideByTabs) ? 'none' : '';
+  });
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) tab(firstVisible);
   }
 }
 
@@ -585,7 +624,7 @@ function renderList() {
       wtCell + rackCell +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+esc(p.note||'')+'</td>' +
       '<td style="white-space:nowrap;">' +
-        (currentRole==='admin' ? '<button onclick="openEdit(\''+p.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
+        ((currentRole==='admin'||currentRole==='operator') ? '<button onclick="openEdit(\''+p.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
         '<button onclick="deletePart(\''+p.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>' : '–') +
       '</td>' +
     '</tr>';
@@ -628,6 +667,7 @@ function previewCalc() {
 }
 
 function savePart() {
+  if(currentRole==='viewer'){ return; }
   var partNo = document.getElementById('addPartNo').value.trim().toUpperCase();
   var name   = document.getElementById('addName').value.trim();
   var cust   = document.getElementById('addCustomer').value.trim();
@@ -663,6 +703,7 @@ function savePart() {
 //  DELETE
 // ══════════════════════════════════════
 function deletePart(id) {
+  if(currentRole==='viewer'){ return; }
   var p = parts.find(function(x){ return x.id===id; });
   if (!p || !confirm('ลบ "'+p.partNo+'" ออกจาก Part Master?')) return;
   parts = parts.filter(function(x){ return x.id!==id; });
@@ -673,6 +714,7 @@ function deletePart(id) {
 //  EDIT MODAL
 // ══════════════════════════════════════
 function openEdit(id) {
+  if(currentRole==='viewer'){ return; }
   var p = parts.find(function(x){ return x.id===id; });
   if (!p) return;
   document.getElementById('editPartId').value    = id;
@@ -823,17 +865,12 @@ function showToast(id, msg, type) {
 //  INIT
 // ══════════════════════════════════════
 window.addEventListener('load', function(){
-  try {
-    if (localStorage.getItem('pm_pin')==='1') {
-      currentRole = localStorage.getItem('pm_role') || 'viewer';
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('appScreen').style.display='block';
-      applyRole();
-      loadLocal();
-      renderAll();
-      fbLoad();
-    }
-  } catch(e){}
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('part_master_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+  }
 });
 </script>
 </body>
