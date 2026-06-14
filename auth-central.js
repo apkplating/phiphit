@@ -4,7 +4,7 @@
    วิธีใช้ในแต่ละระบบ:
      1. ใส่ <script src="auth-central.js"></script> ก่อนสคริปต์หลักของหน้า
      2. ตั้งชื่อระบบของไฟล์นี้ด้วย: var SYSTEM_KEY = 'job_master';
-        (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master,
+        (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master, po_master,
                        plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin)
      3. ตอน login เรียก:
           CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
@@ -51,6 +51,14 @@
   // ตัวที่ใช้เรียก tab('...') หรือ switchTab('...') ในไฟล์จริงของระบบนั้น
   // ใช้สำหรับ auth_admin (ติ๊กเลือกแท็บที่อนุญาต) และ login() (คืนค่า tabs ที่อนุญาต)
   var SYSTEM_LIST = [
+    {
+      key: 'po_master', label: 'PO จัดซื้อ', group: 'สำนักงาน & ทะเบียนกลาง',
+      tabs: [
+        { id: 'list',    label: 'รายการ PO' },
+        { id: 'new',     label: 'สร้าง PO ใหม่' },
+        { id: 'vendors', label: 'ผู้ขาย/Vendor' }
+      ]
+    },
     {
       key: 'job_master', label: 'Job Master', group: 'สำนักงาน & ทะเบียนกลาง',
       tabs: [

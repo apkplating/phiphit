@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PO จัดซื้อ — APK Plating</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --blue:#1e40af; --blue2:#3b82f6; --teal:#0d9488;
+  --green:#16a34a; --red:#dc2626; --orange:#ea580c; --amber:#d97706;
+  --bg:#f1f5f9; --card:#ffffff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --sky-pale:#f0f9ff; --success-bg:#f0fdf4; --success:#16a34a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
+.app-header{
+  background:linear-gradient(135deg,var(--navy) 0%,#1e3a5f 100%);
+  color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 2px 12px rgba(0,0,0,0.3);
+}
+.app-header .title{font-size:15px;font-weight:700;}
+.app-header .sub{font-size:10px;color:#93c5fd;letter-spacing:0.5px;}
+.sync-badge{font-size:10px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.12);color:#93c5fd;display:flex;align-items:center;gap:5px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#94a3b8;}
+.sync-dot.ok{background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.tab-bar{display:flex;background:var(--navy);padding:0 8px 8px;gap:4px;overflow-x:auto;}
+.tab-btn{flex:1;padding:8px 6px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;color:#94a3b8;background:transparent;border:none;border-radius:8px;cursor:pointer;transition:all .2s;white-space:nowrap;min-width:80px;}
+.tab-btn.active{background:var(--blue);color:#fff;}
+.main{padding:12px;max-width:960px;margin:0 auto;}
+.view{display:none;} .view.active{display:block;}
+.card{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.card-label{font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--navy);margin-bottom:4px;}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;color:var(--text);background:#fff;transition:border-color .2s;outline:none;}
+input:focus,select:focus,textarea:focus{border-color:var(--blue2);}
+textarea{resize:vertical;min-height:54px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;}
+.btn{padding:11px 16px;border-radius:10px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;width:100%;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-outline{background:#fff;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-danger{background:#fef2f2;color:var(--red);border:1.5px solid #fecaca;}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:7px;width:auto;}
+.toast{margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;display:none;}
+.toast.ok{background:var(--success-bg);color:var(--success);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;}
+
+/* PO items table */
+.po-items{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}
+.po-items th{background:var(--navy);color:#fff;padding:6px 5px;font-size:10px;font-weight:600;text-align:center;}
+.po-items td{padding:5px 4px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.po-items td input{padding:6px 7px;font-size:12px;}
+.po-items td.no-col{text-align:center;width:28px;color:var(--text-muted);font-size:11px;}
+.po-items td.amt-col{text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:600;white-space:nowrap;padding-right:8px;}
+.po-items td.rm-col{text-align:center;width:30px;}
+.po-items .rm-btn{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px;}
+.po-totals{margin-top:6px;font-size:12px;}
+.po-totals .row{display:flex;justify-content:space-between;padding:4px 0;}
+.po-totals .row.grand{font-weight:800;font-size:14px;color:var(--navy);border-top:1.5px solid var(--border);padding-top:8px;margin-top:4px;}
+.po-totals .row span:last-child{font-family:'IBM Plex Mono',monospace;}
+
+/* PO list cards */
+.po-card{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s;}
+.po-card:hover{border-color:var(--blue2);}
+.po-card .row1{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.po-card .pono{font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--navy);}
+.po-card .vendor{font-size:12px;color:var(--text-mid);margin-top:2px;}
+.po-card .amt{font-weight:800;font-family:'IBM Plex Mono',monospace;text-align:right;}
+.po-card .meta{font-size:10px;color:var(--text-muted);margin-top:4px;}
+.status-badge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;}
+.status-pending{background:#fffbeb;color:var(--amber);}
+.status-approved{background:#eff6ff;color:var(--blue);}
+.status-received{background:var(--success-bg);color:var(--success);}
+.status-cancelled{background:#fef2f2;color:var(--red);}
+
+/* Vendor list */
+.vendor-card{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.vendor-card .name{font-weight:700;color:var(--navy);}
+.vendor-card .detail{font-size:11px;color:var(--text-mid);margin-top:2px;line-height:1.5;}
+.empty-note{text-align:center;color:var(--text-muted);font-size:12px;padding:30px 10px;}
+
+/* PO detail / print view */
+.po-print{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;}
+.po-print .ph-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+.po-print .ph-co{font-size:12px;font-weight:700;color:var(--navy);}
+.po-print .ph-co-sub{font-size:10px;color:var(--text-muted);margin-top:2px;line-height:1.5;}
+.po-print .ph-title{font-size:18px;font-weight:800;color:var(--navy);text-align:right;}
+.po-print .ph-title .en{font-size:11px;color:var(--text-muted);font-weight:500;}
+.po-print .ph-meta{font-size:11px;text-align:right;margin-top:4px;color:var(--text-mid);}
+.po-print table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0;}
+.po-print th{background:var(--navy);color:#fff;padding:6px;font-size:10px;}
+.po-print td{padding:6px;border-bottom:1px solid var(--border);}
+.po-print .sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px;font-size:11px;text-align:center;}
+.po-print .sign-line{border-top:1px solid var(--text-mid);margin-top:30px;padding-top:4px;}
+
+/* Login */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+
+body.viewer-mode .hide-viewer{display:none !important;}
+
+@media print{
+  .app-header,.tab-bar,.no-print{display:none !important;}
+  .main{padding:0;max-width:none;}
+  .card{box-shadow:none;border:none;padding:0;}
+}
+@media(max-width:480px){.grid3{grid-template-columns:1fr 1fr;}.po-print .sign-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- ══ Login ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px;">🧾</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">PO จัดซื้อ</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — ระบบใบสั่งซื้อกลาง</div>
+    <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
+    <button class="btn btn-primary" onclick="checkPin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ══ App ══ -->
+<div id="appScreen" style="display:none;">
+
+<div class="app-header">
+  <div>
+    <div class="sub">APK PLATING</div>
+    <div class="title">🧾 PO จัดซื้อ</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+    <button onclick="logoutPO()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="tab('list')">📋 รายการ PO</button>
+  <button class="tab-btn" onclick="tab('new')">➕ สร้าง PO ใหม่</button>
+  <button class="tab-btn" onclick="tab('vendors')">🏢 ผู้ขาย/Vendor</button>
+</div>
+
+<div class="main">
+
+<!-- ══ TAB: รายการ PO ══ -->
+<div id="v-list" class="view active">
+
+  <div class="card">
+    <div class="card-label">ค้นหา/กรอง</div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>ค้นหา (เลข PO / ผู้ขาย)</label>
+        <input type="text" id="poSearch" placeholder="พิมพ์เพื่อค้นหา..." oninput="renderPoList()">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>สถานะ</label>
+        <select id="poFilterStatus" onchange="renderPoList()">
+          <option value="">— ทุกสถานะ —</option>
+          <option value="pending">รออนุมัติ</option>
+          <option value="approved">อนุมัติแล้ว</option>
+          <option value="received">รับสินค้าแล้ว</option>
+          <option value="cancelled">ยกเลิก</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="poListWrap"></div>
+
+  <!-- ══ PO Detail Overlay ══ -->
+  <div id="poDetailOv" style="display:none;position:fixed;inset:0;background:rgba(15,32,68,.5);z-index:500;overflow-y:auto;padding:14px;">
+    <div style="max-width:760px;margin:0 auto;">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;" class="no-print">
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ พิมพ์</button>
+        <button class="btn btn-outline btn-sm" onclick="closePoDetail()">✕ ปิด</button>
+      </div>
+      <div id="poDetailBody"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB: สร้าง PO ใหม่ ══ -->
+<div id="v-new" class="view">
+
+  <div class="card">
+    <div class="card-label">ข้อมูลใบสั่งซื้อ</div>
+    <div class="grid2">
+      <div class="field">
+        <label>เลขที่ใบสั่งซื้อ</label>
+        <input type="text" id="poNo" placeholder="เช่น PO-2606-001">
+      </div>
+      <div class="field">
+        <label>วันที่</label>
+        <input type="date" id="poDate">
+      </div>
+    </div>
+    <div class="field">
+      <label>ผู้ขาย / Vendor</label>
+      <input type="text" id="poVendorName" list="vendorList" placeholder="พิมพ์หรือเลือกชื่อผู้ขาย" oninput="onVendorPick()">
+      <datalist id="vendorList"></datalist>
+    </div>
+    <div class="field">
+      <label>ที่อยู่ผู้ขาย</label>
+      <textarea id="poVendorAddr" placeholder="(ไม่บังคับ)"></textarea>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>เลขประจำตัวผู้เสียภาษี</label>
+        <input type="text" id="poVendorTax" placeholder="(ไม่บังคับ)">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>กำหนดส่งสินค้า</label>
+        <input type="date" id="poDueDate">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">รายการสินค้า/บริการ</div>
+    <div class="tbl-wrap" style="overflow-x:auto;">
+      <table class="po-items">
+        <thead><tr>
+          <th style="width:28px;">#</th>
+          <th style="text-align:left;">รายการ (Description)</th>
+          <th style="width:60px;">จำนวน</th>
+          <th style="width:60px;">หน่วย</th>
+          <th style="width:90px;">ราคา/หน่วย</th>
+          <th style="width:100px;">จำนวนเงิน</th>
+          <th style="width:30px;"></th>
+        </tr></thead>
+        <tbody id="poItemsBody"></tbody>
+      </table>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="addPoItemRow()">➕ เพิ่มรายการ</button>
+
+    <div class="po-totals">
+      <div class="row"><span>รวม</span><span id="poSubtotal">0.00</span></div>
+      <div class="row">
+        <span>VAT
+          <select id="poVatPercent" style="display:inline-block;width:auto;padding:2px 6px;font-size:11px;margin-left:4px;" onchange="recalcPoTotals()">
+            <option value="7">7%</option>
+            <option value="0">0%</option>
+          </select>
+        </span>
+        <span id="poVatAmt">0.00</span>
+      </div>
+      <div class="row grand"><span>รวมทั้งสิ้น</span><span id="poGrandTotal">0.00</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">หมายเหตุ และผู้เกี่ยวข้อง</div>
+    <div class="field">
+      <label>หมายเหตุ</label>
+      <textarea id="poNote" placeholder="เช่น กรุณายืนยันกลับภายใน 1 วัน"></textarea>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>ผู้ออกเอกสาร (ISSUED BY)</label>
+        <input type="text" id="poIssuedBy" placeholder="ชื่อผู้ออก PO">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>ผู้อนุมัติ (APPROVED BY)</label>
+        <input type="text" id="poApprovedBy" placeholder="(กรอกเมื่ออนุมัติแล้ว)">
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-green" onclick="savePo()" id="poSaveBtn">💾 บันทึก PO</button>
+  <button class="btn btn-outline" style="margin-top:8px;" onclick="resetPoForm()">🔄 ล้างฟอร์ม</button>
+  <div id="poToast" class="toast"></div>
+
+</div>
+
+<!-- ══ TAB: ผู้ขาย/Vendor ══ -->
+<div id="v-vendors" class="view">
+
+  <div class="card hide-viewer">
+    <div class="card-label">เพิ่มผู้ขายใหม่</div>
+    <div class="field">
+      <label>ชื่อผู้ขาย</label>
+      <input type="text" id="vName" placeholder="เช่น บริษัท เอบีซี จำกัด">
+    </div>
+    <div class="field">
+      <label>ที่อยู่</label>
+      <textarea id="vAddr" placeholder="(ไม่บังคับ)"></textarea>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>เลขประจำตัวผู้เสียภาษี</label>
+        <input type="text" id="vTax" placeholder="(ไม่บังคับ)">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>โทรศัพท์/อีเมล</label>
+        <input type="text" id="vContact" placeholder="(ไม่บังคับ)">
+      </div>
+    </div>
+    <button class="btn btn-green" onclick="addVendor()">➕ เพิ่มผู้ขาย</button>
+    <div id="vendorToast" class="toast"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">รายชื่อผู้ขาย (<span id="vendorCount">0</span>)</div>
+    <div id="vendorListWrap"></div>
+  </div>
+
+</div>
+
+</div><!-- end main -->
+</div><!-- end appScreen -->
+
+<script src="auth-central.js"></script>
+<script>
+// ══════════════════════════════════════
+//  AUTH (Central Auth)
+// ══════════════════════════════════════
+var SYSTEM_KEY = 'po_master';
+var TAB_IDS = ['list','new','vendors'];
+var currentRole = '';
+var currentTabs = null;
+
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
+    try { sessionStorage.setItem('po_master_pin', pin); } catch(e){}
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    applyRole();
+    initApp();
+  });
+}
+
+function logoutPO() {
+  try { sessionStorage.removeItem('po_master_pin'); } catch(e){}
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+// viewer: ดูได้อย่างเดียว — ซ่อนปุ่มบันทึก/เพิ่ม/ลบทั้งหมด
+function applyRole() {
+  var isViewer = currentRole === 'viewer';
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+    var tabId = TAB_IDS[i];
+    var hidden = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = hidden ? 'none' : '';
+  });
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) tab(firstVisible);
+  }
+  document.body.classList.toggle('viewer-mode', isViewer);
+}
+
+// ══════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════
+var DB_URL  = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var FB_PATH = DB_URL + '/po-master';
+
+// ── Data ──
+var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, dueDate, items:[...], vatPercent, note, issuedBy, approvedBy, status, createdAt}]
+var vendors  = [];   // [{id, name, addr, tax, contact}]
+var poItemRows = []; // current form rows [{desc,qty,unit,price}]
+var _itemRowSeq = 0;
+var _pollTimer = null;
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+function initApp(){
+  if (window._poInitDone) return;
+  window._poInitDone = true;
+  document.getElementById('poDate').value = isoToday();
+  if (poItemRows.length === 0) addPoItemRow();
+  loadLocal();
+  renderAll();
+  startPoll();
+  setTimeout(fbLoad, 500);
+}
+
+window.addEventListener('load', function(){
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('po_master_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+  }
+});
+
+function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function fmtMoney(n){ n = parseFloat(n)||0; return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtD(s){
+  if(!s) return '–';
+  try{ var d=new Date(s+'T00:00:00');
+    var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return d.getDate()+' '+m[d.getMonth()+1]+' '+(d.getFullYear()+543);
+  }catch(e){return s;}
+}
+
+// ══════════════════════════════════════
+//  TAB
+// ══════════════════════════════════════
+function tab(t) {
+  ['list','new','vendors'].forEach(function(n,i){
+    var el = document.getElementById('v-'+n);
+    if (el) el.classList.toggle('active', n===t);
+    var btns = document.querySelectorAll('.tab-btn');
+    if (btns[i]) btns[i].classList.toggle('active', n===t);
+  });
+  if (t==='list')    renderPoList();
+  if (t==='vendors') renderVendorList();
+  if (t==='new')     renderVendorDatalist();
+}
+
+// ══════════════════════════════════════
+//  LOCAL STORAGE
+// ══════════════════════════════════════
+function loadLocal() {
+  try { poList  = JSON.parse(localStorage.getItem('po_master_list')    || '[]'); } catch(e){ poList=[]; }
+  try { vendors = JSON.parse(localStorage.getItem('po_master_vendors') || '[]'); } catch(e){ vendors=[]; }
+}
+function saveLocal() {
+  try { localStorage.setItem('po_master_list',    JSON.stringify(poList)); } catch(e){}
+  try { localStorage.setItem('po_master_vendors', JSON.stringify(vendors)); } catch(e){}
+}
+
+// ══════════════════════════════════════
+//  FIREBASE
+// ══════════════════════════════════════
+async function fbSave() {
+  try {
+    var res = await fetch(FB_PATH+'.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ poList:poList, vendors:vendors, savedAt:new Date().toISOString() })
+    });
+    if (res.ok) setSyncOk(); else setSyncErr();
+  } catch(e) { setSyncErr(); }
+}
+
+async function fbLoad() {
+  try {
+    var res = await fetch(FB_PATH+'.json');
+    if (!res.ok) { setSyncErr(); return; }
+    var data = await res.json();
+    if (data) {
+      if (Array.isArray(data.poList))  poList  = data.poList;
+      if (Array.isArray(data.vendors)) vendors = data.vendors;
+      saveLocal();
+      setSyncOk();
+      renderAll();
+    }
+  } catch(e) { setSyncErr(); }
+}
+
+function startPoll(){
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(function(){ fbLoad(); }, 15000);
+}
+function setSyncOk(){ var d=document.getElementById('syncDot'); var l=document.getElementById('syncLabel'); if(d){d.className='sync-dot ok';} if(l){l.textContent='Sync แล้ว';} }
+function setSyncErr(){ var d=document.getElementById('syncDot'); var l=document.getElementById('syncLabel'); if(d){d.className='sync-dot';} if(l){l.textContent='ออฟไลน์';} }
+
+function renderAll(){
+  renderPoList();
+  renderVendorList();
+  renderVendorDatalist();
+}
+
+// ══════════════════════════════════════
+//  PO ITEM ROWS (กรอกฟอร์ม)
+// ══════════════════════════════════════
+function addPoItemRow(data){
+  var row = data || {desc:'',qty:1,unit:'',price:0};
+  row._rid = ++_itemRowSeq;
+  poItemRows.push(row);
+  renderPoItemRows();
+}
+function removePoItemRow(rid){
+  poItemRows = poItemRows.filter(function(r){ return r._rid !== rid; });
+  if (poItemRows.length === 0) addPoItemRow();
+  else renderPoItemRows();
+}
+function renderPoItemRows(){
+  var body = document.getElementById('poItemsBody');
+  body.innerHTML = poItemRows.map(function(r, idx){
+    return '<tr>' +
+      '<td class="no-col">'+(idx+1)+'</td>' +
+      '<td><input type="text" value="'+esc(r.desc)+'" oninput="onItemFieldChange('+r._rid+',\'desc\',this.value)" placeholder="รายละเอียดสินค้า/บริการ"></td>' +
+      '<td><input type="number" min="0" step="any" value="'+r.qty+'" oninput="onItemFieldChange('+r._rid+',\'qty\',this.value)"></td>' +
+      '<td><input type="text" value="'+esc(r.unit)+'" oninput="onItemFieldChange('+r._rid+',\'unit\',this.value)" placeholder="ชิ้น/กก."></td>' +
+      '<td><input type="number" min="0" step="any" value="'+r.price+'" oninput="onItemFieldChange('+r._rid+',\'price\',this.value)"></td>' +
+      '<td class="amt-col">'+fmtMoney((parseFloat(r.qty)||0)*(parseFloat(r.price)||0))+'</td>' +
+      '<td class="rm-col"><button class="rm-btn" onclick="removePoItemRow('+r._rid+')">✕</button></td>' +
+    '</tr>';
+  }).join('');
+  recalcPoTotals();
+}
+function onItemFieldChange(rid, field, value){
+  var r = poItemRows.find(function(x){ return x._rid===rid; });
+  if (!r) return;
+  r[field] = value;
+  // อัปเดตเฉพาะ amount cell + totals โดยไม่ re-render ทั้งตาราง (กัน focus หลุด)
+  var rows = document.querySelectorAll('#poItemsBody tr');
+  var idx = poItemRows.indexOf(r);
+  if (rows[idx]) {
+    var amtCell = rows[idx].querySelector('.amt-col');
+    if (amtCell) amtCell.textContent = fmtMoney((parseFloat(r.qty)||0)*(parseFloat(r.price)||0));
+  }
+  recalcPoTotals();
+}
+function recalcPoTotals(){
+  var subtotal = poItemRows.reduce(function(sum,r){ return sum + (parseFloat(r.qty)||0)*(parseFloat(r.price)||0); }, 0);
+  var vatPct = parseFloat(document.getElementById('poVatPercent').value)||0;
+  var vatAmt = subtotal * vatPct / 100;
+  var grand = subtotal + vatAmt;
+  document.getElementById('poSubtotal').textContent = fmtMoney(subtotal);
+  document.getElementById('poVatAmt').textContent = fmtMoney(vatAmt);
+  document.getElementById('poGrandTotal').textContent = fmtMoney(grand);
+}
+
+// ══════════════════════════════════════
+//  VENDOR AUTOCOMPLETE
+// ══════════════════════════════════════
+function renderVendorDatalist(){
+  var dl = document.getElementById('vendorList');
+  dl.innerHTML = vendors.map(function(v){ return '<option value="'+esc(v.name)+'">'; }).join('');
+}
+function onVendorPick(){
+  var name = document.getElementById('poVendorName').value.trim();
+  var v = vendors.find(function(x){ return x.name === name; });
+  if (v) {
+    document.getElementById('poVendorAddr').value = v.addr || '';
+    document.getElementById('poVendorTax').value = v.tax || '';
+  }
+}
+
+// ══════════════════════════════════════
+//  SAVE / RESET PO
+// ══════════════════════════════════════
+function resetPoForm(){
+  document.getElementById('poNo').value = '';
+  document.getElementById('poDate').value = isoToday();
+  document.getElementById('poVendorName').value = '';
+  document.getElementById('poVendorAddr').value = '';
+  document.getElementById('poVendorTax').value = '';
+  document.getElementById('poDueDate').value = '';
+  document.getElementById('poNote').value = '';
+  document.getElementById('poIssuedBy').value = '';
+  document.getElementById('poApprovedBy').value = '';
+  document.getElementById('poVatPercent').value = '7';
+  poItemRows = [];
+  addPoItemRow();
+  document.getElementById('poToast').className = 'toast';
+}
+
+function savePo(){
+  if (currentRole === 'viewer') return;
+  var poNo = document.getElementById('poNo').value.trim();
+  var vendorName = document.getElementById('poVendorName').value.trim();
+  var toast = document.getElementById('poToast');
+
+  if (!poNo) { toast.className='toast err'; toast.textContent='กรุณากรอกเลขที่ใบสั่งซื้อ'; return; }
+  if (!vendorName) { toast.className='toast err'; toast.textContent='กรุณากรอกชื่อผู้ขาย'; return; }
+  var validItems = poItemRows.filter(function(r){ return r.desc.trim() && (parseFloat(r.qty)||0) > 0; });
+  if (validItems.length === 0) { toast.className='toast err'; toast.textContent='กรุณากรอกรายการสินค้าอย่างน้อย 1 รายการ'; return; }
+
+  var subtotal = validItems.reduce(function(sum,r){ return sum + (parseFloat(r.qty)||0)*(parseFloat(r.price)||0); }, 0);
+  var vatPct = parseFloat(document.getElementById('poVatPercent').value)||0;
+  var vatAmt = subtotal * vatPct / 100;
+  var grand = subtotal + vatAmt;
+
+  var po = {
+    id: 'po_' + Date.now(),
+    poNo: poNo,
+    date: document.getElementById('poDate').value || isoToday(),
+    vendorName: vendorName,
+    vendorAddr: document.getElementById('poVendorAddr').value.trim(),
+    vendorTax: document.getElementById('poVendorTax').value.trim(),
+    dueDate: document.getElementById('poDueDate').value,
+    items: validItems.map(function(r){ return {desc:r.desc.trim(), qty:parseFloat(r.qty)||0, unit:r.unit.trim(), price:parseFloat(r.price)||0}; }),
+    vatPercent: vatPct,
+    subtotal: subtotal, vatAmt: vatAmt, grandTotal: grand,
+    note: document.getElementById('poNote').value.trim(),
+    issuedBy: document.getElementById('poIssuedBy').value.trim(),
+    approvedBy: document.getElementById('poApprovedBy').value.trim(),
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  // บันทึก vendor ใหม่ลงทะเบียนถ้ายังไม่มี
+  if (!vendors.find(function(v){ return v.name === vendorName; })) {
+    vendors.push({ id:'v_'+Date.now(), name:vendorName, addr:po.vendorAddr, tax:po.vendorTax, contact:'' });
+  }
+
+  poList.unshift(po);
+  saveLocal(); fbSave();
+  renderAll();
+  toast.className='toast ok'; toast.textContent='✅ บันทึก PO '+poNo+' แล้ว';
+  resetPoForm();
+  setTimeout(function(){ tab('list'); }, 600);
+}
+
+// ══════════════════════════════════════
+//  PO LIST / DETAIL
+// ══════════════════════════════════════
+var STATUS_LABELS = { pending:'รออนุมัติ', approved:'อนุมัติแล้ว', received:'รับสินค้าแล้ว', cancelled:'ยกเลิก' };
+
+function renderPoList(){
+  var wrap = document.getElementById('poListWrap');
+  var q = (document.getElementById('poSearch')?document.getElementById('poSearch').value:'').trim().toLowerCase();
+  var statusFilter = document.getElementById('poFilterStatus')?document.getElementById('poFilterStatus').value:'';
+
+  var filtered = poList.filter(function(po){
+    if (statusFilter && po.status !== statusFilter) return false;
+    if (q && !((po.poNo||'').toLowerCase().includes(q) || (po.vendorName||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div class="card"><div class="empty-note">ไม่พบรายการ PO</div></div>';
+    return;
+  }
+
+  wrap.innerHTML = filtered.map(function(po){
+    return '<div class="po-card" onclick="openPoDetail(\''+po.id+'\')">' +
+      '<div class="row1">' +
+        '<div>' +
+          '<div class="pono">'+esc(po.poNo)+'</div>' +
+          '<div class="vendor">'+esc(po.vendorName)+'</div>' +
+        '</div>' +
+        '<div class="amt">'+fmtMoney(po.grandTotal)+' ฿</div>' +
+      '</div>' +
+      '<div class="meta">'+fmtD(po.date)+' · <span class="status-badge status-'+po.status+'">'+(STATUS_LABELS[po.status]||po.status)+'</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+function openPoDetail(id){
+  var po = poList.find(function(x){ return x.id===id; });
+  if (!po) return;
+
+  var itemsHtml = po.items.map(function(r,i){
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(r.desc)+'</td><td style="text-align:center;">'+r.qty+'</td>' +
+      '<td style="text-align:center;">'+esc(r.unit)+'</td><td style="text-align:right;">'+fmtMoney(r.price)+'</td>' +
+      '<td style="text-align:right;">'+fmtMoney(r.qty*r.price)+'</td></tr>';
+  }).join('');
+
+  var statusOptions = Object.keys(STATUS_LABELS).map(function(s){
+    return '<option value="'+s+'"'+(s===po.status?' selected':'')+'>'+STATUS_LABELS[s]+'</option>';
+  }).join('');
+
+  document.getElementById('poDetailBody').innerHTML =
+    '<div class="po-print">' +
+      '<div class="ph-row">' +
+        '<div>' +
+          '<div class="ph-co">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div>' +
+          '<div class="ph-co-sub">APK PLATING SERVICE CO.,LTD.<br>349/16 หมู่ 1 ตำบลบางโปรง อำเภอเมือง จังหวัดสมุทรปราการ 10270</div>' +
+        '</div>' +
+        '<div>' +
+          '<div class="ph-title">ใบสั่งซื้อ<div class="en">PURCHASE ORDER</div></div>' +
+          '<div class="ph-meta">เลขที่: '+esc(po.poNo)+'<br>วันที่: '+fmtD(po.date)+'</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:12px;margin-bottom:8px;"><b>ผู้ขาย/VENDOR</b><br>'+esc(po.vendorName)+
+        (po.vendorAddr?'<br>'+esc(po.vendorAddr).replace(/\n/g,'<br>'):'')+
+        (po.vendorTax?'<br>เลขประจำตัวผู้เสียภาษี: '+esc(po.vendorTax):'')+
+      '</div>' +
+      '<table><thead><tr><th>ลำดับ</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th><th>ราคา/หน่วย</th><th>จำนวนเงิน</th></tr></thead>' +
+      '<tbody>'+itemsHtml+'</tbody></table>' +
+      '<div class="po-totals" style="max-width:260px;margin-left:auto;">' +
+        '<div class="row"><span>รวม</span><span>'+fmtMoney(po.subtotal)+'</span></div>' +
+        '<div class="row"><span>VAT '+po.vatPercent+'%</span><span>'+fmtMoney(po.vatAmt)+'</span></div>' +
+        '<div class="row grand"><span>รวมทั้งสิ้น</span><span>'+fmtMoney(po.grandTotal)+' ฿</span></div>' +
+      '</div>' +
+      (po.note?'<div style="font-size:11px;margin-top:10px;color:var(--text-mid);"><b>หมายเหตุ:</b> '+esc(po.note)+'</div>':'') +
+      '<div class="sign-grid">' +
+        '<div><div class="sign-line">'+esc(po.issuedBy||'\u00A0')+'</div>ออกโดย (ISSUED BY)</div>' +
+        '<div><div class="sign-line">'+esc(po.approvedBy||'\u00A0')+'</div>อนุมัติโดย (APPROVED BY)</div>' +
+        '<div><div class="sign-line">'+fmtD(po.dueDate)+'</div>กำหนดส่งสินค้า (DUE DATE)</div>' +
+        '<div><div class="sign-line">\u00A0</div>รับทราบโดย (VENDOR ACKNOWLEDGEMENT)</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card no-print hide-viewer" style="margin-top:10px;">' +
+      '<div class="card-label">จัดการสถานะ</div>' +
+      '<div class="grid2">' +
+        '<div class="field" style="margin-bottom:0;">' +
+          '<label>สถานะ</label>' +
+          '<select id="poStatusSel" onchange="updatePoStatus(\''+po.id+'\',this.value)">'+statusOptions+'</select>' +
+        '</div>' +
+        '<div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;">' +
+          '<button class="btn btn-danger btn-sm" style="width:100%;" onclick="deletePo(\''+po.id+'\')">🗑️ ลบ PO นี้</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('poDetailOv').style.display = 'block';
+}
+function closePoDetail(){
+  document.getElementById('poDetailOv').style.display = 'none';
+}
+function updatePoStatus(id, status){
+  if (currentRole === 'viewer') return;
+  var po = poList.find(function(x){ return x.id===id; });
+  if (!po) return;
+  po.status = status;
+  saveLocal(); fbSave(); renderPoList();
+}
+function deletePo(id){
+  if (currentRole === 'viewer') return;
+  var po = poList.find(function(x){ return x.id===id; });
+  if (!po || !confirm('ลบ PO "'+po.poNo+'" ?')) return;
+  poList = poList.filter(function(x){ return x.id!==id; });
+  saveLocal(); fbSave();
+  closePoDetail();
+  renderPoList();
+}
+
+// ══════════════════════════════════════
+//  VENDORS
+// ══════════════════════════════════════
+function addVendor(){
+  if (currentRole === 'viewer') return;
+  var name = document.getElementById('vName').value.trim();
+  var toast = document.getElementById('vendorToast');
+  if (!name) { toast.className='toast err'; toast.textContent='กรุณากรอกชื่อผู้ขาย'; return; }
+  if (vendors.find(function(v){ return v.name===name; })) { toast.className='toast err'; toast.textContent='มีผู้ขายชื่อนี้อยู่แล้ว'; return; }
+
+  vendors.push({
+    id: 'v_'+Date.now(),
+    name: name,
+    addr: document.getElementById('vAddr').value.trim(),
+    tax: document.getElementById('vTax').value.trim(),
+    contact: document.getElementById('vContact').value.trim()
+  });
+  saveLocal(); fbSave();
+  document.getElementById('vName').value = '';
+  document.getElementById('vAddr').value = '';
+  document.getElementById('vTax').value = '';
+  document.getElementById('vContact').value = '';
+  toast.className='toast ok'; toast.textContent='✅ เพิ่มผู้ขายแล้ว';
+  renderVendorList(); renderVendorDatalist();
+}
+function deleteVendor(id){
+  if (currentRole === 'viewer') return;
+  var v = vendors.find(function(x){ return x.id===id; });
+  if (!v || !confirm('ลบผู้ขาย "'+v.name+'" ?')) return;
+  vendors = vendors.filter(function(x){ return x.id!==id; });
+  saveLocal(); fbSave();
+  renderVendorList(); renderVendorDatalist();
+}
+function renderVendorList(){
+  document.getElementById('vendorCount').textContent = vendors.length;
+  var wrap = document.getElementById('vendorListWrap');
+  if (vendors.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">ยังไม่มีผู้ขายในระบบ — เพิ่มได้ด้านบน หรือจะถูกบันทึกอัตโนมัติเมื่อสร้าง PO</div>';
+    return;
+  }
+  wrap.innerHTML = vendors.map(function(v){
+    return '<div class="vendor-card">' +
+      '<div>' +
+        '<div class="name">'+esc(v.name)+'</div>' +
+        '<div class="detail">' +
+          (v.addr?esc(v.addr)+'<br>':'') +
+          (v.tax?'เลขผู้เสียภาษี: '+esc(v.tax)+'<br>':'') +
+          (v.contact?esc(v.contact):'') +
+        '</div>' +
+      '</div>' +
+      '<button class="rm-btn hide-viewer" style="font-size:16px;" onclick="deleteVendor(\''+v.id+'\')">🗑️</button>' +
+    '</div>';
+  }).join('');
+}
+</script>
+</body>
+</html>
