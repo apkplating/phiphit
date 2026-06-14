@@ -138,6 +138,30 @@ select.role-select.role-admin{ color:var(--green); border-color:#bbf7d0; backgro
 
 .empty-note{ padding:24px; text-align:center; color:var(--text-muted); font-size:12.5px; }
 
+/* ── Tab permission cell ── */
+.sys-cell{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+.tabs-btn{
+  font-size:10px; padding:2px 7px; border-radius:6px; border:1px solid var(--border);
+  background:var(--card); color:var(--text-mid); cursor:pointer; white-space:nowrap;
+}
+.tabs-btn:hover{ border-color:var(--steel-2); }
+.tabs-btn.restricted{ color:var(--amber); border-color:#fde68a; background:#fffbeb; }
+.tabs-btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+/* ── Tabs picker modal ── */
+.modal-ov{ display:none; position:fixed; inset:0; background:rgba(15,32,68,.45); z-index:1000; align-items:center; justify-content:center; }
+.modal-ov.show{ display:flex; }
+.modal-box{ background:var(--card); border-radius:14px; padding:20px; width:340px; max-width:92vw; max-height:80vh; overflow-y:auto; }
+.modal-box h3{ font-size:14px; margin-bottom:4px; }
+.modal-box p.sub{ font-size:11.5px; color:var(--text-mid); margin-bottom:14px; }
+.tab-check-row{ display:flex; align-items:center; gap:8px; padding:7px 0; font-size:12.5px; border-bottom:1px solid var(--border); }
+.tab-check-row:last-child{ border-bottom:none; }
+.tab-check-row input{ width:16px; height:16px; cursor:pointer; }
+.tab-check-row label{ cursor:pointer; flex:1; }
+.modal-actions{ display:flex; gap:8px; margin-top:14px; }
+.modal-actions .btn{ flex:1; }
+.modal-toggle-all{ font-size:11px; color:var(--blue2); cursor:pointer; text-decoration:underline; background:none; border:none; padding:0; margin-bottom:8px; }
+
 @media (max-width:640px){
   th.sys-col, td.sys-col{ min-width:78px; }
 }
@@ -227,6 +251,20 @@ select.role-select.role-admin{ color:var(--green); border-color:#bbf7d0; backgro
   </div>
 
 </main>
+
+<!-- Tabs picker modal -->
+<div class="modal-ov" id="tabsModal">
+  <div class="modal-box">
+    <h3 id="tabsModalTitle">เลือกแท็บที่อนุญาต</h3>
+    <p class="sub" id="tabsModalSub"></p>
+    <button class="modal-toggle-all" id="tabsToggleAll" onclick="toggleAllTabs()">เลือกทั้งหมด / ไม่เลือกเลย</button>
+    <div id="tabsCheckList"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="saveTabsModal()">บันทึก</button>
+      <button class="btn secondary" onclick="closeTabsModal()">ยกเลิก</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -360,7 +398,10 @@ function renderTable() {
 
     CentralAuth.SYSTEM_LIST.forEach(function(sys){
       var role = perms[sys.key] || 'none';
-      cells += '<td class="sys-col">' + roleSelectHtml(pin, sys.key, role) + '</td>';
+      cells += '<td class="sys-col"><div class="sys-cell">' +
+        roleSelectHtml(pin, sys.key, role) +
+        tabsButtonHtml(pin, sys.key, role, perms) +
+        '</div></td>';
     });
 
     // auth_admin — boolean toggle
@@ -390,14 +431,103 @@ function roleSelectHtml(pin, sysKey, currentRole) {
 }
 
 // ══════════════════════════════════════
+//  TAB-LEVEL PERMISSIONS
+// ══════════════════════════════════════
+// ปุ่มเล็กๆ ใต้ dropdown role — เปิด modal เลือกแท็บที่อนุญาต
+// แสดงเฉพาะ role ที่มีความหมาย (operator/viewer) — admin เห็นหมดเสมอ, none ไม่เข้าระบบอยู่แล้ว
+function tabsButtonHtml(pin, sysKey, role, perms) {
+  var def = systemDef(sysKey);
+  if (!def || !def.tabs || !def.tabs.length) return '';
+  if (role !== 'operator' && role !== 'viewer') {
+    return '<button class="tabs-btn" disabled>ทุกแท็บ</button>';
+  }
+  var allowed = perms[sysKey + CentralAuth.TABS_SUFFIX];
+  var restricted = Array.isArray(allowed);
+  var label = restricted ? ('แท็บ: ' + allowed.length + '/' + def.tabs.length) : 'ทุกแท็บ';
+  return '<button class="tabs-btn' + (restricted ? ' restricted' : '') + '" ' +
+    'onclick="openTabsModal(\'' + pin + '\',\'' + sysKey + '\')">' + esc(label) + '</button>';
+}
+
+function systemDef(sysKey) {
+  return CentralAuth.SYSTEM_LIST.find(function(s){ return s.key === sysKey; }) || null;
+}
+
+var tabsModalState = null; // { pin, sysKey }
+
+function openTabsModal(pin, sysKey) {
+  var def = systemDef(sysKey);
+  if (!def) return;
+  var u = users[pin] || {};
+  var perms = u.permissions || {};
+  var allowed = perms[sysKey + CentralAuth.TABS_SUFFIX];
+  var allIds = def.tabs.map(function(t){ return t.id; });
+  var checked = Array.isArray(allowed) ? allowed : allIds; // ไม่จำกัด = ติ๊กทุกอันไว้ก่อน
+
+  tabsModalState = { pin: pin, sysKey: sysKey };
+  document.getElementById('tabsModalTitle').textContent = 'แท็บที่อนุญาต — ' + labelForSystem(sysKey);
+  document.getElementById('tabsModalSub').textContent =
+    (u.name || pin) + ' (PIN ' + pin + ') — ถ้าไม่ติ๊กแท็บใด แท็บนั้นจะถูกซ่อนสำหรับผู้ใช้นี้';
+
+  var html = def.tabs.map(function(t){
+    var isChecked = checked.indexOf(t.id) !== -1;
+    return '<div class="tab-check-row">' +
+      '<input type="checkbox" id="tabchk_'+t.id+'" value="'+esc(t.id)+'" ' + (isChecked?'checked':'') + '>' +
+      '<label for="tabchk_'+t.id+'">' + esc(t.label) + '</label>' +
+    '</div>';
+  }).join('');
+  document.getElementById('tabsCheckList').innerHTML = html;
+  document.getElementById('tabsModal').classList.add('show');
+}
+
+function closeTabsModal() {
+  document.getElementById('tabsModal').classList.remove('show');
+  tabsModalState = null;
+}
+
+function toggleAllTabs() {
+  var boxes = document.querySelectorAll('#tabsCheckList input[type=checkbox]');
+  var allChecked = Array.prototype.every.call(boxes, function(b){ return b.checked; });
+  boxes.forEach(function(b){ b.checked = !allChecked; });
+}
+
+function saveTabsModal() {
+  if (!tabsModalState) return;
+  var pin = tabsModalState.pin, sysKey = tabsModalState.sysKey;
+  var def = systemDef(sysKey);
+  var allIds = def.tabs.map(function(t){ return t.id; });
+  var boxes = document.querySelectorAll('#tabsCheckList input[type=checkbox]');
+  var selected = [];
+  boxes.forEach(function(b){ if (b.checked) selected.push(b.value); });
+
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+
+  var tabsKey = sysKey + CentralAuth.TABS_SUFFIX;
+  if (selected.length === allIds.length) {
+    // เลือกครบทุกแท็บ = ไม่จำกัด → ลบคีย์ออกไปเลย (กลับสู่ default)
+    delete users[pin].permissions[tabsKey];
+  } else {
+    users[pin].permissions[tabsKey] = selected;
+  }
+
+  closeTabsModal();
+  renderTable();
+  persistUsers('อัปเดตสิทธิ์แท็บ ' + (users[pin].name || pin) + ' — ' + labelForSystem(sysKey));
+}
+
+document.getElementById('tabsModal').addEventListener('click', function(e){
+  if (e.target === e.currentTarget) closeTabsModal();
+});
+
+// ══════════════════════════════════════
 //  ACTIONS — เปลี่ยนสิทธิ์ / เพิ่ม / ลบ ผู้ใช้
 // ══════════════════════════════════════
 function onRoleChange(pin, sysKey, selectEl) {
   var newRole = selectEl.value;
-  selectEl.className = 'role-select role-' + newRole;
   if (!users[pin]) users[pin] = { name:'', permissions:{} };
   if (!users[pin].permissions) users[pin].permissions = {};
   users[pin].permissions[sysKey] = newRole;
+  renderTable();
   persistUsers('อัปเดตสิทธิ์ ' + (users[pin].name || pin) + ' → ' + labelForSystem(sysKey));
 }
 
