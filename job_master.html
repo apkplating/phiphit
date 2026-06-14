@@ -120,7 +120,10 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div style="font-size:10px;color:#93c5fd;letter-spacing:.5px;">APK PLATING</div>
     <div style="font-size:16px;font-weight:700;">📋 Job Master</div>
   </div>
-  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+    <button onclick="logoutJM()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
+  </div>
 </div>
 
 <div class="tab-bar">
@@ -754,11 +757,13 @@ input:focus,select:focus{border-color:var(--blue2);}
   </div>
 </div>
 
+<script src="auth-central.js"></script>
 <script>
 // ══════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════
-var PINS = { '010517':'admin', 'Apk002':'viewer' };
+var SYSTEM_KEY = 'job_master';
+var TAB_IDS = ['board','in','out','history','sales','pricelist'];
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
@@ -782,35 +787,70 @@ var priceList  = [];   // ทะเบียนราคา {id, partName, custo
 var hiddenCustomers = []; // คีย์ (บรรทัดแรกของชื่อลูกค้า) ที่ซ่อนจาก dropdown เลือกลูกค้า (เช่น "CASH" รุ่นเก่าไม่มีที่อยู่)
 var _pollTimer = null, _pollCount = 0;
 var currentRole = '';
+var currentTabs = null;
 
 // ══════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════
+function logoutJM() {
+  try { sessionStorage.removeItem('job_master_pin'); } catch(e){}
+  if (_pollTimer) clearInterval(_pollTimer);
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
 function checkPin() {
   var pin = document.getElementById('pinInput').value.trim();
-  currentRole = PINS[pin];
-  if (currentRole) {
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
-    try { localStorage.setItem('job_pin','1'); localStorage.setItem('job_role', currentRole); } catch(e){}
+    try { sessionStorage.setItem('job_master_pin', pin); } catch(e){}
     applyRole();
     loadLocal();
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(fbLoad, 800);
     loadPartMaster().then(function(){ updatePmStatusHint(); renderCustomerFilter(); pullFromLines(); });
-  } else {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('pinInput').value = '';
-  }
+  });
 }
 
 function applyRole() {
   // Viewer ซ่อนปุ่มรับเข้า/จ่ายออก
   var isViewer = currentRole === 'viewer';
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
-    if (isViewer && (i === 1 || i === 2)) btn.style.display = 'none';
+    var tabId = TAB_IDS[i];
+    var hideByRole = isViewer && (i === 1 || i === 2);
+    var hideByTabs = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = (hideByRole || hideByTabs) ? 'none' : '';
   });
+  // ถ้าแท็บที่ active อยู่ถูกซ่อน ให้สลับไปแท็บแรกที่อนุญาต
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) tab(firstVisible);
+  }
 }
 
 // ══════════════════════════════════════
@@ -3015,14 +3055,10 @@ window.addEventListener('load', function(){
   onUnitChange();
 
   try {
-    if (localStorage.getItem('job_pin')==='1') {
-      currentRole = localStorage.getItem('job_role') || 'operator';
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('appScreen').style.display='block';
-      applyRole();
-      loadLocal(); startPoll(); setTimeout(fbLoad, 500);
-      // ดึงข้อมูลจากไลน์ชุบหลังโหลด
-      setTimeout(pullFromLines, 2000);
+    var savedPin = sessionStorage.getItem('job_master_pin');
+    if (savedPin) {
+      document.getElementById('pinInput').value = savedPin;
+      checkPin();
     }
   } catch(e){}
 });
