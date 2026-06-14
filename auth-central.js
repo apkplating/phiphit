@@ -5,7 +5,7 @@
      1. ใส่ <script src="auth-central.js"></script> ก่อนสคริปต์หลักของหน้า
      2. ตั้งชื่อระบบของไฟล์นี้ด้วย: var SYSTEM_KEY = 'job_master';
         (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master,
-                       plating_v4, plating_v5_b2, plating_v6_r1, auth_admin)
+                       plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin)
      3. ตอน login เรียก:
           CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
             if (!result.ok) { แสดง error; return; }
@@ -126,6 +126,18 @@
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'job',      label: 'งาน' },
         { id: 'settings', label: 'ตั้งค่า' }
+      ]
+    },
+    {
+      key: 'apk_hr', label: 'APK HR', group: 'บุคคล',
+      tabs: [
+        { id: 'dashboard',  label: 'แดชบอร์ด' },
+        { id: 'scan',       label: 'สแกนบัตร' },
+        { id: 'schedule',   label: 'ตารางกะ' },
+        { id: 'attendance', label: 'บันทึกเวลา' },
+        { id: 'salary',     label: 'เงินเดือน' },
+        { id: 'import',     label: 'นำเข้า ZKTeco' },
+        { id: 'settings',   label: 'การตั้งค่า' }
       ]
     }
   ];
