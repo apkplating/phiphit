@@ -86,14 +86,44 @@ table.st td.tl{text-align:left;}
 .terr{display:block;background:#fef2f2;color:#9b2c2c;}
 
 .info-box{padding:10px 12px;background:var(--sky-pale);border-radius:8px;border:1px solid var(--border);margin-bottom:12px;font-size:12px;display:none;}
+
+/* ── Login ── */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),var(--navy-light));display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.login-box .pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;box-sizing:border-box;}
+.login-box .pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+.app-logout-btn{background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;}
+body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
 </style>
 </head>
 <body>
 
+<!-- ══ Login ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px;">📦</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">B/L Stock</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — สต๊อกรวมทุกสายการผลิต</div>
+    <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
+    <button class="btn btn-navy" onclick="checkPin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ══ App ══ -->
+<div id="appScreen" style="display:none;">
+
 <div class="app-header">
-  <div class="hdr-badge">APK Plating · Stock Control</div>
-  <div class="hdr-title">B/L Stock</div>
-  <div class="hdr-sub" id="hdrDate">—</div>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+    <div>
+      <div class="hdr-badge">APK Plating · Stock Control</div>
+      <div class="hdr-title">B/L Stock</div>
+      <div class="hdr-sub" id="hdrDate">—</div>
+    </div>
+    <button class="app-logout-btn" onclick="logoutBL()">🚪 ออกจากระบบ</button>
+  </div>
 </div>
 
 <div class="app-body">
@@ -243,8 +273,80 @@ table.st td.tl{text-align:left;}
   </div>
 
 </div><!-- app-body -->
+</div><!-- end appScreen -->
 
+<script src="auth-central.js"></script>
 <script>
+// ══════════════════════════════════════════════════════
+//  AUTH (Central Auth)
+// ══════════════════════════════════════════════════════
+var SYSTEM_KEY = 'bl_stock';
+var TAB_IDS = ['stock','delivery','history'];
+var currentRole = '';
+var currentTabs = null;
+
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
+    try { sessionStorage.setItem('bl_stock_pin', pin); } catch(e){}
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    applyRole();
+    initApp();
+  });
+}
+
+function logoutBL() {
+  try { sessionStorage.removeItem('bl_stock_pin'); } catch(e){}
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+// ── จำกัดสิทธิ์ตาม role/tabs ──
+//   viewer: ดูได้อย่างเดียว — ซ่อนปุ่ม "บันทึก Delivery" และปุ่มลบ 🗑
+//   admin/operator: ใช้งานได้เต็มที่
+function applyRole() {
+  var isViewer = currentRole === 'viewer';
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+    var tabId = TAB_IDS[i];
+    var hidden = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = hidden ? 'none' : '';
+  });
+  // ถ้าแท็บที่ active ถูกซ่อน ให้สลับไปแท็บแรกที่อนุญาต
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) switchTab(firstVisible);
+  }
+
+  var saveBtn = document.querySelector('button.btn-green[onclick="saveDelivery()"]');
+  if (saveBtn) saveBtn.style.display = isViewer ? 'none' : '';
+  document.body.classList.toggle('viewer-mode', isViewer);
+}
+
 // ══════════════════════════════════════════════════════
 //  Firebase URLs
 // ══════════════════════════════════════════════════════
@@ -269,12 +371,23 @@ var pmParts   = [];  // Part Master [{id,partNo,name,customer,colors,weightPerPc
 // ══════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════
-window.addEventListener('load', function(){
+function initApp(){
+  if (window._blInitDone) return;
+  window._blInitDone = true;
   document.getElementById('hdrDate').textContent =
     new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('dDate').value = isoToday();
   loadAll(false);
   setInterval(function(){ loadAll(false); }, 30000);
+}
+
+window.addEventListener('load', function(){
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('bl_stock_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+  }
 });
 
 function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -848,6 +961,7 @@ function checkDQty(){
 }
 
 async function saveDelivery(){
+  if(currentRole==='viewer'){ return; }
   var val=document.getElementById('dPartSel').value;
   var qty=parseInt(document.getElementById('dQty').value)||0;
   var date=document.getElementById('dDate').value;
@@ -887,6 +1001,7 @@ async function saveDelivery(){
 }
 
 async function deleteBLDel(id){
+  if(currentRole==='viewer'){ return; }
   if(!confirm('ลบรายการ Delivery นี้?')) return;
   blDel=blDel.filter(function(d){return d.id!==id;});
   await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
