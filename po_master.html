@@ -85,6 +85,16 @@ textarea{resize:vertical;min-height:54px;}
 .vendor-card .detail{font-size:11px;color:var(--text-mid);margin-top:2px;line-height:1.5;}
 .empty-note{text-align:center;color:var(--text-muted);font-size:12px;padding:30px 10px;}
 
+/* Summary tables */
+.sum-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;}
+.sum-table th{background:var(--navy);color:#fff;padding:6px 8px;font-size:10px;font-weight:600;text-align:left;}
+.sum-table th.num{text-align:right;}
+.sum-table td{padding:6px 8px;border-bottom:1px solid var(--border);}
+.sum-table td.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+.sum-table tr.grand td{font-weight:800;border-top:1.5px solid var(--border);color:var(--navy);}
+.vendor-card.clickable{cursor:pointer;transition:border-color .15s;}
+.vendor-card.clickable:hover{border-color:var(--blue2);}
+
 /* PO detail / print view */
 .po-print{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;}
 .po-print .ph-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
@@ -149,6 +159,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
   <button class="tab-btn active" onclick="tab('list')">📋 รายการ PO</button>
   <button class="tab-btn" onclick="tab('new')">➕ สร้าง PO ใหม่</button>
   <button class="tab-btn" onclick="tab('vendors')">🏢 ผู้ขาย/Vendor</button>
+  <button class="tab-btn" onclick="tab('summary')">📊 สรุปยอดซื้อ</button>
 </div>
 
 <div class="main">
@@ -229,6 +240,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
 
   <div class="card">
     <div class="card-label">รายการสินค้า/บริการ</div>
+    <datalist id="itemRegistryList"></datalist>
     <div class="tbl-wrap" style="overflow-x:auto;">
       <table class="po-items">
         <thead><tr>
@@ -318,6 +330,38 @@ body.viewer-mode .hide-viewer{display:none !important;}
 
 </div>
 
+<!-- ══ TAB: สรุปยอดซื้อ ══ -->
+<div id="v-summary" class="view">
+
+  <div class="card">
+    <div class="card-label">สรุปยอดสั่งซื้อรายเดือน/รายปี</div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>มุมมอง</label>
+        <select id="sumViewMode" onchange="renderSummary()">
+          <option value="month">รายเดือน</option>
+          <option value="year">รายปี</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>ปี (พ.ศ.)</label>
+        <select id="sumYear" onchange="renderSummary()"></select>
+      </div>
+    </div>
+    <div id="sumTotalsWrap"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">ประวัติการสั่งซื้อรายรายการ</div>
+    <div class="field" style="margin-bottom:0;">
+      <label>ค้นหารายการ</label>
+      <input type="text" id="itemHistSearch" placeholder="พิมพ์ชื่อรายการเพื่อค้นหา..." oninput="renderItemHistory()">
+    </div>
+    <div id="itemHistWrap" style="margin-top:10px;"></div>
+  </div>
+
+</div>
+
 </div><!-- end main -->
 </div><!-- end appScreen -->
 
@@ -327,7 +371,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
 //  AUTH (Central Auth)
 // ══════════════════════════════════════
 var SYSTEM_KEY = 'po_master';
-var TAB_IDS = ['list','new','vendors'];
+var TAB_IDS = ['list','new','vendors','summary'];
 var currentRole = '';
 var currentTabs = null;
 
@@ -395,6 +439,7 @@ var FB_PATH = DB_URL + '/po-master';
 // ── Data ──
 var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, dueDate, items:[...], vatPercent, note, issuedBy, approvedBy, status, createdAt}]
 var vendors  = [];   // [{id, name, addr, tax, contact}]
+var itemRegistry = []; // [{key, desc, unit, lastPrice, lastDate, totalQty, orderCount}] — สร้างจาก poList อัตโนมัติ
 var poItemRows = []; // current form rows [{desc,qty,unit,price}]
 var _itemRowSeq = 0;
 var _pollTimer = null;
@@ -438,7 +483,7 @@ function fmtD(s){
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['list','new','vendors'].forEach(function(n,i){
+  ['list','new','vendors','summary'].forEach(function(n,i){
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -446,7 +491,8 @@ function tab(t) {
   });
   if (t==='list')    renderPoList();
   if (t==='vendors') renderVendorList();
-  if (t==='new')     renderVendorDatalist();
+  if (t==='new')     { renderVendorDatalist(); renderItemRegistryDatalist(); }
+  if (t==='summary') { populateSummaryYears(); renderSummary(); renderItemHistory(); }
 }
 
 // ══════════════════════════════════════
@@ -497,9 +543,39 @@ function setSyncOk(){ var d=document.getElementById('syncDot'); var l=document.g
 function setSyncErr(){ var d=document.getElementById('syncDot'); var l=document.getElementById('syncLabel'); if(d){d.className='sync-dot';} if(l){l.textContent='ออฟไลน์';} }
 
 function renderAll(){
+  rebuildItemRegistry();
   renderPoList();
   renderVendorList();
   renderVendorDatalist();
+  renderItemRegistryDatalist();
+}
+
+// ══════════════════════════════════════
+//  ITEM REGISTRY — สร้างจากประวัติ PO ทั้งหมด
+// ══════════════════════════════════════
+// key = ชื่อรายการ (normalize ตัดช่องว่าง/ตัวพิมพ์เพื่อรวมรายการซ้ำที่สะกดต่างกันเล็กน้อย)
+function itemKey(desc){ return String(desc||'').trim().toLowerCase().replace(/\s+/g,' '); }
+
+function rebuildItemRegistry(){
+  var map = {};
+  // เรียงจากเก่า→ใหม่ เพื่อให้ "ล่าสุด" ถูกต้อง (poList เก็บใหม่ไว้บนสุดด้วย unshift)
+  var sorted = poList.slice().sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
+  sorted.forEach(function(po){
+    (po.items||[]).forEach(function(it){
+      var k = itemKey(it.desc);
+      if (!k) return;
+      if (!map[k]) map[k] = { key:k, desc:it.desc, unit:it.unit, lastPrice:it.price, lastDate:po.date, totalQty:0, orderCount:0, history:[] };
+      var entry = map[k];
+      entry.desc = it.desc;          // ใช้การสะกดล่าสุด
+      entry.unit = it.unit || entry.unit;
+      entry.lastPrice = it.price;
+      entry.lastDate = po.date;
+      entry.totalQty += (parseFloat(it.qty)||0);
+      entry.orderCount += 1;
+      entry.history.push({ poNo:po.poNo, date:po.date, vendorName:po.vendorName, qty:it.qty, unit:it.unit, price:it.price, amount:it.qty*it.price });
+    });
+  });
+  itemRegistry = Object.values(map).sort(function(a,b){ return a.desc.localeCompare(b.desc,'th'); });
 }
 
 // ══════════════════════════════════════
@@ -521,7 +597,7 @@ function renderPoItemRows(){
   body.innerHTML = poItemRows.map(function(r, idx){
     return '<tr>' +
       '<td class="no-col">'+(idx+1)+'</td>' +
-      '<td><input type="text" value="'+esc(r.desc)+'" oninput="onItemFieldChange('+r._rid+',\'desc\',this.value)" placeholder="รายละเอียดสินค้า/บริการ"></td>' +
+      '<td><input type="text" value="'+esc(r.desc)+'" list="itemRegistryList" oninput="onItemFieldChange('+r._rid+',\'desc\',this.value)" onchange="onItemDescPick('+r._rid+',this)" placeholder="รายละเอียดสินค้า/บริการ"></td>' +
       '<td><input type="number" min="0" step="any" value="'+r.qty+'" oninput="onItemFieldChange('+r._rid+',\'qty\',this.value)"></td>' +
       '<td><input type="text" value="'+esc(r.unit)+'" oninput="onItemFieldChange('+r._rid+',\'unit\',this.value)" placeholder="ชิ้น/กก."></td>' +
       '<td><input type="number" min="0" step="any" value="'+r.price+'" oninput="onItemFieldChange('+r._rid+',\'price\',this.value)"></td>' +
@@ -560,6 +636,21 @@ function recalcPoTotals(){
 function renderVendorDatalist(){
   var dl = document.getElementById('vendorList');
   dl.innerHTML = vendors.map(function(v){ return '<option value="'+esc(v.name)+'">'; }).join('');
+}
+function renderItemRegistryDatalist(){
+  var dl = document.getElementById('itemRegistryList');
+  if (!dl) return;
+  dl.innerHTML = itemRegistry.map(function(it){ return '<option value="'+esc(it.desc)+'">'; }).join('');
+}
+// เมื่อเลือกรายการจากทะเบียน (datalist) — auto-fill หน่วย/ราคาล่าสุด
+function onItemDescPick(rid, inputEl){
+  var entry = itemRegistry.find(function(it){ return itemKey(it.desc) === itemKey(inputEl.value); });
+  if (!entry) return;
+  var r = poItemRows.find(function(x){ return x._rid===rid; });
+  if (!r) return;
+  if (!r.unit) r.unit = entry.unit;
+  if (!parseFloat(r.price)) r.price = entry.lastPrice;
+  renderPoItemRows();
 }
 function onVendorPick(){
   var name = document.getElementById('poVendorName').value.trim();
@@ -792,17 +883,157 @@ function renderVendorList(){
     return;
   }
   wrap.innerHTML = vendors.map(function(v){
-    return '<div class="vendor-card">' +
+    var vPoCount = poList.filter(function(po){ return po.vendorName===v.name; }).length;
+    return '<div class="vendor-card clickable" onclick="openVendorDetail(\''+v.id+'\')">' +
       '<div>' +
         '<div class="name">'+esc(v.name)+'</div>' +
         '<div class="detail">' +
           (v.addr?esc(v.addr)+'<br>':'') +
           (v.tax?'เลขผู้เสียภาษี: '+esc(v.tax)+'<br>':'') +
-          (v.contact?esc(v.contact):'') +
+          (v.contact?esc(v.contact)+'<br>':'') +
+          '<span style="color:var(--blue);">สั่งซื้อแล้ว '+vPoCount+' ครั้ง — แตะเพื่อดูประวัติ</span>' +
         '</div>' +
       '</div>' +
-      '<button class="rm-btn hide-viewer" style="font-size:16px;" onclick="deleteVendor(\''+v.id+'\')">🗑️</button>' +
+      '<button class="rm-btn hide-viewer" style="font-size:16px;" onclick="event.stopPropagation();deleteVendor(\''+v.id+'\')">🗑️</button>' +
     '</div>';
+  }).join('');
+}
+
+// ── ประวัติการสั่งซื้อรายผู้ขาย ──
+function openVendorDetail(id){
+  var v = vendors.find(function(x){ return x.id===id; });
+  if (!v) return;
+  var vendorPos = poList.filter(function(po){ return po.vendorName===v.name; })
+    .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  var totalAmt = vendorPos.reduce(function(s,po){ return s+(po.grandTotal||0); }, 0);
+
+  var rowsHtml = vendorPos.length ? vendorPos.map(function(po){
+    return '<tr onclick="closePoDetail();openPoDetail(\''+po.id+'\')" style="cursor:pointer;">' +
+      '<td>'+esc(po.poNo)+'</td><td>'+fmtD(po.date)+'</td>' +
+      '<td><span class="status-badge status-'+po.status+'">'+(STATUS_LABELS[po.status]||po.status)+'</span></td>' +
+      '<td class="num">'+fmtMoney(po.grandTotal)+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">ยังไม่มีประวัติการสั่งซื้อ</td></tr>';
+
+  document.getElementById('poDetailBody').innerHTML =
+    '<div class="po-print">' +
+      '<div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px;">'+esc(v.name)+'</div>' +
+      '<div style="font-size:11px;color:var(--text-mid);margin-bottom:12px;">' +
+        (v.addr?esc(v.addr)+'<br>':'') +
+        (v.tax?'เลขผู้เสียภาษี: '+esc(v.tax)+'<br>':'') +
+        (v.contact?esc(v.contact):'') +
+      '</div>' +
+      '<div class="sum-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">' +
+        '<div class="card" style="margin-bottom:0;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--navy);">'+vendorPos.length+'</div><div style="font-size:10px;color:var(--text-muted);">จำนวน PO</div></div>' +
+        '<div class="card" style="margin-bottom:0;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--navy);">'+fmtMoney(totalAmt)+'</div><div style="font-size:10px;color:var(--text-muted);">ยอดสั่งซื้อรวม (฿)</div></div>' +
+      '</div>' +
+      '<table class="sum-table"><thead><tr><th>เลขที่ PO</th><th>วันที่</th><th>สถานะ</th><th class="num">ยอดรวม</th></tr></thead>' +
+      '<tbody>'+rowsHtml+'</tbody></table>' +
+    '</div>';
+
+  document.getElementById('poDetailOv').style.display = 'block';
+}
+
+// ══════════════════════════════════════
+//  สรุปยอดสั่งซื้อรายเดือน/รายปี
+// ══════════════════════════════════════
+var THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function populateSummaryYears(){
+  var sel = document.getElementById('sumYear');
+  var years = {};
+  poList.forEach(function(po){
+    if (po.date) years[po.date.slice(0,4)] = true;
+  });
+  var thisYear = String(new Date().getFullYear());
+  years[thisYear] = true;
+  var sortedYears = Object.keys(years).sort().reverse();
+  var currentVal = sel.value;
+  sel.innerHTML = sortedYears.map(function(y){
+    return '<option value="'+y+'">'+(parseInt(y)+543)+'</option>';
+  }).join('');
+  if (sortedYears.indexOf(currentVal) !== -1) sel.value = currentVal;
+  else sel.value = thisYear;
+}
+
+function renderSummary(){
+  var wrap = document.getElementById('sumTotalsWrap');
+  var mode = document.getElementById('sumViewMode').value;
+  var year = document.getElementById('sumYear').value;
+
+  if (mode === 'month') {
+    var byMonth = {}; // 0-11 -> {count, total}
+    for (var i=0;i<12;i++) byMonth[i] = {count:0,total:0};
+    poList.forEach(function(po){
+      if (!po.date || po.date.slice(0,4) !== year) return;
+      if (po.status === 'cancelled') return;
+      var m = parseInt(po.date.slice(5,7),10)-1;
+      byMonth[m].count += 1;
+      byMonth[m].total += (po.grandTotal||0);
+    });
+    var grandTotal = 0, grandCount = 0;
+    var rows = '';
+    for (var m=0; m<12; m++) {
+      grandTotal += byMonth[m].total;
+      grandCount += byMonth[m].count;
+      rows += '<tr><td>'+THAI_MONTHS[m]+'</td><td class="num">'+byMonth[m].count+'</td><td class="num">'+fmtMoney(byMonth[m].total)+'</td></tr>';
+    }
+    rows += '<tr class="grand"><td>รวมทั้งปี</td><td class="num">'+grandCount+'</td><td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
+    wrap.innerHTML = '<table class="sum-table"><thead><tr><th>เดือน</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">* ไม่รวมรายการที่ถูกยกเลิก</div>';
+  } else {
+    var byYear = {};
+    poList.forEach(function(po){
+      if (!po.date) return;
+      if (po.status === 'cancelled') return;
+      var y = po.date.slice(0,4);
+      if (!byYear[y]) byYear[y] = {count:0,total:0};
+      byYear[y].count += 1;
+      byYear[y].total += (po.grandTotal||0);
+    });
+    var sortedYears = Object.keys(byYear).sort().reverse();
+    if (sortedYears.length === 0) {
+      wrap.innerHTML = '<div class="empty-note">ยังไม่มีข้อมูล PO</div>';
+      return;
+    }
+    var rows2 = sortedYears.map(function(y){
+      return '<tr><td>'+(parseInt(y)+543)+'</td><td class="num">'+byYear[y].count+'</td><td class="num">'+fmtMoney(byYear[y].total)+'</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="sum-table"><thead><tr><th>ปี (พ.ศ.)</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows2+'</tbody></table>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">* ไม่รวมรายการที่ถูกยกเลิก</div>';
+  }
+}
+
+// ══════════════════════════════════════
+//  ประวัติการสั่งซื้อรายรายการ
+// ══════════════════════════════════════
+function renderItemHistory(){
+  var wrap = document.getElementById('itemHistWrap');
+  var q = document.getElementById('itemHistSearch').value.trim().toLowerCase();
+
+  var filtered = itemRegistry.filter(function(it){
+    return !q || it.desc.toLowerCase().includes(q);
+  });
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div class="empty-note">'+(itemRegistry.length===0?'ยังไม่มีประวัติการสั่งซื้อ':'ไม่พบรายการที่ค้นหา')+'</div>';
+    return;
+  }
+
+  wrap.innerHTML = filtered.map(function(it){
+    var histRows = it.history.slice().reverse().slice(0,10).map(function(h){
+      return '<tr><td>'+esc(h.poNo)+'</td><td>'+fmtD(h.date)+'</td><td>'+esc(h.vendorName)+'</td>' +
+        '<td class="num">'+h.qty+' '+esc(h.unit)+'</td><td class="num">'+fmtMoney(h.price)+'</td></tr>';
+    }).join('');
+    return '<details style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;">' +
+      '<summary style="cursor:pointer;font-weight:600;">' +
+        esc(it.desc) +
+        '<span style="float:right;font-size:11px;color:var(--text-mid);">สั่งแล้ว '+it.orderCount+' ครั้ง · รวม '+it.totalQty+' '+esc(it.unit)+' · ล่าสุด '+fmtMoney(it.lastPrice)+' ฿/'+esc(it.unit)+'</span>' +
+      '</summary>' +
+      '<table class="sum-table"><thead><tr><th>เลขที่ PO</th><th>วันที่</th><th>ผู้ขาย</th><th class="num">จำนวน</th><th class="num">ราคา/หน่วย</th></tr></thead>' +
+      '<tbody>'+histRows+'</tbody></table>' +
+      (it.history.length>10?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">แสดง 10 ครั้งล่าสุดจากทั้งหมด '+it.history.length+' ครั้ง</div>':'') +
+    '</details>';
   }).join('');
 }
 </script>

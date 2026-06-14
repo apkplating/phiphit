@@ -56,7 +56,8 @@
       tabs: [
         { id: 'list',    label: 'รายการ PO' },
         { id: 'new',     label: 'สร้าง PO ใหม่' },
-        { id: 'vendors', label: 'ผู้ขาย/Vendor' }
+        { id: 'vendors', label: 'ผู้ขาย/Vendor' },
+        { id: 'summary', label: 'สรุปยอดซื้อ' }
       ]
     },
     {
