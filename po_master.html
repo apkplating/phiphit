@@ -200,6 +200,22 @@ body.viewer-mode .hide-viewer{display:none !important;}
     </div>
   </div>
 
+  <!-- ══ Approval Sign Modal ══ -->
+  <div id="approvalOv" style="display:none;position:fixed;inset:0;background:rgba(15,32,68,.55);z-index:600;align-items:center;justify-content:center;padding:14px;">
+    <div class="card" style="max-width:380px;width:100%;margin-bottom:0;">
+      <div class="card-label">✍️ เซ็นอนุมัติ PO</div>
+      <div class="field">
+        <label>กรอก PIN เพื่อยืนยันตัวตนผู้อนุมัติ</label>
+        <input type="password" id="approvalPin" class="pin-input" placeholder="••••••" maxlength="10"
+          style="font-size:18px;letter-spacing:4px;" oninput="onApprovalPinInput()" onkeydown="if(event.key==='Enter')confirmApproval()">
+      </div>
+      <div id="approvalErr" class="toast err" style="display:none;"></div>
+      <div id="approvalSigPreview"></div>
+      <button class="btn btn-green" onclick="confirmApproval()">✅ ยืนยันอนุมัติ</button>
+      <button class="btn btn-outline" style="margin-top:8px;" onclick="closeApprovalModal()">ยกเลิก</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ══ TAB: สร้าง PO ใหม่ ══ -->
@@ -847,13 +863,14 @@ function openPoDetail(id){
       (po.note?'<div style="font-size:11px;margin-top:10px;color:var(--text-mid);"><b>หมายเหตุ:</b> '+esc(po.note)+'</div>':'') +
       '<div class="sign-grid">' +
         '<div><div class="sign-line">'+esc(po.issuedBy||'\u00A0')+'</div>ออกโดย (ISSUED BY)</div>' +
-        '<div><div class="sign-line">'+esc(po.approvedBy||'\u00A0')+'</div>อนุมัติโดย (APPROVED BY)</div>' +
+        '<div>'+renderApprovalSignBlock(po)+'อนุมัติโดย (APPROVED BY)</div>' +
         '<div><div class="sign-line">'+fmtD(po.dueDate)+'</div>กำหนดส่งสินค้า (DUE DATE)</div>' +
         '<div><div class="sign-line">\u00A0</div>รับทราบโดย (VENDOR ACKNOWLEDGEMENT)</div>' +
       '</div>' +
     '</div>' +
     '<div class="card no-print hide-viewer" style="margin-top:10px;">' +
       '<div class="card-label">จัดการสถานะ</div>' +
+      (po.approvedBy ? '<div style="font-size:11px;color:var(--success);margin-bottom:8px;">✅ อนุมัติโดย '+esc(po.approvedBy)+' เมื่อ '+fmtDT(po.approvedAt)+'</div>' : '') +
       '<div class="grid2">' +
         '<div class="field" style="margin-bottom:0;">' +
           '<label>สถานะ</label>' +
@@ -863,9 +880,30 @@ function openPoDetail(id){
           '<button class="btn btn-danger btn-sm" style="width:100%;" onclick="deletePo(\''+po.id+'\')">🗑️ ลบ PO นี้</button>' +
         '</div>' +
       '</div>' +
+      (po.approvedBy ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;" onclick="openApprovalModal(\''+po.id+'\')">✍️ เซ็นอนุมัติใหม่ (เปลี่ยนผู้อนุมัติ)</button>'
+                     : '<button class="btn btn-green btn-sm" style="width:100%;margin-top:8px;" onclick="openApprovalModal(\''+po.id+'\')">✍️ เซ็นอนุมัติ PO นี้</button>') +
     '</div>';
 
   document.getElementById('poDetailOv').style.display = 'block';
+}
+
+// ── แสดงลายเซ็น/ชื่อผู้อนุมัติในใบ PO ──
+function renderApprovalSignBlock(po){
+  if (po.approvalSignature) {
+    return '<div class="sign-line" style="padding-top:0;border-top:none;">' +
+      '<img src="'+po.approvalSignature+'" style="max-height:48px;max-width:160px;display:block;margin:0 auto 2px;">' +
+      '<div style="border-top:1px solid var(--text-mid);padding-top:2px;">'+esc(po.approvedBy||'\u00A0')+'</div>' +
+    '</div>';
+  }
+  return '<div class="sign-line">'+esc(po.approvedBy||'\u00A0')+'</div>';
+}
+function fmtDT(iso){
+  if(!iso) return '–';
+  try{
+    var d = new Date(iso);
+    var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return d.getDate()+' '+m[d.getMonth()+1]+' '+(d.getFullYear()+543)+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  }catch(e){ return iso; }
 }
 function closePoDetail(){
   document.getElementById('poDetailOv').style.display = 'none';
@@ -876,6 +914,78 @@ function updatePoStatus(id, status){
   if (!po) return;
   po.status = status;
   saveLocal(); fbSave(); renderPoList();
+}
+
+// ══════════════════════════════════════
+//  เซ็นอนุมัติ (PIN + ลายเซ็นที่บันทึกไว้ใน auth_admin)
+// ══════════════════════════════════════
+var _approvalPoId = null;
+var _approvalDebounce = null;
+
+function openApprovalModal(id){
+  if (currentRole === 'viewer') return;
+  _approvalPoId = id;
+  document.getElementById('approvalPin').value = '';
+  document.getElementById('approvalErr').style.display = 'none';
+  document.getElementById('approvalSigPreview').innerHTML = '';
+  document.getElementById('approvalOv').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('approvalPin').focus(); }, 100);
+}
+function closeApprovalModal(){
+  document.getElementById('approvalOv').style.display = 'none';
+  _approvalPoId = null;
+}
+
+// พิมพ์ PIN แล้ว preview ลายเซ็นที่ผูกไว้กับ PIN นั้น (ถ้ามี) — debounce กันยิง fetch ทุกตัวอักษร
+function onApprovalPinInput(){
+  var pin = document.getElementById('approvalPin').value.trim();
+  var preview = document.getElementById('approvalSigPreview');
+  var errEl = document.getElementById('approvalErr');
+  errEl.style.display = 'none';
+  preview.innerHTML = '';
+  if (_approvalDebounce) clearTimeout(_approvalDebounce);
+  if (!pin) return;
+  _approvalDebounce = setTimeout(function(){
+    CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+      if (!result.ok || (result.role !== 'admin' && result.role !== 'operator')) return;
+      if (result.user.signature) {
+        preview.innerHTML = '<div class="field"><label>ลายเซ็นที่บันทึกไว้</label>' +
+          '<img src="'+result.user.signature+'" style="max-height:50px;border:1px solid var(--border);border-radius:6px;background:#fff;padding:4px;display:block;">' +
+        '</div>';
+      } else {
+        preview.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">' +
+          'ℹ️ ผู้ใช้นี้ยังไม่มีลายเซ็นเก็บไว้ — PO จะอนุมัติโดยไม่มีรูปลายเซ็น (สามารถไปอัปโหลดได้ที่ auth_admin.html)' +
+        '</div>';
+      }
+    });
+  }, 400);
+}
+
+function confirmApproval(){
+  if (!_approvalPoId) return;
+  var pin = document.getElementById('approvalPin').value.trim();
+  var errEl = document.getElementById('approvalErr');
+  if (!pin) { errEl.textContent = 'กรุณากรอก PIN'; errEl.style.display = 'block'; return; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok || (result.role !== 'admin' && result.role !== 'operator')) {
+      errEl.textContent = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์อนุมัติ PO';
+      errEl.style.display = 'block';
+      return;
+    }
+    var po = poList.find(function(x){ return x.id===_approvalPoId; });
+    if (!po) { closeApprovalModal(); return; }
+
+    po.approvedBy = result.user.name || ('PIN ' + result.user.pin);
+    po.approvedAt = new Date().toISOString();
+    po.approvalSignature = result.user.signature || null;
+    po.status = 'approved';
+
+    saveLocal(); fbSave();
+    closeApprovalModal();
+    renderPoList();
+    openPoDetail(po.id);
+  });
 }
 function deletePo(id){
   if (currentRole === 'viewer') return;

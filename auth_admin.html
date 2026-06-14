@@ -380,7 +380,7 @@ function renderTable() {
   CentralAuth.SYSTEM_LIST.forEach(function(sys){
     headHtml += '<th class="sys-col">' + esc(sys.label) + '</th>';
   });
-  headHtml += '<th class="sys-col">จัดการผู้ใช้</th><th>ลบ</th>';
+  headHtml += '<th class="sys-col">จัดการผู้ใช้</th><th class="sys-col">ลายเซ็น</th><th>ลบ</th>';
   headRow.innerHTML = headHtml;
 
   var pins = Object.keys(users).sort();
@@ -414,12 +414,57 @@ function renderTable() {
       '</label>' +
     '</td>';
 
+    cells += '<td class="sys-col"><div class="sys-cell">' + signatureCellHtml(pin, u) + '</div></td>';
+
     cells += '<td><button class="icon-btn danger" title="ลบผู้ใช้นี้"'
       + (isSelf ? ' disabled title="ไม่สามารถลบตัวเองได้"' : ' onclick="deleteUser(\'' + pin + '\')"')
       + '>🗑️</button></td>';
 
     return '<tr>' + cells + '</tr>';
   }).join('');
+}
+
+// ── ลายเซ็นผู้ใช้ — อัปโหลดรูป/พรีวิว/ลบ ──
+function signatureCellHtml(pin, u){
+  var sig = u.signature;
+  var html = '';
+  if (sig) {
+    html += '<img src="'+sig+'" alt="ลายเซ็น" style="max-width:80px;max-height:36px;border:1px solid var(--border);border-radius:4px;background:#fff;display:block;margin:0 auto 4px;">';
+    html += '<div style="display:flex;gap:4px;justify-content:center;">';
+    html += '<button class="tabs-btn" onclick="document.getElementById(\'sigFile_'+pin+'\').click()">เปลี่ยน</button>';
+    html += '<button class="tabs-btn restricted" onclick="removeSignature(\''+pin+'\')">ลบ</button>';
+    html += '</div>';
+  } else {
+    html += '<button class="tabs-btn" onclick="document.getElementById(\'sigFile_'+pin+'\').click()">📤 อัปโหลด</button>';
+  }
+  html += '<input type="file" id="sigFile_'+pin+'" accept="image/*" style="display:none;" onchange="onSignatureFileChange(\''+pin+'\',this)">';
+  return html;
+}
+
+function onSignatureFileChange(pin, inputEl){
+  var file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (file.size > 500*1024) {
+    alert('ไฟล์รูปใหญ่เกินไป (เกิน 500KB) — กรุณาเลือกไฟล์ที่เล็กลง');
+    inputEl.value = '';
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    if (!users[pin]) users[pin] = { name:'', permissions:{} };
+    users[pin].signature = e.target.result;
+    renderTable();
+    persistUsers('อัปโหลดลายเซ็น ' + (users[pin].name || pin));
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeSignature(pin){
+  if (!users[pin]) return;
+  if (!confirm('ลบลายเซ็นของ ' + (users[pin].name || pin) + ' ?')) return;
+  delete users[pin].signature;
+  renderTable();
+  persistUsers('ลบลายเซ็น ' + (users[pin].name || pin));
 }
 
 function roleSelectHtml(pin, sysKey, currentRole) {

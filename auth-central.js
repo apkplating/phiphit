@@ -234,7 +234,7 @@
         ok: true,
         role: role,
         tabs: resolveTabs(systemKey, role, perms),
-        user: { pin: pin, name: user.name || '', permissions: perms }
+        user: { pin: pin, name: user.name || '', permissions: perms, signature: user.signature || null }
       };
     });
   }
