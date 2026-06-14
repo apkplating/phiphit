@@ -1443,6 +1443,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 </div><!-- end appContent -->
 
+<script src="auth-central.js"></script>
 <script>
 // ═══════════════════════════════════════
 //  STATE
@@ -5585,29 +5586,35 @@ function exportIntakeCSV() {
 //  PIN LOGIN — 3 ระดับ
 // ═══════════════════════════════════════
 
-var PINS = {
-  '010517': 'admin',    // ระดับ 1 — แก้ไขทุกอย่าง
-  'Apk002': 'viewer',   // ระดับ 2 — ดูประวัติ + ดาวน์โหลด CSV
-  'Apk001': 'operator'  // ระดับ 3 — กรอกรายรอบอย่างเดียว
-};
+var SYSTEM_KEY = 'plating_v5_b2';
+var TAB_IDS = ['entry','summary','history','chart','chem','thick','qa','job','settings'];
 
 var currentRole = null;
+var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
 
 function checkPin() {
   var input = document.getElementById('pinInput').value.trim();
-  var role = PINS[input];
-  if (role) {
-    currentRole = role;
-    try {
-      localStorage.setItem('b2_pinAuth', '1');
-      localStorage.setItem('b2_pinRole', role);
-    } catch(e){}
-    showApp(role);
-  } else {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('pinInput').value = '';
-    document.getElementById('pinInput').focus();
-  }
+  if (!input) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+
+  CentralAuth.login(input, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinInput').focus();
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
+    try { sessionStorage.setItem('plating_v5_b2_pin', input); } catch(e){}
+    showApp(currentRole);
+  });
 }
 
 function applyRoleUI(role) {
@@ -5626,25 +5633,36 @@ function applyRoleUI(role) {
   // Operator (apk001): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
   // Viewer (apk002): เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
   var tabs = document.querySelectorAll('.tab-btn');
-  tabs.forEach(function(btn) {
+  tabs.forEach(function(btn, i) {
     var txt = btn.textContent.trim();
+    var visible = true;
     if (isOperator) {
-      var show = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
+      visible = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
                  txt.includes('งาน') || txt.includes('บันทึกผล');
-      btn.style.display = show ? '' : 'none';
     } else if (isViewer) {
       var hide = txt.includes('กรอกรายรอบ') || txt === 'ตั้งค่า';
-      btn.style.display = hide ? 'none' : '';
+      visible = !hide;
     }
-    // Admin: เห็นทุก tab
+    // จำกัดเพิ่มเติมตาม tabs ที่ตั้งใน auth_admin (ถ้ามี)
+    if (currentTabs && TAB_IDS[i] && currentTabs.indexOf(TAB_IDS[i]) === -1) {
+      visible = false;
+    }
+    btn.style.display = visible ? '' : 'none';
   });
 
-  // ถ้า Operator → force tab กรอกรายรอบ
-  if (isOperator) { tab('entry'); }
-  // ถ้า Viewer → force tab ประวัติ
-  else if (isViewer) { tab('history'); }
-  // Admin → กรอกรายรอบ (default)
-  else { tab('entry'); }
+  function firstVisibleTab() {
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].style.display !== 'none') return TAB_IDS[i];
+    }
+    return 'entry';
+  }
+
+  // ถ้า Operator → force tab กรอกรายรอบ (หรือแท็บแรกที่เห็นได้ ถ้าถูกจำกัดเพิ่ม)
+  if (isOperator) { tab(currentTabs && currentTabs.indexOf('entry')===-1 ? firstVisibleTab() : 'entry'); }
+  // ถ้า Viewer → force tab ประวัติ (หรือแท็บแรกที่เห็นได้ ถ้าถูกจำกัดเพิ่ม)
+  else if (isViewer) { tab(currentTabs && currentTabs.indexOf('history')===-1 ? firstVisibleTab() : 'history'); }
+  // Admin → กรอกรายรอบ (default) หรือแท็บแรกที่เห็นได้ถ้าถูกจำกัด
+  else { tab(currentTabs && currentTabs.indexOf('entry')===-1 ? firstVisibleTab() : 'entry'); }
 
   // ปุ่มบันทึก/เพิ่มรอบ — Viewer ซ่อน
   var saveButtons = ['saveBtn','discordBtn','clearBtn','addBarrelBtn'];
@@ -5684,10 +5702,8 @@ function showApp(role) {
 function doLogout() {
   if (!confirm('ออกจากระบบ?')) return;
   currentRole = null;
-  try {
-    localStorage.removeItem('b2_pinAuth');
-    localStorage.removeItem('b2_pinRole');
-  } catch(e){}
+  currentTabs = null;
+  try { sessionStorage.removeItem('plating_v5_b2_pin'); } catch(e){}
   document.getElementById('userBar').style.display = 'none';
   document.getElementById('appContent').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -5696,14 +5712,13 @@ function doLogout() {
 }
 
 function checkAutoLogin() {
-  try {
-    if (localStorage.getItem('b2_pinAuth') === '1') {
-      var role = localStorage.getItem('b2_pinRole') || 'operator';
-      currentRole = role;
-      showApp(role);
-      return;
-    }
-  } catch(e){}
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('plating_v5_b2_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+    return;
+  }
   document.getElementById('loginScreen').style.display = 'flex';
 }
 
