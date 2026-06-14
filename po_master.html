@@ -219,8 +219,11 @@ body.viewer-mode .hide-viewer{display:none !important;}
     </div>
     <div class="field">
       <label>ผู้ขาย / Vendor</label>
-      <input type="text" id="poVendorName" list="vendorList" placeholder="พิมพ์หรือเลือกชื่อผู้ขาย" oninput="onVendorPick()">
-      <datalist id="vendorList"></datalist>
+      <select id="poVendorSel" onchange="onVendorSelChange()">
+        <option value="">— เลือกผู้ขาย —</option>
+        <option value="__new__">➕ ผู้ขายใหม่ (พิมพ์ชื่อ)</option>
+      </select>
+      <input type="text" id="poVendorName" placeholder="พิมพ์ชื่อผู้ขายใหม่" style="margin-top:8px;display:none;" oninput="onVendorPick()">
     </div>
     <div class="field">
       <label>ที่อยู่ผู้ขาย</label>
@@ -631,11 +634,19 @@ function recalcPoTotals(){
 }
 
 // ══════════════════════════════════════
-//  VENDOR AUTOCOMPLETE
+//  VENDOR PICKER
 // ══════════════════════════════════════
 function renderVendorDatalist(){
-  var dl = document.getElementById('vendorList');
-  dl.innerHTML = vendors.map(function(v){ return '<option value="'+esc(v.name)+'">'; }).join('');
+  var sel = document.getElementById('poVendorSel');
+  var currentVal = sel.value;
+  var options = '<option value="">— เลือกผู้ขาย —</option>' +
+    vendors.map(function(v){ return '<option value="'+esc(v.name)+'">'+esc(v.name)+'</option>'; }).join('') +
+    '<option value="__new__">➕ ผู้ขายใหม่ (พิมพ์ชื่อ)</option>';
+  sel.innerHTML = options;
+  // คงค่าที่เลือกไว้ถ้ายังมีอยู่ในลิสต์
+  if (vendors.find(function(v){ return v.name===currentVal; }) || currentVal==='__new__' || currentVal==='') {
+    sel.value = currentVal;
+  }
 }
 function renderItemRegistryDatalist(){
   var dl = document.getElementById('itemRegistryList');
@@ -652,6 +663,32 @@ function onItemDescPick(rid, inputEl){
   if (!parseFloat(r.price)) r.price = entry.lastPrice;
   renderPoItemRows();
 }
+// เลือกผู้ขายจาก dropdown — ถ้าเลือก "ผู้ขายใหม่" ให้เปิดช่องกรอกชื่อ
+// ถ้าเลือกผู้ขายเดิม ให้เติมที่อยู่/เลขผู้เสียภาษีให้อัตโนมัติ
+function onVendorSelChange(){
+  var sel = document.getElementById('poVendorSel');
+  var nameInput = document.getElementById('poVendorName');
+  if (sel.value === '__new__') {
+    nameInput.style.display = '';
+    nameInput.value = '';
+    document.getElementById('poVendorAddr').value = '';
+    document.getElementById('poVendorTax').value = '';
+    nameInput.focus();
+  } else if (sel.value === '') {
+    nameInput.style.display = 'none';
+    nameInput.value = '';
+    document.getElementById('poVendorAddr').value = '';
+    document.getElementById('poVendorTax').value = '';
+  } else {
+    nameInput.style.display = 'none';
+    nameInput.value = sel.value;
+    var v = vendors.find(function(x){ return x.name === sel.value; });
+    if (v) {
+      document.getElementById('poVendorAddr').value = v.addr || '';
+      document.getElementById('poVendorTax').value = v.tax || '';
+    }
+  }
+}
 function onVendorPick(){
   var name = document.getElementById('poVendorName').value.trim();
   var v = vendors.find(function(x){ return x.name === name; });
@@ -660,6 +697,12 @@ function onVendorPick(){
     document.getElementById('poVendorTax').value = v.tax || '';
   }
 }
+// คืนชื่อผู้ขายที่จะใช้บันทึก PO — จาก select หรือช่องผู้ขายใหม่
+function getSelectedVendorName(){
+  var sel = document.getElementById('poVendorSel');
+  if (sel.value === '__new__') return document.getElementById('poVendorName').value.trim();
+  return sel.value;
+}
 
 // ══════════════════════════════════════
 //  SAVE / RESET PO
@@ -667,7 +710,9 @@ function onVendorPick(){
 function resetPoForm(){
   document.getElementById('poNo').value = '';
   document.getElementById('poDate').value = isoToday();
+  document.getElementById('poVendorSel').value = '';
   document.getElementById('poVendorName').value = '';
+  document.getElementById('poVendorName').style.display = 'none';
   document.getElementById('poVendorAddr').value = '';
   document.getElementById('poVendorTax').value = '';
   document.getElementById('poDueDate').value = '';
@@ -683,7 +728,7 @@ function resetPoForm(){
 function savePo(){
   if (currentRole === 'viewer') return;
   var poNo = document.getElementById('poNo').value.trim();
-  var vendorName = document.getElementById('poVendorName').value.trim();
+  var vendorName = getSelectedVendorName();
   var toast = document.getElementById('poToast');
 
   if (!poNo) { toast.className='toast err'; toast.textContent='กรุณากรอกเลขที่ใบสั่งซื้อ'; return; }
@@ -980,7 +1025,8 @@ function renderSummary(){
     }
     rows += '<tr class="grand"><td>รวมทั้งปี</td><td class="num">'+grandCount+'</td><td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
     wrap.innerHTML = '<table class="sum-table"><thead><tr><th>เดือน</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">* ไม่รวมรายการที่ถูกยกเลิก</div>';
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;margin-bottom:10px;">* ไม่รวมรายการที่ถูกยกเลิก</div>' +
+      renderVendorBreakdown(year);
   } else {
     var byYear = {};
     poList.forEach(function(po){
@@ -1000,8 +1046,37 @@ function renderSummary(){
       return '<tr><td>'+(parseInt(y)+543)+'</td><td class="num">'+byYear[y].count+'</td><td class="num">'+fmtMoney(byYear[y].total)+'</td></tr>';
     }).join('');
     wrap.innerHTML = '<table class="sum-table"><thead><tr><th>ปี (พ.ศ.)</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows2+'</tbody></table>' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">* ไม่รวมรายการที่ถูกยกเลิก</div>';
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;margin-bottom:10px;">* ไม่รวมรายการที่ถูกยกเลิก</div>' +
+      renderVendorBreakdown(year);
   }
+}
+
+// ── สรุปยอดซื้อแยกตามผู้ขาย (เฉพาะปีที่เลือก, ไม่รวมยกเลิก) ──
+function renderVendorBreakdown(year){
+  var byVendor = {};
+  poList.forEach(function(po){
+    if (!po.date || po.date.slice(0,4) !== year) return;
+    if (po.status === 'cancelled') return;
+    var key = po.vendorName || '(ไม่ระบุผู้ขาย)';
+    if (!byVendor[key]) byVendor[key] = {count:0,total:0};
+    byVendor[key].count += 1;
+    byVendor[key].total += (po.grandTotal||0);
+  });
+  var vendorNames = Object.keys(byVendor);
+  if (vendorNames.length === 0) {
+    return '<div class="card-label" style="margin-top:4px;">ยอดสั่งซื้อแยกตามผู้ขาย — ปี '+(parseInt(year)+543)+'</div>' +
+      '<div class="empty-note">ยังไม่มีข้อมูล PO ในปีนี้</div>';
+  }
+  vendorNames.sort(function(a,b){ return byVendor[b].total - byVendor[a].total; });
+  var grandTotal = 0, grandCount = 0;
+  var rows = vendorNames.map(function(v){
+    grandTotal += byVendor[v].total;
+    grandCount += byVendor[v].count;
+    return '<tr><td>'+esc(v)+'</td><td class="num">'+byVendor[v].count+'</td><td class="num">'+fmtMoney(byVendor[v].total)+'</td></tr>';
+  }).join('');
+  rows += '<tr class="grand"><td>รวมทั้งหมด</td><td class="num">'+grandCount+'</td><td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
+  return '<div class="card-label" style="margin-top:4px;">ยอดสั่งซื้อแยกตามผู้ขาย — ปี '+(parseInt(year)+543)+'</div>' +
+    '<table class="sum-table"><thead><tr><th>ผู้ขาย</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 // ══════════════════════════════════════
