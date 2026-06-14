@@ -79,6 +79,11 @@ input:focus,select:focus{border-color:var(--blue2);}
 .pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;}
 .pin-input:focus{border-color:var(--blue);outline:none;}
 .login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+body.viewer-mode [onclick^="deleteItem"],
+body.viewer-mode [onclick^="deleteRecord"],
+body.viewer-mode [onclick^="addChemIn"],
+body.viewer-mode [onclick^="confirmAddItem"],
+body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
 @media(max-width:480px){.sum-grid{grid-template-columns:repeat(2,1fr);}.grid3{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
@@ -102,7 +107,10 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div style="font-size:10px;color:#93c5fd;letter-spacing:0.5px;">APK PLATING</div>
     <div style="font-size:16px;font-weight:700;">🧪 Chemical Master</div>
   </div>
-  <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+    <button onclick="logoutCM()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
+  </div>
 </div>
 
 <div class="tab-bar">
@@ -337,9 +345,13 @@ input:focus,select:focus{border-color:var(--blue2);}
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
+<script src="auth-central.js"></script>
 <script>
 // ══ CONFIG ══
-var PINS = { '010517':'admin', 'Apk002':'viewer' };
+var SYSTEM_KEY = 'chem_master';
+var TAB_IDS = ['stock','in','items'];
+var currentRole = '';
+var currentTabs = null;
 var FIREBASE_CONFIG = {
   apiKey:"AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:"platingapp-92e21-c1346.firebaseapp.com",
@@ -356,15 +368,59 @@ var _pollTimer  = null, _pollCount = 0;
 // ══ LOGIN ══
 function checkPin() {
   var pin = document.getElementById('pinInput').value.trim();
-  if (PINS[pin]) {
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
-    try { localStorage.setItem('master_pin','1'); } catch(e){}
+    try { sessionStorage.setItem('chem_master_pin', pin); } catch(e){}
+    applyRole();
     loadLocal(); startPoll(); setTimeout(fbLoad, 800);
-  } else {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('pinInput').value = '';
+  });
+}
+
+function logoutCM() {
+  try { sessionStorage.removeItem('chem_master_pin'); } catch(e){}
+  if (_pollTimer) clearInterval(_pollTimer);
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+// ══ ROLE ══
+// viewer: ดูได้อย่างเดียว — ซ่อนปุ่มบันทึกรับเข้า/เพิ่มเคมี/ลบ
+function applyRole() {
+  var isViewer = currentRole === 'viewer';
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+    var tabId = TAB_IDS[i];
+    var hidden = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = hidden ? 'none' : '';
+  });
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) tab(firstVisible);
   }
+  document.body.classList.toggle('viewer-mode', isViewer);
 }
 
 // ══ TAB ══
@@ -689,6 +745,7 @@ function removeCertLink(i) {
 }
 
 function addChemIn() {
+  if(currentRole==='viewer'){ return; }
   var chemId   = document.getElementById('inChemSel').value;
   var date     = document.getElementById('inDate').value;
   var bill     = document.getElementById('inBill').value.trim();
@@ -740,6 +797,7 @@ function toggleAddForm(){
   f.style.display=f.style.display==='none'?'block':'none';
 }
 function confirmAddItem(){
+  if(currentRole==='viewer'){ return; }
   var code=document.getElementById('newCode').value.trim();
   var name=document.getElementById('newName').value.trim();
   var supplier=document.getElementById('newSupplier').value.trim();
@@ -772,6 +830,7 @@ function renderItemsList(){
   }).join('');
 }
 function deleteItem(id){
+  if(currentRole==='viewer'){ return; }
   var item=chemItems.find(function(c){return c.id===id;});
   if (!item||!confirm('ลบ "'+item.name+'" และประวัติทั้งหมด?')) return;
   chemItems=chemItems.filter(function(c){return c.id!==id;});
@@ -779,6 +838,7 @@ function deleteItem(id){
   saveLocal(); fbSave(); renderItemsList(); populateStockSel(); renderStockCard();
 }
 function deleteRecord(id){
+  if(currentRole==='viewer'){ return; }
   if (!id||!confirm('ลบรายการนี้?')) return;
   chemRecords=chemRecords.filter(function(r){return String(r.id)!==String(id);});
   saveLocal(); fbSave(); renderStockCard();
@@ -795,13 +855,12 @@ function showToast(section,msg,type){
 
 // ══ INIT ══
 window.addEventListener('load', function(){
-  try {
-    if (localStorage.getItem('master_pin')==='1'){
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('appScreen').style.display='block';
-      loadLocal(); startPoll(); setTimeout(fbLoad, 500);
-    }
-  } catch(e){}
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('chem_master_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+  }
   loadQCTopics();
   var d=document.getElementById('inDate');
   if (d) d.value=new Date().toISOString().slice(0,10);
