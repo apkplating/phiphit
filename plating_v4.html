@@ -1571,6 +1571,7 @@ function addBarrel() {
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
+              jobId: document.getElementById('bJobPick').value || '',
               lotNo: lotNo };
   todayBarrels.push(row);
   try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
@@ -1592,6 +1593,7 @@ function addBarrel() {
   document.getElementById('bPcs').value       = '';
   document.getElementById('bPartName').value  = '';
   document.getElementById('bCustomer').value  = '';
+  document.getElementById('bJobPick').value   = '';
   // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
@@ -1767,10 +1769,19 @@ async function autoJobOut(rec) {
     }
     if (!bPcs && !bKg) return;
 
-    jobMasterItems.forEach(function(job) {
-      var jobPartKey = partNoFromName(job.partName || '');
-      if (!jobPartKey || jobPartKey !== bPartKey) return;
+    // ── ถ้าผู้ใช้เลือก P/No (บิล) จาก dropdown ไว้ → ตัดจากบิลนั้นโดยตรง ──
+    var targetJobs;
+    if (barrel.jobId) {
+      var pickedJob = jobMasterItems.find(function(j){ return j.id === barrel.jobId; });
+      // ใช้ได้เฉพาะถ้า job ยังมีอยู่จริงและ P/No ตรงกัน (กันกรณีถูกลบ/แก้ไปแล้ว)
+      targetJobs = (pickedJob && partNoFromName(pickedJob.partName||'')===bPartKey) ? [pickedJob] : null;
+    }
+    // fallback: ไม่ได้เลือกจาก dropdown หรือ job ที่เลือกหายไปแล้ว → จับคู่ตาม P/No ทุกบิล
+    if (!targetJobs) {
+      targetJobs = jobMasterItems.filter(function(j){ return partNoFromName(j.partName||'')===bPartKey; });
+    }
 
+    targetJobs.forEach(function(job) {
       var unit = job.unit || 'pcs';
       var bal = calcJobBal(job.id);
 
@@ -6094,13 +6105,18 @@ function populateBarrelJobPick() {
   if (!sel) return;
   var cur = sel.value;
   var items = (jobMasterItems || []).filter(function(j){ return calcJobBal(j.id).remain > 0; });
-  // เรียง P/No ตามตัวอักษร
-  items = items.slice().sort(function(a,b){ return (a.partName||'').localeCompare(b.partName||''); });
+  // เรียง P/No ตามตัวอักษร แล้วตามเลขที่บิล
+  items = items.slice().sort(function(a,b){
+    var pn = (a.partName||'').localeCompare(b.partName||'');
+    if (pn !== 0) return pn;
+    return (a.bill||'').localeCompare(b.bill||'');
+  });
   sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
     items.map(function(j){
       var bal = calcJobBal(j.id);
       var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
-      var label = (j.partName||'(ไม่มีชื่อ)') + (j.customer?(' — '+j.customer):'') + '  [คงเหลือ '+bal.remain.toLocaleString()+unitLabel+']';
+      var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
+        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+bal.remain.toLocaleString()+unitLabel;
       return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
     }).join('');
   if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;

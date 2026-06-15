@@ -369,6 +369,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
   <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn" onclick="tab('job')">📋 งาน</button>
+  <button class="tab-btn" onclick="tab('qc100')">✅ QC 100%</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
 
@@ -463,6 +464,17 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <button onclick="reuseLastBarrel()" style="width:100%;background:var(--navy);border:none;border-radius:10px;padding:9px 12px;color:#fff;font-size:12px;font-family:'IBM Plex Sans Thai',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">
           <span style="font-size:14px;">↩</span> ใช้ค่าเดิม: <span id="reuseLabel" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--sky);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SU02C126H06 · MST</span>
         </button>
+      </div>
+
+      <!-- P/No จาก Job Master -->
+      <div class="field" style="margin-bottom:6px;">
+        <label style="display:flex;align-items:center;justify-content:space-between;">
+          P/No (จาก Job Master)
+          <button onclick="jobMasterLoad().then(populateBarrelJobPick)" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄 รีเฟรช</button>
+        </label>
+        <select id="bJobPick" onchange="onBarrelJobPick()" style="font-size:13px;">
+          <option value="">— เลือก P/No จากงานที่มีอยู่ —</option>
+        </select>
       </div>
 
       <!-- ชื่อชิ้นงาน with autocomplete -->
@@ -1507,6 +1519,7 @@ function init() {
   loadAlertConfig();
   loadAutoDiscordSetting();
   renderSummaryMonthTable();    // โหลดการตั้งค่าแจ้งเตือนสต็อค
+  setTimeout(jobMasterLoad, 1800); // โหลด Job Master สำหรับ dropdown P/No
   tab('entry'); // ตั้ง default view หลัง DOM พร้อม
 }
 
@@ -1518,7 +1531,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','qa','job','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','qa','job','qc100','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1531,6 +1544,7 @@ function tab(t) {
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
   if (t === 'qa')    { renderQAHistory(); renderQAChart(); }
   if (t === 'job')   { jobMasterLoad(); }
+  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); }
 }
 
 // ═══════════════════════════════════════
@@ -1636,6 +1650,7 @@ function addBarrel() {
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
+              jobId: document.getElementById('bJobPick').value || '',
               lotNo: lotNo,
               batchNo: _selBatchNo };
   todayBarrels.push(row);
@@ -1643,10 +1658,7 @@ function addBarrel() {
   renderBarrels(); // แสดงทันที ไม่รอ Firebase
   livePush(); // ← Live Sync (background)
 
-  // ════ ตัดสต็อค Job Master อัตโนมัติ ════
-  if (row.partName && row.pcs > 0) {
-    deductJobStock(row.partName, row.pcs, row.id);
-  }
+  // หมายเหตุ: การตัดสต็อค Job Master จะทำตอนกดบันทึกวัน (ดู autoJobOut)
 
   // save last used for reuse button
   if (row.partName || row.customer) {
@@ -1662,6 +1674,7 @@ function addBarrel() {
   document.getElementById('bPcs').value       = '';
   document.getElementById('bPartName').value  = '';
   document.getElementById('bCustomer').value  = '';
+  document.getElementById('bJobPick').value   = '';
   // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
@@ -1674,9 +1687,6 @@ function delBarrel(id) {
   todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
   try { localStorage.setItem('r1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
-  if (deleted && deleted.partName && deleted.pcs > 0) {
-    restoreJobStock(deleted.partName, deleted.pcs, deleted.id);
-  }
   renderBarrels();
 }
 
@@ -1811,53 +1821,58 @@ function persist(rec) {
 async function autoJobOut(rec) {
   if (!jobMasterItems || !jobMasterItems.length) return;
 
-  var qtyMap = {};
+  // รวม qty ต่อ jobId จากทุก barrel ในรอบนี้ — เก็บแยกหน่วย { pcs: x, kg: y }
+  var qtyMap = {}; // jobId -> {pcs, kg, unit}
 
   (rec.rows || []).forEach(function(barrel) {
-    var bPartKey = partNoFromName(barrel.partName || barrel.name || '');
+    var bPartKey = partNoFromName(barrel.partName || '');
     if (!bPartKey) return;
 
-    var bLotKey = normalizePartKey(barrel.lotNo || rec.lotNo || '');
+    var bKg = Number(barrel.kg || 0);
 
+    // คำนวณ pcs (ถ้ามี pcs ตรงๆ ใช้เลย, ไม่งั้นแปลงจาก kg ผ่าน weightG)
     var bPcs = Number(barrel.pcs || 0);
-    if (!bPcs) {
+    if (!bPcs && bKg > 0) {
       var mp = partList.find(function(p) {
         var pk = normalizePartKey(p.partNo);
         return pk === bPartKey
             || normalizePartKey(p.partNo + (p.partName ? ' '+p.partName : '')) === bPartKey;
       });
       var wg = mp ? Number(mp.weightG || 0) : 0;
-      if (!wg) {
-        var mj = jobMasterItems.find(function(j) {
-          return partNoFromName(j.name || '') === bPartKey;
-        });
-        if (mj) wg = Number(mj.weightG || 0);
-      }
-      if (wg > 0 && Number(barrel.kg || 0) > 0) {
-        bPcs = Math.round(Number(barrel.kg) * 1000 / wg);
-      } else if (Number(barrel.kg || 0) > 0) {
-        bPcs = Number(barrel.kg);
-      }
+      if (wg > 0) bPcs = Math.round(bKg * 1000 / wg);
     }
-    if (!bPcs) return;
+    if (!bPcs && !bKg) return;
 
-    jobMasterItems.forEach(function(job) {
-      var jobPartKey = partNoFromName(job.name || '');
-      var jobLotKey  = normalizePartKey(job.lot || '');
+    // ── ถ้าผู้ใช้เลือก P/No (บิล) จาก dropdown ไว้ → ตัดจากบิลนั้นโดยตรง ──
+    var targetJobs;
+    if (barrel.jobId) {
+      var pickedJob = jobMasterItems.find(function(j){ return j.id === barrel.jobId; });
+      targetJobs = (pickedJob && partNoFromName(pickedJob.partName||'')===bPartKey) ? [pickedJob] : null;
+    }
+    // fallback: ไม่ได้เลือกจาก dropdown หรือ job ที่เลือกหายไปแล้ว → จับคู่ตาม P/No ทุกบิล
+    if (!targetJobs) {
+      targetJobs = jobMasterItems.filter(function(j){ return partNoFromName(j.partName||'')===bPartKey; });
+    }
 
-      if (!jobPartKey || jobPartKey !== bPartKey) return;
-      if (jobLotKey && bLotKey && jobLotKey !== bLotKey) return;
+    targetJobs.forEach(function(job) {
+      var unit = job.unit || 'pcs';
+      var bal = calcJobBal(job.id);
 
-      var totalOut = 0;
-      jobMasterRecords.forEach(function(r) {
-        if (r.jobId === job.id && r.type === 'out') totalOut += Number(r.qty || 0);
-      });
-      if (qtyMap[job.id]) totalOut += qtyMap[job.id];
-      var remain = (job.qty || 0) - totalOut;
-      if (remain <= 0) return;
+      var already = qtyMap[job.id] || {pcs:0, kg:0};
 
-      var outQty = Math.min(bPcs, remain);
-      qtyMap[job.id] = (qtyMap[job.id] || 0) + outQty;
+      if (unit === 'kg') {
+        if (bKg <= 0) return;
+        var remainKg = bal.remainKg - already.kg;
+        if (remainKg <= 0) return;
+        var outKg = Math.min(bKg, remainKg);
+        qtyMap[job.id] = { pcs: already.pcs, kg: already.kg + outKg, unit: 'kg' };
+      } else {
+        if (bPcs <= 0) return;
+        var remainPcs = bal.remain - already.pcs;
+        if (remainPcs <= 0) return;
+        var outPcs = Math.min(bPcs, remainPcs);
+        qtyMap[job.id] = { pcs: already.pcs + outPcs, kg: already.kg, unit: 'pcs' };
+      }
     });
   });
 
@@ -1865,12 +1880,15 @@ async function autoJobOut(rec) {
   if (!jobIds.length) return;
 
   var newOuts = jobIds.map(function(jobId) {
+    var m = qtyMap[jobId];
     return {
       id: 'A' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
       jobId: jobId,
       type: 'out',
       date: rec.date || new Date().toISOString().slice(0,10),
-      qty: qtyMap[jobId],
+      unit: m.unit,
+      qty: m.unit==='kg' ? 0 : m.pcs,
+      qtyKg: m.unit==='kg' ? parseFloat(m.kg.toFixed(3)) : 0,
       inv: rec.lotNo || '',
       by: rec.recorder || '',
       note: 'Auto จากรอบชุบ ' + (rec.lotNo || '')
@@ -5577,7 +5595,7 @@ function exportIntakeCSV() {
 // ═══════════════════════════════════════
 
 var SYSTEM_KEY = 'plating_v6_r1';
-var TAB_IDS = ['entry','summary','history','chart','chem','thick','qa','job','settings'];
+var TAB_IDS = ['entry','summary','history','chart','chem','thick','qa','job','qc100','settings'];
 
 var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
@@ -5655,7 +5673,7 @@ function applyRoleUI(role) {
   else { tab(currentTabs && currentTabs.indexOf('entry')===-1 ? firstVisibleTab() : 'entry'); }
 
   // ปุ่มบันทึก/เพิ่มรอบ — Viewer ซ่อน
-  var saveButtons = ['saveBtn','discordBtn','clearBtn','addBarrelBtn'];
+  var saveButtons = ['saveBtn','discordBtn','clearBtn','addBarrelBtn','qcSaveBtn'];
   saveButtons.forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = (isViewer) ? 'none' : '';
@@ -6132,19 +6150,61 @@ async function jobMasterLoad() {
     }
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
+    populateBarrelJobPick();
   } catch(e) {
     document.getElementById('jobSyncLabel').textContent = '❌ ออฟไลน์';
   }
 }
 
+// ── เติม dropdown P/No จาก Job Master ในแท็บกรอกรายรอบ ──
+function populateBarrelJobPick() {
+  var sel = document.getElementById('bJobPick');
+  if (!sel) return;
+  var cur = sel.value;
+  var items = (jobMasterItems || []).filter(function(j){ return calcJobBal(j.id).remain > 0; });
+  // เรียง P/No ตามตัวอักษร แล้วตามเลขที่บิล
+  items = items.slice().sort(function(a,b){
+    var pn = (a.partName||'').localeCompare(b.partName||'');
+    if (pn !== 0) return pn;
+    return (a.bill||'').localeCompare(b.bill||'');
+  });
+  sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
+    items.map(function(j){
+      var bal = calcJobBal(j.id);
+      var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
+      var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
+        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+bal.remain.toLocaleString()+unitLabel;
+      return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
+    }).join('');
+  if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;
+}
+
+// ── เลือก P/No จาก dropdown → เติมชื่อชิ้นงาน + ลูกค้า ──
+function onBarrelJobPick() {
+  var sel = document.getElementById('bJobPick');
+  var jobId = sel.value;
+  if (!jobId) return;
+  var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
+  if (!job) return;
+  document.getElementById('bPartName').value = job.partName || '';
+  if (job.customer) document.getElementById('bCustomer').value = job.customer;
+}
+
 function calcJobBal(jobId) {
-  var totalIn=0, totalOut=0;
+  var job = (jobMasterItems || []).find(function(j){ return j.id===jobId; }) || {};
+  var unit = job.unit || 'pcs';
+  var totalIn=0, totalOut=0, totalInKg=0, totalOutKg=0;
   jobMasterRecords.forEach(function(r){
     if (r.jobId!==jobId) return;
-    if (r.type==='in')  totalIn  += Number(r.qty||0);
-    if (r.type==='out') totalOut += Number(r.qty||0);
+    if (r.type==='in')  { totalIn += Number(r.qty||0); totalInKg += Number(r.qtyKg||0); }
+    if (r.type==='out') { totalOut += Number(r.qty||0); totalOutKg += Number(r.qtyKg||0); }
   });
-  return { totalIn:totalIn, totalOut:totalOut, remain:totalIn-totalOut };
+  var remain   = totalIn - totalOut;
+  var remainKg = parseFloat((totalInKg - totalOutKg).toFixed(3));
+  return {
+    totalIn:totalIn, totalOut:totalOut, remain: unit==='kg' ? remainKg : remain,
+    totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit
+  };
 }
 
 function getJobStatus(job) {
@@ -6694,6 +6754,142 @@ async function confirmJobOut() {
 
 </div>
 
+<!-- ══════════════════════════════════ -->
+<!--  QC 100%  (APK-FR-QA-004)            -->
+<!-- ══════════════════════════════════ -->
+<div id="v-qc100" class="view">
+
+  <div style="background:var(--navy);border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+    <div style="font-size:14px;font-weight:700;color:#fff;">✅ QC 100%</div>
+    <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">ใบรายงานการตรวจสอบชิ้นงานประจำวัน · APK-FR-QA-004</div>
+  </div>
+
+  <!-- ฟอร์มบันทึก -->
+  <div class="card">
+    <div class="card-label">✏️ บันทึกผลตรวจ</div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>วันที่ตรวจสอบ</label>
+        <input type="date" id="qcDate">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หมายเลขชิ้นงาน</label>
+        <input type="text" id="qcPartNo" placeholder="เช่น 17219-K1N-V000">
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>ชื่อชิ้นงาน</label>
+        <input type="text" id="qcPartName" placeholder="ชื่อชิ้นงาน">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Pro. Lot No.</label>
+        <input type="text" id="qcLotNo" placeholder="เลข Lot การผลิต">
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>เวลาเริ่มตรวจ</label>
+        <input type="time" id="qcTimeStart" onchange="qcCalcDuration()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เวลาเสร็จตรวจ</label>
+        <input type="time" id="qcTimeEnd" onchange="qcCalcDuration()">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>เวลาที่ใช้ตรวจสอบ (นาที)</label>
+      <input type="number" id="qcDuration" placeholder="คำนวณอัตโนมัติจากเวลาเริ่ม/เสร็จ" readonly style="background:var(--sky-pale);">
+    </div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>จำนวนตรวจสอบ (ชิ้น)</label>
+        <input type="number" id="qcQtyInspect" min="0" placeholder="0" oninput="qcCalcResult()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ชิ้นงาน "NG" (ชิ้น)</label>
+        <input type="number" id="qcQtyNG" min="0" placeholder="0" oninput="qcCalcResult()">
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-bottom:8px;">
+      <div class="field" style="margin:0;">
+        <label>ชิ้นงาน "OK" (ชิ้น)</label>
+        <input type="number" id="qcQtyOK" readonly style="background:var(--sky-pale);">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>เปอร์เซ็นต์เสีย (%)</label>
+        <input type="text" id="qcPercentNG" readonly style="background:var(--sky-pale);">
+      </div>
+    </div>
+
+    <!-- ประเภทงานเสีย -->
+    <div class="field">
+      <label>ประเภทงานเสีย</label>
+      <div id="qcDefectChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="qcNewDefect" placeholder="เพิ่มประเภทงานเสียใหม่..." style="flex:1;">
+        <button onclick="qcAddDefectType()"
+          style="padding:10px 14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'IBM Plex Sans Thai',sans-serif;">+ เพิ่ม</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ชื่อผู้ตรวจสอบ</label>
+      <input type="text" id="qcInspector" placeholder="ชื่อผู้ตรวจสอบ">
+    </div>
+
+    <button class="btn btn-primary" onclick="qcSaveRecord()" id="qcSaveBtn">💾 บันทึกผลตรวจ</button>
+    <div id="qcToast" style="margin-top:8px;font-size:12px;font-weight:600;display:none;"></div>
+  </div>
+
+  <!-- ประวัติ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;">🗂 ประวัติการตรวจสอบ</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="qcFilterDate" onchange="qcRenderHistory()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— ทุกวัน —</option>
+        </select>
+        <button onclick="qcExportCSV()"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;">
+          📥 CSV
+        </button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">วันที่</th>
+            <th style="text-align:left;">หมายเลขชิ้นงาน</th>
+            <th style="text-align:left;">ชื่อชิ้นงาน</th>
+            <th style="text-align:left;">Lot No.</th>
+            <th>เวลาตรวจ (นาที)</th>
+            <th>ตรวจ</th>
+            <th>OK</th>
+            <th>NG</th>
+            <th>% เสีย</th>
+            <th style="text-align:left;">ประเภทงานเสีย</th>
+            <th style="text-align:left;">ผู้ตรวจสอบ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="qcHistBody">
+          <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 //  QA CONTROL CHART — v2 with Titration & Coefficient
@@ -7208,6 +7404,268 @@ document.addEventListener('DOMContentLoaded', function() {
   var today = new Date().toISOString().split('T')[0];
   var qd = document.getElementById('qaDate');
   if (qd && !qd.value) qd.value = today;
+});
+
+// ═══════════════════════════════════════════════
+//  QC 100%  (APK-FR-QA-004)
+// ═══════════════════════════════════════════════
+var QC_RECORDS_KEY  = 'qc100_records_r1';
+var QC_DEFECTS_KEY  = 'qc100_defects_r1';
+var QC_DEFAULT_DEFECTS = ['ชุบไม่ติด','คราบน้ำ','ชิ้นงานเสียรูป','ชิ้นงานใหม่'];
+var qcSelectedDefects = [];
+
+function qcEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+function qcLoadRecords() {
+  try { return JSON.parse(localStorage.getItem(QC_RECORDS_KEY) || '[]'); } catch(e) { return []; }
+}
+function qcSaveRecords(arr) { localStorage.setItem(QC_RECORDS_KEY, JSON.stringify(arr)); }
+
+function qcLoadDefects() {
+  try {
+    var d = JSON.parse(localStorage.getItem(QC_DEFECTS_KEY) || 'null');
+    if (Array.isArray(d) && d.length) return d;
+  } catch(e){}
+  return QC_DEFAULT_DEFECTS.slice();
+}
+function qcSaveDefects(arr) { localStorage.setItem(QC_DEFECTS_KEY, JSON.stringify(arr)); }
+
+// ── Firebase sync ──
+async function qcFbSaveRecords() {
+  if (!fbIsConfigured()) return;
+  try {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qc100.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: qcLoadRecords(), defects: qcLoadDefects(), savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('qcFbSaveRecords:', e.message); }
+}
+async function qcFbLoadRecords() {
+  if (!fbIsConfigured()) return;
+  try {
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-r1-qc100.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data) {
+      if (Array.isArray(data.records) && data.records.length > 0) {
+        var local = qcLoadRecords();
+        var localIds = {};
+        local.forEach(function(r){ localIds[r.id] = true; });
+        var merged = local.slice();
+        data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
+        merged.sort(function(a,b){ return b.ts - a.ts; });
+        qcSaveRecords(merged);
+      }
+      if (Array.isArray(data.defects) && data.defects.length > 0) {
+        var localD = qcLoadDefects();
+        var merged2 = localD.slice();
+        data.defects.forEach(function(d){ if (merged2.indexOf(d)===-1) merged2.push(d); });
+        qcSaveDefects(merged2);
+      }
+      qcPopulateDateFilter();
+      qcRenderDefectChips();
+      qcRenderHistory();
+    }
+  } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
+}
+
+// ── เวลาตรวจสอบ (นาที) — คำนวณจากเวลาเริ่ม/เสร็จ ──
+function qcCalcDuration() {
+  var s = document.getElementById('qcTimeStart').value;
+  var e = document.getElementById('qcTimeEnd').value;
+  var out = document.getElementById('qcDuration');
+  if (!s || !e) { out.value = ''; return; }
+  var sm = s.split(':'), em = e.split(':');
+  var startMin = (+sm[0])*60 + (+sm[1]);
+  var endMin   = (+em[0])*60 + (+em[1]);
+  var diff = endMin - startMin;
+  if (diff < 0) diff += 24*60; // ข้ามวัน (กะดึก)
+  out.value = diff;
+}
+
+// ── คำนวณ OK / %เสีย จากจำนวนตรวจ + NG ──
+function qcCalcResult() {
+  var qty = parseFloat(document.getElementById('qcQtyInspect').value) || 0;
+  var ng  = parseFloat(document.getElementById('qcQtyNG').value) || 0;
+  if (ng > qty) ng = qty;
+  var ok = qty - ng;
+  document.getElementById('qcQtyOK').value = qty ? ok : '';
+  document.getElementById('qcPercentNG').value = qty ? ((ng/qty)*100).toFixed(2)+'%' : '';
+}
+
+// ── ประเภทงานเสีย (chips เลือกได้หลายรายการ) ──
+function qcRenderDefectChips() {
+  var wrap = document.getElementById('qcDefectChips');
+  var defects = qcLoadDefects();
+  wrap.innerHTML = defects.map(function(d){
+    var active = qcSelectedDefects.indexOf(d) !== -1;
+    return '<button type="button" onclick="qcToggleDefect(\''+qcEsc(d).replace(/'/g,"\\'")+'\')" '+
+      'style="padding:5px 12px;border-radius:20px;font-size:11px;border:1.5px solid '+(active?'var(--navy)':'var(--border)')+
+      ';background:'+(active?'var(--navy)':'#fff')+';color:'+(active?'#fff':'var(--text)')+';cursor:pointer;font-family:\'IBM Plex Sans Thai\',sans-serif;">'+
+      qcEsc(d)+'</button>';
+  }).join('');
+}
+function qcToggleDefect(name) {
+  var i = qcSelectedDefects.indexOf(name);
+  if (i === -1) qcSelectedDefects.push(name);
+  else qcSelectedDefects.splice(i,1);
+  qcRenderDefectChips();
+}
+function qcAddDefectType() {
+  var input = document.getElementById('qcNewDefect');
+  var name = input.value.trim();
+  if (!name) return;
+  var defects = qcLoadDefects();
+  if (defects.indexOf(name) === -1) {
+    defects.push(name);
+    qcSaveDefects(defects);
+    qcFbSaveRecords();
+  }
+  qcSelectedDefects.push(name);
+  input.value = '';
+  qcRenderDefectChips();
+}
+
+// ── บันทึกผลตรวจ ──
+function qcSaveRecord() {
+  if (currentRole === 'viewer') return;
+  var date = document.getElementById('qcDate').value;
+  var partNo = document.getElementById('qcPartNo').value.trim();
+  var partName = document.getElementById('qcPartName').value.trim();
+  var lotNo = document.getElementById('qcLotNo').value.trim();
+  var timeStart = document.getElementById('qcTimeStart').value;
+  var timeEnd = document.getElementById('qcTimeEnd').value;
+  var duration = document.getElementById('qcDuration').value;
+  var qty = parseFloat(document.getElementById('qcQtyInspect').value) || 0;
+  var ng  = parseFloat(document.getElementById('qcQtyNG').value) || 0;
+  var ok  = qty - ng;
+  var pct = qty ? ((ng/qty)*100) : 0;
+  var inspector = document.getElementById('qcInspector').value.trim();
+  var toast = document.getElementById('qcToast');
+
+  if (!date || !partNo || !qty) {
+    toast.style.display = 'block';
+    toast.style.color = 'var(--red)';
+    toast.textContent = '⚠️ กรุณากรอกวันที่, หมายเลขชิ้นงาน และจำนวนตรวจสอบ';
+    setTimeout(function(){ toast.style.display='none'; }, 2500);
+    return;
+  }
+
+  var rec = {
+    id: 'QC'+Date.now(),
+    ts: Date.now(),
+    date: date, partNo: partNo, partName: partName, lotNo: lotNo,
+    timeStart: timeStart, timeEnd: timeEnd, duration: duration,
+    qtyInspect: qty, qtyOK: ok, qtyNG: ng, percentNG: pct,
+    defects: qcSelectedDefects.slice(),
+    inspector: inspector
+  };
+  var recs = qcLoadRecords();
+  recs.unshift(rec);
+  qcSaveRecords(recs);
+  qcFbSaveRecords();
+
+  toast.style.display = 'block';
+  toast.style.color = 'var(--green)';
+  toast.textContent = '✅ บันทึกผลตรวจสอบแล้ว';
+  setTimeout(function(){ toast.style.display='none'; }, 2000);
+
+  // ล้างฟอร์มบางส่วน (เก็บวันที่/ชื่อผู้ตรวจไว้ใช้ต่อ)
+  document.getElementById('qcPartNo').value = '';
+  document.getElementById('qcPartName').value = '';
+  document.getElementById('qcLotNo').value = '';
+  document.getElementById('qcTimeStart').value = '';
+  document.getElementById('qcTimeEnd').value = '';
+  document.getElementById('qcDuration').value = '';
+  document.getElementById('qcQtyInspect').value = '';
+  document.getElementById('qcQtyNG').value = '';
+  document.getElementById('qcQtyOK').value = '';
+  document.getElementById('qcPercentNG').value = '';
+  qcSelectedDefects = [];
+  qcRenderDefectChips();
+
+  qcPopulateDateFilter();
+  qcRenderHistory();
+}
+
+function qcDeleteRecord(id) {
+  if (!confirm('ลบรายการตรวจสอบนี้?')) return;
+  var recs = qcLoadRecords().filter(function(r){ return r.id !== id; });
+  qcSaveRecords(recs);
+  qcFbSaveRecords();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+}
+
+function qcPopulateDateFilter() {
+  var recs = qcLoadRecords();
+  var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
+  var sel = document.getElementById('qcFilterDate');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— ทุกวัน —</option>';
+  dates.forEach(function(d){
+    var o = document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+}
+
+function qcRenderHistory() {
+  var filterDate = (document.getElementById('qcFilterDate')||{}).value || '';
+  var recs = qcLoadRecords().filter(function(r){
+    if (filterDate && r.date !== filterDate) return false;
+    return true;
+  }).sort(function(a,b){return b.ts-a.ts;});
+
+  var tbody = document.getElementById('qcHistBody');
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = recs.map(function(r){
+    var pctColor = r.percentNG > 5 ? '#ef4444' : r.percentNG > 0 ? '#f59e0b' : '#10b981';
+    return '<tr>'
+      +'<td class="td-l">'+qcEsc(r.date)+'</td>'
+      +'<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">'+qcEsc(r.partNo)+'</td>'
+      +'<td class="td-l">'+qcEsc(r.partName||'–')+'</td>'
+      +'<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+qcEsc(r.lotNo||'–')+'</td>'
+      +'<td>'+(r.duration||'–')+'</td>'
+      +'<td style="font-weight:700;">'+r.qtyInspect+'</td>'
+      +'<td style="color:#059669;">'+r.qtyOK+'</td>'
+      +'<td style="color:#ef4444;">'+r.qtyNG+'</td>'
+      +'<td style="font-weight:800;color:'+pctColor+';">'+r.percentNG.toFixed(2)+'%</td>'
+      +'<td class="td-l" style="font-size:10px;">'+((r.defects&&r.defects.length)?r.defects.map(qcEsc).join(', '):'–')+'</td>'
+      +'<td class="td-l">'+qcEsc(r.inspector||'–')+'</td>'
+      +'<td><button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+function qcExportCSV() {
+  var recs = qcLoadRecords().sort(function(a,b){return a.ts-b.ts;});
+  if (!recs.length) { alert('ไม่มีข้อมูล'); return; }
+  var h = ['วันที่','หมายเลขชิ้นงาน','ชื่อชิ้นงาน','Pro.Lot No.','เวลาเริ่ม','เวลาเสร็จ','เวลาตรวจ(นาที)','จำนวนตรวจ','OK','NG','%เสีย','ประเภทงานเสีย','ผู้ตรวจสอบ'];
+  var rows = recs.map(function(r){
+    return [r.date,r.partNo,r.partName||'',r.lotNo||'',r.timeStart||'',r.timeEnd||'',r.duration||'',
+      r.qtyInspect,r.qtyOK,r.qtyNG,r.percentNG.toFixed(2),(r.defects||[]).join('/'),r.inspector||''].join(',');
+  });
+  var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href=url; a.download='qc100_r1.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init on load ──
+document.addEventListener('DOMContentLoaded', function() {
+  var today = new Date().toISOString().split('T')[0];
+  var qcd = document.getElementById('qcDate');
+  if (qcd && !qcd.value) qcd.value = today;
+  qcRenderDefectChips();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+  setTimeout(qcFbLoadRecords, 1000);
 });
 </script>
 
