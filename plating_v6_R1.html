@@ -1544,7 +1544,7 @@ function tab(t) {
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
   if (t === 'qa')    { renderQAHistory(); renderQAChart(); }
   if (t === 'job')   { jobMasterLoad(); }
-  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); }
+  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); }
 }
 
 // ═══════════════════════════════════════
@@ -5637,23 +5637,25 @@ function applyRoleUI(role) {
   var isOperator = role === 'operator';
 
   // Tab bar
-  // Admin: เห็นทุก tab
-  // Operator (apk001): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
-  // Viewer (apk002): เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
+  // ถ้า auth_admin ตั้งค่า currentTabs ไว้แล้ว (array) → ใช้ตามนั้นเป๊ะๆ (ไม่จำกัดซ้ำตาม role)
+  // ถ้ายังไม่ได้ตั้ง (currentTabs === null = "ทุกแท็บ") → ใช้ค่า default ตาม role:
+  //   Admin: เห็นทุก tab | Operator: กรอกรายรอบ, ความหนา, งาน, บันทึกผล, QC 100%
+  //   Viewer: เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(btn, i) {
     var txt = btn.textContent.trim();
     var visible = true;
-    if (isOperator) {
+    if (currentTabs) {
+      // auth_admin ตั้งสิทธิ์แท็บไว้แล้ว — ใช้รายการนี้เป็นหลัก
+      visible = TAB_IDS[i] ? (currentTabs.indexOf(TAB_IDS[i]) !== -1) : true;
+    } else if (isOperator) {
+      // Operator (ค่า default): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล, QC 100%
       visible = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
-                 txt.includes('งาน') || txt.includes('บันทึกผล');
+                 txt.includes('งาน') || txt.includes('บันทึกผล') || txt.includes('QC 100%');
     } else if (isViewer) {
+      // Viewer (ค่า default): ซ่อน กรอกรายรอบ และ ตั้งค่า เท่านั้น
       var hide = txt.includes('กรอกรายรอบ') || txt === 'ตั้งค่า';
       visible = !hide;
-    }
-    // จำกัดเพิ่มเติมตาม tabs ที่ตั้งใน auth_admin (ถ้ามี)
-    if (currentTabs && TAB_IDS[i] && currentTabs.indexOf(TAB_IDS[i]) === -1) {
-      visible = false;
     }
     btn.style.display = visible ? '' : 'none';
   });
@@ -6151,6 +6153,7 @@ async function jobMasterLoad() {
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
     populateBarrelJobPick();
+    if (typeof qcPopulateJobPick === 'function') qcPopulateJobPick();
   } catch(e) {
     document.getElementById('jobSyncLabel').textContent = '❌ ออฟไลน์';
   }
@@ -6767,6 +6770,17 @@ async function confirmJobOut() {
   <!-- ฟอร์มบันทึก -->
   <div class="card">
     <div class="card-label">✏️ บันทึกผลตรวจ</div>
+
+    <!-- P/No จาก Job Master -->
+    <div class="field" style="margin-bottom:8px;">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        P/No (จาก Job Master)
+        <button onclick="jobMasterLoad().then(qcPopulateJobPick)" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄 รีเฟรช</button>
+      </label>
+      <select id="qcJobPick" onchange="onQcJobPick()" style="font-size:13px;">
+        <option value="">— เลือก P/No จากงานที่มีอยู่ —</option>
+      </select>
+    </div>
 
     <div class="grid2" style="margin-bottom:8px;">
       <div class="field" style="margin:0;">
@@ -7470,6 +7484,47 @@ async function qcFbLoadRecords() {
   } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
 }
 
+// ── เติม dropdown P/No จาก Job Master ในแท็บ QC 100% (ใช้ jobMasterItems ร่วมกับแท็บกรอกรายรอบ) ──
+function qcPopulateJobPick() {
+  var sel = document.getElementById('qcJobPick');
+  if (!sel) return;
+  var cur = sel.value;
+  var items = (jobMasterItems || []).filter(function(j){ return calcJobBal(j.id).remain > 0; });
+  items = items.slice().sort(function(a,b){
+    var pn = (a.partName||'').localeCompare(b.partName||'');
+    if (pn !== 0) return pn;
+    return (a.bill||'').localeCompare(b.bill||'');
+  });
+  sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
+    items.map(function(j){
+      var bal = calcJobBal(j.id);
+      var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
+      var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
+        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+bal.remain.toLocaleString()+unitLabel;
+      return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
+    }).join('');
+  if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;
+}
+
+// ── เลือก P/No จาก dropdown → เติมหมายเลข/ชื่อชิ้นงาน ──
+function onQcJobPick() {
+  var sel = document.getElementById('qcJobPick');
+  var jobId = sel.value;
+  if (!jobId) return;
+  var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
+  if (!job) return;
+
+  var key = partNoFromName(job.partName || '');
+  var mp = partList.find(function(p){ return normalizePartKey(p.partNo) === key; });
+  if (mp) {
+    document.getElementById('qcPartNo').value = mp.partNo;
+    document.getElementById('qcPartName').value = mp.partName || job.partName || '';
+  } else {
+    document.getElementById('qcPartNo').value = '';
+    document.getElementById('qcPartName').value = job.partName || '';
+  }
+}
+
 // ── เวลาตรวจสอบ (นาที) — คำนวณจากเวลาเริ่ม/เสร็จ ──
 function qcCalcDuration() {
   var s = document.getElementById('qcTimeStart').value;
@@ -7556,6 +7611,7 @@ function qcSaveRecord() {
     id: 'QC'+Date.now(),
     ts: Date.now(),
     date: date, partNo: partNo, partName: partName, lotNo: lotNo,
+    jobId: document.getElementById('qcJobPick').value || '',
     timeStart: timeStart, timeEnd: timeEnd, duration: duration,
     qtyInspect: qty, qtyOK: ok, qtyNG: ng, percentNG: pct,
     defects: qcSelectedDefects.slice(),
@@ -7575,6 +7631,7 @@ function qcSaveRecord() {
   document.getElementById('qcPartNo').value = '';
   document.getElementById('qcPartName').value = '';
   document.getElementById('qcLotNo').value = '';
+  document.getElementById('qcJobPick').value = '';
   document.getElementById('qcTimeStart').value = '';
   document.getElementById('qcTimeEnd').value = '';
   document.getElementById('qcDuration').value = '';
