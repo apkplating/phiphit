@@ -106,6 +106,7 @@
         { id: 'thick',    label: 'ความหนา' },
         { id: 'job',      label: 'งาน' },
         { id: 'qa',       label: 'บันทึกผล' },
+        { id: 'qc100',    label: 'QC 100%' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
@@ -120,6 +121,7 @@
         { id: 'thick',    label: 'ความหนา' },
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'job',      label: 'งาน' },
+        { id: 'qc100',    label: 'QC 100%' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
@@ -134,6 +136,7 @@
         { id: 'thick',    label: 'ความหนา' },
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'job',      label: 'งาน' },
+        { id: 'qc100',    label: 'QC 100%' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
