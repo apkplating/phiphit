@@ -463,6 +463,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div id="ac-bPartSearch" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #3b82f6;border-top:none;border-radius:0 0 10px 10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.15);"></div>
         </div>
         <div id="bPartSearchStatus" style="font-size:11px;margin-top:4px;min-height:16px;"></div>
+        <!-- ปุ่มบันทึก Preset -->
+        <button onclick="saveBarrelPreset()" style="margin-top:5px;background:none;border:1px dashed #93c5fd;border-radius:8px;padding:4px 10px;font-size:10px;color:#0369a1;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
+          ⭐ บันทึกชิ้นงานนี้เป็น Preset
+        </button>
       </div>
 
       <!-- ── Step 2: เลือกบิล (ซ่อนถ้ายังไม่เลือก P/No) ── -->
@@ -2588,39 +2592,98 @@ function getPresets() {
 function savePresets(list) {
   try { localStorage.setItem('b1_partPresets', JSON.stringify(list)); } catch(e){}
 }
-function savePreset() {
-  var pn = document.getElementById('bPartName').value.trim();
+// บันทึก Preset — ต้องเลือกจาก PM ก่อน
+function saveBarrelPreset() {
+  if (!_barrelPartSelected) {
+    showToast('entry', '🚫 กรุณาเลือก P/No จาก Part Master ก่อนบันทึก Preset', 'err'); return;
+  }
+  var searchEl = document.getElementById('bPartSearch');
+  var pn = searchEl ? searchEl.value.trim() : '';
   var cu = document.getElementById('bCustomer').value.trim();
-  if (!pn && !cu) { showToast('entry', 'กรอกชื่อชิ้นงานหรือลูกค้าก่อน', 'err'); return; }
+  if (!pn) { showToast('entry', 'กรุณาเลือก P/No ก่อน', 'err'); return; }
   var presets = getPresets();
-  var exists = presets.some(function(p){ return p.partName === pn && p.customer === cu; });
-  if (exists) { showToast('entry', 'มี Preset นี้แล้ว', 'err'); return; }
-  presets.push({ partName: pn, customer: cu });
+  var exists = presets.some(function(p){ return p.partNo === pn; });
+  if (exists) { showToast('entry', '"'+pn+'" มีใน Preset แล้ว', 'err'); return; }
+  presets.push({ partNo: pn, customer: cu, fromPM: true });
   savePresets(presets);
   renderPresetChips();
-  showToast('entry', 'บันทึก Preset แล้ว ⭐', 'ok');
+  showToast('entry', '⭐ บันทึก Preset "'+pn+'" แล้ว', 'ok');
 }
+// compat: เรียกจากปุ่มเดิม (ถ้ามี)
+function savePreset() { saveBarrelPreset(); }
+
 function applyPreset(idx) {
   var p = getPresets()[idx];
   if (!p) return;
-  document.getElementById('bPartName').value = p.partName || '';
-  document.getElementById('bCustomer').value = p.customer || '';
-  showToast('entry', 'เลือก Preset แล้ว ✓', 'ok');
+  // รองรับ format เก่า (partName) และใหม่ (partNo)
+  var partNo = p.partNo || p.partName || '';
+  var cu     = p.customer || '';
+
+  // ใส่ลงช่องค้นหา แล้วเรียก barrelPmAcPick จาก PM
+  var searchEl = document.getElementById('bPartSearch');
+  if (!searchEl) return;
+  searchEl.value = partNo;
+
+  // หา PM match
+  var pmSrc = (typeof partList !== 'undefined' && partList.length)
+    ? partList : (typeof pmParts !== 'undefined' ? pmParts : []);
+  var normQ = partNo.toUpperCase().replace(/[\s\-]+/g,'');
+  var pmIdx = pmSrc.findIndex(function(p2){
+    return (p2.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
+  });
+
+  if (pmIdx >= 0) {
+    // พบใน PM — เรียก flow เดิม
+    _barrelPmMatches = pmSrc.filter(function(p2){
+      return (p2.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
+    });
+    barrelPmAcPick(0);
+    showToast('entry', '⭐ Preset "'+partNo+'" — เลือกบิลด้านล่าง', 'ok');
+  } else {
+    // ไม่พบใน PM
+    searchEl.value = '';
+    var statusEl = document.getElementById('bPartSearchStatus');
+    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">🚫 Preset "'+partNo+'" ไม่พบใน Part Master อีกต่อไป — กรุณาลบ Preset นี้</span>';
+    showToast('entry', '🚫 "'+partNo+'" ไม่พบใน Part Master', 'err');
+  }
 }
+
 function delPreset(idx) {
   var presets = getPresets();
   presets.splice(idx, 1);
   savePresets(presets);
   renderPresetChips();
 }
+
 function renderPresetChips() {
   var presets = getPresets();
   var wrap = document.getElementById('presetChips');
-  if (!presets.length) { wrap.innerHTML = ''; return; }
+  if (!wrap) return;
+  if (!presets.length) {
+    wrap.innerHTML = '<span style="font-size:10px;color:#94a3b8;">ยังไม่มี Preset — เลือก P/No แล้วกด ⭐</span>';
+    return;
+  }
+  // ตรวจว่า P/No ยังอยู่ใน PM ไหม
+  var pmSrc = (typeof partList !== 'undefined' && partList.length)
+    ? partList : (typeof pmParts !== 'undefined' ? pmParts : []);
   wrap.innerHTML = presets.map(function(p, i) {
-    var label = (p.partName || '') + (p.customer ? ' · ' + p.customer : '');
+    var partNo = p.partNo || p.partName || '';
+    var cu     = p.customer || '';
+    var label  = partNo + (cu ? ' · ' + cu : '');
+    var normQ  = partNo.toUpperCase().replace(/[\s\-]+/g,'');
+    var inPM   = pmSrc.some(function(pm){
+      return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
+    });
+    var hasStock = inPM && (jobMasterItems||[]).some(function(j){
+      return calcJobBal(j.id).remain > 0 && normalizePartKey(j.partName) === normalizePartKey(partNo);
+    });
+    var badge = !inPM
+      ? '<span style="font-size:9px;color:#fca5a5;margin-left:3px;">⚠️PM</span>'
+      : (hasStock
+          ? '<span style="font-size:9px;color:#86efac;margin-left:3px;">●</span>'
+          : '<span style="font-size:9px;color:#fcd34d;margin-left:3px;">○</span>');
     return '<button class="preset-chip" onclick="applyPreset(' + i + ')" title="' + label + '">' +
-      '<span>' + label + '</span>' +
+      '<span>' + partNo + badge + '</span>' +
       '<span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(' + i + ')">✕</span>' +
     '</button>';
   }).join('');
