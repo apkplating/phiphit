@@ -132,6 +132,7 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
     <button class="tab-btn active" onclick="switchTab('stock')">📦 Stock Board</button>
     <button class="tab-btn" onclick="switchTab('delivery')">📤 Delivery</button>
     <button class="tab-btn" onclick="switchTab('history')">🗂 ประวัติ</button>
+    <button class="tab-btn" onclick="switchTab('trace')">🔍 Traceability</button>
   </div>
 
   <!-- Sync bar -->
@@ -248,6 +249,26 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
   </div>
 
   <!-- ══ HISTORY ══ -->
+
+  <!-- ══ Tab: Traceability ══ -->
+  <div id="tab-trace" style="display:none;">
+    <div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div style="position:relative;flex:1;min-width:200px;">
+          <input type="text" id="traceSearchInput"
+            placeholder="พิมพ์ P/No หรือชื่อชิ้นงาน..."
+            autocomplete="off"
+            style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;outline:none;"
+            oninput="traceAcShow()" onfocus="traceAcShow()"
+            onblur="setTimeout(traceAcHide,200)">
+          <div id="ac-trace" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 10px 10px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12);"></div>
+        </div>
+        <button onclick="traceSearch()" style="padding:9px 18px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">ค้นหา</button>
+      </div>
+    </div>
+    <div id="traceResult"></div>
+  </div>
   <div id="tab-history" style="display:none;">
     <div class="filter-bar">
       <select id="hPartSel" onchange="renderHist()" style="flex:1;"><option value="all">— ทุก P/No —</option></select>
@@ -281,7 +302,7 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
 //  AUTH (Central Auth)
 // ══════════════════════════════════════════════════════
 var SYSTEM_KEY = 'bl_stock';
-var TAB_IDS = ['stock','delivery','history'];
+var TAB_IDS = ['stock','delivery','history','trace'];
 var currentRole = '';
 var currentTabs = null;
 
@@ -411,7 +432,7 @@ function fmtD(s){
 async function loadAll(manual) {
   setSyncing(true);
   try {
-    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster() ]);
+    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster(), loadQCData() ]);
     // debug: แสดง path ที่ดึง
     console.log('[BL Stock] intake:', INTAKE_URL);
     console.log('[BL Stock] job-master:', JM_URL);
@@ -1109,14 +1130,15 @@ function renderHist(){
 //  TAB SWITCH
 // ══════════════════════════════════════════════════════
 function switchTab(name){
-  ['stock','delivery','history'].forEach(function(t){
+  ['stock','delivery','history','trace'].forEach(function(t){
     document.getElementById('tab-'+t).style.display=t===name?'':'none';
   });
   document.querySelectorAll('.tab-btn').forEach(function(btn,i){
-    btn.classList.toggle('active',['stock','delivery','history'][i]===name);
+    btn.classList.toggle('active',['stock','delivery','history','trace'][i]===name);
   });
   if(name==='delivery'){ populateDeliverySel(); showDInfo(); }
   if(name==='history') { buildHistFilters(); renderHist(); }
+  if(name==='trace')   { traceAcShow(); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1269,6 +1291,234 @@ function setSyncing(loading,ok,errMsg){
     dot.className='sdot err';
     lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  TRACEABILITY — ติดตามงาน P/No ผ่านทุก Stock
+// ══════════════════════════════════════════════════════
+var _traceAcItems = [];
+
+function traceAcHide(){
+  var el=document.getElementById('ac-trace');
+  if(el) el.style.display='none';
+}
+
+function traceAcShow(){
+  var input = document.getElementById('traceSearchInput');
+  var list  = document.getElementById('ac-trace');
+  if(!input||!list) return;
+  var q = input.value.trim();
+  if(!q){ list.style.display='none'; return; }
+  var qn = norm(q);
+
+  // รวม P/No จาก jmItems + pmParts
+  var seen={}, items=[];
+  jmItems.forEach(function(j){
+    var pn = jobPartNo(j); if(!pn) return;
+    var k  = norm(pn);
+    if(seen[k]) return; seen[k]=1;
+    if(k.includes(qn)||norm(j.customer||'').includes(qn)) items.push({partNo:pn, customer:j.customer||''});
+  });
+  pmParts.forEach(function(p){
+    var k = norm(p.partNo||'');
+    if(!k) return;
+    if(seen[k]) return; seen[k]=1;
+    if(k.includes(qn)||norm(p.name||'').includes(qn)||norm(p.customer||'').includes(qn))
+      items.push({partNo:p.partNo||'', customer:p.customer||''});
+  });
+  items = items.slice(0,12);
+  _traceAcItems = items;
+  if(!items.length){ list.style.display='none'; return; }
+  list.innerHTML = items.map(function(it,i){
+    return '<div style="padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;" onmousedown="tracePickAc('+i+')">'
+      +'<span style="font-weight:700;color:var(--navy);">'+esc(it.partNo)+'</span>'
+      +(it.customer?'<span style="color:#64748b;font-size:11px;margin-left:6px;">'+esc(it.customer)+'</span>':'')
+      +'</div>';
+  }).join('');
+  list.style.display='block';
+}
+
+function tracePickAc(i){
+  var it = _traceAcItems[i];
+  if(!it) return;
+  document.getElementById('traceSearchInput').value = it.partNo;
+  traceAcHide();
+  traceSearch();
+}
+
+function traceSearch(){
+  var q  = (document.getElementById('traceSearchInput').value||'').trim();
+  var el = document.getElementById('traceResult');
+  if(!q){ el.innerHTML=''; return; }
+  var qn = norm(q);
+
+  // หา P/No ที่ตรงหรือใกล้เคียง
+  var matched = [];
+  var seenK={};
+  jmItems.forEach(function(j){
+    var pn=jobPartNo(j); if(!pn) return;
+    var k=norm(pn);
+    if(seenK[k]) return;
+    if(k.includes(qn)||norm(j.customer||'').includes(qn)){seenK[k]=1;matched.push(pn);}
+  });
+  pmParts.forEach(function(p){
+    var k=norm(p.partNo||''); if(!k||seenK[k]) return;
+    if(k.includes(qn)||norm(p.name||'').includes(qn)){seenK[k]=1;matched.push(p.partNo||'');}
+  });
+
+  if(!matched.length){
+    el.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;text-align:center;color:#94a3b8;">ไม่พบ P/No ที่ตรงกับ "'+esc(q)+'"</div>';
+    return;
+  }
+
+  var html = matched.map(function(pn){ return renderTraceCard(pn); }).join('');
+  el.innerHTML = html;
+}
+
+function renderTraceCard(partNo){
+  var k    = norm(partNo);
+  var pm   = pmLookup(partNo);
+  var name = (pm && pm.name) ? pm.name : '';
+  var cust = (pm && pm.customer) ? pm.customer : '';
+
+  // ── Stock 1: รับเข้า (Job Master) ──
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  var s1In  = bills.reduce(function(a,j){ return a+jobQty(j); },0);
+  var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
+  // จ่ายออกจาก Job Master records
+  var s1Out = 0, s1OutKg = 0;
+  jmRecords.forEach(function(r){
+    if(r.type!=='out') return;
+    var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
+    if(!j||norm(jobPartNo(j))!==k) return;
+    s1Out   += Number(r.qty||0);
+    s1OutKg += Number(r.qtyKg||0);
+  });
+  blDel.forEach(function(d){
+    if(norm(d.partNo||'')!==k) return;
+    s1Out   += Number(d.qty||0);
+    s1OutKg += Number(d.qtyKg||0);
+  });
+  var s1Rem   = Math.max(0, s1In - s1Out);
+  var s1RemKg = Math.max(0, s1InKg - s1OutKg);
+
+  // ── Stock 2: WIP (กำลังชุบ) ──
+  var wo    = getWip(partNo)||{};
+  var s2Pcs = wo.pcs||0;
+  var s2Kg  = wo.kgs||0;
+  var s2Lines = wo.lines||{};
+
+  // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
+  // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
+  var s3 = (_qcMap && _qcMap[k]) || null;
+  var s3Pass=0, s3Ng=0;
+  if(s3){ s3Pass=s3.pass||0; s3Ng=s3.ng||0; }
+
+  // ── Stock 4: จ่ายออก (INV) ──
+  var s4Out   = s1Out;
+  var s4OutKg = s1OutKg;
+
+  // ── บิลรายการ ──
+  var billRows = bills.map(function(j){
+    var outQty = 0;
+    jmRecords.forEach(function(r){
+      if(r.type==='out' && r.jobId===j.id) outQty+=Number(r.qty||0);
+    });
+    blDel.forEach(function(d){
+      if(norm(d.partNo||'')===k) outQty+=Number(d.qty||0);
+    });
+    var rem=Math.max(0,jobQty(j)-outQty);
+    var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
+    var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
+    return '<tr>'
+      +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
+      +'<td style="font-size:11px;">'+fmtD(j.date||'')+'</td>'
+      +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
+      +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
+      +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
+      +'<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
+      +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div></td>'
+      +'</tr>';
+  }).join('');
+
+  // ── สร้าง Stock bar แต่ละ Stock ──
+  function stockBox(num, label, pcs, kg, color, detail){
+    var hasPcs = pcs>0||kg>0;
+    return '<div style="flex:1;min-width:130px;background:'+(hasPcs?color+'18':'#f8fafc')+';border:1.5px solid '+(hasPcs?color:'#e2e8f0')+';border-radius:10px;padding:10px;text-align:center;">'
+      +'<div style="font-size:9px;font-weight:700;color:'+(hasPcs?color:'#94a3b8')+';margin-bottom:4px;">STOCK '+num+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-bottom:6px;">'+label+'</div>'
+      +'<div style="font-size:18px;font-weight:800;color:'+(hasPcs?color:'#cbd5e1')+';">'+(pcs>0?pcs.toLocaleString():'–')+'</div>'
+      +(kg>0?'<div style="font-size:10px;color:#94a3b8;margin-top:1px;">'+kg.toFixed(2)+' kg</div>':'')
+      +(detail?'<div style="font-size:10px;color:#64748b;margin-top:4px;">'+detail+'</div>':'')
+      +'</div>';
+  }
+
+  var lineDetail = Object.keys(s2Lines).map(function(ln){
+    return ln+':'+s2Lines[ln];
+  }).join(' · ');
+
+  var s3Detail = s3 ? ('ผ่าน '+s3Pass+' / NG '+s3Ng) : '(ยังไม่มีข้อมูล QC)';
+
+  return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
+    // header
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
+      +'<div>'
+        +'<div style="font-size:15px;font-weight:800;color:var(--navy);font-family:monospace;">'+esc(partNo)+'</div>'
+        +(name?'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+esc(name)+'</div>':'')
+        +(cust?'<div style="font-size:11px;color:#3b82f6;margin-top:1px;">'+esc(cust)+'</div>':'')
+      +'</div>'
+      +'<div style="text-align:right;">'
+        +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
+        +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
+      +'</div>'
+    +'</div>'
+
+    // stock boxes
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' จ่าย '+s1Out)
+      +stockBox(2,'WIP ชุบ',s2Pcs,s2Kg,'#0891b2',lineDetail||'–')
+      +stockBox(3,'QC 100%',s3Pass,0,'#7c3aed',s3Detail)
+      +stockBox(4,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
+    +'</div>'
+
+    // bill table
+    +(bills.length?
+      '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:5px;">รายการบิล</div>'
+      +'<div style="overflow-x:auto;"><table class="st" style="min-width:340px;">'
+        +'<thead><tr>'
+          +'<th class="tl">Bill No</th><th>วันรับ</th><th>รับเข้า</th><th>จ่ายออก</th><th>คงเหลือ</th><th>สถานะ</th>'
+        +'</tr></thead>'
+        +'<tbody>'+billRows+'</tbody>'
+      +'</table></div>'
+    :'')
+    +'</div>';
+}
+
+// ── QC map (โหลด QC records จาก Firebase เพื่อแสดงใน Stock 3) ──
+var _qcMap = null;
+
+async function loadQCData(){
+  _qcMap = {};
+  var qcPaths = [
+    { url: DB_B1+'/plating-b1-qa.json' },
+    { url: DB_B2+'/plating-b2-qa.json' },
+    { url: DB_R1+'/plating-r1-qa.json' },
+  ];
+  await Promise.all(qcPaths.map(async function(p){
+    try {
+      var res = await fetch(p.url);
+      if(!res.ok) return;
+      var data = await res.json();
+      var recs = Array.isArray(data) ? data : (Array.isArray(data&&data.records)?data.records:[]);
+      recs.forEach(function(r){
+        var pn = r.partName||r.partNo||''; if(!pn) return;
+        var k  = norm(pn);
+        if(!_qcMap[k]) _qcMap[k]={pass:0,ng:0};
+        _qcMap[k].pass += Number(r.passQty||r.pass||0);
+        _qcMap[k].ng   += Number(r.ngQty||r.ng||0);
+      });
+    }catch(e){}
+  }));
 }
 </script>
 </body>
