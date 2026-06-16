@@ -227,12 +227,16 @@ input:focus,select:focus{border-color:var(--blue2);}
       </select>
     </div>
     <div class="field">
-      <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span></label>
+      <label>ชื่อชิ้นงาน <span style="color:var(--red);">*</span> <span style="font-size:10px;color:var(--text-muted);">— จาก Part Master</span></label>
       <div class="ac-wrap">
-        <input type="text" id="inPartName" placeholder="เช่น 50543-K1M-T000 ASSY MAIN STAND"
-          autocomplete="off" oninput="acShow('inPartName')" onblur="acHide('inPartName',300); acAutoFillCustomerFromPM()" onfocus="acShow('inPartName')">
+        <input type="text" id="inPartName" placeholder="พิมพ์หมายเลขชิ้นงาน เช่น 77110, K76L..."
+          autocomplete="off"
+          oninput="pmAcShow()"
+          onfocus="pmAcShow()"
+          onblur="setTimeout(function(){ pmAcHide(); pmAcCheckBlur(); }, 200)">
         <div class="ac-list" id="ac-inPartName"></div>
       </div>
+      <div id="inPartNameStatus" style="font-size:11px;margin-top:4px;"></div>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
@@ -350,7 +354,7 @@ input:focus,select:focus{border-color:var(--blue2);}
           autocomplete="off"
           oninput="onInvPartSearchInput()"
           onfocus="onInvPartSearchInput()"
-          onblur="setTimeout(function(){hideInvPartDropdown()},200)"
+          onblur="setTimeout(function(){ hideInvPartDropdown(); checkInvPartBlur(); },200)"
           style="font-size:13px;">
         <!-- PM autocomplete list -->
         <div class="ac-list" id="ac-invPartSearch"></div>
@@ -1149,7 +1153,14 @@ function addJobIn() {
   if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
   if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
   if (!partName) { showToast('in','กรุณากรอกชื่อชิ้นงาน','err'); return; }
-  if (unit==='pcs' && !qty) { showToast('in','กรุณากรอกจำนวนรับเข้า (ชิ้น)','err'); return; }
+  // ตรวจ PM — ต้องมีใน Part Master เท่านั้น
+  if (!_inPartSelected || !pmLookup(partName)) {
+    showToast('in','🚫 ชิ้นงาน "'+partName+'" ไม่ได้อยู่ใน Part Master — กรุณาเลือกจากรายการหรือเพิ่มใน PM ก่อน','err');
+    document.getElementById('inPartName').value = '';
+    document.getElementById('inPartNameStatus').innerHTML =
+      '<span style="color:var(--red);">🚫 กรุณาเลือกชิ้นงานจากรายการ Part Master เท่านั้น</span>';
+    return;
+  }
   if (unit==='kg'  && !qtyKg) { showToast('in','กรุณากรอกน้ำหนัก (กก.)','err'); return; }
 
   var displayQty = unit==='kg' ? qtyKg : qty;
@@ -1165,6 +1176,9 @@ function addJobIn() {
   ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
+  _inPartSelected = false;
+  var stEl = document.getElementById('inPartNameStatus');
+  if (stEl) stEl.textContent = '';
   inDueDateManual = false;
   onInDateChange(); // ตั้งกำหนดส่งกลับเป็นค่า default (วันที่รับเข้า + 7) สำหรับรายการถัดไป
   renderCustomerFilter();
@@ -1187,6 +1201,18 @@ var invSelectedPartName = ''; // P/No ที่เลือกจาก PM แ�
 function hideInvPartDropdown() {
   var list = document.getElementById('ac-invPartSearch');
   if (list) list.classList.remove('open');
+}
+
+// ตรวจสอบเมื่อออกจาก input — ถ้าพิมพ์เองโดยไม่เลือกจาก dropdown ให้ clear
+function checkInvPartBlur() {
+  var val = (document.getElementById('invPartSearch').value || '').trim();
+  if (!val) return;
+  // ถ้ายังไม่มี invSelectedPartName แปลว่าพิมพ์เองแต่ไม่เลือก → clear
+  if (!invSelectedPartName) {
+    document.getElementById('invPartSearch').value = '';
+    document.getElementById('invPartSearchInfo').innerHTML =
+      '<span style="color:var(--text-muted);font-size:11px;">💡 กรุณาเลือกจากรายการด้านบน</span>';
+  }
 }
 
 function onInvPartSearchInput() {
@@ -1270,8 +1296,8 @@ function onInvPartSearchInput() {
     var badge = it.fromPM
       ? (it.hasStock ? '<span style="color:var(--green);font-size:10px;margin-left:4px;">✅ มีสต็อก</span>'
                      : '<span style="color:var(--amber);font-size:10px;margin-left:4px;">⚠️ ไม่มีสต็อก</span>')
-      : '<span style="color:var(--text-muted);font-size:10px;margin-left:4px;">(ไม่ได้อยู่ใน PM)</span>';
-    return '<div class="ac-item" onclick="selectInvPart(\''+esc(it.partNo||it.name)+'\','+it.hasStock+')">'+
+      : '<span style="color:var(--red);font-size:10px;margin-left:4px;">🚫 ไม่ได้อยู่ใน PM</span>';
+    return '<div class="ac-item" onclick="selectInvPart(\''+esc(it.partNo||it.name)+'\','+it.hasStock+','+it.fromPM+')">'+
       '<span class="ac-item-part">'+label+'</span>'+badge+
     '</div>';
   }).join('');
@@ -1279,21 +1305,37 @@ function onInvPartSearchInput() {
   infoEl.textContent = '';
 }
 
-function selectInvPart(partNo, hasStock) {
+function selectInvPart(partNo, hasStock, fromPM) {
   invSelectedPartName = partNo;
   document.getElementById('invPartSearch').value = partNo;
   hideInvPartDropdown();
 
   var infoEl = document.getElementById('invPartSearchInfo');
   var wrapEl = document.getElementById('invBillSelWrap');
+  wrapEl.style.display = 'none';
+  document.getElementById('invLineRemainInfo').style.display = 'none';
 
-  if (!hasStock) {
-    infoEl.innerHTML = '<span style="color:var(--amber);">⚠️ ยังไม่มีบิลรับเข้าที่มีคงเหลือสำหรับชิ้นงานนี้</span>';
-    wrapEl.style.display = 'none';
+  // ❌ ไม่อยู่ใน PM → block ทันที
+  if (!fromPM) {
+    infoEl.innerHTML =
+      '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:10px 12px;color:var(--red);">'+
+      '🚫 <b>ไม่พบหมายเลขนี้ใน Part Master</b><br>'+
+      '<span style="font-size:11px;">กรุณาเพิ่มชิ้นงาน <b>'+esc(partNo)+'</b> ใน Part Master ก่อน จึงจะสามารถออก INV ได้</span>'+
+      '</div>';
     return;
   }
 
-  // กรอง jobItems ที่มีคงเหลือและ partName ตรงกับที่เลือก
+  // ❌ อยู่ใน PM แต่ไม่มีสต็อก → block
+  if (!hasStock) {
+    infoEl.innerHTML =
+      '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 12px;color:var(--amber);">'+
+      '⚠️ <b>ยังไม่มีบิลรับเข้าสำหรับ '+esc(partNo)+'</b><br>'+
+      '<span style="font-size:11px;">กรุณาบันทึกรับงานเข้าก่อน จึงจะสามารถออก INV ได้</span>'+
+      '</div>';
+    return;
+  }
+
+  // ✅ อยู่ใน PM + มีสต็อก → แสดงขั้นที่ 2
   var normSel = normalizePartKey(partNo);
   var active = jobItems.filter(function(j) {
     var b = calcJob(j.id);
@@ -1302,12 +1344,14 @@ function selectInvPart(partNo, hasStock) {
   });
 
   if (!active.length) {
-    infoEl.innerHTML = '<span style="color:var(--amber);">⚠️ ไม่มีบิลที่มีคงเหลือ</span>';
-    wrapEl.style.display = 'none';
+    infoEl.innerHTML =
+      '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 12px;color:var(--amber);">'+
+      '⚠️ <b>ไม่มีบิลที่มีคงเหลือ</b> สำหรับ '+esc(partNo)+
+      '</div>';
     return;
   }
 
-  infoEl.innerHTML = '✅ พบ <b>'+active.length+'</b> บิล — เลือกบิลด้านล่าง';
+  infoEl.innerHTML = '<span style="color:var(--green);">✅ <b>'+esc(partNo)+'</b> — พบ '+active.length+' บิล เลือกบิลด้านล่าง</span>';
 
   var sel = document.getElementById('invLineJobSel');
   var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
@@ -1340,7 +1384,12 @@ function renderInvLineSelect() {
     }
   }
   // re-run ถ้ามี P/No เลือกอยู่
-  if (invSelectedPartName) selectInvPart(invSelectedPartName, true);
+  if (invSelectedPartName) {
+    var pmMatch = pmParts.find(function(p){
+      return normalizePartKey(p.partNo||p.name||'') === normalizePartKey(invSelectedPartName);
+    });
+    selectInvPart(invSelectedPartName, true, !!pmMatch);
+  }
 }
 
 function onInvLineJobSelect() {
@@ -2891,6 +2940,101 @@ function acAutoFillCustomerFromPM(manual) {
     if (manual) showToast('in','✅ ดึงลูกค้า "'+pm.customer+'" จาก Part Master แล้ว','ok');
   } else if (manual) {
     showToast('in','⚠️ ไม่พบ "'+pn+'" ใน Part Master (มีข้อมูล '+pmParts.length+' รายการ) หรือยังไม่ได้ระบุลูกค้าไว้','err');
+  }
+}
+
+// ══════════════════════════════════════
+//  PM Autocomplete — รับงานเข้า (Tab in)
+//  บังคับให้เลือกจาก Part Master เท่านั้น
+// ══════════════════════════════════════
+var _inPartSelected = false; // flag: เลือกจาก PM dropdown แล้ว
+
+function pmAcShow() {
+  var input   = document.getElementById('inPartName');
+  var list    = document.getElementById('ac-inPartName');
+  var statusEl = document.getElementById('inPartNameStatus');
+  if (!input || !list) return;
+
+  _inPartSelected = false; // reset เมื่อพิมพ์ใหม่
+  var q    = input.value.trim();
+  var qNorm = q.toLowerCase().replace(/[\s\-]+/g,'');
+
+  statusEl.textContent = '';
+
+  if (!q) { list.innerHTML = ''; list.classList.remove('open'); return; }
+
+  if (!pmParts.length) {
+    list.innerHTML = '<div class="ac-item" style="color:var(--text-muted);">⏳ Part Master ยังโหลดไม่เสร็จ...</div>';
+    list.classList.add('open');
+    return;
+  }
+
+  var matches = pmParts.filter(function(p){
+    var no  = (p.partNo||'').toLowerCase();
+    var nm  = (p.name||'').toLowerCase();
+    var noN = no.replace(/[\s\-]+/g,'');
+    var nmN = nm.replace(/[\s\-]+/g,'');
+    return noN.indexOf(qNorm)>=0 || nmN.indexOf(qNorm)>=0
+        || no.indexOf(q.toLowerCase())>=0 || nm.indexOf(q.toLowerCase())>=0;
+  }).slice(0,12);
+
+  if (!matches.length) {
+    list.innerHTML =
+      '<div class="ac-item" style="color:var(--red);cursor:default;">'+
+      '🚫 ไม่พบ "'+esc(q)+'" ใน Part Master<br>'+
+      '<span style="font-size:10px;">กรุณาเพิ่มชิ้นงานใน PM ก่อนบันทึก</span></div>';
+    list.classList.add('open');
+    return;
+  }
+
+  list.innerHTML = matches.map(function(p, i){
+    var partNo = p.partNo || '';
+    var name   = p.name   || '';
+    var cust   = p.customer || '';
+    return '<div class="ac-item" onmousedown="pmAcPick('+i+')">' +
+      '<span class="ac-item-part">'+esc(partNo)+'</span>' +
+      (name ? '<span class="ac-item-cust">'+esc(name)+'</span>' : '') +
+      (cust ? '<span class="ac-item-cust" style="color:var(--blue2);">· '+esc(cust)+'</span>' : '') +
+    '</div>';
+  }).join('');
+  list._pmMatches = matches;
+  list.classList.add('open');
+}
+
+function pmAcPick(idx) {
+  var list = document.getElementById('ac-inPartName');
+  var matches = list._pmMatches || [];
+  var p = matches[idx];
+  if (!p) return;
+
+  var partNo = p.partNo || p.name || '';
+  document.getElementById('inPartName').value = partNo;
+  // auto-fill ลูกค้าจาก PM
+  if (p.customer) {
+    var custEl = document.getElementById('inCustomer');
+    if (custEl && !custEl.value.trim()) custEl.value = p.customer;
+  }
+  _inPartSelected = true;
+  list.classList.remove('open');
+  document.getElementById('inPartNameStatus').innerHTML =
+    '<span style="color:var(--green);">✅ เลือกจาก Part Master แล้ว</span>'
+    + (p.customer ? ' · ลูกค้า: <b>'+esc(p.customer)+'</b>' : '');
+}
+
+function pmAcHide() {
+  var list = document.getElementById('ac-inPartName');
+  if (list) list.classList.remove('open');
+}
+
+// ตรวจสอบเมื่อออกจาก input — block ถ้าไม่ได้เลือกจาก PM
+function pmAcCheckBlur() {
+  var val = (document.getElementById('inPartName').value||'').trim();
+  var statusEl = document.getElementById('inPartNameStatus');
+  if (!val) { statusEl.textContent = ''; return; }
+  if (!_inPartSelected) {
+    document.getElementById('inPartName').value = '';
+    statusEl.innerHTML =
+      '<span style="color:var(--red);">🚫 กรุณาเลือกชิ้นงานจากรายการ Part Master เท่านั้น</span>';
   }
 }
 
