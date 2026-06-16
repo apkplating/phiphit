@@ -1174,7 +1174,9 @@ function onInvPartSearchInput() {
 
   // reset ส่วนล่าง
   document.getElementById('invLineRemainInfo').style.display = 'none';
-  document.getElementById('invLineJobSel').value = '';
+  var selEl = document.getElementById('invLineJobSel');
+  selEl.value = '';
+  selEl.size = 1; // reset กลับเป็น dropdown ปกติ
 
   if (!q) {
     infoEl.textContent = '';
@@ -1203,14 +1205,17 @@ function onInvPartSearchInput() {
 
   // เติม dropdown บิล
   var sel = document.getElementById('invLineJobSel');
-  sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
-    active.map(function(j){
-      var b = calcJob(j.id);
-      var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
-      return '<option value="'+j.id+'">'+
-        j.partName.slice(0,28)+' [บิล '+esc(j.bill)+' · เหลือ '+rem+']'+
-      '</option>';
-    }).join('');
+  var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
+  active.forEach(function(j){
+    var b = calcJob(j.id);
+    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
+    var billNo = j.bill || '(ไม่มีเลขบิล)';
+    var partLabel = (j.partName||'').slice(0,30);
+    optHtml += '<option value="'+j.id+'">'+partLabel+' ['+billNo+' · เหลือ '+rem+']</option>';
+  });
+  sel.innerHTML = optHtml;
+  // แสดง size เพื่อให้เห็นรายการทันทีโดยไม่ต้องคลิก dropdown
+  sel.size = Math.min(active.length + 1, 6);
 
   wrapEl.style.display = 'block';
 }
@@ -1246,6 +1251,8 @@ function onInvLineJobSelect() {
   if (!jobId) { infoEl.style.display='none'; return; }
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { infoEl.style.display='none'; return; }
+  // หลังเลือกแล้ว ยุบ select กลับเป็น 1 แถว
+  document.getElementById('invLineJobSel').size = 1;
   var b = calcJob(jobId);
   var isKg = job.unit==='kg';
   var rem = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
@@ -1476,6 +1483,8 @@ function addInvLine() {
   if (partInfoEl) partInfoEl.textContent = '';
   var billWrapEl = document.getElementById('invBillSelWrap');
   if (billWrapEl) billWrapEl.style.display = 'none';
+  var selReset = document.getElementById('invLineJobSel');
+  if (selReset) { selReset.size = 1; selReset.value = ''; }
   document.getElementById('invLineRemainInfo').style.display = 'none';
 
   showToast('invline','✅ เพิ่มรายการแล้ว — ค้นหา P/No ถัดไปได้เลย','ok');
