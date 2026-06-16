@@ -446,59 +446,39 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <!-- Preset chips -->
       <div id="presetChips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;min-height:0;"><button class="preset-chip" onclick="applyPreset(0)" title="SU02C126H06 · MST"><span>SU02C126H06 · MST</span><span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(0)">✕</span></button><button class="preset-chip" onclick="applyPreset(1)" title="SU02C126H02 · MST"><span>SU02C126H02 · MST</span><span class="preset-chip-del" onmousedown="event.stopPropagation()" onclick="event.stopPropagation();delPreset(1)">✕</span></button></div>
 
-      <!-- ปุ่มใช้ค่าเดิม -->
-      <div id="reuseBar" style="display: block; margin-bottom: 6px;">
-        <button onclick="reuseLastBarrel()" style="width:100%;background:var(--navy);border:none;border-radius:10px;padding:9px 12px;color:#fff;font-size:12px;font-family:'IBM Plex Sans Thai',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">
-          <span style="font-size:14px;">↩</span> ใช้ค่าเดิม: <span id="reuseLabel" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--sky);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">SU02C126H06 · MST</span>
-        </button>
-      </div>
-
-      <!-- P/No จาก Job Master (2-step: PM → บิล) -->
-      <div class="field" style="margin-bottom:6px;">
-        <label style="display:flex;align-items:center;justify-content:space-between;">
-          ① P/No (จาก Part Master)
-          <button onclick="jobMasterLoad().then(populateBarrelJobPick)" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄 รีเฟรช</button>
-        </label>
+      <!-- ── Step 1: ค้นหา P/No จาก PM ── -->
+      <div style="background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+          ① หมายเลขชิ้นงาน (P/No)
+          <button onclick="jobMasterLoad().then(barrelRefreshPM)" style="font-size:10px;color:var(--blue);background:#fff;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄 รีเฟรช</button>
+        </div>
         <div style="position:relative;">
           <input type="text" id="bPartSearch"
-            placeholder="พิมพ์หมายเลขชิ้นงาน เช่น 77110, K76L..."
-            autocomplete="off" style="font-size:13px;"
+            placeholder="พิมพ์หมายเลข เช่น 77110, K76L, 50316..."
+            autocomplete="off"
+            style="font-size:13px;width:100%;padding:10px 12px;border:1.5px solid #93c5fd;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;outline:none;"
             oninput="barrelPmAcShow()"
             onfocus="barrelPmAcShow()"
             onblur="setTimeout(function(){ barrelPmAcHide(); barrelPmCheckBlur(); }, 200)">
-          <div id="ac-bPartSearch" class="ac-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue);border-top:none;border-radius:0 0 8px 8px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12);"></div>
+          <div id="ac-bPartSearch" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #3b82f6;border-top:none;border-radius:0 0 10px 10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.15);"></div>
         </div>
-        <div id="bPartSearchStatus" style="font-size:11px;margin-top:3px;"></div>
+        <div id="bPartSearchStatus" style="font-size:11px;margin-top:4px;min-height:16px;"></div>
       </div>
-      <!-- ② เลือกบิล (ซ่อนจนกว่าจะเลือก P/No) -->
-      <div id="bBillSelWrap" style="display:none;margin-bottom:6px;">
-        <label style="font-size:11px;font-weight:600;color:var(--navy);display:block;margin-bottom:4px;">② เลือกบิล (คงเหลือ)</label>
-        <select id="bJobPick" onchange="onBarrelJobPick()" style="font-size:13px;">
+
+      <!-- ── Step 2: เลือกบิล (ซ่อนถ้ายังไม่เลือก P/No) ── -->
+      <div id="bBillSelWrap" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:6px;">② เลือกบิล (คงเหลือ)</div>
+        <select id="bJobPick" onchange="onBarrelJobPick()" style="font-size:13px;width:100%;padding:9px 10px;border:1.5px solid #86efac;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;background:#fff;">
           <option value="">— เลือกบิลที่ต้องการ —</option>
         </select>
+        <div id="bBillInfo" style="font-size:11px;margin-top:4px;color:#15803d;min-height:14px;"></div>
       </div>
 
-      <!-- ชื่อชิ้นงาน with autocomplete -->
-      <div class="field" style="margin-bottom:6px;position:relative;">
-        <label style="display:flex;align-items:center;justify-content:space-between;">
-          ชื่อ/หมายเลขชิ้นงาน
-          <button onclick="openPartPicker('barrel')" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">📋 Part List</button>
-        </label>
-        <input type="text" id="bPartName" placeholder="เช่น 90522-KMHA-T002..." autocomplete="off" style="font-size:13px;" oninput="onBarrelPartNameChange()" onblur="acBlur('acPartName')" onfocus="acInput('bPartName','acPartName')">
-        <div id="acPartName" class="ac-drop" style="display:none;"></div>
-      </div>
-
-      <!-- ชื่อลูกค้า with autocomplete -->
-      <div class="field" style="margin-bottom:6px;position:relative;">
-        <label>ชื่อลูกค้า</label>
-        <input type="text" id="bCustomer" placeholder="เช่น Honda, Yamaha..." autocomplete="off" style="font-size:13px;" oninput="acInput('bCustomer','acCustomer')" onblur="acBlur('acCustomer')" onfocus="acInput('bCustomer','acCustomer')">
-        <div id="acCustomer" class="ac-drop" style="display:none;"></div>
-      </div>
-
-      <!-- บันทึก preset -->
-      <button onclick="savePreset()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 10px;font-size:10px;color:var(--text-muted);cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
-        ⭐ บันทึกชุดนี้เป็น Preset
-      </button>
+      <!-- hidden fields ที่ยังต้องใช้โดย logic เดิม -->
+      <input type="hidden" id="bPartName">
+      <input type="hidden" id="bCustomer">
+      <div id="acPartName" style="display:none;"></div>
+      <div id="acCustomer" style="display:none;"></div>
     </div>
     <div class="field" style="margin-bottom:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
@@ -1508,7 +1488,7 @@ function tab(t) {
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
   if (t === 'job')   { jobMasterLoad(); }
   if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
-  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); qcPopulateWipLots(); }
+  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); }
 }
 
 // ═══════════════════════════════════════
@@ -1580,6 +1560,22 @@ function addBarrel() {
       // ยังให้เพิ่มได้ แต่แจ้งเตือน
     }
   }
+  // ── ต้องเลือก P/No + บิลก่อน ──
+  var jobPick = document.getElementById('bJobPick').value;
+  if (!_barrelPartSelected || !jobPick) {
+    var step = !_barrelPartSelected ? '① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master' : '② กรุณาเลือกบิลก่อนบันทึก';
+    showToast('entry', '🚫 ' + step, 'err');
+    document.getElementById('bPartSearch').focus();
+    return;
+  }
+  // ── ต้องเลือก P/No + บิลก่อน ──
+  var jobPick = document.getElementById('bJobPick').value;
+  if (!_barrelPartSelected || !jobPick) {
+    var step = !_barrelPartSelected ? '① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master' : '② กรุณาเลือกบิลก่อนบันทึก';
+    showToast('entry', '🚫 ' + step, 'err');
+    document.getElementById('bPartSearch').focus();
+    return;
+  }
   if (!kg && !pcs) { showToast('entry','กรุณากรอก Kgs หรือ Pcs','err'); return; }
 
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
@@ -1608,11 +1604,11 @@ function addBarrel() {
   document.getElementById('bPartName').value  = '';
   document.getElementById('bCustomer').value  = '';
   document.getElementById('bJobPick').value   = '';
-  if (document.getElementById('bPartSearch')) {
-    document.getElementById('bPartSearch').value = '';
-    document.getElementById('bPartSearchStatus').textContent = '';
-    document.getElementById('bBillSelWrap').style.display = 'none';
-  }
+  // reset step 1+2
+  var bps = document.getElementById('bPartSearch'); if(bps) bps.value='';
+  var bpss = document.getElementById('bPartSearchStatus'); if(bpss) bpss.textContent='';
+  var bbsw = document.getElementById('bBillSelWrap'); if(bbsw) bbsw.style.display='none';
+  var bbi  = document.getElementById('bBillInfo'); if(bbi) bbi.textContent='';
   _barrelPartSelected = false;
   // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
   _barrelPartWeightG = 0;
@@ -6121,11 +6117,16 @@ async function jobMasterLoad() {
 }
 
 
-// ══════════════════════════════════════
-//  2-Step P/No picker (Entry tab) — PM → บิล
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  Entry Form — 2-Step: PM Search → Bill Pick
+// ══════════════════════════════════════════════════
 var _barrelPartSelected = false;
-var _barrelPartMatches  = [];
+var _barrelPmMatches    = [];
+
+function barrelRefreshPM() {
+  barrelPmAcShow();
+  populateBarrelJobPick();
+}
 
 function barrelPmAcShow() {
   var input    = document.getElementById('bPartSearch');
@@ -6133,9 +6134,12 @@ function barrelPmAcShow() {
   var statusEl = document.getElementById('bPartSearchStatus');
   if (!input || !list) return;
 
+  // reset step 2 ทุกครั้งที่พิมพ์ใหม่
   _barrelPartSelected = false;
   document.getElementById('bBillSelWrap').style.display = 'none';
   document.getElementById('bJobPick').value = '';
+  document.getElementById('bPartName').value = '';
+  document.getElementById('bCustomer').value = '';
 
   var q     = input.value.trim();
   var qNorm = q.toLowerCase().replace(/[\s\-]+/g,'');
@@ -6143,73 +6147,87 @@ function barrelPmAcShow() {
 
   if (!q) { list.style.display = 'none'; return; }
 
-  var pmSource = (typeof partList !== 'undefined' && partList.length) ? partList : [];
-  var matches = pmSource.filter(function(p){
+  // ค้นจาก partList (PM) ที่ v4/v5/v6 โหลดไว้
+  var pmSrc = (typeof partList !== 'undefined' && partList.length)
+    ? partList
+    : (typeof pmParts !== 'undefined' ? pmParts : []);
+
+  var matches = pmSrc.filter(function(p){
     var no  = (p.partNo||'').toLowerCase();
     var nm  = (p.partName||p.name||'').toLowerCase();
-    return no.replace(/[\s\-]+/g,'').indexOf(qNorm)>=0
-        || nm.replace(/[\s\-]+/g,'').indexOf(qNorm)>=0
-        || no.indexOf(q.toLowerCase())>=0;
+    var noN = no.replace(/[\s\-]+/g,'');
+    var nmN = nm.replace(/[\s\-]+/g,'');
+    return noN.indexOf(qNorm)>=0 || nmN.indexOf(qNorm)>=0
+        || no.indexOf(q.toLowerCase())>=0 || nm.indexOf(q.toLowerCase())>=0;
   }).slice(0,12);
 
   if (!matches.length) {
-    list.innerHTML = '<div style="padding:8px 12px;color:#dc2626;font-size:12px;">🚫 ไม่พบ "'+q+'" ใน Part Master<br><span style="font-size:10px;">กรุณาเพิ่มชิ้นงานใน PM ก่อน</span></div>';
+    list.innerHTML =
+      '<div style="padding:10px 14px;color:#dc2626;font-size:12px;">'+
+      '🚫 ไม่พบ <b>"'+q+'"</b> ใน Part Master<br>'+
+      '<span style="font-size:10px;color:#64748b;">กรุณาเพิ่มชิ้นงานนี้ใน PM ก่อนบันทึก</span></div>';
     list.style.display = 'block';
+    statusEl.innerHTML = '<span style="color:#dc2626;">🚫 ไม่พบใน Part Master</span>';
     return;
   }
 
-  _barrelPartMatches = matches;
+  _barrelPmMatches = matches;
   list.innerHTML = matches.map(function(p,i){
     var partNo = p.partNo || '';
     var nm     = p.partName || p.name || '';
     var cust   = p.customer || '';
-    // ตรวจว่ามีสต็อกใน JM
     var hasStock = (jobMasterItems||[]).some(function(j){
       var bal = calcJobBal(j.id);
       return bal.remain > 0 && normalizePartKey(j.partName) === normalizePartKey(partNo);
     });
-    return '<div style="padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;" '+
+    return '<div style="padding:9px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;" '+
       'onmousedown="barrelPmAcPick('+i+')">' +
-      '<span style="font-weight:700;">' + partNo + '</span>' +
-      (nm ? '<span style="color:#64748b;font-size:11px;margin-left:6px;">'+nm+'</span>' : '') +
-      (cust ? '<span style="color:#3b82f6;font-size:10px;margin-left:6px;">· '+cust+'</span>' : '') +
-      (hasStock
-        ? '<span style="color:#16a34a;font-size:10px;margin-left:4px;">✅</span>'
-        : '<span style="color:#d97706;font-size:10px;margin-left:4px;">⚠️ ไม่มีสต็อก</span>') +
+      '<div>' +
+        '<span style="font-weight:700;color:#0f172a;">'+partNo+'</span>' +
+        (nm   ? '<span style="color:#64748b;font-size:11px;margin-left:6px;">'+nm+'</span>' : '') +
+        (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '') +
+      '</div>' +
+      '<span style="font-size:11px;white-space:nowrap;margin-left:8px;">'+(hasStock
+        ? '<span style="color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;">✅ มีสต็อก</span>'
+        : '<span style="color:#d97706;background:#fef9c3;padding:2px 7px;border-radius:10px;">⚠️ ไม่มีสต็อก</span>')+'</span>'+
     '</div>';
   }).join('');
   list.style.display = 'block';
 }
 
 function barrelPmAcPick(idx) {
-  var p = _barrelPartMatches[idx];
+  var p = _barrelPmMatches[idx];
   if (!p) return;
   var partNo = p.partNo || p.name || '';
+  var nm     = p.partName || p.name || '';
+  var cust   = p.customer || '';
+
   document.getElementById('bPartSearch').value = partNo;
   document.getElementById('ac-bPartSearch').style.display = 'none';
-  _barrelPartSelected = true;
 
-  // auto-fill bPartName + bCustomer
-  var pnFull = partNo + (p.partName ? ' '+p.partName : '');
-  if (document.getElementById('bPartName')) document.getElementById('bPartName').value = pnFull;
-  if (p.customer && document.getElementById('bCustomer')) {
-    if (!document.getElementById('bCustomer').value) document.getElementById('bCustomer').value = p.customer;
-  }
+  // auto-fill hidden fields ที่ logic เดิมอ่าน
+  document.getElementById('bPartName').value = partNo + (nm && nm !== partNo ? ' '+nm : '');
+  if (cust) document.getElementById('bCustomer').value = cust;
 
-  // ตรวจสต็อก → เติม dropdown บิล
+  var statusEl = document.getElementById('bPartSearchStatus');
+
+  // ตรวจว่ามีบิลมีคงเหลือไหม
   var normSel = normalizePartKey(partNo);
   var active  = (jobMasterItems||[]).filter(function(j){
     return calcJobBal(j.id).remain > 0 && normalizePartKey(j.partName) === normSel;
   });
 
-  var statusEl = document.getElementById('bPartSearchStatus');
   if (!active.length) {
-    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ ยังไม่มีบิลรับเข้าที่มีคงเหลือ</span>';
+    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลรับเข้าที่มีคงเหลือ — กรุณาบันทึกรับงานเข้าใน Job Master ก่อน</span>';
     document.getElementById('bBillSelWrap').style.display = 'none';
+    _barrelPartSelected = false;
     return;
   }
 
-  statusEl.innerHTML = '<span style="color:#16a34a;">✅ พบ '+active.length+' บิล — เลือกบิลด้านล่าง</span>';
+  _barrelPartSelected = true;
+  statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span>';
+
+  // เติม dropdown บิล
   var sel = document.getElementById('bJobPick');
   sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
     active.map(function(j){
@@ -6218,12 +6236,14 @@ function barrelPmAcPick(idx) {
       return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+rem+(j.customer?' · '+j.customer:'')+'</option>';
     }).join('');
   sel.size = Math.min(active.length + 1, 6);
+
   document.getElementById('bBillSelWrap').style.display = 'block';
+  document.getElementById('bBillInfo').textContent = '';
 }
 
 function barrelPmAcHide() {
-  var list = document.getElementById('ac-bPartSearch');
-  if (list) list.style.display = 'none';
+  var el = document.getElementById('ac-bPartSearch');
+  if (el) el.style.display = 'none';
 }
 
 function barrelPmCheckBlur() {
@@ -6232,42 +6252,9 @@ function barrelPmCheckBlur() {
   if (!_barrelPartSelected) {
     document.getElementById('bPartSearch').value = '';
     document.getElementById('bPartSearchStatus').innerHTML =
-      '<span style="color:#dc2626;">🚫 กรุณาเลือกจาก Part Master เท่านั้น</span>';
+      '<span style="color:#dc2626;">🚫 กรุณาเลือกหมายเลขชิ้นงานจาก Part Master เท่านั้น</span>';
     document.getElementById('bBillSelWrap').style.display = 'none';
   }
-}
-
-// ── ปรับ populateBarrelJobPick ให้ collapse size กลับ ──
-function resetBarrelJobPickSize() {
-  var sel = document.getElementById('bJobPick');
-  if (sel) sel.size = 1;
-}
-
-// ── QC: เติม dropdown Pro Lot No จาก WIP (dayRecords ที่บันทึกแล้ว) ──
-function qcPopulateWipLots() {
-  var sel = document.getElementById('qcLotNoPick');
-  if (!sel) return;
-  var recs = (typeof dayRecords !== 'undefined') ? dayRecords : [];
-  // เรียงใหม่ → เก่า
-  var sorted = recs.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'')||(b.id-a.id); });
-  // เอาเฉพาะ lotNo ที่ไม่ซ้ำ (30 รายการล่าสุด)
-  var seen = {}, opts = [];
-  sorted.forEach(function(r){
-    var lot = r.lotNo || r.proLotNo || '';
-    if (!lot || seen[lot]) return;
-    seen[lot] = true;
-    opts.push({ lot: lot, date: r.date || '', barrels: (r.rows||[]).length });
-  });
-  opts = opts.slice(0,30);
-  sel.innerHTML = '<option value="">— เลือก Pro Lot No จาก WIP —</option>' +
-    opts.map(function(o){
-      return '<option value="'+o.lot+'">'+o.lot+(o.date?' ('+o.date+')':'')+(o.barrels?' · '+o.barrels+' รอบ':'')+'</option>';
-    }).join('');
-}
-
-function onQcLotNoPick() {
-  var val = document.getElementById('qcLotNoPick').value;
-  if (val) document.getElementById('qcLotNo').value = val;
 }
 
 // ── เติม dropdown P/No จาก Job Master ในแท็บกรอกรายรอบ ──
@@ -6297,12 +6284,18 @@ function populateBarrelJobPick() {
 function onBarrelJobPick() {
   var sel = document.getElementById('bJobPick');
   var jobId = sel.value;
-  if (!jobId) return;
+  var infoEl = document.getElementById('bBillInfo');
+  if (!jobId) { if(infoEl) infoEl.textContent=''; return; }
   var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
   if (!job) return;
-  sel.size = 1; // ยุบกลับหลังเลือก
+  sel.size = 1;
   document.getElementById('bPartName').value = job.partName || '';
   if (job.customer) document.getElementById('bCustomer').value = job.customer;
+  if (infoEl) {
+    var bal = calcJobBal(jobId);
+    var rem = bal.remain.toLocaleString() + (job.unit==='kg' ? ' กก.' : ' ชิ้น');
+    infoEl.innerHTML = '📋 บิล <b>'+(job.bill||'?')+'</b> · คงเหลือ <b style="color:#15803d;">'+rem+'</b>'+(job.customer?' · '+job.customer:'');
+  }
 }
 
 function calcJobBal(jobId) {
@@ -6911,14 +6904,8 @@ async function confirmJobOut() {
         <input type="text" id="qcPartName" placeholder="ชื่อชิ้นงาน">
       </div>
       <div class="field" style="margin:0;">
-        <label style="display:flex;align-items:center;justify-content:space-between;">
-          Pro. Lot No.
-          <button onclick="qcPopulateWipLots()" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 6px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄</button>
-        </label>
-        <select id="qcLotNoPick" onchange="onQcLotNoPick()" style="font-size:12px;margin-bottom:4px;">
-          <option value="">— เลือก Pro Lot No จาก WIP —</option>
-        </select>
-        <input type="text" id="qcLotNo" placeholder="หรือพิมพ์เลข Lot เอง" style="font-size:13px;">
+        <label>Pro. Lot No.</label>
+        <input type="text" id="qcLotNo" placeholder="เลข Lot การผลิต">
       </div>
     </div>
 
@@ -7750,7 +7737,6 @@ function qcSaveRecord() {
   document.getElementById('qcPartNo').value = '';
   document.getElementById('qcPartName').value = '';
   document.getElementById('qcLotNo').value = '';
-  if (document.getElementById('qcLotNoPick')) document.getElementById('qcLotNoPick').value = '';
   document.getElementById('qcJobPick').value = '';
   document.getElementById('qcTimeStart').value = '';
   document.getElementById('qcTimeEnd').value = '';
