@@ -337,23 +337,35 @@ input:focus,select:focus{border-color:var(--blue2);}
   <div class="card">
     <div class="card-label">➕ เพิ่มรายการสินค้า (P/No)</div>
 
-    <!-- ขั้นตอน 1: ค้นหา P/No -->
+  <!-- ── เพิ่มรายการสินค้า ── -->
+  <div class="card">
+    <div class="card-label">➕ เพิ่มรายการสินค้า (P/No)</div>
+
+    <!-- ขั้นที่ 1: เลือก P/No จาก PM -->
     <div class="field">
-      <label>🔍 ค้นหาหมายเลขชิ้นงาน (P/No)</label>
-      <input type="text" id="invPartSearch"
-        placeholder="พิมพ์หมายเลขชิ้นงาน เช่น 45156, K2S, 50316..."
-        autocomplete="off"
-        oninput="onInvPartSearchInput()"
-        style="font-size:14px;">
-      <div id="invPartSearchInfo" style="font-size:11px;color:var(--text-muted);margin-top:3px;"></div>
+      <label>① เลือกหมายเลขชิ้นงาน (P/No) <span style="font-size:10px;color:var(--text-muted);">— จาก Part Master</span></label>
+      <div class="ac-wrap">
+        <input type="text" id="invPartSearch"
+          placeholder="พิมพ์หมายเลขหรือชื่อชิ้นงาน เช่น 77110, K76L, MAIN STAND..."
+          autocomplete="off"
+          oninput="onInvPartSearchInput()"
+          onfocus="onInvPartSearchInput()"
+          onblur="setTimeout(function(){hideInvPartDropdown()},200)"
+          style="font-size:13px;">
+        <!-- PM autocomplete list -->
+        <div class="ac-list" id="ac-invPartSearch"></div>
+      </div>
+      <div id="invPartSearchInfo" style="font-size:11px;margin-top:4px;"></div>
     </div>
 
-    <!-- ขั้นตอน 2: เลือกบิล (แสดงเฉพาะ P/No ที่ค้นหา) -->
-    <div class="field" id="invBillSelWrap" style="display:none;">
-      <label>📋 เลือกบิล (คงเหลือ)</label>
-      <select id="invLineJobSel" onchange="onInvLineJobSelect()" style="font-size:13px;">
-        <option value="">— เลือกบิลที่ต้องการ —</option>
-      </select>
+    <!-- ขั้นที่ 2: เลือกบิล (ซ่อนจนกว่าจะเลือก P/No) -->
+    <div id="invBillSelWrap" style="display:none;">
+      <div class="field" style="margin-bottom:8px;">
+        <label>② เลือกบิล (คงเหลือ)</label>
+        <select id="invLineJobSel" onchange="onInvLineJobSelect()" style="font-size:13px;">
+          <option value="">— เลือกบิลที่ต้องการ —</option>
+        </select>
+      </div>
     </div>
     <div id="invLineRemainInfo" style="display:none;font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
     <div class="grid2">
@@ -1166,70 +1178,147 @@ function addJobIn() {
 //  ออก INV ขาย (ใบส่งสินค้า — รวมหลาย P/No)
 // ══════════════════════════════════════
 
-// ค้นหา P/No — กรอง dropdown บิลให้เหลือเฉพาะ P/No ที่ตรง
-function onInvPartSearchInput() {
-  var q = (document.getElementById('invPartSearch').value || '').trim().toLowerCase();
-  var infoEl = document.getElementById('invPartSearchInfo');
-  var wrapEl = document.getElementById('invBillSelWrap');
+// ══════════════════════════════════════
+//  ค้นหา P/No จาก Part Master → เลือกบิล
+// ══════════════════════════════════════
 
-  // reset ส่วนล่าง
+var invSelectedPartName = ''; // P/No ที่เลือกจาก PM แล้ว
+
+function hideInvPartDropdown() {
+  var list = document.getElementById('ac-invPartSearch');
+  if (list) list.classList.remove('open');
+}
+
+function onInvPartSearchInput() {
+  var q = (document.getElementById('invPartSearch').value || '').trim();
+  var infoEl = document.getElementById('invPartSearchInfo');
+  var list = document.getElementById('ac-invPartSearch');
+
+  // reset ขั้น 2
+  invSelectedPartName = '';
+  document.getElementById('invBillSelWrap').style.display = 'none';
   document.getElementById('invLineRemainInfo').style.display = 'none';
-  var selEl = document.getElementById('invLineJobSel');
-  selEl.value = '';
-  selEl.size = 1; // reset กลับเป็น dropdown ปกติ
+  var sel = document.getElementById('invLineJobSel');
+  sel.value = ''; sel.size = 1;
 
   if (!q) {
     infoEl.textContent = '';
+    list.innerHTML = '';
+    list.classList.remove('open');
+    return;
+  }
+
+  var qNorm = q.toLowerCase().replace(/[\s\-]+/g, '');
+
+  // 1) ค้นหาจาก PM ก่อน
+  var pmMatches = [];
+  if (pmParts.length) {
+    pmMatches = pmParts.filter(function(p) {
+      var no   = (p.partNo||'').toLowerCase();
+      var nm   = (p.name||'').toLowerCase();
+      var noN  = no.replace(/[\s\-]+/g, '');
+      var nmN  = nm.replace(/[\s\-]+/g, '');
+      var qLow = q.toLowerCase();
+      return noN.indexOf(qNorm) >= 0 || nmN.indexOf(qNorm) >= 0
+          || no.indexOf(qLow)   >= 0 || nm.indexOf(qLow)   >= 0;
+    }).slice(0, 12);
+  }
+
+  // 2) P/No จาก jobItems (ที่มีคงเหลือ) เผื่อไม่มีใน PM
+  var jobPartNames = {};
+  jobItems.forEach(function(j) {
+    var b = calcJob(j.id);
+    var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
+    if (!hasRemain) return;
+    var pn = (j.partName||'').trim();
+    if (!pn) return;
+    var pnN = pn.toLowerCase().replace(/[\s\-]+/g,'');
+    if (pnN.indexOf(qNorm) >= 0 || pn.toLowerCase().indexOf(q.toLowerCase()) >= 0) {
+      jobPartNames[pn] = true;
+    }
+  });
+
+  // สร้าง dropdown list
+  var items = [];
+  // จาก PM ก่อน
+  pmMatches.forEach(function(p) {
+    var hasJob = jobItems.some(function(j){
+      var b = calcJob(j.id);
+      var hasR = j.unit==='kg' ? b.remainKg>0 : b.remain>0;
+      return hasR && normalizePartKey(j.partName) === normalizePartKey(p.partNo||p.name||'');
+    });
+    items.push({ partNo: p.partNo||'', name: p.name||'', fromPM: true, hasStock: hasJob });
+  });
+
+  // P/No จาก jobItems ที่ไม่อยู่ใน PM matches
+  var pmNorms = pmMatches.map(function(p){ return normalizePartKey(p.partNo||p.name||''); });
+  Object.keys(jobPartNames).forEach(function(pn) {
+    if (pmNorms.indexOf(normalizePartKey(pn)) < 0) {
+      items.push({ partNo: pn, name: '', fromPM: false, hasStock: true });
+    }
+  });
+
+  if (!items.length) {
+    list.innerHTML = '<div class="ac-item" style="color:var(--text-muted);">ไม่พบชิ้นงานที่ตรงกัน</div>';
+    list.classList.add('open');
+    infoEl.innerHTML = '<span style="color:var(--red);">⚠️ ไม่พบใน Part Master — กรุณาเพิ่มชิ้นงานใน PM ก่อน</span>';
+    return;
+  }
+
+  list.innerHTML = items.map(function(it) {
+    var label = it.partNo + (it.name ? ' <span style="color:var(--text-muted);font-size:11px;">'+esc(it.name)+'</span>' : '');
+    var badge = it.fromPM
+      ? (it.hasStock ? '<span style="color:var(--green);font-size:10px;margin-left:4px;">✅ มีสต็อก</span>'
+                     : '<span style="color:var(--amber);font-size:10px;margin-left:4px;">⚠️ ไม่มีสต็อก</span>')
+      : '<span style="color:var(--text-muted);font-size:10px;margin-left:4px;">(ไม่ได้อยู่ใน PM)</span>';
+    return '<div class="ac-item" onclick="selectInvPart(\''+esc(it.partNo||it.name)+'\','+it.hasStock+')">'+
+      '<span class="ac-item-part">'+label+'</span>'+badge+
+    '</div>';
+  }).join('');
+  list.classList.add('open');
+  infoEl.textContent = '';
+}
+
+function selectInvPart(partNo, hasStock) {
+  invSelectedPartName = partNo;
+  document.getElementById('invPartSearch').value = partNo;
+  hideInvPartDropdown();
+
+  var infoEl = document.getElementById('invPartSearchInfo');
+  var wrapEl = document.getElementById('invBillSelWrap');
+
+  if (!hasStock) {
+    infoEl.innerHTML = '<span style="color:var(--amber);">⚠️ ยังไม่มีบิลรับเข้าที่มีคงเหลือสำหรับชิ้นงานนี้</span>';
     wrapEl.style.display = 'none';
     return;
   }
 
-  // หา jobItems ที่มีคงเหลือ + ชื่อ partName หรือเลขบิล ตรงกับคำค้น
-  // แยก query เป็น tokens (เว้นวรรคหลายคำ)
-  var tokens = q.split(/\s+/).filter(Boolean);
-  var active = jobItems.filter(function(j){
+  // กรอง jobItems ที่มีคงเหลือและ partName ตรงกับที่เลือก
+  var normSel = normalizePartKey(partNo);
+  var active = jobItems.filter(function(j) {
     var b = calcJob(j.id);
     var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
-    if (!hasRemain) return false;
-    // normalize: ตัด space + lowercase
-    var partNorm = (j.partName||'').trim().toLowerCase().replace(/[\s\-]+/g, '');
-    var billNorm = (j.bill||'').toString().trim().toLowerCase();
-    var partOrig = (j.partName||'').trim().toLowerCase();
-    // ทุก token ต้องเจอใน partName หรือ bill
-    return tokens.every(function(t){
-      var tNorm = t.replace(/[\s\-]+/g, '');
-      return partNorm.indexOf(tNorm) >= 0
-          || partOrig.indexOf(t) >= 0
-          || billNorm.indexOf(t) >= 0;
-    });
+    return hasRemain && normalizePartKey(j.partName) === normSel;
   });
 
   if (!active.length) {
-    infoEl.innerHTML = '<span style="color:var(--red);">⚠️ ไม่พบชิ้นงานที่มีคงเหลือ ตรงกับ "'+esc(q)+'"</span>';
+    infoEl.innerHTML = '<span style="color:var(--amber);">⚠️ ไม่มีบิลที่มีคงเหลือ</span>';
     wrapEl.style.display = 'none';
     return;
   }
 
-  // นับจำนวน P/No unique
-  var uniqueParts = {};
-  active.forEach(function(j){ uniqueParts[j.partName] = true; });
-  var partCount = Object.keys(uniqueParts).length;
-  infoEl.innerHTML = '✅ พบ <b>'+active.length+'</b> บิล จาก <b>'+partCount+'</b> P/No — เลือกบิลด้านล่าง';
+  infoEl.innerHTML = '✅ พบ <b>'+active.length+'</b> บิล — เลือกบิลด้านล่าง';
 
-  // เติม dropdown บิล
   var sel = document.getElementById('invLineJobSel');
   var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
-  active.forEach(function(j){
+  active.forEach(function(j) {
     var b = calcJob(j.id);
-    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
-    var billNo = j.bill || '(ไม่มีเลขบิล)';
-    var partLabel = (j.partName||'').slice(0,30);
-    optHtml += '<option value="'+j.id+'">'+partLabel+' ['+billNo+' · เหลือ '+rem+']</option>';
+    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    optHtml += '<option value="'+j.id+'">['+esc(j.bill||'?')+'] เหลือ '+rem
+      +(j.customer ? ' · '+esc(j.customer) : '')+'</option>';
   });
   sel.innerHTML = optHtml;
-  // แสดง size เพื่อให้เห็นรายการทันทีโดยไม่ต้องคลิก dropdown
-  sel.size = Math.min(active.length + 1, 6);
-
+  sel.size = Math.min(active.length + 1, 7);
   wrapEl.style.display = 'block';
 }
 
@@ -1237,8 +1326,6 @@ function onInvPartSearchInput() {
 function renderInvLineSelect() {
   var sel = document.getElementById('invLineJobSel');
   if (!sel) return;
-  // ถ้า dropdown ถูกซ่อนอยู่ (ยังไม่ค้นหา) ก็ไม่ต้องทำอะไร
-  // เพียงแค่ clear ค่าที่เลือกไว้ ถ้า jobId ที่เลือกไม่มีอยู่แล้ว
   var cur = sel.value;
   if (cur) {
     var stillExists = jobItems.find(function(j){
@@ -1248,12 +1335,12 @@ function renderInvLineSelect() {
     });
     if (!stillExists) {
       sel.value = '';
+      sel.size = 1;
       document.getElementById('invLineRemainInfo').style.display = 'none';
     }
   }
-  // re-run search ถ้ามีคำค้นอยู่
-  var q = (document.getElementById('invPartSearch').value || '').trim();
-  if (q) onInvPartSearchInput();
+  // re-run ถ้ามี P/No เลือกอยู่
+  if (invSelectedPartName) selectInvPart(invSelectedPartName, true);
 }
 
 function onInvLineJobSelect() {
@@ -1492,6 +1579,7 @@ function addInvLine() {
   });
   var searchEl = document.getElementById('invPartSearch');
   if (searchEl) searchEl.value = '';
+  invSelectedPartName = '';
   var partInfoEl = document.getElementById('invPartSearchInfo');
   if (partInfoEl) partInfoEl.textContent = '';
   var billWrapEl = document.getElementById('invBillSelWrap');
