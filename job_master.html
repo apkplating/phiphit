@@ -1184,11 +1184,24 @@ function onInvPartSearchInput() {
     return;
   }
 
-  // หา jobItems ที่มีคงเหลือ + ชื่อ partName ตรงกับคำค้น
+  // หา jobItems ที่มีคงเหลือ + ชื่อ partName หรือเลขบิล ตรงกับคำค้น
+  // แยก query เป็น tokens (เว้นวรรคหลายคำ)
+  var tokens = q.split(/\s+/).filter(Boolean);
   var active = jobItems.filter(function(j){
     var b = calcJob(j.id);
     var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
-    return hasRemain && (j.partName||'').toLowerCase().indexOf(q) >= 0;
+    if (!hasRemain) return false;
+    // normalize: ตัด space + lowercase
+    var partNorm = (j.partName||'').trim().toLowerCase().replace(/[\s\-]+/g, '');
+    var billNorm = (j.bill||'').toString().trim().toLowerCase();
+    var partOrig = (j.partName||'').trim().toLowerCase();
+    // ทุก token ต้องเจอใน partName หรือ bill
+    return tokens.every(function(t){
+      var tNorm = t.replace(/[\s\-]+/g, '');
+      return partNorm.indexOf(tNorm) >= 0
+          || partOrig.indexOf(t) >= 0
+          || billNorm.indexOf(t) >= 0;
+    });
   });
 
   if (!active.length) {
