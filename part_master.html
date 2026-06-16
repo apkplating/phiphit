@@ -351,8 +351,7 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>P/No</label>
-        <input type="text" id="editPartNo" style="font-family:'IBM Plex Mono',monospace;font-weight:600;" readonly
-          style="background:#f8fafc;cursor:default;">
+        <input type="text" id="editPartNo" style="font-family:'IBM Plex Mono',monospace;font-weight:600;">
       </div>
       <div class="field" style="margin:0;">
         <label>ชื่อชิ้นงาน</label>
@@ -744,9 +743,15 @@ function saveEdit() {
   var rack   = parseInt(document.getElementById('editPcsPerRack').value) || 0;
   var note   = document.getElementById('editNote').value.trim();
 
+  var newPartNo = document.getElementById('editPartNo').value.trim();
+  if (!newPartNo) { showToast('edit','กรุณากรอก P/No','err'); return; }
+
   var idx = parts.findIndex(function(p){ return p.id===id; });
   if (idx < 0) return;
-  parts[idx] = Object.assign({}, parts[idx], { name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
+  // ตรวจว่า P/No ซ้ำกับรายการอื่นไหม
+  var dupIdx = parts.findIndex(function(p){ return p.partNo===newPartNo && p.id!==id; });
+  if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
+  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
 
   saveLocal(); fbSave();
   showToast('edit','✅ บันทึกสำเร็จ','ok');
