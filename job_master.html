@@ -2757,7 +2757,24 @@ function renderHistory() {
   var dateFrom   = (document.getElementById('histDateFrom')||{}).value   || '';
   var dateTo     = (document.getElementById('histDateTo')||{}).value     || '';
 
-  var rows = jobRecords.filter(function(r){
+  // สร้าง synthetic records สำหรับ job ที่เก็บยอดโดยตรง (ไม่มี records type:'in')
+  var syntheticRows = [];
+  jobItems.forEach(function(job){
+    var hasIn = jobRecords.some(function(r){ return r.jobId===job.id && r.type==='in'; });
+    if (!hasIn) {
+      var qty   = Number(job.qty   || job.pcs || 0);
+      var qtyKg = Number(job.qtyKg || job.kg  || 0);
+      if (qty > 0 || qtyKg > 0) {
+        syntheticRows.push({
+          id: 'SYN-'+job.id, jobId: job.id, type: 'in',
+          qty: qty, qtyKg: qtyKg, date: job.date || '', note: 'บันทึกรับเข้า'
+        });
+      }
+    }
+  });
+  var allRows = jobRecords.concat(syntheticRows);
+
+  var rows = allRows.filter(function(r){
     if (jobFilter  && r.jobId !== jobFilter) return false;
     if (typeFilter && r.type  !== typeFilter) return false;
     if (dateFrom   && r.date  <  dateFrom)   return false;
