@@ -6496,23 +6496,39 @@ function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function pickBillRow(jobId, billNo) {
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
   if (!job) return;
-  // อัปเดต hidden select
+
+  // 1. set hidden select
   var sel = document.getElementById('bJobPick');
   if (sel) sel.value = jobId;
-  // re-render list เพื่อ highlight ที่เลือก
-  var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
-  var normSel = normalizePartKey(pn);
-  var active = (jobMasterItems||[]).filter(function(j){
-    var b = calcJobBal(j.id);
-    var u = calcTodayUsed(j.id);
-    var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
-    if (r <= 0) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
-  });
-  renderBillList(active, jobId);
-  // trigger onBarrelJobPick
+
+  // 2. highlight แถวที่เลือก / ยกเลิก highlight แถวอื่น
+  var listEl = document.getElementById('bBillList');
+  if (listEl) {
+    Array.from(listEl.children).forEach(function(row){
+      var isThis = row.id === 'billrow-'+jobId;
+      row.style.border = '1.5px solid ' + (isThis ? '#16a34a' : '#bbf7d0');
+      row.style.background = isThis ? '#dcfce7' : '#fff';
+      // เพิ่ม/ลบ checkmark
+      var right = row.querySelector('div:last-child');
+      var existCheck = row.querySelector('.bill-check');
+      if (isThis && !existCheck && right) {
+        var chk = document.createElement('span');
+        chk.className = 'bill-check';
+        chk.textContent = '✅';
+        chk.style.cssText = 'font-size:13px;';
+        right.insertBefore(chk, right.firstChild);
+      } else if (!isThis && existCheck) {
+        existCheck.remove();
+      }
+    });
+  }
+
+  // 3. แสดง bill info ด้านล่าง
   onBarrelJobPick();
+
+  // 4. scroll bBillInfo ให้เห็น
+  var infoEl = document.getElementById('bBillInfo');
+  if (infoEl) setTimeout(function(){ infoEl.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 100);
 }
 
 function savePresetWithBill(partNo, jobId, customer, billNo) {
@@ -6575,18 +6591,24 @@ function populateBarrelJobPick() {
 // ── เลือก P/No จาก dropdown → เติมชื่อชิ้นงาน + ลูกค้า ──
 function onBarrelJobPick() {
   var sel = document.getElementById('bJobPick');
-  var jobId = sel.value;
+  var jobId = sel ? sel.value : '';
   var infoEl = document.getElementById('bBillInfo');
   if (!jobId) { if(infoEl) infoEl.textContent=''; return; }
   var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
   if (!job) return;
-  sel.size = 1;
   document.getElementById('bPartName').value = job.partName || '';
   if (job.customer) document.getElementById('bCustomer').value = job.customer;
   if (infoEl) {
     var bal = calcJobBal(jobId);
-    var rem = bal.remain.toLocaleString() + (job.unit==='kg' ? ' กก.' : ' ชิ้น');
-    infoEl.innerHTML = '📋 บิล <b>'+(job.bill||'?')+'</b> · คงเหลือ <b style="color:#15803d;">'+rem+'</b>'+(job.customer?' · '+job.customer:'');
+    var u   = calcTodayUsed(jobId);
+    var r   = (job.unit==='kg') ? Math.max(0, bal.remainKg - u.usedKg) : Math.max(0, bal.remain - u.used);
+    var remStr = (job.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+    infoEl.innerHTML =
+      '<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:8px;padding:8px 12px;margin-top:4px;">' +
+      '✅ เลือกบิล <b style="font-family:monospace;">'+(job.bill||'?')+'</b> · ' +
+      'คงเหลือ <b style="color:#15803d;">'+remStr+'</b>' +
+      (job.customer ? ' · <span style="color:#3b82f6;">'+job.customer+'</span>' : '') +
+      '</div>';
   }
 }
 
