@@ -6426,11 +6426,23 @@ function calcJobBal(jobId) {
   var job = (jobMasterItems || []).find(function(j){ return j.id===jobId; }) || {};
   var unit = job.unit || 'pcs';
   var totalIn=0, totalOut=0, totalInKg=0, totalOutKg=0;
+
+  // รับเข้า: ดูจาก records[type:'in'] ก่อน
+  // ถ้าไม่มี records → fallback ใช้ job.qty / job.qtyKg โดยตรง
+  var hasInRecords = jobMasterRecords.some(function(r){ return r.jobId===jobId && r.type==='in'; });
+
   jobMasterRecords.forEach(function(r){
     if (r.jobId!==jobId) return;
     if (r.type==='in')  { totalIn += Number(r.qty||0); totalInKg += Number(r.qtyKg||0); }
     if (r.type==='out') { totalOut += Number(r.qty||0); totalOutKg += Number(r.qtyKg||0); }
   });
+
+  // fallback: job.qty เก็บจำนวนรับเข้าโดยตรง (format ของ Job Master v2)
+  if (!hasInRecords) {
+    totalIn   = Number(job.qty   || job.pcs || 0);
+    totalInKg = Number(job.qtyKg || job.kg  || 0);
+  }
+
   var remain   = totalIn - totalOut;
   var remainKg = parseFloat((totalInKg - totalOutKg).toFixed(3));
   return {
