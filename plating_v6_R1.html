@@ -6434,61 +6434,45 @@ function renderBillList(active, selectedJobId) {
     active.map(function(j){ return '<option value="'+j.id+'"'+(j.id===selectedJobId?' selected':'')+'>'+j.id+'</option>'; }).join('');
   if (selectedJobId) sel.value = selectedJobId;
 
-  // สร้าง DOM elements โดยตรง (ไม่ใช้ inline onclick เพื่อหลีกเลี่ยงปัญหา escape)
-  listEl.innerHTML = '';
-  active.forEach(function(j){
+  // render HTML ทั้งหมดก่อน แล้วค่อย attach events ด้วย delegation
+  listEl.innerHTML = active.map(function(j){
     var b    = calcJobBal(j.id);
     var u    = calcTodayUsed(j.id);
     var r    = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
     var remStr  = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
-    var usedStr = (u.used||u.usedKg) ? ((j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้') : '';
+    var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้)' : '';
     var isSelected = j.id === selectedJobId;
     var bill = j.bill || '?';
     var cust = j.customer || '';
+    return '<div class="bill-row" data-jobid="'+j.id+'" data-bill="'+bill+'" data-pn="'+pn+'" data-cust="'+cust+'" '+
+      'style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:background .15s,border .15s;margin-bottom:4px;">' +
+      '<div>' +
+        '<span style="font-family:monospace;font-size:13px;font-weight:700;color:#15803d;">['+bill+']</span>' +
+        '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
+        (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">'+usedStr+'</span>' : '') +
+        (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '') +
+        (isSelected ? '<div style="font-size:10px;color:#16a34a;font-weight:600;margin-top:2px;">✅ เลือกอยู่</div>' : '') +
+      '</div>' +
+      '<button class="preset-btn" data-jobid="'+j.id+'" data-bill="'+bill+'" data-pn="'+pn+'" data-cust="'+cust+'" '+
+        'style="background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">⭐ Preset</button>'+
+    '</div>';
+  }).join('');
 
-    // wrapper div
-    var row = document.createElement('div');
-    row.id = 'billrow-'+j.id;
-    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:all .15s;margin-bottom:4px;';
-
-    // left: bill info
-    var left = document.createElement('div');
-    left.innerHTML =
-      '<span style="font-family:monospace;font-size:13px;font-weight:700;color:#15803d;">['+bill+']</span>' +
-      '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
-      (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">(ใช้ '+usedStr+')</span>' : '') +
-      (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '');
-
-    // right: check + preset button
-    var right = document.createElement('div');
-    right.style.cssText = 'display:flex;align-items:center;gap:5px;flex-shrink:0;';
-    if (isSelected) {
-      var check = document.createElement('span');
-      check.textContent = '✅';
-      check.style.fontSize = '13px';
-      right.appendChild(check);
-    }
-    var btn = document.createElement('button');
-    btn.textContent = '⭐ Preset';
-    btn.title = 'บันทึก Preset ด้วยบิลนี้';
-    btn.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;';
-    btn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
-    btn.addEventListener('click', function(e){
+  // event delegation — ผูกครั้งเดียวที่ container
+  listEl.onclick = function(e) {
+    // คลิกปุ่ม Preset
+    var btn = e.target.closest('.preset-btn');
+    if (btn) {
       e.stopPropagation();
-      savePresetWithBill(pn, j.id, cust, bill);
-    });
-    right.appendChild(btn);
-
-    row.appendChild(left);
-    row.appendChild(right);
-
-    // click row → เลือกบิล
-    row.addEventListener('click', function(){
-      pickBillRow(j.id, bill);
-    });
-
-    listEl.appendChild(row);
-  });
+      savePresetWithBill(btn.dataset.pn, btn.dataset.jobid, btn.dataset.cust, btn.dataset.bill);
+      return;
+    }
+    // คลิก row
+    var row = e.target.closest('.bill-row');
+    if (row) {
+      pickBillRow(row.dataset.jobid, row.dataset.bill);
+    }
+  };
 }
 
 function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
