@@ -472,10 +472,13 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <!-- ── Step 2: เลือกบิล (ซ่อนถ้ายังไม่เลือก P/No) ── -->
       <div id="bBillSelWrap" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:6px;">② เลือกบิล (คงเหลือ)</div>
-        <select id="bJobPick" onchange="onBarrelJobPick()" style="font-size:13px;width:100%;padding:9px 10px;border:1.5px solid #86efac;border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;background:#fff;">
+        <!-- hidden select ยังคงไว้เพื่อ backward compat กับ code ที่อ่าน bJobPick.value -->
+        <select id="bJobPick" onchange="onBarrelJobPick()" style="display:none;">
           <option value="">— เลือกบิลที่ต้องการ —</option>
         </select>
-        <div id="bBillInfo" style="font-size:11px;margin-top:4px;color:#15803d;min-height:14px;"></div>
+        <!-- bill list rows -->
+        <div id="bBillList" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <div id="bBillInfo" style="font-size:11px;margin-top:6px;color:#15803d;min-height:14px;"></div>
       </div>
 
       <!-- hidden fields ที่ยังต้องใช้โดย logic เดิม -->
@@ -2675,18 +2678,9 @@ function applyPreset(idx) {
               || partNoFromName(j.partName||'') === normSel
               || normalizePartKey(j.partName).startsWith(normSel));
         });
+        renderBillList(active, savedJobId);
         var sel = document.getElementById('bJobPick');
-        sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
-          active.map(function(j){
-            var b = calcJobBal(j.id);
-            var u = calcTodayUsed(j.id);
-            var r = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
-            var remStr = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
-            return '<option value="'+j.id+'"'+(j.id===savedJobId?' selected':'')+'>'+
-              '['+( j.bill||'?')+'] เหลือ '+remStr+(j.customer?' · '+j.customer:'')+'</option>';
-          }).join('');
-        sel.value = savedJobId;
-        sel.size = 1;
+        if (sel) { sel.value = savedJobId; sel.size = 1; }
 
         // แสดง bill info
         var remVal = (job.unit==='kg') ? Math.max(0,realRemain).toFixed(2)+' กก.' : Math.max(0,realRemain).toLocaleString()+' ชิ้น';
@@ -2731,10 +2725,21 @@ function renderPresetChips() {
     var inPM   = pmSrc.some(function(pm){
       return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
     });
-    var hasStock = inPM && (jobMasterItems||[]).some(function(j){
-      return calcJobBal(j.id).remain > 0 && normalizePartKey(j.partName) === normalizePartKey(partNo);
+    // ตรวจสต็อก — ใช้ partNoFromName เพื่อ handle partName ยาว
+    var normSel = normalizePartKey(partNo);
+    var hasStock = (jobMasterItems||[]).some(function(j){
+      var b = calcJobBal(j.id);
+      var u = calcTodayUsed(j.id);
+      var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
+      if (r <= 0) return false;
+      var jNorm = normalizePartKey(j.partName||'');
+      return jNorm === normSel
+          || partNoFromName(j.partName||'') === normSel
+          || jNorm.startsWith(normSel);
     });
-    var badge = !inPM
+    // ถ้า pmSrc ยังโหลดไม่เสร็จ แต่มีสต็อกใน JM → ถือว่าผ่าน
+    var reallyInPM = inPM || (pmSrc.length === 0 && hasStock);
+    var badge = !reallyInPM
       ? '<span style="font-size:9px;color:#fca5a5;margin-left:3px;">⚠️PM</span>'
       : (hasStock
           ? '<span style="font-size:9px;color:#86efac;margin-left:3px;">●</span>'
@@ -4478,6 +4483,7 @@ function loadPartList() {
         try { localStorage.setItem('b1_partList', JSON.stringify(partList)); } catch(e){}
         if (typeof renderPartList === 'function') renderPartList();
         if (typeof renderPartPickerList === 'function') renderPartPickerList();
+        if (typeof renderPresetChips === 'function') renderPresetChips();
         console.log('[Part Master] loaded', partList.length, 'parts');
       }
     })
@@ -6354,21 +6360,90 @@ function barrelPmAcPick(idx) {
   _barrelPartSelected = true;
   statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span>';
 
-  // เติม dropdown บิล — แสดงคงเหลือ ณ ปัจจุบัน (หักวันนี้แล้ว)
-  var sel = document.getElementById('bJobPick');
-  sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
-    active.map(function(j){
-      var b = calcJobBal(j.id);
-      var u = calcTodayUsed(j.id);
-      var r = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
-      var remStr = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
-      var usedStr = u.used||u.usedKg ? ' (ใช้วันนี้ '+(j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+')' : '';
-      return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+remStr+usedStr+(j.customer?' · '+j.customer:'')+'</option>';
-    }).join('');
-  sel.size = Math.min(active.length + 1, 6);
+  // เติม bill list rows
+  renderBillList(active, '');
 
   document.getElementById('bBillSelWrap').style.display = 'block';
   document.getElementById('bBillInfo').textContent = '';
+}
+
+function renderBillList(active, selectedJobId) {
+  var listEl = document.getElementById('bBillList');
+  var sel    = document.getElementById('bJobPick');
+  if (!listEl) return;
+
+  // อัปเดต hidden select ด้วย (backward compat)
+  sel.innerHTML = '<option value="">—</option>' +
+    active.map(function(j){ return '<option value="'+j.id+'"'+(j.id===selectedJobId?' selected':'')+'>'+j.id+'</option>'; }).join('');
+  if (selectedJobId) sel.value = selectedJobId;
+
+  listEl.innerHTML = active.map(function(j){
+    var b    = calcJobBal(j.id);
+    var u    = calcTodayUsed(j.id);
+    var r    = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
+    var remStr  = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+    var usedStr = (u.used||u.usedKg) ? ((j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้') : '';
+    var isSelected = j.id === selectedJobId;
+    var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
+
+    return '<div id="billrow-'+j.id+'" onclick="pickBillRow(\''+j.id+'\',\''+esc2(j.bill||'?')+'\')" '+
+      'style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:all .15s;">' +
+      '<div>' +
+        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:#15803d;">['+esc2(j.bill||'?')+']</span>' +
+        '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
+        (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">(ใช้ '+usedStr+')</span>' : '') +
+        (j.customer ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+esc2(j.customer)+'</div>' : '') +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;">' +
+        (isSelected ? '<span style="font-size:11px;color:#16a34a;">✅</span>' : '') +
+        '<button onmousedown="event.stopPropagation()" onclick="event.stopPropagation();savePresetWithBill(\''+esc2(pn)+'\',\''+j.id+'\',\''+esc2(j.customer||'')+'\',\''+esc2(j.bill||'?')+'\')" '+
+          'title="บันทึก Preset ด้วยบิลนี้" '+
+          'style="background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;white-space:nowrap;">⭐ Preset</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function esc2(s){ return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+function pickBillRow(jobId, billNo) {
+  var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
+  if (!job) return;
+  // อัปเดต hidden select
+  var sel = document.getElementById('bJobPick');
+  if (sel) sel.value = jobId;
+  // re-render list เพื่อ highlight ที่เลือก
+  var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
+  var normSel = normalizePartKey(pn);
+  var active = (jobMasterItems||[]).filter(function(j){
+    var b = calcJobBal(j.id);
+    var u = calcTodayUsed(j.id);
+    var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
+    if (r <= 0) return false;
+    var jNorm = normalizePartKey(j.partName||'');
+    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+  });
+  renderBillList(active, jobId);
+  // trigger onBarrelJobPick
+  onBarrelJobPick();
+}
+
+function savePresetWithBill(partNo, jobId, customer, billNo) {
+  if (!partNo) { showToast('entry','กรุณาเลือก P/No ก่อน','err'); return; }
+  var presets = getPresets();
+  var existIdx = presets.findIndex(function(p){ return (p.partNo||p.partName||'') === partNo; });
+  if (existIdx >= 0) {
+    presets[existIdx].jobId    = jobId;
+    presets[existIdx].customer = customer;
+    savePresets(presets);
+    renderPresetChips();
+    showToast('entry','⭐ อัปเดต Preset "'+partNo+'" → บิล '+billNo,'ok');
+  } else {
+    presets.push({ partNo:partNo, customer:customer, jobId:jobId, fromPM:true });
+    savePresets(presets);
+    renderPresetChips();
+    showToast('entry','⭐ บันทึก Preset "'+partNo+'" · บิล '+billNo,'ok');
+  }
 }
 
 function barrelPmAcHide() {
