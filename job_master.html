@@ -2723,7 +2723,7 @@ function renderHistFilter() {
   var cur = sel.value;
   sel.innerHTML = '<option value="">— ทุกบิล —</option>' +
     jobItems.map(function(j){
-      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+j.bill+' — '+j.partName.slice(0,20)+'</option>';
+      return '<option value="'+j.id+'"'+(j.id===cur?' selected':'')+'>'+(j.bill||'?')+' — '+(j.partName||'').slice(0,20)+'</option>';
     }).join('');
 }
 
@@ -3078,7 +3078,7 @@ function acShow(fieldId) {
   }
 
   var filtered = pairs.filter(function(p) {
-    if (fieldId === 'inPartName') return !val || p.partName.toLowerCase().includes(val);
+    if (fieldId === 'inPartName') return !val || (p.partName||'').toLowerCase().includes(val);
     if (fieldId === 'inCustomer') return !val || p.customer.toLowerCase().includes(val);
     return false;
   });
