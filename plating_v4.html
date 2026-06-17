@@ -2592,60 +2592,117 @@ function getPresets() {
 function savePresets(list) {
   try { localStorage.setItem('b1_partPresets', JSON.stringify(list)); } catch(e){}
 }
-// บันทึก Preset — ต้องเลือกจาก PM ก่อน
+// บันทึก Preset — เก็บ partNo + jobId ปัจจุบัน
 function saveBarrelPreset() {
   if (!_barrelPartSelected) {
     showToast('entry', '🚫 กรุณาเลือก P/No จาก Part Master ก่อนบันทึก Preset', 'err'); return;
   }
   var searchEl = document.getElementById('bPartSearch');
-  var pn = searchEl ? searchEl.value.trim() : '';
-  var cu = document.getElementById('bCustomer').value.trim();
+  var pn    = searchEl ? searchEl.value.trim() : '';
+  var cu    = document.getElementById('bCustomer').value.trim();
+  var jobId = document.getElementById('bJobPick').value || '';
   if (!pn) { showToast('entry', 'กรุณาเลือก P/No ก่อน', 'err'); return; }
   var presets = getPresets();
-  var exists = presets.some(function(p){ return p.partNo === pn; });
-  if (exists) { showToast('entry', '"'+pn+'" มีใน Preset แล้ว', 'err'); return; }
-  presets.push({ partNo: pn, customer: cu, fromPM: true });
+  // อัปเดต preset เดิมถ้ามีแล้ว (เปลี่ยน jobId)
+  var existIdx = presets.findIndex(function(p){ return p.partNo === pn; });
+  if (existIdx >= 0) {
+    presets[existIdx].jobId    = jobId;
+    presets[existIdx].customer = cu;
+    savePresets(presets);
+    renderPresetChips();
+    showToast('entry', '⭐ อัปเดต Preset "'+pn+'" แล้ว', 'ok');
+    return;
+  }
+  presets.push({ partNo: pn, customer: cu, jobId: jobId, fromPM: true });
   savePresets(presets);
   renderPresetChips();
   showToast('entry', '⭐ บันทึก Preset "'+pn+'" แล้ว', 'ok');
 }
-// compat: เรียกจากปุ่มเดิม (ถ้ามี)
+// compat
 function savePreset() { saveBarrelPreset(); }
 
 function applyPreset(idx) {
   var p = getPresets()[idx];
   if (!p) return;
-  // รองรับ format เก่า (partName) และใหม่ (partNo)
   var partNo = p.partNo || p.partName || '';
   var cu     = p.customer || '';
+  var savedJobId = p.jobId || '';
 
-  // ใส่ลงช่องค้นหา แล้วเรียก barrelPmAcPick จาก PM
   var searchEl = document.getElementById('bPartSearch');
   if (!searchEl) return;
-  searchEl.value = partNo;
 
   // หา PM match
   var pmSrc = (typeof partList !== 'undefined' && partList.length)
     ? partList : (typeof pmParts !== 'undefined' ? pmParts : []);
   var normQ = partNo.toUpperCase().replace(/[\s\-]+/g,'');
-  var pmIdx = pmSrc.findIndex(function(p2){
+  var pmMatch = pmSrc.filter(function(p2){
     return (p2.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
   });
 
-  if (pmIdx >= 0) {
-    // พบใน PM — เรียก flow เดิม
-    _barrelPmMatches = pmSrc.filter(function(p2){
-      return (p2.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
-    });
-    barrelPmAcPick(0);
-    showToast('entry', '⭐ Preset "'+partNo+'" — เลือกบิลด้านล่าง', 'ok');
-  } else {
-    // ไม่พบใน PM
+  if (!pmMatch.length) {
     searchEl.value = '';
     var statusEl = document.getElementById('bPartSearchStatus');
-    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">🚫 Preset "'+partNo+'" ไม่พบใน Part Master อีกต่อไป — กรุณาลบ Preset นี้</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">🚫 Preset "'+partNo+'" ไม่พบใน Part Master — กรุณาลบ Preset นี้</span>';
     showToast('entry', '🚫 "'+partNo+'" ไม่พบใน Part Master', 'err');
+    return;
   }
+
+  searchEl.value = partNo;
+  _barrelPmMatches = pmMatch;
+
+  // ถ้ามี jobId ที่บันทึกไว้ และบิลนั้นยังมีคงเหลือ → ข้าม step ② เลย
+  if (savedJobId) {
+    var job = (jobMasterItems||[]).find(function(j){ return j.id===savedJobId; });
+    if (job) {
+      var bal  = calcJobBal(savedJobId);
+      var used = calcTodayUsed(savedJobId);
+      var realRemain = (job.unit==='kg') ? bal.remainKg - used.usedKg : bal.remain - used.used;
+      if (realRemain > 0) {
+        // บิลนี้ยังมีคงเหลือ → set ค่าทันที ข้าม step ②
+        _barrelPartSelected = true;
+        document.getElementById('bPartName').value = job.partName || partNo;
+        if (cu) document.getElementById('bCustomer').value = cu;
+        document.getElementById('bPartSearchStatus').innerHTML =
+          '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cu?' · '+cu:'')+'</span>';
+
+        // เติม dropdown แล้วเลือก jobId นั้นทันที
+        var normSel = normalizePartKey(partNo);
+        var active = (jobMasterItems||[]).filter(function(j){
+          var b = calcJobBal(j.id);
+          var u = calcTodayUsed(j.id);
+          var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
+          return r > 0 && (normalizePartKey(j.partName) === normSel
+              || partNoFromName(j.partName||'') === normSel
+              || normalizePartKey(j.partName).startsWith(normSel));
+        });
+        var sel = document.getElementById('bJobPick');
+        sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
+          active.map(function(j){
+            var b = calcJobBal(j.id);
+            var u = calcTodayUsed(j.id);
+            var r = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
+            var remStr = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+            return '<option value="'+j.id+'"'+(j.id===savedJobId?' selected':'')+'>'+
+              '['+( j.bill||'?')+'] เหลือ '+remStr+(j.customer?' · '+j.customer:'')+'</option>';
+          }).join('');
+        sel.value = savedJobId;
+        sel.size = 1;
+
+        // แสดง bill info
+        var remVal = (job.unit==='kg') ? Math.max(0,realRemain).toFixed(2)+' กก.' : Math.max(0,realRemain).toLocaleString()+' ชิ้น';
+        var bi = document.getElementById('bBillInfo');
+        if(bi) bi.innerHTML = '📋 บิล <b>'+(job.bill||'?')+'</b> · คงเหลือ <b style="color:#15803d;">'+remVal+'</b>';
+
+        document.getElementById('bBillSelWrap').style.display = 'block';
+        showToast('entry', '⭐ Preset "'+partNo+'" · บิล '+(job.bill||'?')+' ✅', 'ok');
+        return;
+      }
+    }
+  }
+
+  // ไม่มี jobId หรือบิลหมดแล้ว → flow ปกติ (step ①②)
+  barrelPmAcPick(0);
+  showToast('entry', '⭐ Preset "'+partNo+'" — เลือกบิลด้านล่าง', 'ok');
 }
 
 function delPreset(idx) {
@@ -6277,7 +6334,14 @@ function barrelPmAcPick(idx) {
   // ตรวจว่ามีบิลมีคงเหลือไหม
   var normSel = normalizePartKey(partNo);
   var active  = (jobMasterItems||[]).filter(function(j){
-    return calcJobBal(j.id).remain > 0 && normalizePartKey(j.partName) === normSel;
+    var b = calcJobBal(j.id);
+    var u = calcTodayUsed(j.id);
+    var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
+    if (r <= 0) return false;
+    var jNorm = normalizePartKey(j.partName||'');
+    return jNorm === normSel
+        || partNoFromName(j.partName||'') === normSel
+        || jNorm.startsWith(normSel);
   });
 
   if (!active.length) {
@@ -6290,13 +6354,16 @@ function barrelPmAcPick(idx) {
   _barrelPartSelected = true;
   statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span>';
 
-  // เติม dropdown บิล
+  // เติม dropdown บิล — แสดงคงเหลือ ณ ปัจจุบัน (หักวันนี้แล้ว)
   var sel = document.getElementById('bJobPick');
   sel.innerHTML = '<option value="">— เลือกบิลที่ต้องการ —</option>' +
     active.map(function(j){
-      var bal = calcJobBal(j.id);
-      var rem = bal.remain.toLocaleString() + (j.unit==='kg' ? ' กก.' : ' ชิ้น');
-      return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+rem+(j.customer?' · '+j.customer:'')+'</option>';
+      var b = calcJobBal(j.id);
+      var u = calcTodayUsed(j.id);
+      var r = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
+      var remStr = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+      var usedStr = u.used||u.usedKg ? ' (ใช้วันนี้ '+(j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+')' : '';
+      return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+remStr+usedStr+(j.customer?' · '+j.customer:'')+'</option>';
     }).join('');
   sel.size = Math.min(active.length + 1, 6);
 
@@ -6365,17 +6432,44 @@ function calcJobBal(jobId) {
   var job = (jobMasterItems || []).find(function(j){ return j.id===jobId; }) || {};
   var unit = job.unit || 'pcs';
   var totalIn=0, totalOut=0, totalInKg=0, totalOutKg=0;
+  var hasInRecords = jobMasterRecords.some(function(r){ return r.jobId===jobId && r.type==='in'; });
   jobMasterRecords.forEach(function(r){
     if (r.jobId!==jobId) return;
     if (r.type==='in')  { totalIn += Number(r.qty||0); totalInKg += Number(r.qtyKg||0); }
     if (r.type==='out') { totalOut += Number(r.qty||0); totalOutKg += Number(r.qtyKg||0); }
   });
+  if (!hasInRecords) {
+    totalIn   = Number(job.qty   || job.pcs || 0);
+    totalInKg = Number(job.qtyKg || job.kg  || 0);
+  }
   var remain   = totalIn - totalOut;
   var remainKg = parseFloat((totalInKg - totalOutKg).toFixed(3));
   return {
     totalIn:totalIn, totalOut:totalOut, remain: unit==='kg' ? remainKg : remain,
     totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit
   };
+}
+
+// คำนวณที่ชุบไปแล้ววันนี้ต่อ jobId (จาก todayBarrels + dayRecords วันนี้)
+function calcTodayUsed(jobId) {
+  var todayStr = new Date().toISOString().slice(0,10);
+  var used = 0, usedKg = 0;
+  // จาก todayBarrels (ยังไม่ save)
+  (todayBarrels||[]).forEach(function(b){
+    if (b.jobId !== jobId) return;
+    used   += Number(b.pcs||0);
+    usedKg += Number(b.kg||0);
+  });
+  // จาก dayRecords วันนี้ (save แล้ว)
+  (dayRecords||[]).forEach(function(d){
+    if ((d.date||'').slice(0,10) !== todayStr) return;
+    (d.rows||[]).forEach(function(b){
+      if (b.jobId !== jobId) return;
+      used   += Number(b.pcs||0);
+      usedKg += Number(b.kg||0);
+    });
+  });
+  return { used:used, usedKg:usedKg };
 }
 
 function getJobStatus(job) {
