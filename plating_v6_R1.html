@@ -6290,9 +6290,15 @@ function barrelPmAcShow() {
     var partNo = p.partNo || '';
     var nm     = p.partName || p.name || '';
     var cust   = p.customer || '';
+    var _pnNorm = normalizePartKey(partNo);
     var hasStock = (jobMasterItems||[]).some(function(j){
       var bal = calcJobBal(j.id);
-      return bal.remain > 0 && normalizePartKey(j.partName) === normalizePartKey(partNo);
+      if (bal.remain <= 0) return false;
+      // เปรียบเทียบ 3 วิธี: ตรง / partNoFromName / startsWith
+      var jNorm = normalizePartKey(j.partName||'');
+      return jNorm === _pnNorm
+          || partNoFromName(j.partName||'') === _pnNorm
+          || jNorm.startsWith(_pnNorm);
     });
     return '<div style="padding:9px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;" '+
       'onmousedown="barrelPmAcPick('+i+')">' +
@@ -6325,10 +6331,14 @@ function barrelPmAcPick(idx) {
 
   var statusEl = document.getElementById('bPartSearchStatus');
 
-  // ตรวจว่ามีบิลมีคงเหลือไหม
+  // ตรวจว่ามีบิลมีคงเหลือไหม (ใช้ partNoFromName เพื่อ handle กรณี partName มีชื่อยาว)
   var normSel = normalizePartKey(partNo);
   var active  = (jobMasterItems||[]).filter(function(j){
-    return calcJobBal(j.id).remain > 0 && normalizePartKey(j.partName) === normSel;
+    if (calcJobBal(j.id).remain <= 0) return false;
+    var jNorm = normalizePartKey(j.partName||'');
+    return jNorm === normSel
+        || partNoFromName(j.partName||'') === normSel
+        || jNorm.startsWith(normSel);
   });
 
   if (!active.length) {
