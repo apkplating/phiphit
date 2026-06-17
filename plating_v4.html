@@ -6371,40 +6371,71 @@ function renderBillList(active, selectedJobId) {
   var listEl = document.getElementById('bBillList');
   var sel    = document.getElementById('bJobPick');
   if (!listEl) return;
+  var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
 
-  // อัปเดต hidden select ด้วย (backward compat)
+  // อัปเดต hidden select
   sel.innerHTML = '<option value="">—</option>' +
     active.map(function(j){ return '<option value="'+j.id+'"'+(j.id===selectedJobId?' selected':'')+'>'+j.id+'</option>'; }).join('');
   if (selectedJobId) sel.value = selectedJobId;
 
-  listEl.innerHTML = active.map(function(j){
+  // สร้าง DOM elements โดยตรง (ไม่ใช้ inline onclick เพื่อหลีกเลี่ยงปัญหา escape)
+  listEl.innerHTML = '';
+  active.forEach(function(j){
     var b    = calcJobBal(j.id);
     var u    = calcTodayUsed(j.id);
     var r    = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
     var remStr  = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
     var usedStr = (u.used||u.usedKg) ? ((j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้') : '';
     var isSelected = j.id === selectedJobId;
-    var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
+    var bill = j.bill || '?';
+    var cust = j.customer || '';
 
-    return '<div id="billrow-'+j.id+'" onclick="pickBillRow(\''+j.id+'\',\''+esc2(j.bill||'?')+'\')" '+
-      'style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:all .15s;">' +
-      '<div>' +
-        '<span style="font-family:monospace;font-size:12px;font-weight:700;color:#15803d;">['+esc2(j.bill||'?')+']</span>' +
-        '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
-        (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">(ใช้ '+usedStr+')</span>' : '') +
-        (j.customer ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+esc2(j.customer)+'</div>' : '') +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:5px;">' +
-        (isSelected ? '<span style="font-size:11px;color:#16a34a;">✅</span>' : '') +
-        '<button onmousedown="event.stopPropagation()" onclick="event.stopPropagation();savePresetWithBill(\''+esc2(pn)+'\',\''+j.id+'\',\''+esc2(j.customer||'')+'\',\''+esc2(j.bill||'?')+'\')" '+
-          'title="บันทึก Preset ด้วยบิลนี้" '+
-          'style="background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;white-space:nowrap;">⭐ Preset</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+    // wrapper div
+    var row = document.createElement('div');
+    row.id = 'billrow-'+j.id;
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:all .15s;margin-bottom:4px;';
+
+    // left: bill info
+    var left = document.createElement('div');
+    left.innerHTML =
+      '<span style="font-family:monospace;font-size:13px;font-weight:700;color:#15803d;">['+bill+']</span>' +
+      '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
+      (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">(ใช้ '+usedStr+')</span>' : '') +
+      (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '');
+
+    // right: check + preset button
+    var right = document.createElement('div');
+    right.style.cssText = 'display:flex;align-items:center;gap:5px;flex-shrink:0;';
+    if (isSelected) {
+      var check = document.createElement('span');
+      check.textContent = '✅';
+      check.style.fontSize = '13px';
+      right.appendChild(check);
+    }
+    var btn = document.createElement('button');
+    btn.textContent = '⭐ Preset';
+    btn.title = 'บันทึก Preset ด้วยบิลนี้';
+    btn.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;';
+    btn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      savePresetWithBill(pn, j.id, cust, bill);
+    });
+    right.appendChild(btn);
+
+    row.appendChild(left);
+    row.appendChild(right);
+
+    // click row → เลือกบิล
+    row.addEventListener('click', function(){
+      pickBillRow(j.id, bill);
+    });
+
+    listEl.appendChild(row);
+  });
 }
 
-function esc2(s){ return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function pickBillRow(jobId, billNo) {
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
