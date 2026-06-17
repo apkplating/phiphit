@@ -2659,8 +2659,10 @@ function applyPreset(idx) {
     if (job) {
       var bal  = calcJobBal(savedJobId);
       var used = calcTodayUsed(savedJobId);
-      var realRemain = (job.unit==='kg') ? bal.remainKg - used.usedKg : bal.remain - used.used;
-      if (realRemain > 0) {
+      var realRemainPcs = bal.remain   - used.used;
+      var realRemainKg  = bal.remainKg - used.usedKg;
+      var realRemain = realRemainKg > 0 ? realRemainKg : realRemainPcs;
+      if (realRemainPcs > 0 || realRemainKg > 0) {
         // บิลนี้ยังมีคงเหลือ → set ค่าทันที ข้าม step ②
         _barrelPartSelected = true;
         document.getElementById('bPartName').value = job.partName || partNo;
@@ -2673,10 +2675,12 @@ function applyPreset(idx) {
         var active = (jobMasterItems||[]).filter(function(j){
           var b = calcJobBal(j.id);
           var u = calcTodayUsed(j.id);
-          var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
-          return r > 0 && (normalizePartKey(j.partName) === normSel
+          var rPcs = b.remain   - u.used;
+          var rKg  = b.remainKg - u.usedKg;
+          if (rPcs <= 0 && rKg <= 0) return false;
+          return normalizePartKey(j.partName) === normSel
               || partNoFromName(j.partName||'') === normSel
-              || normalizePartKey(j.partName).startsWith(normSel));
+              || normalizePartKey(j.partName).startsWith(normSel);
         });
         renderBillList(active, savedJobId);
         var sel = document.getElementById('bJobPick');
