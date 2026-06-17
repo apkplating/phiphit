@@ -2816,13 +2816,14 @@ function renderPresetChips() {
     var inPM   = pmSrc.some(function(pm){
       return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
     });
-    // ตรวจสต็อก — ใช้ partNoFromName เพื่อ handle partName ยาว
+    // ตรวจสต็อก — เช็คทั้ง pcs และ kg
     var normSel = normalizePartKey(partNo);
     var hasStock = (jobMasterItems||[]).some(function(j){
       var b = calcJobBal(j.id);
       var u = calcTodayUsed(j.id);
-      var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
-      if (r <= 0) return false;
+      var rPcs = b.remain   - u.used;
+      var rKg  = b.remainKg - u.usedKg;
+      if (rPcs <= 0 && rKg <= 0) return false;
       var jNorm = normalizePartKey(j.partName||'');
       return jNorm === normSel
           || partNoFromName(j.partName||'') === normSel
@@ -6416,8 +6417,10 @@ function barrelPmAcPick(idx) {
   var active  = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
     var u = calcTodayUsed(j.id);
-    var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
-    if (r <= 0) return false;
+    // เช็คทั้ง pcs และ kg เพราะ unit อาจไม่ถูก set อย่างสม่ำเสมอ
+    var rPcs = b.remain   - u.used;
+    var rKg  = b.remainKg - u.usedKg;
+    if (rPcs <= 0 && rKg <= 0) return false;
     var jNorm = normalizePartKey(j.partName||'');
     return jNorm === normSel
         || partNoFromName(j.partName||'') === normSel
@@ -6456,9 +6459,12 @@ function renderBillList(active, selectedJobId) {
   listEl.innerHTML = active.map(function(j){
     var b    = calcJobBal(j.id);
     var u    = calcTodayUsed(j.id);
-    var r    = (j.unit==='kg') ? Math.max(0, b.remainKg - u.usedKg) : Math.max(0, b.remain - u.used);
-    var remStr  = (j.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
-    var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(j.unit==='kg'?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้)' : '';
+    var rKg  = Math.max(0, b.remainKg - u.usedKg);
+    var rPcs = Math.max(0, b.remain   - u.used);
+    var isKgUnit = j.unit==='kg' || (rKg > 0 && rPcs === 0);
+    var r    = isKgUnit ? rKg : rPcs;
+    var remStr  = isKgUnit ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+    var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้)' : '';
     var isSelected = j.id === selectedJobId;
     var bill = j.bill || '?';
     var cust = j.customer || '';
