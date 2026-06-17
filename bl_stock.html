@@ -529,30 +529,39 @@ async function loadWIP() {
     { url: DB_B2+'/plating-b2.json', label:'B2' },
     { url: DB_R1+'/plating-r1.json', label:'R1' },
   ];
+
+  // คำนวณ delivery ที่ออกไปแล้ว (จาก jmRecords + blDel) เพื่อ cap WIP
+  // WIP = งานที่ชุบแล้ว แต่ยังไม่ถูกส่งออก
+  // กรองเฉพาะ 30 วันล่าสุด เพื่อให้ WIP สะท้อนงานที่ค้างอยู่จริง
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+
   await Promise.all(lines.map(async function(ln){
     try {
       var res = await fetch(ln.url);
       if (!res.ok) return;
       var data = await res.json();
-      // dayRecords อาจอยู่ใน data หรือ data.dayRecords
       var recs = Array.isArray(data) ? data
                : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
-      var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-60); // ขยายเป็น 60 วัน
+
       recs.forEach(function(dr){
         if (!dr.rows) return;
+        // ข้าม: บันทึกที่ mark done แล้ว
         if (dr.status === 'done') return;
-        if (!dr.status && dr.date) {
-          var drDate = new Date(dr.date);
+        // ข้าม: บันทึกที่เก่ากว่า 30 วัน (ถ้าไม่มีวันที่ก็ผ่าน)
+        if (dr.date) {
+          var drDate = new Date(dr.date + 'T00:00:00');
           if (drDate < cutoff) return;
         }
         dr.rows.forEach(function(row){
           var pn = (row.partName||'').trim();
           if (!pn) return;
           var k = norm(pn);
-          if (!wipMap[k]) wipMap[k]={ partName:pn, pcs:0, kgs:0, lines:{} };
+          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
           wipMap[k].pcs += Number(row.pcs||0);
           wipMap[k].kgs += Number(row.kg||0);
-          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0)+Number(row.pcs||0);
+          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + Number(row.pcs||0);
+          if (dr.date && wipMap[k].dates.indexOf(dr.date) < 0) wipMap[k].dates.push(dr.date);
         });
       });
     } catch(e){}
@@ -638,23 +647,27 @@ function buildMap() {
     }
 
     // ── cap WIP ไม่ให้เกิน (receive - delivery) ──
-    // WIP จริงต้องไม่มากกว่างานที่ยังค้างอยู่
-    var maxWip = Math.max(0, map[k].receive - map[k].delivery);
+    var maxWipPcs = Math.max(0, map[k].receive   - map[k].delivery);
+    var maxWipKg  = Math.max(0, map[k].receiveKg - map[k].deliveryKg);
     var wo = getWip(map[k].partNo);
-    if (wo && maxWip >= 0) {
+    if (wo) {
       var pm2 = pmLookup(map[k].partNo);
       var wipPcs = wo.pcs || 0;
       var wipKg  = wo.kgs || 0;
-      // แปลง kg→ชิ้นเพื่อ cap ถ้ายังไม่มี pcs
-      if (!wipPcs && wipKg > 0 && pm2 && pm2.weightPerPc > 0) {
-        wipPcs = Math.round(wipKg * 1000 / pm2.weightPerPc);
+
+      // กรณี kg-based: cap ด้วย maxWipKg
+      if (maxWipKg > 0 && wipKg > maxWipKg) {
+        var ratioKg = maxWipKg / wipKg;
+        wo.kgs = parseFloat(maxWipKg.toFixed(3));
+        wo.pcs = Math.round(wipPcs * ratioKg);
       }
-      if (wipPcs > maxWip) {
-        // cap ทั้ง pcs และ kgs ตาม ratio
-        var ratio = maxWip / wipPcs;
-        wo.pcs = maxWip;
-        wo.kgs = parseFloat((wipKg * ratio).toFixed(3));
+      // กรณี pcs-based: cap ด้วย maxWipPcs
+      else if (maxWipPcs > 0 && wipPcs > maxWipPcs) {
+        var ratioPcs = maxWipPcs / wipPcs;
+        wo.pcs = maxWipPcs;
+        wo.kgs = parseFloat((wipKg * ratioPcs).toFixed(3));
       }
+      // ถ้าทั้ง receive เป็น 0 (ยังไม่มีข้อมูล JM) → ไม่ cap
     }
   });
 
