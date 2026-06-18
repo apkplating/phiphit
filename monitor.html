@@ -279,9 +279,9 @@ var DB = {
   jm: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
 var PATHS = {
-  b1: DB.b1+'/plating-b1.json',
-  b2: DB.b2+'/plating-b2.json',
-  r1: DB.r1+'/plating-r1.json',
+  b1: DB.b1+'/live.json',
+  b2: DB.b2+'/live.json',
+  r1: DB.r1+'/live.json',
   jm: DB.jm+'/job-master.json',
 };
 
@@ -342,53 +342,51 @@ function extractTodayBarrels(data, today) {
   var liveAh   = 0;
   var targetAh = Number(data.targetAh || data.ahTarget || 0);
 
-  // dayRecords อาจเป็น Array หรือ Object (Firebase แปลง sparse array)
-  var dayRecs = [];
-  if (Array.isArray(data.dayRecords)) {
-    dayRecs = data.dayRecords;
-  } else if (data.dayRecords && typeof data.dayRecords === 'object') {
-    dayRecs = Object.values(data.dayRecords);
-  }
-
-  // หา dayRecord ของวันนี้
-  var todayRec = null;
-  dayRecs.forEach(function(dr){
-    if (dr && (dr.date||'').slice(0,10) === today) todayRec = dr;
-  });
-
-  if (todayRec) {
-    if (Array.isArray(todayRec.rows)) {
-      barrels = todayRec.rows;
-    } else if (todayRec.rows && typeof todayRec.rows === 'object') {
-      barrels = Object.values(todayRec.rows);
+  // /live.json โครงสร้าง: { date, rows:[], ah, totalKg, status:'live', ... }
+  if (data.status === 'live' || data.rows) {
+    var liveDate = (data.date || '').slice(0,10);
+    if (liveDate === today || !liveDate) {
+      if (Array.isArray(data.rows)) {
+        barrels = data.rows;
+      } else if (data.rows && typeof data.rows === 'object') {
+        barrels = Object.values(data.rows);
+      }
+      liveAh = Number(data.ah || data.liveAh || data.ahTotal || 0);
+      targetAh = Number(data.targetAh || 0);
     }
-    // B2 ใช้ ah/ahB2, B1 ใช้ liveAh/ahTotal
-    liveAh   = Number(todayRec.liveAh || todayRec.ahTotal || todayRec.ah || 0);
-    targetAh = Number(todayRec.targetAh || data.targetAh || 0);
   }
 
-  // fallback: todayBarrels โดยตรง (เวอร์ชันเก่า)
+  // fallback: dayRecords array (เวอร์ชันเก่า)
   if (!barrels.length) {
-    if (Array.isArray(data.todayBarrels)) {
-      barrels = data.todayBarrels.filter(function(b){
-        return !b.date || b.date.slice(0,10) === today;
-      });
-      liveAh = Number(data.liveAh || 0);
+    var dayRecs = [];
+    if (Array.isArray(data.dayRecords)) {
+      dayRecs = data.dayRecords;
+    } else if (data.dayRecords && typeof data.dayRecords === 'object') {
+      dayRecs = Object.values(data.dayRecords);
+    }
+    var todayRec = null;
+    dayRecs.forEach(function(dr){
+      if (dr && (dr.date||'').slice(0,10) === today) todayRec = dr;
+    });
+    if (todayRec) {
+      barrels = Array.isArray(todayRec.rows) ? todayRec.rows : Object.values(todayRec.rows||{});
+      liveAh  = Number(todayRec.liveAh || todayRec.ahTotal || todayRec.ah || 0);
+      targetAh= Number(todayRec.targetAh || data.targetAh || 0);
     }
   }
 
-  // normalize field names ให้รองรับทุก line
+  // normalize field names
   barrels = barrels.filter(Boolean).map(function(b){
     return {
-      time:     b.time     || '-',
-      barrel:   b.barrel   || b.rack || '-',
-      partName: b.partName || b.customer || '-',
-      jobId:    b.jobId    || b.lotNo || '',
-      type:     b.type     || 'N',
-      color:    b.color    || 'B',
-      kg:       Number(b.kg  || b.kgC || 0),
-      pcs:      Number(b.pcs || 0),
-      batchNo:  b.batchNo  || '',
+      time:    b.time    || '-',
+      barrel:  b.barrel  || b.rack || '-',
+      partName:b.partName|| b.customer || '-',
+      jobId:   b.jobId   || b.lotNo || '',
+      type:    b.type    || 'N',
+      color:   b.color   || 'B',
+      kg:      Number(b.kg   || b.kgC || 0),
+      pcs:     Number(b.pcs  || 0),
+      batchNo: b.batchNo || '',
     };
   });
 
