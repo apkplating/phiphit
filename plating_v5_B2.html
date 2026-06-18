@@ -6493,17 +6493,13 @@ function renderBillList(active, selectedJobId) {
     '</div>';
   }).join('');
 
-  // เพิ่ม "ไม่ระบุบิล" ท้ายรายการเสมอ
-  var noJobDiv = document.createElement('div');
-  noJobDiv.className = 'bill-row';
-  noJobDiv.dataset.jobid = '';
-  noJobDiv.dataset.bill = 'ไม่ระบุบิล';
-  noJobDiv.dataset.pn = pn;
-  noJobDiv.dataset.cust = '';
-  var isNoJobSelected = selectedJobId === '';
-  noJobDiv.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid #e2e8f0;background:'+(isNoJobSelected?'#f1f5f9':'#fafafa')+';transition:background .15s,border .15s;margin-bottom:4px;opacity:0.75;';
-  noJobDiv.innerHTML = '<div><span style="font-size:12px;color:#64748b;">— ไม่ระบุบิล (บันทึกได้แต่ไม่ตัดสต็อก) —</span>'+(isNoJobSelected?'<div style="font-size:10px;color:#16a34a;margin-top:1px;">✅ เลือกอยู่</div>':'')+'</div>';
-  listEl.appendChild(noJobDiv);
+  // เพิ่ม "ไม่ระบุบิล" ท้ายรายการ — ใช้ innerHTML เพื่อให้ delegation จับได้
+  var isNoJobSelected = selectedJobId === 'NOBILL' || selectedJobId === '';
+  listEl.innerHTML += '<div class="bill-row" data-jobid="NOBILL" data-bill="ไม่ระบุบิล" data-pn="'+pn+'" data-cust="" '+
+    'style="display:flex;align-items:center;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px dashed #cbd5e1;background:#fafafa;margin-bottom:4px;">'+
+    '<span style="font-size:12px;color:#64748b;flex:1;">— ไม่ระบุบิล (บันทึกได้แต่ไม่ตัดสต็อก) —</span>'+
+    (isNoJobSelected ? '<span style="font-size:12px;color:#16a34a;">✅</span>' : '')+
+  '</div>';
 
   // event delegation — ผูกครั้งเดียวที่ container
   listEl.onclick = function(e) {
@@ -6525,6 +6521,24 @@ function renderBillList(active, selectedJobId) {
 function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function pickBillRow(jobId, billNo) {
+  // กรณีเลือก "ไม่ระบุบิล"
+  if (jobId === 'NOBILL' || jobId === '') {
+    var sel = document.getElementById('bJobPick');
+    if (sel) sel.value = '';
+    var listEl2 = document.getElementById('bBillList');
+    if (listEl2) {
+      Array.from(listEl2.children).forEach(function(row){
+        var isThis = row.dataset.jobid === jobId;
+        row.style.border = isThis ? '1.5px dashed #16a34a' : '';
+        row.style.background = isThis ? '#f0fdf4' : '';
+      });
+    }
+    var infoEl = document.getElementById('bBillInfo');
+    if (infoEl) infoEl.innerHTML = '<div style="background:#fef9c3;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-top:4px;font-size:12px;">⚠️ ไม่ระบุบิล — บันทึกได้แต่ไม่ตัดสต็อก</div>';
+    onBarrelJobPick();
+    return;
+  }
+
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
   if (!job) return;
 
