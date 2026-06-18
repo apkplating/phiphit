@@ -1576,9 +1576,10 @@ function addBarrel() {
     return;
   }
   // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
-  if (!_barrelPartSelected) {
+  var bps = document.getElementById('bPartSearch');
+  if (!_barrelPartSelected && (!bps || !bps.value.trim())) {
     showToast('entry', '🚫 ① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master', 'err');
-    document.getElementById('bPartSearch').focus();
+    if (bps) bps.focus();
     return;
   }
   if (!kg && !pcs) { showToast('entry','กรุณากรอก Kgs หรือ Pcs','err'); return; }
