@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🖥 APK Plating — Live Monitor</title>
+<style>
+  :root {
+    --bg:    #0d1117;
+    --card:  #161b22;
+    --bdr:   #30363d;
+    --navy:  #1f6feb;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red:   #f85149;
+    --muted: #8b949e;
+    --text:  #e6edf3;
+    --b1:    #388bfd;
+    --b2:    #a371f7;
+    --r1:    #f78166;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans Thai','Sarabun',system-ui,sans-serif;
+    min-height:100vh; overflow-x:hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background:linear-gradient(135deg,#0d1117 0%,#1c2128 100%);
+    border-bottom:1px solid var(--bdr);
+    padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .header-left { display:flex; align-items:center; gap:12px; }
+  .logo { font-size:22px; font-weight:800; color:var(--text);
+    letter-spacing:-0.5px; }
+  .logo span { color:var(--navy); }
+  .live-dot { width:10px; height:10px; border-radius:50%;
+    background:var(--green); box-shadow:0 0 8px var(--green);
+    animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .live-label { font-size:12px; color:var(--green); font-weight:600; }
+  .clock { font-size:28px; font-weight:800; font-family:'IBM Plex Mono',monospace;
+    color:var(--text); }
+  .date-label { font-size:11px; color:var(--muted); text-align:right; }
+
+  /* ── Summary cards ── */
+  .summary {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+    padding:16px 20px 0;
+  }
+  .sum-card {
+    background:var(--card); border:1px solid var(--bdr);
+    border-radius:12px; padding:14px 16px; text-align:center;
+  }
+  .sum-card .val { font-size:32px; font-weight:800; line-height:1; }
+  .sum-card .lbl { font-size:11px; color:var(--muted); margin-top:4px; }
+  .sum-card.b1 .val { color:var(--b1); }
+  .sum-card.b2 .val { color:var(--b2); }
+  .sum-card.r1 .val { color:var(--r1); }
+  .sum-card.total .val { color:var(--green); }
+
+  /* ── Line sections ── */
+  .lines {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:12px;
+    padding:12px 20px 20px;
+  }
+  .line-card {
+    background:var(--card); border:1px solid var(--bdr);
+    border-radius:14px; overflow:hidden;
+  }
+  .line-header {
+    padding:10px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--bdr);
+  }
+  .line-header .line-name {
+    font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;
+  }
+  .line-dot { width:8px; height:8px; border-radius:50%; }
+  .b1 .line-dot, .line-card.b1 .line-dot { background:var(--b1); }
+  .b2 .line-dot, .line-card.b2 .line-dot { background:var(--b2); }
+  .r1 .line-dot, .line-card.r1 .line-dot { background:var(--r1); }
+  .line-card.b1 .line-name { color:var(--b1); }
+  .line-card.b2 .line-name { color:var(--b2); }
+  .line-card.r1 .line-name { color:var(--r1); }
+  .line-stats { display:flex; gap:12px; }
+  .line-stat { text-align:right; }
+  .line-stat .sv { font-size:16px; font-weight:700; }
+  .line-stat .sl { font-size:9px; color:var(--muted); }
+
+  /* ── Barrel table ── */
+  .barrel-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .barrel-table thead tr { background:#21262d; }
+  .barrel-table thead th {
+    padding:7px 10px; color:var(--muted); font-size:10px;
+    font-weight:600; text-align:left; letter-spacing:.04em; text-transform:uppercase;
+  }
+  .barrel-table thead th:nth-child(n+4) { text-align:center; }
+  .barrel-table tbody tr { border-bottom:1px solid #21262d; }
+  .barrel-table tbody tr:last-child { border:none; }
+  .barrel-table td {
+    padding:7px 10px; color:var(--text); font-size:12px;
+  }
+  .barrel-table td:nth-child(n+4) { text-align:center; }
+  .barrel-table tbody tr:nth-child(even) { background:#1c2128; }
+
+  .badge {
+    display:inline-block; border-radius:5px; padding:1px 6px;
+    font-size:10px; font-weight:700; font-family:'IBM Plex Mono',monospace;
+  }
+  .badge-N { background:#1f4e1f; color:#3fb950; }
+  .badge-R { background:#4a2020; color:#f85149; }
+  .badge-B { background:#1a3a5c; color:#79c0ff; }
+  .badge-C { background:#3b2a4e; color:#d2a8ff; }
+  .badge-K { background:#2d2d2d; color:#8b949e; }
+
+  .bill-badge {
+    font-size:10px; background:#1a3a5c; color:#79c0ff;
+    border-radius:5px; padding:1px 6px; font-family:'IBM Plex Mono',monospace;
+  }
+  .no-bill { font-size:10px; color:#4a4a4a; }
+
+  .empty-line {
+    padding:24px; text-align:center; color:var(--muted); font-size:13px;
+  }
+
+  .updated-at {
+    font-size:10px; color:var(--muted); padding:6px 14px 10px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  /* AH progress bar */
+  .ah-bar-wrap { padding:0 14px 10px; }
+  .ah-bar-bg { background:#21262d; border-radius:4px; height:6px; }
+  .ah-bar-fill { height:100%; border-radius:4px; transition:width .5s; }
+  .ah-bar-label { display:flex; justify-content:space-between;
+    font-size:10px; color:var(--muted); margin-top:3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">APK <span>PLATING</span></div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="live-dot" id="liveDot"></div>
+      <div class="live-label" id="liveLabel">กำลังโหลด...</div>
+    </div>
+  </div>
+  <div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="date-label" id="dateLabel">--</div>
+  </div>
+</div>
+
+<!-- ── Summary ── -->
+<div class="summary">
+  <div class="sum-card b1">
+    <div class="val" id="s-b1-rounds">0</div>
+    <div class="lbl">B-1 รอบวันนี้</div>
+  </div>
+  <div class="sum-card b2">
+    <div class="val" id="s-b2-rounds">0</div>
+    <div class="lbl">B-2 รอบวันนี้</div>
+  </div>
+  <div class="sum-card r1">
+    <div class="val" id="s-r1-rounds">0</div>
+    <div class="lbl">R-1 รอบวันนี้</div>
+  </div>
+  <div class="sum-card total">
+    <div class="val" id="s-total-kg">0</div>
+    <div class="lbl">รวม Kgs / Pcs วันนี้</div>
+  </div>
+</div>
+
+<!-- ── Lines ── -->
+<div class="lines">
+  <div class="line-card b1" id="card-b1">
+    <div class="line-header">
+      <div class="line-name"><div class="line-dot"></div>สาย B-1</div>
+      <div class="line-stats">
+        <div class="line-stat">
+          <div class="sv" id="b1-kg">0.0</div>
+          <div class="sl">Kgs</div>
+        </div>
+        <div class="line-stat">
+          <div class="sv" id="b1-ah">0</div>
+          <div class="sl">AH</div>
+        </div>
+      </div>
+    </div>
+    <div class="ah-bar-wrap">
+      <div class="ah-bar-bg"><div class="ah-bar-fill" id="b1-bar" style="width:0%;background:var(--b1);"></div></div>
+      <div class="ah-bar-label"><span>0 AH</span><span id="b1-bar-label">เป้า 0</span></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead><tr>
+          <th>เวลา</th><th>โม่</th><th>ชิ้นงาน</th>
+          <th>บิล</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>
+        </tr></thead>
+        <tbody id="b1-tbody"><tr><td colspan="8" class="empty-line">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="updated-at" id="b1-upd">–</div>
+  </div>
+
+  <div class="line-card b2" id="card-b2">
+    <div class="line-header">
+      <div class="line-name"><div class="line-dot"></div>สาย B-2</div>
+      <div class="line-stats">
+        <div class="line-stat">
+          <div class="sv" id="b2-kg">0.0</div>
+          <div class="sl">Kgs</div>
+        </div>
+        <div class="line-stat">
+          <div class="sv" id="b2-ah">0</div>
+          <div class="sl">AH</div>
+        </div>
+      </div>
+    </div>
+    <div class="ah-bar-wrap">
+      <div class="ah-bar-bg"><div class="ah-bar-fill" id="b2-bar" style="width:0%;background:var(--b2);"></div></div>
+      <div class="ah-bar-label"><span>0 AH</span><span id="b2-bar-label">เป้า 0</span></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead><tr>
+          <th>เวลา</th><th>โม่</th><th>บ่อ</th><th>ชิ้นงาน</th>
+          <th>บิล</th><th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>
+        </tr></thead>
+        <tbody id="b2-tbody"><tr><td colspan="9" class="empty-line">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="updated-at" id="b2-upd">–</div>
+  </div>
+
+  <div class="line-card r1" id="card-r1">
+    <div class="line-header">
+      <div class="line-name"><div class="line-dot"></div>สาย R-1</div>
+      <div class="line-stats">
+        <div class="line-stat">
+          <div class="sv" id="r1-pcs">0</div>
+          <div class="sl">Pcs</div>
+        </div>
+        <div class="line-stat">
+          <div class="sv" id="r1-ah">0</div>
+          <div class="sl">AH</div>
+        </div>
+      </div>
+    </div>
+    <div class="ah-bar-wrap">
+      <div class="ah-bar-bg"><div class="ah-bar-fill" id="r1-bar" style="width:0%;background:var(--r1);"></div></div>
+      <div class="ah-bar-label"><span>0 AH</span><span id="r1-bar-label">เป้า 0</span></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="barrel-table">
+        <thead><tr>
+          <th>เวลา</th><th>Rack</th><th>บ่อ</th><th>ชิ้นงาน</th>
+          <th>บิล</th><th>ประเภท</th><th>สี</th><th>Pcs</th>
+        </tr></thead>
+        <tbody id="r1-tbody"><tr><td colspan="8" class="empty-line">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="updated-at" id="r1-upd">–</div>
+  </div>
+</div>
+
+<script>
+// ── Firebase URLs ──
+var DB = {
+  b1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  b2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  r1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
+  jm: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+};
+var PATHS = {
+  b1: DB.b1+'/plating-b1.json',
+  b2: DB.b2+'/plating-b2.json',
+  r1: DB.r1+'/plating-r1.json',
+  jm: DB.jm+'/job-master.json',
+};
+
+var state = { b1:[], b2:[], r1:[], jmItems:[] };
+
+// ── Clock ──
+function tickClock() {
+  var now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('dateLabel').textContent =
+    now.toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ── Helpers ──
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function fmt(n){ return (Number(n)||0).toFixed(2); }
+function fmtPcs(n){ return (Number(n)||0).toLocaleString(); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function getBill(jobId) {
+  if (!jobId) return '';
+  var j = state.jmItems.find(function(x){ return x.id === jobId; });
+  return j ? (j.bill||'') : '';
+}
+
+// ── Fetch job master ──
+async function fetchJM() {
+  try {
+    var res = await fetch(PATHS.jm);
+    if (!res.ok) return;
+    var data = await res.json();
+    state.jmItems = Array.isArray(data.items) ? data.items : [];
+  } catch(e) {}
+}
+
+// ── Fetch live data ──
+async function fetchLine(line) {
+  try {
+    var res = await fetch(PATHS[line]);
+    if (!res.ok) return null;
+    var data = await res.json();
+    return data;
+  } catch(e) { return null; }
+}
+
+// ── Extract todayBarrels from data ──
+function extractTodayBarrels(data, today) {
+  if (!data) return { barrels:[], liveAh:0, targetAh:0 };
+
+  // live data (ยังไม่บันทึก)
+  var barrels = [];
+  var liveAh  = 0, targetAh = 0;
+
+  // B1/B2/R1 เก็บ todayBarrels ใน data โดยตรง หรือใน data.todayBarrels
+  if (Array.isArray(data.todayBarrels)) {
+    barrels = data.todayBarrels;
+  } else if (data.rows && Array.isArray(data.rows)) {
+    barrels = data.rows;
+  }
+
+  // กรองเฉพาะวันนี้
+  barrels = barrels.filter(function(b){
+    return !b.date || b.date.slice(0,10) === today;
+  });
+
+  liveAh    = Number(data.liveAh    || data.ahToday || 0);
+  targetAh  = Number(data.targetAh  || data.ahTarget || 0);
+
+  return { barrels: barrels, liveAh: liveAh, targetAh: targetAh };
+}
+
+// ── Render B1 ──
+function renderB1(barrels, liveAh, targetAh) {
+  document.getElementById('s-b1-rounds').textContent = barrels.length;
+  var totalKg = barrels.reduce(function(s,b){ return s + Number(b.kg||0); }, 0);
+  document.getElementById('b1-kg').textContent = fmt(totalKg);
+  document.getElementById('b1-ah').textContent = fmtPcs(liveAh);
+
+  var pct = targetAh > 0 ? Math.min(100, Math.round(liveAh/targetAh*100)) : 0;
+  document.getElementById('b1-bar').style.width = pct+'%';
+  document.getElementById('b1-bar-label').textContent = 'เป้า '+fmtPcs(targetAh)+' AH ('+pct+'%)';
+
+  var tbody = document.getElementById('b1-tbody');
+  if (!barrels.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-line">ยังไม่มีรายรอบวันนี้</td></tr>';
+    return;
+  }
+  tbody.innerHTML = barrels.slice().reverse().map(function(b){
+    var bill = getBill(b.jobId);
+    var billCell = bill ? '<span class="bill-badge">'+esc(bill)+'</span>' : '<span class="no-bill">–</span>';
+    return '<tr>'+
+      '<td style="font-family:monospace;">'+esc(b.time||'–')+'</td>'+
+      '<td style="text-align:center;">'+esc(b.barrel||'–')+'</td>'+
+      '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(b.partName||'')+'">'+esc((b.partName||'–').slice(0,18))+'</td>'+
+      '<td>'+billCell+'</td>'+
+      '<td><span class="badge badge-'+esc(b.type||'N')+'">'+esc(b.type||'N')+'</span></td>'+
+      '<td><span class="badge badge-'+esc(b.color||'B')+'">'+esc(b.color||'B')+'</span></td>'+
+      '<td style="text-align:right;font-family:monospace;">'+fmt(b.kg)+'</td>'+
+      '<td style="text-align:right;font-family:monospace;">'+fmtPcs(b.pcs)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ── Render B2 (มีบ่อ) ──
+function renderB2(barrels, liveAh, targetAh) {
+  document.getElementById('s-b2-rounds').textContent = barrels.length;
+  var totalKg = barrels.reduce(function(s,b){ return s + Number(b.kg||0); }, 0);
+  document.getElementById('b2-kg').textContent = fmt(totalKg);
+  document.getElementById('b2-ah').textContent = fmtPcs(liveAh);
+
+  var pct = targetAh > 0 ? Math.min(100, Math.round(liveAh/targetAh*100)) : 0;
+  document.getElementById('b2-bar').style.width = pct+'%';
+  document.getElementById('b2-bar-label').textContent = 'เป้า '+fmtPcs(targetAh)+' AH ('+pct+'%)';
+
+  var tbody = document.getElementById('b2-tbody');
+  if (!barrels.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-line">ยังไม่มีรายรอบวันนี้</td></tr>';
+    return;
+  }
+  tbody.innerHTML = barrels.slice().reverse().map(function(b){
+    var bill = getBill(b.jobId);
+    var billCell = bill ? '<span class="bill-badge">'+esc(bill)+'</span>' : '<span class="no-bill">–</span>';
+    var batchLabel = b.batchNo ? 'บ่อ'+b.batchNo : '–';
+    return '<tr>'+
+      '<td style="font-family:monospace;">'+esc(b.time||'–')+'</td>'+
+      '<td style="text-align:center;">'+esc(b.barrel||'–')+'</td>'+
+      '<td style="text-align:center;font-size:10px;color:var(--muted);">'+batchLabel+'</td>'+
+      '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(b.partName||'')+'">'+esc((b.partName||'–').slice(0,16))+'</td>'+
+      '<td>'+billCell+'</td>'+
+      '<td><span class="badge badge-'+esc(b.type||'N')+'">'+esc(b.type||'N')+'</span></td>'+
+      '<td><span class="badge badge-'+esc(b.color||'B')+'">'+esc(b.color||'B')+'</span></td>'+
+      '<td style="text-align:right;font-family:monospace;">'+fmt(b.kg)+'</td>'+
+      '<td style="text-align:right;font-family:monospace;">'+fmtPcs(b.pcs)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ── Render R1 (Pcs) ──
+function renderR1(barrels, liveAh, targetAh) {
+  document.getElementById('s-r1-rounds').textContent = barrels.length;
+  var totalPcs = barrels.reduce(function(s,b){ return s + Number(b.pcs||0); }, 0);
+  document.getElementById('r1-pcs').textContent = fmtPcs(totalPcs);
+  document.getElementById('r1-ah').textContent  = fmtPcs(liveAh);
+
+  var pct = targetAh > 0 ? Math.min(100, Math.round(liveAh/targetAh*100)) : 0;
+  document.getElementById('r1-bar').style.width = pct+'%';
+  document.getElementById('r1-bar-label').textContent = 'เป้า '+fmtPcs(targetAh)+' AH ('+pct+'%)';
+
+  var tbody = document.getElementById('r1-tbody');
+  if (!barrels.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-line">ยังไม่มีรายรอบวันนี้</td></tr>';
+    return;
+  }
+  tbody.innerHTML = barrels.slice().reverse().map(function(b){
+    var bill = getBill(b.jobId);
+    var billCell = bill ? '<span class="bill-badge">'+esc(bill)+'</span>' : '<span class="no-bill">–</span>';
+    var batchLabel = b.batchNo ? 'บ่อ'+b.batchNo : '–';
+    return '<tr>'+
+      '<td style="font-family:monospace;">'+esc(b.time||'–')+'</td>'+
+      '<td style="text-align:center;">'+esc(b.barrel||'–')+'</td>'+
+      '<td style="text-align:center;font-size:10px;color:var(--muted);">'+batchLabel+'</td>'+
+      '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(b.partName||'')+'">'+esc((b.partName||'–').slice(0,16))+'</td>'+
+      '<td>'+billCell+'</td>'+
+      '<td><span class="badge badge-'+esc(b.type||'N')+'">'+esc(b.type||'N')+'</span></td>'+
+      '<td><span class="badge badge-'+esc(b.color||'B')+'">'+esc(b.color||'B')+'</span></td>'+
+      '<td style="text-align:right;font-family:monospace;">'+fmtPcs(b.pcs)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ── Update summary total ──
+function updateTotal() {
+  var kg  = state.b1.reduce(function(s,b){ return s+Number(b.kg||0); },0)
+           + state.b2.reduce(function(s,b){ return s+Number(b.kg||0); },0);
+  var pcs = state.r1.reduce(function(s,b){ return s+Number(b.pcs||0); },0);
+  document.getElementById('s-total-kg').textContent =
+    (kg>0?fmt(kg)+' kg ':'')+( pcs>0?fmtPcs(pcs)+' pcs':'');
+}
+
+// ── Timestamp ──
+function updLabel(id) {
+  var now = new Date();
+  document.getElementById(id).textContent =
+    'อัปเดต '+now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ── Poll loop ──
+var INTERVAL = 15000; // 15 วินาที
+var errorCount = { b1:0, b2:0, r1:0 };
+
+async function refresh() {
+  var today = todayStr();
+
+  // ดึงข้อมูลพร้อมกัน
+  var [d1, d2, d3] = await Promise.all([
+    fetchLine('b1'), fetchLine('b2'), fetchLine('r1')
+  ]);
+
+  // B1
+  if (d1 !== null) {
+    var e1 = extractTodayBarrels(d1, today);
+    state.b1 = e1.barrels;
+    renderB1(e1.barrels, e1.liveAh, e1.targetAh);
+    updLabel('b1-upd'); errorCount.b1 = 0;
+  } else { errorCount.b1++; }
+
+  // B2
+  if (d2 !== null) {
+    var e2 = extractTodayBarrels(d2, today);
+    state.b2 = e2.barrels;
+    renderB2(e2.barrels, e2.liveAh, e2.targetAh);
+    updLabel('b2-upd'); errorCount.b2 = 0;
+  } else { errorCount.b2++; }
+
+  // R1
+  if (d3 !== null) {
+    var e3 = extractTodayBarrels(d3, today);
+    state.r1 = e3.barrels;
+    renderR1(e3.barrels, e3.liveAh, e3.targetAh);
+    updLabel('r1-upd'); errorCount.r1 = 0;
+  } else { errorCount.r1++; }
+
+  updateTotal();
+
+  // Live indicator
+  var allOk = (errorCount.b1 + errorCount.b2 + errorCount.r1) === 0;
+  document.getElementById('liveDot').style.background = allOk ? 'var(--green)' : 'var(--amber)';
+  document.getElementById('liveDot').style.boxShadow  = allOk ? '0 0 8px var(--green)' : '0 0 8px var(--amber)';
+  document.getElementById('liveLabel').textContent = allOk ? 'Live' : 'บางสายขาดการเชื่อมต่อ';
+}
+
+// ── Init ──
+(async function init() {
+  await fetchJM();
+  await refresh();
+  // poll JM ทุก 2 นาที
+  setInterval(fetchJM, 120000);
+  // poll barrels ทุก 15 วินาที
+  setInterval(refresh, INTERVAL);
+})();
+</script>
+</body>
+</html>

@@ -1646,11 +1646,9 @@ function addBarrel() {
       // ยังให้เพิ่มได้ แต่แจ้งเตือน
     }
   }
-  // ── ต้องเลือก P/No + บิลก่อน ──
-  var jobPick = document.getElementById('bJobPick').value;
-  if (!_barrelPartSelected || !jobPick) {
-    var step = !_barrelPartSelected ? '① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master' : '② กรุณาเลือกบิลก่อนบันทึก';
-    showToast('entry', '🚫 ' + step, 'err');
+  // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
+  if (!_barrelPartSelected) {
+    showToast('entry', '🚫 ① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master', 'err');
     document.getElementById('bPartSearch').focus();
     return;
   }
@@ -2107,12 +2105,18 @@ function renderHistory() {
 
     var detRows = (r.rows||[]).map(function(b,i) {
       var batchBadge = b.batchNo ? '<span style="background:'+(b.batchNo===1?'#1e40af':'#7c3aed')+';color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">บ่อ'+b.batchNo+'</span>' : '–';
+      var job = (jobMasterItems||[]).find(function(j){ return j.id === b.jobId; });
+      var billLabel = job ? job.bill : '';
+      var billCell = billLabel
+        ? '<span style="font-family:monospace;font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:6px;">'+billLabel+'</span>'
+        : '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>';
       return '<tr>' +
         '<td>' + (i+1) + '. ' + b.time + '</td>' +
         '<td>' + b.barrel + '</td>' +
         '<td style="text-align:center;">' + batchBadge + '</td>' +
         '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">' + (b.partName||'–') + '</td>' +
         '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">' + (b.customer||'–') + '</td>' +
+        '<td>' + billCell + '</td>' +
         '<td style="font-size:10px;color:var(--text-muted);">' + (b.lotNo||'–') + '</td>' +
         '<td><span class="badge-'+b.type+'">'+b.type+'</span></td>' +
         '<td><span class="badge-'+b.color+'">'+b.color+'</span></td>' +
@@ -2124,10 +2128,11 @@ function renderHistory() {
       '<div class="detail-inner"><div class="tbl-wrap">' +
         '<table class="detail-table"><thead><tr>' +
           '<th style="text-align:left;">เวลา</th><th>โม่</th><th>บ่อ</th>' +
-          '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th><th>Lot No</th>' +
-          '<th>ประเภท</th><th>สี</th><th>Pcs</th><th>Pcs</th>' +
+          '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th>' +
+          '<th>บิล</th><th>Lot No</th>' +
+          '<th>ประเภท</th><th>สี</th><th>Pcs</th>' +
         '</tr></thead><tbody>' +
-        (detRows || '<tr><td colspan="9" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
+        (detRows || '<tr><td colspan="10" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
         '</tbody></table></div></div></td></tr>';
   });
   tbody.innerHTML = html;
@@ -2725,8 +2730,10 @@ function applyPreset(idx) {
     if (job) {
       var bal  = calcJobBal(savedJobId);
       var used = calcTodayUsed(savedJobId);
-      var realRemain = (job.unit==='kg') ? bal.remainKg - used.usedKg : bal.remain - used.used;
-      if (realRemain > 0) {
+      var realRemainPcs = bal.remain   - used.used;
+      var realRemainKg  = bal.remainKg - used.usedKg;
+      var realRemain = realRemainKg > 0 ? realRemainKg : realRemainPcs;
+      if (realRemainPcs > 0 || realRemainKg > 0) {
         // บิลนี้ยังมีคงเหลือ → set ค่าทันที ข้าม step ②
         _barrelPartSelected = true;
         document.getElementById('bPartName').value = job.partName || partNo;
@@ -2739,10 +2746,12 @@ function applyPreset(idx) {
         var active = (jobMasterItems||[]).filter(function(j){
           var b = calcJobBal(j.id);
           var u = calcTodayUsed(j.id);
-          var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
-          return r > 0 && (normalizePartKey(j.partName) === normSel
+          var rPcs = b.remain   - u.used;
+          var rKg  = b.remainKg - u.usedKg;
+          if (rPcs <= 0 && rKg <= 0) return false;
+          return normalizePartKey(j.partName) === normSel
               || partNoFromName(j.partName||'') === normSel
-              || normalizePartKey(j.partName).startsWith(normSel));
+              || normalizePartKey(j.partName).startsWith(normSel);
         });
         renderBillList(active, savedJobId);
         var sel = document.getElementById('bJobPick');
@@ -6408,10 +6417,12 @@ function barrelPmAcPick(idx) {
         || jNorm.startsWith(normSel);
   });
 
+  // ถ้าไม่มีสต็อก → ยังให้ทำงานต่อได้ แต่ dropdown มีแค่ "ไม่ระบุบิล"
+  _barrelPartSelected = true;
   if (!active.length) {
-    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลรับเข้าที่มีคงเหลือ — กรุณาบันทึกรับงานเข้าใน Job Master ก่อน</span>';
-    document.getElementById('bBillSelWrap').style.display = 'none';
-    _barrelPartSelected = false;
+    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือ — เลือก "ไม่ระบุบิล" เพื่อบันทึกต่อ (ไม่ตัดสต็อก)</span>';
+    renderBillList([], '');
+    document.getElementById('bBillSelWrap').style.display = 'block';
     return;
   }
 
@@ -6461,6 +6472,18 @@ function renderBillList(active, selectedJobId) {
         'style="background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">⭐ Preset</button>'+
     '</div>';
   }).join('');
+
+  // เพิ่ม "ไม่ระบุบิล" ท้ายรายการเสมอ
+  var noJobDiv = document.createElement('div');
+  noJobDiv.className = 'bill-row';
+  noJobDiv.dataset.jobid = '';
+  noJobDiv.dataset.bill = 'ไม่ระบุบิล';
+  noJobDiv.dataset.pn = pn;
+  noJobDiv.dataset.cust = '';
+  var isNoJobSelected = selectedJobId === '';
+  noJobDiv.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid #e2e8f0;background:'+(isNoJobSelected?'#f1f5f9':'#fafafa')+';transition:background .15s,border .15s;margin-bottom:4px;opacity:0.75;';
+  noJobDiv.innerHTML = '<div><span style="font-size:12px;color:#64748b;">— ไม่ระบุบิล (บันทึกได้แต่ไม่ตัดสต็อก) —</span>'+(isNoJobSelected?'<div style="font-size:10px;color:#16a34a;margin-top:1px;">✅ เลือกอยู่</div>':'')+'</div>';
+  listEl.appendChild(noJobDiv);
 
   // event delegation — ผูกครั้งเดียวที่ container
   listEl.onclick = function(e) {
@@ -8155,6 +8178,80 @@ document.addEventListener('DOMContentLoaded', function() {
   qcRenderHistory();
   setTimeout(qcFbLoadRecords, 1000);
 });
+
+// ══════════════════════════════════════
+//  เพิ่มบิลย้อนหลังให้ dayRecord row
+// ══════════════════════════════════════
+function openAddBillModal(dayId, rowIdx) {
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr) return;
+  var row = (dr.rows||[])[rowIdx];
+  if (!row) return;
+  var partNo = (row.partName||'').trim();
+
+  // หาบิลที่มีคงเหลือสำหรับ P/No นี้
+  var normSel = normalizePartKey(partNo);
+  var active = (jobMasterItems||[]).filter(function(j){
+    var b = calcJobBal(j.id);
+    var rPcs = b.remain   - 0;
+    var rKg  = b.remainKg - 0;
+    if (rPcs <= 0 && rKg <= 0) return false;
+    var jNorm = normalizePartKey(j.partName||'');
+    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+  });
+
+  // สร้าง modal
+  var existing = document.getElementById('addBillModal');
+  if (existing) existing.remove();
+
+  var opts = active.map(function(j){
+    var b = calcJobBal(j.id);
+    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+rem+'</option>';
+  }).join('');
+
+  var modal = document.createElement('div');
+  modal.id = 'addBillModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:14px;padding:20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);">' +
+      '<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;">✏️ เพิ่มบิลให้รอบนี้</div>' +
+      '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">ชิ้นงาน: <b>'+partNo+'</b></div>' +
+      (active.length
+        ? '<select id="addBillSel" style="width:100%;font-size:13px;padding:8px;border:1.5px solid #86efac;border-radius:8px;margin-bottom:12px;">' +
+          '<option value="">— เลือกบิล —</option>' + opts + '</select>'
+        : '<div style="color:#d97706;font-size:12px;margin-bottom:12px;">⚠️ ไม่มีบิลที่มีคงเหลือสำหรับชิ้นงานนี้</div>') +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
+        '<button onclick="document.getElementById('addBillModal').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+}
+
+function saveBillToRow(dayId, rowIdx) {
+  var sel = document.getElementById('addBillSel');
+  var jobId = sel ? sel.value : '';
+  if (!jobId) { showToast('hist','กรุณาเลือกบิลก่อน','err'); return; }
+
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr || !dr.rows || !dr.rows[rowIdx]) return;
+  dr.rows[rowIdx].jobId = jobId;
+
+  // save กลับ Firebase + localStorage
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dayRecords)); } catch(e){}
+  Promise.resolve().then(function(){ fbSave(); return {ok:true}; }).then(function(){
+    showToast('hist','✅ บันทึกบิลแล้ว','ok');
+    document.getElementById('addBillModal').remove();
+    renderHistory();
+  }).catch(function(){
+    showToast('hist','✅ บันทึกบิลแล้ว','ok');
+    document.getElementById('addBillModal').remove();
+    renderHistory();
+  });
+}
+
 </script>
 
 </body></html>

@@ -554,6 +554,8 @@ async function loadWIP() {
           if (drDate < cutoff) return;
         }
         dr.rows.forEach(function(row){
+          // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
+          if ((row.type||'').toUpperCase() === 'R') return;
           var pn = (row.partName||'').trim();
           if (!pn) return;
           var k = norm(pn);
