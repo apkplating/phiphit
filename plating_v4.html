@@ -8181,7 +8181,7 @@ function openAddBillModal(dayId, rowIdx) {
         : '<div style="color:#d97706;font-size:12px;margin-bottom:12px;">⚠️ ไม่มีบิลที่มีคงเหลือสำหรับชิ้นงานนี้</div>') +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
-        '<button onclick="document.getElementById('addBillModal').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+        '<button onclick="document.getElementById(\'addBillModal\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
