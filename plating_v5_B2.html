@@ -3555,7 +3555,7 @@ function livePush() {
 }
 
 async function livePushNow() {
-  var s = calcDay();
+  var s = calcSummary();
   var now = new Date();
   var recorder = (document.getElementById('recorder')||{}).value || '–';
   var lotNo    = (document.getElementById('lotNo')||{}).value || '–';
@@ -3681,7 +3681,7 @@ async function sendLiveDiscord() {
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
   if (!todayBarrels.length) { showToast('entry','ยังไม่มีรายรอบวันนี้','err'); return; }
 
-  var s = calcDay();
+  var s = calcSummary();
   var now = new Date();
   var dateStr = now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
   var timeStr = now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
