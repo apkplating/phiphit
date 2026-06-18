@@ -1567,14 +1567,6 @@ function addBarrel() {
       // ยังให้เพิ่มได้ แต่แจ้งเตือน
     }
   }
-  // ── ต้องเลือก P/No + บิลก่อน ──
-  var jobPick = document.getElementById('bJobPick').value;
-  if (!_barrelPartSelected || !jobPick) {
-    var step = !_barrelPartSelected ? '① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master' : '② กรุณาเลือกบิลก่อนบันทึก';
-    showToast('entry', '🚫 ' + step, 'err');
-    document.getElementById('bPartSearch').focus();
-    return;
-  }
   // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
   var bps = document.getElementById('bPartSearch');
   if (!_barrelPartSelected && (!bps || !bps.value.trim())) {
