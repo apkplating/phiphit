@@ -274,8 +274,8 @@
 // ── Firebase URLs ──
 var DB = {
   b1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
-  b2: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
-  r1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  b2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  r1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
   jm: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
 var PATHS = {
@@ -284,6 +284,11 @@ var PATHS = {
   r1: DB.r1+'/plating-r1.json',
   jm: DB.jm+'/job-master.json',
 };
+
+// ── แปลง lotNo/jobId ให้ getBill ทำงานได้ ──
+function getJobId(row) {
+  return row.jobId || row.lotNo || '';
+}
 
 var state = { b1:[], b2:[], r1:[], jmItems:[] };
 
@@ -337,16 +342,28 @@ function extractTodayBarrels(data, today) {
   var liveAh   = 0;
   var targetAh = Number(data.targetAh || data.ahTarget || 0);
 
-  // หา dayRecord ของวันนี้ใน dayRecords[]
-  var dayRecs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+  // dayRecords อาจเป็น Array หรือ Object (Firebase แปลง sparse array)
+  var dayRecs = [];
+  if (Array.isArray(data.dayRecords)) {
+    dayRecs = data.dayRecords;
+  } else if (data.dayRecords && typeof data.dayRecords === 'object') {
+    dayRecs = Object.values(data.dayRecords);
+  }
+
+  // หา dayRecord ของวันนี้
   var todayRec = null;
   dayRecs.forEach(function(dr){
-    if ((dr.date||'').slice(0,10) === today) todayRec = dr;
+    if (dr && (dr.date||'').slice(0,10) === today) todayRec = dr;
   });
 
   if (todayRec) {
-    barrels  = Array.isArray(todayRec.rows) ? todayRec.rows : [];
-    liveAh   = Number(todayRec.liveAh || todayRec.ahTotal || 0);
+    if (Array.isArray(todayRec.rows)) {
+      barrels = todayRec.rows;
+    } else if (todayRec.rows && typeof todayRec.rows === 'object') {
+      barrels = Object.values(todayRec.rows);
+    }
+    // B2 ใช้ ah/ahB2, B1 ใช้ liveAh/ahTotal
+    liveAh   = Number(todayRec.liveAh || todayRec.ahTotal || todayRec.ah || 0);
     targetAh = Number(todayRec.targetAh || data.targetAh || 0);
   }
 
@@ -359,6 +376,21 @@ function extractTodayBarrels(data, today) {
       liveAh = Number(data.liveAh || 0);
     }
   }
+
+  // normalize field names ให้รองรับทุก line
+  barrels = barrels.filter(Boolean).map(function(b){
+    return {
+      time:     b.time     || '-',
+      barrel:   b.barrel   || b.rack || '-',
+      partName: b.partName || b.customer || '-',
+      jobId:    b.jobId    || b.lotNo || '',
+      type:     b.type     || 'N',
+      color:    b.color    || 'B',
+      kg:       Number(b.kg  || b.kgC || 0),
+      pcs:      Number(b.pcs || 0),
+      batchNo:  b.batchNo  || '',
+    };
+  });
 
   return { barrels: barrels, liveAh: liveAh, targetAh: targetAh };
 }
