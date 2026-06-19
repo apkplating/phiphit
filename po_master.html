@@ -487,6 +487,21 @@ var itemRegistry = []; // [{key, desc, unit, lastPrice, lastDate, totalQty, orde
 var poItemRows = []; // current form rows [{desc,qty,unit,price}]
 var _itemRowSeq = 0;
 var _pollTimer = null;
+var chemMasterItems = []; // [{id,code,name,supplier}] โหลดจาก chem-master Firebase
+
+var CM_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/chem-master.json';
+
+async function loadChemMaster() {
+  try {
+    var res = await fetch(CM_URL);
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.items) && data.items.length) {
+      chemMasterItems = data.items;
+      renderItemRegistryDatalist(); // อัปเดต datalist ใหม่
+    }
+  } catch(e) { console.warn('loadChemMaster:', e.message); }
+}
 
 // ══════════════════════════════════════
 //  INIT
@@ -500,6 +515,7 @@ function initApp(){
   renderAll();
   startPoll();
   setTimeout(fbLoad, 500);
+  setTimeout(loadChemMaster, 800);
 }
 
 window.addEventListener('load', function(){
@@ -636,12 +652,29 @@ function removePoItemRow(rid){
   if (poItemRows.length === 0) addPoItemRow();
   else renderPoItemRows();
 }
+function buildChemOptions(selectedDesc) {
+  var opts = '<option value="">— เลือกรายการเคมี —</option>';
+  if (chemMasterItems.length) {
+    opts += chemMasterItems.map(function(c){
+      var sel = (c.name === selectedDesc) ? ' selected' : '';
+      return '<option value="'+esc(c.name)+'"'+sel+'>'+esc(c.code+' — '+c.name)+'</option>';
+    }).join('');
+  }
+  opts += '<option value="__custom__"'+(selectedDesc && !chemMasterItems.find(function(c){return c.name===selectedDesc;}) ? ' selected' : '')+'>✏️ พิมพ์เอง...</option>';
+  return opts;
+}
+
 function renderPoItemRows(){
   var body = document.getElementById('poItemsBody');
   body.innerHTML = poItemRows.map(function(r, idx){
+    var isCustom = r.desc && !chemMasterItems.find(function(c){ return c.name === r.desc; });
+    var customStyle = isCustom ? '' : 'display:none;';
     return '<tr>' +
       '<td class="no-col">'+(idx+1)+'</td>' +
-      '<td><input type="text" value="'+esc(r.desc)+'" list="itemRegistryList" oninput="onItemFieldChange('+r._rid+',\'desc\',this.value)" onchange="onItemDescPick('+r._rid+',this)" placeholder="รายละเอียดสินค้า/บริการ"></td>' +
+      '<td style="min-width:200px;">' +
+        '<select onchange="onChemSelect('+r._rid+',this)" style="width:100%;padding:6px 7px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:3px;">'+buildChemOptions(isCustom?'__custom__':r.desc)+'</select>' +
+        '<input type="text" value="'+(isCustom?esc(r.desc):'')+'" placeholder="พิมพ์ชื่อรายการ..." style="width:100%;padding:6px 7px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;'+customStyle+'" oninput="onItemFieldChange('+r._rid+',\'desc\',this.value)">' +
+      '</td>' +
       '<td><input type="number" min="0" step="any" value="'+r.qty+'" oninput="onItemFieldChange('+r._rid+',\'qty\',this.value)"></td>' +
       '<td><input type="text" value="'+esc(r.unit)+'" oninput="onItemFieldChange('+r._rid+',\'unit\',this.value)" placeholder="ชิ้น/กก."></td>' +
       '<td><input type="number" min="0" step="any" value="'+r.price+'" oninput="onItemFieldChange('+r._rid+',\'price\',this.value)"></td>' +
@@ -649,6 +682,33 @@ function renderPoItemRows(){
       '<td class="rm-col"><button class="rm-btn" onclick="removePoItemRow('+r._rid+')">✕</button></td>' +
     '</tr>';
   }).join('');
+  recalcPoTotals();
+}
+
+function onChemSelect(rid, sel) {
+  var r = poItemRows.find(function(x){ return x._rid===rid; });
+  if (!r) return;
+  var row = sel.closest('tr');
+  var customInput = row ? row.querySelector('input[type=text]') : null;
+  if (sel.value === '__custom__') {
+    // แสดงช่องพิมพ์
+    if (customInput) { customInput.style.display=''; customInput.value = ''; customInput.focus(); }
+    r.desc = '';
+  } else if (sel.value === '') {
+    if (customInput) customInput.style.display = 'none';
+    r.desc = '';
+  } else {
+    // เลือกจาก chem master
+    if (customInput) customInput.style.display = 'none';
+    r.desc = sel.value;
+    // auto-fill unit จาก itemRegistry ถ้ามีประวัติ
+    var hist = itemRegistry.find(function(it){ return itemKey(it.desc)===itemKey(sel.value); });
+    if (hist) {
+      if (!r.unit) r.unit = hist.unit;
+      if (!parseFloat(r.price)) r.price = hist.lastPrice;
+    }
+    renderPoItemRows();
+  }
   recalcPoTotals();
 }
 function onItemFieldChange(rid, field, value){
@@ -690,9 +750,13 @@ function renderVendorDatalist(){
   }
 }
 function renderItemRegistryDatalist(){
+  // datalist ยังคงไว้สำหรับ backward compat แต่ UI หลักใช้ select+input แล้ว
   var dl = document.getElementById('itemRegistryList');
   if (!dl) return;
-  dl.innerHTML = itemRegistry.map(function(it){ return '<option value="'+esc(it.desc)+'">'; }).join('');
+  var allDescs = {};
+  chemMasterItems.forEach(function(c){ allDescs[c.name] = true; });
+  itemRegistry.forEach(function(it){ allDescs[it.desc] = true; });
+  dl.innerHTML = Object.keys(allDescs).map(function(d){ return '<option value="'+esc(d)+'">'; }).join('');
 }
 // เมื่อเลือกรายการจากทะเบียน (datalist) — auto-fill หน่วย/ราคาล่าสุด
 function onItemDescPick(rid, inputEl){
