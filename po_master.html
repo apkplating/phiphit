@@ -96,18 +96,38 @@ textarea{resize:vertical;min-height:54px;}
 .vendor-card.clickable:hover{border-color:var(--blue2);}
 
 /* PO detail / print view */
-.po-print{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;}
-.po-print .ph-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
-.po-print .ph-co{font-size:12px;font-weight:700;color:var(--navy);}
-.po-print .ph-co-sub{font-size:10px;color:var(--text-muted);margin-top:2px;line-height:1.5;}
-.po-print .ph-title{font-size:18px;font-weight:800;color:var(--navy);text-align:right;}
-.po-print .ph-title .en{font-size:11px;color:var(--text-muted);font-weight:500;}
-.po-print .ph-meta{font-size:11px;text-align:right;margin-top:4px;color:var(--text-mid);}
-.po-print table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0;}
-.po-print th{background:var(--navy);color:#fff;padding:6px;font-size:10px;}
-.po-print td{padding:6px;border-bottom:1px solid var(--border);}
-.po-print .sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px;font-size:11px;text-align:center;}
-.po-print .sign-line{border-top:1px solid var(--text-mid);margin-top:30px;padding-top:4px;}
+.po-print{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;font-family:'IBM Plex Sans Thai',sans-serif;}
+.po-print .ph-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;border-bottom:2px solid var(--navy);padding-bottom:10px;}
+.po-print .ph-co{font-size:13px;font-weight:700;color:var(--navy);}
+.po-print .ph-co-sub{font-size:10px;color:var(--text-muted);margin-top:2px;line-height:1.6;}
+.po-print .ph-title{font-size:22px;font-weight:800;color:var(--navy);text-align:right;line-height:1.1;}
+.po-print .ph-title .en{font-size:11px;color:var(--text-muted);font-weight:500;display:block;}
+.po-print .ph-meta-box{border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;text-align:right;margin-top:6px;min-width:180px;}
+.po-print .ph-meta-box .meta-row{display:flex;justify-content:space-between;gap:20px;padding:2px 0;}
+.po-print .ph-meta-box .meta-label{color:var(--text-muted);}
+.po-print .ph-meta-box .meta-val{font-weight:600;font-family:'IBM Plex Mono',monospace;}
+.po-print .vendor-box{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;}
+.po-print .vendor-box .vb-title{font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.po-print .request-note{font-size:11px;color:var(--text-mid);margin:6px 0;font-style:italic;}
+.po-print table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;}
+.po-print table th{background:var(--navy);color:#fff;padding:7px 6px;font-size:10px;font-weight:600;text-align:center;border:1px solid var(--navy);}
+.po-print table th.left{text-align:left;}
+.po-print table td{padding:6px;border:1px solid #cbd5e1;vertical-align:middle;}
+.po-print table td.center{text-align:center;}
+.po-print table td.right{text-align:right;font-family:'IBM Plex Mono',monospace;}
+.po-print table tbody tr:nth-child(even){background:#f8fafc;}
+.po-print .totals-box{margin-left:auto;width:260px;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:4px;}
+.po-print .totals-box .t-row{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;border-bottom:1px solid var(--border);}
+.po-print .totals-box .t-row:last-child{border-bottom:none;background:var(--navy);color:#fff;font-weight:800;font-size:13px;}
+.po-print .totals-box .t-row .t-val{font-family:'IBM Plex Mono',monospace;}
+.po-print .remarks-box{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:11px;}
+.po-print .remarks-box .rem-title{font-weight:700;color:var(--navy);margin-bottom:4px;font-size:11px;}
+.po-print .remarks-box li{margin-left:14px;margin-bottom:2px;color:var(--text-mid);}
+.po-print .sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;font-size:11px;text-align:center;}
+.po-print .sign-box{border:1px solid var(--border);border-radius:8px;padding:10px 8px 8px;}
+.po-print .sign-box .sign-title{font-size:9px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:24px;}
+.po-print .sign-box .sign-line{border-top:1px solid var(--text-mid);padding-top:4px;margin-top:0;font-weight:600;min-height:20px;}
+.po-print .sign-box .sign-sub{font-size:9px;color:var(--text-muted);margin-top:2px;}
 
 /* Login */
 #loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:999;}
@@ -122,6 +142,11 @@ body.viewer-mode .hide-viewer{display:none !important;}
   .app-header,.tab-bar,.no-print{display:none !important;}
   .main{padding:0;max-width:none;}
   .card{box-shadow:none;border:none;padding:0;}
+  #poDetailOv{position:static !important;background:none !important;padding:0 !important;}
+  .po-print{border:none !important;border-radius:0 !important;padding:10mm 12mm !important;}
+  .po-print table th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .po-print .totals-box .t-row:last-child{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .po-print .sign-grid{page-break-inside:avoid;}
 }
 @media(max-width:480px){.grid3{grid-template-columns:1fr 1fr;}.po-print .sign-grid{grid-template-columns:1fr;}}
 </style>
@@ -828,9 +853,14 @@ function openPoDetail(id){
   if (!po) return;
 
   var itemsHtml = po.items.map(function(r,i){
-    return '<tr><td>'+(i+1)+'</td><td>'+esc(r.desc)+'</td><td style="text-align:center;">'+r.qty+'</td>' +
-      '<td style="text-align:center;">'+esc(r.unit)+'</td><td style="text-align:right;">'+fmtMoney(r.price)+'</td>' +
-      '<td style="text-align:right;">'+fmtMoney(r.qty*r.price)+'</td></tr>';
+    return '<tr>' +
+      '<td class="center">'+(i+1)+'</td>' +
+      '<td>'+esc(r.desc)+'</td>' +
+      '<td class="center">'+r.qty+'</td>' +
+      '<td class="center">'+esc(r.unit)+'</td>' +
+      '<td class="right">'+fmtMoney(r.price)+'</td>' +
+      '<td class="right">'+fmtMoney(r.qty*r.price)+'</td>' +
+    '</tr>';
   }).join('');
 
   var statusOptions = Object.keys(STATUS_LABELS).map(function(s){
@@ -839,33 +869,79 @@ function openPoDetail(id){
 
   document.getElementById('poDetailBody').innerHTML =
     '<div class="po-print">' +
+      // ── Header ──
       '<div class="ph-row">' +
-        '<div>' +
+        '<div style="flex:1;">' +
           '<div class="ph-co">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div>' +
-          '<div class="ph-co-sub">APK PLATING SERVICE CO.,LTD.<br>349/16 หมู่ 1 ตำบลบางโปรง อำเภอเมือง จังหวัดสมุทรปราการ 10270</div>' +
+          '<div class="ph-co-sub">APK PLATING SERVICE CO.,LTD.<br>' +
+            '349/16 หมู่ที่ 1 ตำบล บางโปรง อำเภอ เมือง จังหวัด สมุทรปราการ 10270<br>' +
+            'เลขที่ประจำตัวผู้เสียภาษีอากร 0115559006989<br>' +
+            'โทร. 081-303-1547 &nbsp;|&nbsp; e-mail : apk.plating@gmail.com' +
+          '</div>' +
         '</div>' +
-        '<div>' +
-          '<div class="ph-title">ใบสั่งซื้อ<div class="en">PURCHASE ORDER</div></div>' +
-          '<div class="ph-meta">เลขที่: '+esc(po.poNo)+'<br>วันที่: '+fmtD(po.date)+'</div>' +
+        '<div style="text-align:right;">' +
+          '<div class="ph-title">ใบสั่งซื้อ<span class="en">PURCHASE ORDER</span></div>' +
+          '<div class="ph-meta-box">' +
+            '<div class="meta-row"><span class="meta-label">ใบสั่งซื้อเลขที่:</span><span class="meta-val">'+esc(po.poNo)+'</span></div>' +
+            '<div class="meta-row"><span class="meta-label">วันที่:</span><span class="meta-val">'+fmtD(po.date)+'</span></div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="font-size:12px;margin-bottom:8px;"><b>ผู้ขาย/VENDOR</b><br>'+esc(po.vendorName)+
-        (po.vendorAddr?'<br>'+esc(po.vendorAddr).replace(/\n/g,'<br>'):'')+
-        (po.vendorTax?'<br>เลขประจำตัวผู้เสียภาษี: '+esc(po.vendorTax):'')+
+      // ── Vendor box ──
+      '<div class="vendor-box">' +
+        '<div class="vb-title">ผู้ขาย / VENDOR</div>' +
+        '<div style="font-size:12px;font-weight:600;">'+esc(po.vendorName)+'</div>' +
+        (po.vendorAddr?'<div style="font-size:11px;color:var(--text-mid);margin-top:2px;">'+esc(po.vendorAddr).replace(/\n/g,'<br>')+'</div>':'') +
+        (po.vendorTax?'<div style="font-size:11px;color:var(--text-mid);">เลขประจำตัวผู้เสียภาษี: '+esc(po.vendorTax)+'</div>':'') +
       '</div>' +
-      '<table><thead><tr><th>ลำดับ</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th><th>ราคา/หน่วย</th><th>จำนวนเงิน</th></tr></thead>' +
+      '<div class="request-note">ทางบริษัทฯ ขอรายการสินค้าจากท่านดังต่อไปนี้</div>' +
+      // ── Items table ──
+      '<table><thead><tr>' +
+        '<th style="width:36px;">ลำดับ<br><span style=\"font-size:9px;font-weight:400;\">No.</span></th>' +
+        '<th class="left">รายการ (Description)</th>' +
+        '<th style="width:60px;">จำนวน<br><span style=\"font-size:9px;font-weight:400;\">Q\'ty</span></th>' +
+        '<th style="width:60px;">หน่วย<br><span style=\"font-size:9px;font-weight:400;\">Unit</span></th>' +
+        '<th style="width:100px;">ราคา/หน่วย<br><span style=\"font-size:9px;font-weight:400;\">Unit Price</span></th>' +
+        '<th style="width:110px;">จำนวนเงิน<br><span style=\"font-size:9px;font-weight:400;\">Amount</span></th>' +
+      '</tr></thead>' +
       '<tbody>'+itemsHtml+'</tbody></table>' +
-      '<div class="po-totals" style="max-width:260px;margin-left:auto;">' +
-        '<div class="row"><span>รวม</span><span>'+fmtMoney(po.subtotal)+'</span></div>' +
-        '<div class="row"><span>VAT '+po.vatPercent+'%</span><span>'+fmtMoney(po.vatAmt)+'</span></div>' +
-        '<div class="row grand"><span>รวมทั้งสิ้น</span><span>'+fmtMoney(po.grandTotal)+' ฿</span></div>' +
+      // ── Totals + remarks side by side ──
+      '<div style="display:flex;gap:12px;align-items:flex-start;margin-top:4px;">' +
+        // remarks
+        '<div class="remarks-box" style="flex:1;">' +
+          '<div class="rem-title">หมายเหตุ (Remarks)</div>' +
+          '<ul>' +
+            '<li>กรุณาเซ็นต์ตอบกลับเอกสารภายใน 1 วัน</li>' +
+            '<li>แนบ P/O เมื่อมีการส่งสินค้า และวางบิลทุกครั้ง</li>' +
+            '<li>แนบเอกสาร Certificate ทุกครั้งที่มีการส่งสินค้า</li>' +
+            (po.note?'<li style=\"color:var(--navy);font-weight:600;\">'+esc(po.note)+'</li>':'') +
+          '</ul>' +
+        '</div>' +
+        // totals
+        '<div class="totals-box">' +
+          '<div class="t-row"><span>รวม</span><span class="t-val">'+fmtMoney(po.subtotal)+' ฿</span></div>' +
+          '<div class="t-row"><span>VAT '+po.vatPercent+'%</span><span class="t-val">'+fmtMoney(po.vatAmt)+' ฿</span></div>' +
+          '<div class="t-row"><span>รวมทั้งสิ้น</span><span class="t-val">'+fmtMoney(po.grandTotal)+' ฿</span></div>' +
+        '</div>' +
       '</div>' +
-      (po.note?'<div style="font-size:11px;margin-top:10px;color:var(--text-mid);"><b>หมายเหตุ:</b> '+esc(po.note)+'</div>':'') +
+      // ── Signature grid ──
       '<div class="sign-grid">' +
-        '<div><div class="sign-line">'+esc(po.issuedBy||'\u00A0')+'</div>ออกโดย (ISSUED BY)</div>' +
-        '<div>'+renderApprovalSignBlock(po)+'อนุมัติโดย (APPROVED BY)</div>' +
-        '<div><div class="sign-line">'+fmtD(po.dueDate)+'</div>กำหนดส่งสินค้า (DUE DATE)</div>' +
-        '<div><div class="sign-line">\u00A0</div>รับทราบโดย (VENDOR ACKNOWLEDGEMENT)</div>' +
+        '<div class="sign-box">' +
+          '<div class="sign-title">ออกโดย (ISSUED BY)</div>' +
+          '<div class="sign-line">'+esc(po.issuedBy||'\u00A0')+'</div>' +
+        '</div>' +
+        '<div class="sign-box">' +
+          '<div class="sign-title">อนุมัติโดย (APPROVED BY)</div>' +
+          renderApprovalSignBlock(po) +
+        '</div>' +
+        '<div class="sign-box">' +
+          '<div class="sign-title">กำหนดส่งสินค้า (DUE DATE)</div>' +
+          '<div class="sign-line">'+(po.dueDate?fmtD(po.dueDate):'\u00A0')+'</div>' +
+        '</div>' +
+        '<div class="sign-box">' +
+          '<div class="sign-title">รับทราบโดย (VENDOR ACKNOWLEDGEMENT)</div>' +
+          '<div class="sign-line">\u00A0</div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     '<div class="card no-print hide-viewer" style="margin-top:10px;">' +
@@ -890,10 +966,10 @@ function openPoDetail(id){
 // ── แสดงลายเซ็น/ชื่อผู้อนุมัติในใบ PO ──
 function renderApprovalSignBlock(po){
   if (po.approvalSignature) {
-    return '<div class="sign-line" style="padding-top:0;border-top:none;">' +
-      '<img src="'+po.approvalSignature+'" style="max-height:48px;max-width:160px;display:block;margin:0 auto 2px;">' +
-      '<div style="border-top:1px solid var(--text-mid);padding-top:2px;">'+esc(po.approvedBy||'\u00A0')+'</div>' +
-    '</div>';
+    return '<div style="min-height:48px;display:flex;align-items:center;justify-content:center;">' +
+      '<img src="'+po.approvalSignature+'" style="max-height:48px;max-width:160px;">' +
+    '</div>' +
+    '<div class="sign-line">'+esc(po.approvedBy||'\u00A0')+'</div>';
   }
   return '<div class="sign-line">'+esc(po.approvedBy||'\u00A0')+'</div>';
 }
