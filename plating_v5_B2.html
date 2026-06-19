@@ -3952,7 +3952,7 @@ function saveIntakeJobs() {
 }
 
 function getStoredFbUrl() {
-  try { return localStorage.getItem('b2_fbUrl') || ''; } catch(e){ return ''; }
+  try { return localStorage.getItem('b2_fbDbUrl') || FB_DB_URL || ''; } catch(e){ return FB_DB_URL || ''; }
 }
 
 function fbLoadIntake() {
