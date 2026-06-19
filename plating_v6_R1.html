@@ -3559,10 +3559,16 @@ async function livePushNow() {
     try {
       var base = getStoredFbUrl().replace(/\/+$/, '');
       // push /live สำหรับ poll จากเครื่องอื่น
-      await fetch(base + '/live.json', {
+      var liveRes = await fetch(base + '/live.json', {
         method:'PUT', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(liveData)
       });
+      if (!liveRes.ok) {
+        var errText = await liveRes.text();
+        showToast('entry','❌ Firebase R1 write error ' + liveRes.status + ': ' + errText.slice(0,100),'err');
+        updateLiveIndicator(false);
+        return;
+      }
       // update /data/todayBarrels ให้เครื่อง Viewer เห็น
       await fetch(base + '/data/todayBarrels.json', {
         method:'PUT', headers:{'Content-Type':'application/json'},
@@ -3570,7 +3576,10 @@ async function livePushNow() {
       });
       _fbLiveUpdatedAt = liveData.updatedAt;
       updateLiveIndicator(true, liveData);
-    } catch(e) { updateLiveIndicator(false); }
+    } catch(e) {
+      showToast('entry','❌ Firebase R1 exception: ' + e.message,'err');
+      updateLiveIndicator(false);
+    }
   }
 
   // ── Auto Discord (ถ้าเปิด toggle) ──
