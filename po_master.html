@@ -499,6 +499,7 @@ async function loadChemMaster() {
     if (data && Array.isArray(data.items) && data.items.length) {
       chemMasterItems = data.items;
       renderItemRegistryDatalist(); // อัปเดต datalist ใหม่
+      renderPoItemRows(); // อัปเดต dropdown รายการเคมีในตารางด้วย (ไม่งั้นจะค้างว่างเปล่า)
     }
   } catch(e) { console.warn('loadChemMaster:', e.message); }
 }
