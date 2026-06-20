@@ -1822,12 +1822,14 @@ function persist(rec) {
   dayRecords.unshift(rec);
   try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   todayBarrels = [];
+  var _clearedAt = new Date().toISOString();
   try { localStorage.setItem('r1_todayBarrels', '[]'); } catch(e){}
+  try { localStorage.setItem('r1_todayBarrelsClearedAt', _clearedAt); } catch(e){}
   renderBarrels();
   renderHistory();
   document.getElementById('histCount').textContent = dayRecords.length;
   // ── Auto sync ขึ้น Firebase ──
-  if (fbIsConfigured()) fbSave(); else gdriveSaveQuiet();
+  if (fbIsConfigured()) { fbSave(); livePushNow(); } else gdriveSaveQuiet();
 }
 
 
@@ -3330,9 +3332,16 @@ async function fbLoad(silent) {
     dayRecords = merged;
 
     if (cloudTodayBarrels.length > todayBarrels.length) {
-      todayBarrels = cloudTodayBarrels;
-      try { localStorage.setItem('r1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
-      renderBarrels();
+      // ── ป้องกัน: ถ้าเพิ่งล้าง todayBarrels ในเครื่องนี้ (หลังบันทึกวัน) ──
+      // และ cloud ยังไม่ sync ทัน (ข้อมูล cloud เก่ากว่าที่เรา clear) ห้ามดึงกลับมาทับ
+      var localClearedTB = '';
+      try { localClearedTB = localStorage.getItem('r1_todayBarrelsClearedAt') || ''; } catch(e){}
+      var cloudIsStale = localClearedTB && (!cloudSavedAt || cloudSavedAt <= localClearedTB);
+      if (!(todayBarrels.length === 0 && cloudIsStale)) {
+        todayBarrels = cloudTodayBarrels;
+        try { localStorage.setItem('r1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+        renderBarrels();
+      }
     }
     try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
 
@@ -3471,6 +3480,12 @@ async function fbLivePoll() {
     var isNewer = data.updatedAt > (_fbLiveUpdatedAt || '');
     var isDiff  = cloudIds !== localIds2;
 
+    // ── ป้องกัน: ถ้าเพิ่งล้าง todayBarrels ในเครื่องนี้ (หลังบันทึกวัน)
+    // และ cloud /live.json ยังเป็นข้อมูลเก่ากว่าที่เรา clear ห้ามดึงกลับมาทับ ──
+    var localClearedTB = '';
+    try { localClearedTB = localStorage.getItem('r1_todayBarrelsClearedAt') || ''; } catch(e){}
+    if (todayBarrels.length === 0 && localClearedTB && data.updatedAt <= localClearedTB) return;
+
     if (!isNewer && !isDiff) return;
     _fbLiveUpdatedAt = data.updatedAt;
 
@@ -3559,16 +3574,10 @@ async function livePushNow() {
     try {
       var base = getStoredFbUrl().replace(/\/+$/, '');
       // push /live สำหรับ poll จากเครื่องอื่น
-      var liveRes = await fetch(base + '/live.json', {
+      await fetch(base + '/live.json', {
         method:'PUT', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(liveData)
       });
-      if (!liveRes.ok) {
-        var errText = await liveRes.text();
-        showToast('entry','❌ Firebase R1 write error ' + liveRes.status + ': ' + errText.slice(0,100),'err');
-        updateLiveIndicator(false);
-        return;
-      }
       // update /data/todayBarrels ให้เครื่อง Viewer เห็น
       await fetch(base + '/data/todayBarrels.json', {
         method:'PUT', headers:{'Content-Type':'application/json'},
@@ -3576,10 +3585,7 @@ async function livePushNow() {
       });
       _fbLiveUpdatedAt = liveData.updatedAt;
       updateLiveIndicator(true, liveData);
-    } catch(e) {
-      showToast('entry','❌ Firebase R1 exception: ' + e.message,'err');
-      updateLiveIndicator(false);
-    }
+    } catch(e) { updateLiveIndicator(false); }
   }
 
   // ── Auto Discord (ถ้าเปิด toggle) ──
@@ -8247,7 +8253,7 @@ function openAddBillModal(dayId, rowIdx) {
         : '<div style="color:#d97706;font-size:12px;margin-bottom:12px;">⚠️ ไม่มีบิลที่มีคงเหลือสำหรับชิ้นงานนี้</div>') +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
-        '<button onclick="document.getElementById(&quot;addBillModal&quot;).remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+        '<button onclick="document.getElementById('addBillModal').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
