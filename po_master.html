@@ -185,7 +185,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="tab('list')">📋 รายการ PO</button>
-  <button class="tab-btn" onclick="tab('new')">➕ สร้าง PO ใหม่</button>
+  <button class="tab-btn" onclick="startNewPo()">➕ สร้าง PO ใหม่</button>
   <button class="tab-btn" onclick="tab('vendors')">🏢 ผู้ขาย/Vendor</button>
   <button class="tab-btn" onclick="tab('summary')">📊 สรุปยอดซื้อ</button>
 </div>
@@ -495,6 +495,7 @@ var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, due
 var vendors  = [];   // [{id, name, addr, tax, contact}]
 var itemRegistry = []; // [{key, desc, unit, lastPrice, lastDate, totalQty, orderCount}] — สร้างจาก poList อัตโนมัติ
 var poItemRows = []; // current form rows [{desc,qty,unit,price}]
+var _editingPoId = null; // ถ้าไม่ใช่ null = กำลังแก้ไข PO เดิม (ไม่ใช่สร้างใหม่)
 var _itemRowSeq = 0;
 var _pollTimer = null;
 var chemMasterItems = []; // [{id,code,name,supplier}] โหลดจาก chem-master Firebase
@@ -843,6 +844,50 @@ function resetPoForm(){
   poItemRows = [];
   addPoItemRow();
   document.getElementById('poToast').className = 'toast';
+  _editingPoId = null;
+  document.getElementById('poSaveBtn').textContent = '💾 บันทึก PO';
+}
+
+function startNewPo(){
+  resetPoForm();
+  tab('new');
+}
+
+// ── โหลด PO เดิมขึ้นมาแก้ไขในฟอร์ม ──
+function editPo(id){
+  if (currentRole === 'viewer') return;
+  var po = poList.find(function(x){ return x.id===id; });
+  if (!po) return;
+  closePoDetail();
+  resetPoForm();
+  tab('new');
+  _editingPoId = id;
+  document.getElementById('poNo').value = po.poNo;
+  document.getElementById('poDate').value = po.date || isoToday();
+  var vendorSel = document.getElementById('poVendorSel');
+  vendorSel.value = po.vendorName;
+  if (vendorSel.value !== po.vendorName) {
+    vendorSel.value = '__new__';
+    document.getElementById('poVendorName').style.display = 'block';
+    document.getElementById('poVendorName').value = po.vendorName;
+  } else {
+    document.getElementById('poVendorName').style.display = 'none';
+  }
+  document.getElementById('poVendorAddr').value = po.vendorAddr || '';
+  document.getElementById('poVendorTax').value = po.vendorTax || '';
+  document.getElementById('poDueDate').value = po.dueDate || '';
+  document.getElementById('poNote').value = po.note || '';
+  document.getElementById('poIssuedBy').value = po.issuedBy || '';
+  document.getElementById('poApprovedBy').value = po.approvedBy || '';
+  document.getElementById('poVatPercent').value = po.vatPercent != null ? po.vatPercent : 7;
+  poItemRows = [];
+  (po.items||[]).forEach(function(it){ addPoItemRow({desc:it.desc, qty:it.qty, unit:it.unit, price:it.price}); });
+  if (!poItemRows.length) addPoItemRow();
+  recalcPoTotals();
+  document.getElementById('poSaveBtn').textContent = '💾 บันทึกการแก้ไข';
+  var toast = document.getElementById('poToast');
+  toast.className = 'toast ok';
+  toast.textContent = po.status==='approved' ? '✏️ กำลังแก้ไข PO ที่อนุมัติแล้ว — บันทึกแล้วจะต้องอนุมัติใหม่' : '✏️ กำลังแก้ไข PO '+po.poNo;
 }
 
 function savePo(){
@@ -860,29 +905,56 @@ function savePo(){
   var vatPct = parseFloat(document.getElementById('poVatPercent').value)||0;
   var vatAmt = subtotal * vatPct / 100;
   var grand = subtotal + vatAmt;
+  var items = validItems.map(function(r){ return {desc:r.desc.trim(), qty:parseFloat(r.qty)||0, unit:r.unit.trim(), price:parseFloat(r.price)||0}; });
+  var vendorAddr = document.getElementById('poVendorAddr').value.trim();
+  var vendorTax  = document.getElementById('poVendorTax').value.trim();
+  var dueDate    = document.getElementById('poDueDate').value;
+  var note       = document.getElementById('poNote').value.trim();
+  var issuedBy   = document.getElementById('poIssuedBy').value.trim();
+  var date       = document.getElementById('poDate').value || isoToday();
+
+  // บันทึก vendor ใหม่ลงทะเบียนถ้ายังไม่มี
+  if (!vendors.find(function(v){ return v.name === vendorName; })) {
+    vendors.push({ id:'v_'+Date.now(), name:vendorName, addr:vendorAddr, tax:vendorTax, contact:'' });
+  }
+
+  // ── โหมดแก้ไข PO เดิม ──
+  if (_editingPoId) {
+    var existing = poList.find(function(x){ return x.id===_editingPoId; });
+    if (!existing) { _editingPoId=null; toast.className='toast err'; toast.textContent='ไม่พบ PO ที่จะแก้ไข (อาจถูกลบไปแล้ว)'; return; }
+    var wasApproved = existing.status === 'approved';
+    existing.poNo=poNo; existing.date=date; existing.vendorName=vendorName; existing.vendorAddr=vendorAddr;
+    existing.vendorTax=vendorTax; existing.dueDate=dueDate; existing.items=items; existing.vatPercent=vatPct;
+    existing.subtotal=subtotal; existing.vatAmt=vatAmt; existing.grandTotal=grand; existing.note=note; existing.issuedBy=issuedBy;
+    if (wasApproved) {
+      existing.status='pending'; existing.approvedBy=''; existing.approvedAt=null; existing.approvalSignature=null;
+    }
+    saveLocal(); fbSave(); renderAll();
+    if (wasApproved) notifyDiscordNewPO(existing);
+    toast.className='toast ok';
+    toast.textContent = wasApproved ? '✅ แก้ไข PO '+poNo+' แล้ว (สถานะกลับเป็นรออนุมัติ)' : '✅ แก้ไข PO '+poNo+' แล้ว';
+    resetPoForm();
+    setTimeout(function(){ tab('list'); }, 600);
+    return;
+  }
 
   var po = {
     id: 'po_' + Date.now(),
     poNo: poNo,
-    date: document.getElementById('poDate').value || isoToday(),
+    date: date,
     vendorName: vendorName,
-    vendorAddr: document.getElementById('poVendorAddr').value.trim(),
-    vendorTax: document.getElementById('poVendorTax').value.trim(),
-    dueDate: document.getElementById('poDueDate').value,
-    items: validItems.map(function(r){ return {desc:r.desc.trim(), qty:parseFloat(r.qty)||0, unit:r.unit.trim(), price:parseFloat(r.price)||0}; }),
+    vendorAddr: vendorAddr,
+    vendorTax: vendorTax,
+    dueDate: dueDate,
+    items: items,
     vatPercent: vatPct,
     subtotal: subtotal, vatAmt: vatAmt, grandTotal: grand,
-    note: document.getElementById('poNote').value.trim(),
-    issuedBy: document.getElementById('poIssuedBy').value.trim(),
+    note: note,
+    issuedBy: issuedBy,
     approvedBy: document.getElementById('poApprovedBy').value.trim(),
     status: 'pending',
     createdAt: new Date().toISOString()
   };
-
-  // บันทึก vendor ใหม่ลงทะเบียนถ้ายังไม่มี
-  if (!vendors.find(function(v){ return v.name === vendorName; })) {
-    vendors.push({ id:'v_'+Date.now(), name:vendorName, addr:po.vendorAddr, tax:po.vendorTax, contact:'' });
-  }
 
   poList.unshift(po);
   saveLocal(); fbSave();
@@ -1061,8 +1133,9 @@ function openPoDetail(id){
           '<label>สถานะ</label>' +
           '<select id="poStatusSel" onchange="updatePoStatus(\''+po.id+'\',this.value)">'+statusOptions+'</select>' +
         '</div>' +
-        '<div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;">' +
-          '<button class="btn btn-danger btn-sm" style="width:100%;" onclick="deletePo(\''+po.id+'\')">🗑️ ลบ PO นี้</button>' +
+        '<div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;gap:6px;">' +
+          '<button class="btn btn-outline btn-sm" style="width:100%;" onclick="editPo(\''+po.id+'\')">✏️ แก้ไข</button>' +
+          '<button class="btn btn-danger btn-sm" style="width:100%;" onclick="deletePo(\''+po.id+'\')">🗑️ ลบ</button>' +
         '</div>' +
       '</div>' +
       (po.approvedBy ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;" onclick="openApprovalModal(\''+po.id+'\')">✍️ เซ็นอนุมัติใหม่ (เปลี่ยนผู้อนุมัติ)</button>'
