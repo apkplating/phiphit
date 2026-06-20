@@ -1516,6 +1516,7 @@ function init() {
   setTimeout(qaFbLoadRecords, 2500);
   setTimeout(qaFbLoadProcesses, 2800);
   setTimeout(masterLoad, 1500);
+  setTimeout(jobMasterLoad, 1800); // โหลด Job Master ตั้งแต่เริ่มต้น กันบิลไม่ขึ้นตอนเลือก P/No ครั้งแรก
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
   loadAutoDiscordSetting();
@@ -6417,6 +6418,13 @@ function barrelPmAcPick(idx) {
   if (cust) document.getElementById('bCustomer').value = cust;
 
   var statusEl = document.getElementById('bPartSearchStatus');
+
+  // ── ป้องกัน: ถ้า Job Master ยังโหลดไม่เสร็จ (ว่างเปล่า) อย่าฟันธงว่า "ไม่มีสต็อก" ──
+  if (!jobMasterItems || !jobMasterItems.length) {
+    statusEl.innerHTML = '<span style="color:#d97706;">⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่</span>';
+    jobMasterLoad().then(function(){ barrelPmAcPick(idx); }); // โหลดแล้วลองเลือกซ้ำอัตโนมัติ
+    return;
+  }
 
   // ตรวจว่ามีบิลมีคงเหลือไหม (ใช้ partNoFromName เพื่อ handle กรณี partName มีชื่อยาว)
   var normSel = normalizePartKey(partNo);

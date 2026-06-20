@@ -6429,6 +6429,13 @@ function barrelPmAcPick(idx) {
 
   var statusEl = document.getElementById('bPartSearchStatus');
 
+  // ── ป้องกัน: ถ้า Job Master ยังโหลดไม่เสร็จ (ว่างเปล่า) อย่าฟันธงว่า "ไม่มีสต็อก" ──
+  if (!jobMasterItems || !jobMasterItems.length) {
+    statusEl.innerHTML = '<span style="color:#d97706;">⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่</span>';
+    jobMasterLoad().then(function(){ barrelPmAcPick(idx); }); // โหลดแล้วลองเลือกซ้ำอัตโนมัติ
+    return;
+  }
+
   // ตรวจว่ามีบิลมีคงเหลือไหม
   var normSel = normalizePartKey(partNo);
   var active  = (jobMasterItems||[]).filter(function(j){
