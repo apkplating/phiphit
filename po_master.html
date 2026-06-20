@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PO จัดซื้อ — APK Plating</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --navy:#0f2044; --blue:#1e40af; --blue2:#3b82f6; --teal:#0d9488;
@@ -482,6 +484,12 @@ var APK_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACOCAIAAA
 var DB_URL  = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
 var FB_PATH = DB_URL + '/po-master';
 
+// ══ Discord Webhook config ══
+// แจ้งผู้อนุมัติทุกครั้งที่มีการออก PO ใหม่ (สร้าง Webhook ได้จาก ตั้งค่าช่อง > Integrations > Webhooks ใน Discord)
+var DISCORD_WEBHOOK_NEW_PO   = ''; // วาง URL Webhook ของช่องที่ผู้อนุมัติอยู่
+// ส่งไฟล์ PO.pdf แจ้งผู้ออก PO ทุกครั้งที่ PO ได้รับการอนุมัติแล้ว (เพื่อให้ส่งต่อให้ Supplier)
+var DISCORD_WEBHOOK_APPROVED = ''; // วาง URL Webhook ของช่องที่เจ้าหน้าที่จัดซื้ออยู่
+
 // ── Data ──
 var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, dueDate, items:[...], vatPercent, note, issuedBy, approvedBy, status, createdAt}]
 var vendors  = [];   // [{id, name, addr, tax, contact}]
@@ -879,9 +887,31 @@ function savePo(){
   poList.unshift(po);
   saveLocal(); fbSave();
   renderAll();
+  notifyDiscordNewPO(po);
   toast.className='toast ok'; toast.textContent='✅ บันทึก PO '+poNo+' แล้ว';
   resetPoForm();
   setTimeout(function(){ tab('list'); }, 600);
+}
+
+// ── แจ้งผู้อนุมัติทาง Discord ทุกครั้งที่มีการออก PO ใหม่ ──
+function notifyDiscordNewPO(po){
+  if (!DISCORD_WEBHOOK_NEW_PO) return;
+  var payload = {
+    embeds: [{
+      title: '📝 มี PO ใหม่รอการอนุมัติ',
+      color: 0xf59e0b,
+      fields: [
+        { name:'เลขที่ PO', value:po.poNo, inline:true },
+        { name:'ผู้ขาย', value:po.vendorName, inline:true },
+        { name:'ยอดรวม', value:fmtMoney(po.grandTotal)+' บาท', inline:true },
+        { name:'ออกโดย', value:po.issuedBy||'-', inline:true }
+      ],
+      timestamp: new Date().toISOString()
+    }]
+  };
+  fetch(DISCORD_WEBHOOK_NEW_PO, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  }).catch(function(e){ console.warn('notifyDiscordNewPO failed:', e.message); });
 }
 
 // ══════════════════════════════════════
@@ -919,10 +949,7 @@ function renderPoList(){
   }).join('');
 }
 
-function openPoDetail(id){
-  var po = poList.find(function(x){ return x.id===id; });
-  if (!po) return;
-
+function buildPoPrintHtml(po){
   var itemsHtml = po.items.map(function(r,i){
     return '<tr>' +
       '<td class="center">'+(i+1)+'</td>' +
@@ -934,12 +961,7 @@ function openPoDetail(id){
     '</tr>';
   }).join('');
 
-  var statusOptions = Object.keys(STATUS_LABELS).map(function(s){
-    return '<option value="'+s+'"'+(s===po.status?' selected':'')+'>'+STATUS_LABELS[s]+'</option>';
-  }).join('');
-
-  document.getElementById('poDetailBody').innerHTML =
-    '<div class="po-print">' +
+  return (
       // ── Header ──
       '<div class="ph-row">' +
         '<div style="flex:1;display:flex;gap:10px;align-items:flex-start;">' +
@@ -1017,8 +1039,20 @@ function openPoDetail(id){
           '<div class="sign-line">\u00A0</div>' +
         '</div>' +
       '</div>' +
-      '<div class="form-code-footer">APK-FR-PU-001 &nbsp;|&nbsp; Rev.00 : 02-04-18 &nbsp;|&nbsp; อายุการจัดเก็บเอกสาร 1 ปี</div>' +
-    '</div>' +
+      '<div class="form-code-footer">APK-FR-PU-001 &nbsp;|&nbsp; Rev.00 : 02-04-18 &nbsp;|&nbsp; อายุการจัดเก็บเอกสาร 1 ปี</div>'
+  );
+}
+
+function openPoDetail(id){
+  var po = poList.find(function(x){ return x.id===id; });
+  if (!po) return;
+
+  var statusOptions = Object.keys(STATUS_LABELS).map(function(s){
+    return '<option value="'+s+'"'+(s===po.status?' selected':'')+'>'+STATUS_LABELS[s]+'</option>';
+  }).join('');
+
+  document.getElementById('poDetailBody').innerHTML =
+    '<div class="po-print">' + buildPoPrintHtml(po) + '</div>' +
     '<div class="card no-print hide-viewer" style="margin-top:10px;">' +
       '<div class="card-label">จัดการสถานะ</div>' +
       (po.approvedBy ? '<div style="font-size:11px;color:var(--success);margin-bottom:8px;">✅ อนุมัติโดย '+esc(po.approvedBy)+' เมื่อ '+fmtDT(po.approvedAt)+'</div>' : '') +
@@ -1136,7 +1170,44 @@ function confirmApproval(){
     closeApprovalModal();
     renderPoList();
     openPoDetail(po.id);
+    generateAndSendPoPdf(po);
   });
+}
+
+// ── สร้างไฟล์ PO.pdf จากแบบฟอร์มแล้วส่งแจ้งผู้ออก PO ทาง Discord เพื่อส่งต่อให้ Supplier ──
+async function generateAndSendPoPdf(po){
+  if (!DISCORD_WEBHOOK_APPROVED) return;
+  if (typeof html2canvas === 'undefined' || typeof jspdf === 'undefined') {
+    console.warn('generateAndSendPoPdf: html2canvas/jsPDF ยังโหลดไม่เสร็จ'); return;
+  }
+  var holder = null;
+  try {
+    holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;';
+    holder.innerHTML = '<div class="po-print" style="width:794px;">'+buildPoPrintHtml(po)+'</div>';
+    document.body.appendChild(holder);
+    await new Promise(function(r){ setTimeout(r, 200); }); // รอ font/รูปโลโก้โหลดเสร็จก่อน capture
+
+    var canvas = await html2canvas(holder.firstChild, { scale:2, useCORS:true, backgroundColor:'#ffffff' });
+    var imgData = canvas.toDataURL('image/png');
+    var pdf = new jspdf.jsPDF({ unit:'mm', format:'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var iw = pw, ih = canvas.height * iw / canvas.width;
+    if (ih > ph) ih = ph; // PO ส่วนใหญ่จบในหน้าเดียวอยู่แล้ว
+    pdf.addImage(imgData, 'PNG', 0, 0, iw, ih);
+    var blob = pdf.output('blob');
+
+    var form = new FormData();
+    form.append('payload_json', JSON.stringify({
+      content: '✅ PO **'+po.poNo+'** อนุมัติแล้วโดย '+(po.approvedBy||'-')+'\nผู้ออก: '+(po.issuedBy||'-')+' — รบกวนส่งต่อไฟล์นี้ให้ Supplier ('+po.vendorName+') ด้วยครับ'
+    }));
+    form.append('files[0]', blob, po.poNo+'.pdf');
+    await fetch(DISCORD_WEBHOOK_APPROVED, { method:'POST', body: form });
+  } catch(e) {
+    console.warn('generateAndSendPoPdf failed:', e.message);
+  } finally {
+    if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+  }
 }
 function deletePo(id){
   if (currentRole === 'viewer') return;
