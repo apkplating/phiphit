@@ -486,9 +486,9 @@ var FB_PATH = DB_URL + '/po-master';
 
 // ══ Discord Webhook config ══
 // แจ้งผู้อนุมัติทุกครั้งที่มีการออก PO ใหม่ (สร้าง Webhook ได้จาก ตั้งค่าช่อง > Integrations > Webhooks ใน Discord)
-var DISCORD_WEBHOOK_NEW_PO   = ''; // วาง URL Webhook ของช่องที่ผู้อนุมัติอยู่
+var DISCORD_WEBHOOK_NEW_PO   = 'https://discordapp.com/api/webhooks/1517882647089647769/4aVSUKg8CYEDH9d1ZqZFaw90Rgc45pvfhvBnCMA9i1I-kpqLdkf9Ywi8GgMUcnaFgCaO'; // วาง URL Webhook ของช่องที่ผู้อนุมัติอยู่
 // ส่งไฟล์ PO.pdf แจ้งผู้ออก PO ทุกครั้งที่ PO ได้รับการอนุมัติแล้ว (เพื่อให้ส่งต่อให้ Supplier)
-var DISCORD_WEBHOOK_APPROVED = ''; // วาง URL Webhook ของช่องที่เจ้าหน้าที่จัดซื้ออยู่
+var DISCORD_WEBHOOK_APPROVED = 'https://discordapp.com/api/webhooks/1517882647089647769/4aVSUKg8CYEDH9d1ZqZFaw90Rgc45pvfhvBnCMA9i1I-kpqLdkf9Ywi8GgMUcnaFgCaO'; // วาง URL Webhook ของช่องที่เจ้าหน้าที่จัดซื้ออยู่
 
 // ── Data ──
 var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, dueDate, items:[...], vatPercent, note, issuedBy, approvedBy, status, createdAt}]
