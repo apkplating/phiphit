@@ -325,7 +325,10 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
       </div>
       <div class="grid2">
         <div class="field" style="margin:0;"><label>Supplier</label><input type="text" id="newSupplier" placeholder="เช่น Kelly"></div>
-        <div class="field" style="margin:0;"><label>ใช้ใน Line</label>
+        <div class="field" style="margin:0;"><label>ราคา/หน่วย (บาท)</label><input type="number" id="newPrice" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
+      </div>
+      <div class="grid2">
+        <div class="field" style="margin:0;grid-column:1/-1;"><label>ใช้ใน Line</label>
           <select id="newLines" multiple style="height:70px;">
             <option value="b1" selected>B1</option>
             <option value="b2" selected>B2</option>
@@ -334,7 +337,7 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
         </div>
       </div>
       <div class="grid2" style="margin-top:4px;">
-        <button class="btn btn-primary btn-sm" onclick="confirmAddItem()">✓ บันทึก</button>
+        <button class="btn btn-primary btn-sm" id="addItemSaveBtn" onclick="confirmAddItem()">✓ บันทึก</button>
         <button class="btn btn-outline btn-sm" onclick="toggleAddForm()">ยกเลิก</button>
       </div>
     </div>
@@ -792,22 +795,60 @@ function addChemIn() {
 }
 
 // ══ ITEMS ══
+var editingItemId = null;
 function toggleAddForm(){
   var f=document.getElementById('addItemForm');
-  f.style.display=f.style.display==='none'?'block':'none';
+  var willShow = f.style.display==='none';
+  f.style.display = willShow ? 'block' : 'none';
+  if (!willShow) {
+    // ปิดฟอร์ม → เคลียร์สถานะแก้ไขด้วย
+    editingItemId = null;
+    ['newCode','newName','newSupplier','newPrice'].forEach(function(id){document.getElementById(id).value='';});
+    document.getElementById('addItemSaveBtn').textContent = '✓ บันทึก';
+  }
+}
+function editItem(id){
+  if(currentRole==='viewer'){ return; }
+  var item=chemItems.find(function(c){return c.id===id;});
+  if (!item) return;
+  editingItemId = id;
+  document.getElementById('newCode').value = item.code||'';
+  document.getElementById('newName').value = item.name||'';
+  document.getElementById('newSupplier').value = item.supplier||'';
+  document.getElementById('newPrice').value = item.price||'';
+  var lines = item.lines||['b1','b2','r1'];
+  Array.from(document.getElementById('newLines').options).forEach(function(o){ o.selected = lines.indexOf(o.value)!==-1; });
+  document.getElementById('addItemForm').style.display='block';
+  document.getElementById('addItemSaveBtn').textContent = '💾 บันทึกการแก้ไข';
+  document.getElementById('addItemForm').scrollIntoView({behavior:'smooth', block:'center'});
 }
 function confirmAddItem(){
   if(currentRole==='viewer'){ return; }
   var code=document.getElementById('newCode').value.trim();
   var name=document.getElementById('newName').value.trim();
   var supplier=document.getElementById('newSupplier').value.trim();
+  var price=parseFloat(document.getElementById('newPrice').value)||0;
   var lines=Array.from(document.getElementById('newLines').selectedOptions).map(function(o){return o.value;});
   if (!code||!name){alert('กรุณากรอกรหัสและชื่อเคมี');return;}
-  if (chemItems.some(function(c){return c.code===code;})){alert('รหัสเคมีซ้ำ');return;}
-  chemItems.push({id:'CH'+Date.now(),code,name,supplier,lines});
+  if (chemItems.some(function(c){return c.code===code && c.id!==editingItemId;})){alert('รหัสเคมีซ้ำ');return;}
+  if (editingItemId) {
+    var item = chemItems.find(function(c){return c.id===editingItemId;});
+    if (item) { item.code=code; item.name=name; item.supplier=supplier; item.price=price; item.lines=lines; }
+  } else {
+    chemItems.push({id:'CH'+Date.now(),code,name,supplier,price,lines});
+  }
   saveLocal(); fbSave();
-  ['newCode','newName','newSupplier'].forEach(function(id){document.getElementById(id).value='';});
+  editingItemId = null;
+  ['newCode','newName','newSupplier','newPrice'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('addItemSaveBtn').textContent = '✓ บันทึก';
   toggleAddForm(); renderItemsList(); populateStockSel();
+}
+function updateItemPrice(id, value){
+  if(currentRole==='viewer'){ return; }
+  var item=chemItems.find(function(c){return c.id===id;});
+  if (!item) return;
+  item.price = parseFloat(value)||0;
+  saveLocal(); fbSave();
 }
 function renderItemsList(){
   var el=document.getElementById('itemsList');
@@ -815,16 +856,23 @@ function renderItemsList(){
   el.innerHTML=chemItems.map(function(item){
     var b=calcBalance(item.id);
     var color=b.remain<0?'#dc2626':b.remain<5?'#d97706':'#16a34a';
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;">'+
+    return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;gap:8px;">'+
       '<div>'+
         '<div style="font-weight:700;font-size:12px;">'+item.code+' — '+item.name+'</div>'+
         '<div style="font-size:10px;color:var(--text-muted);">'+(item.supplier||'')+'</div>'+
         '<div style="margin-top:3px;">'+(item.lines||['b1','b2','r1']).map(function(l){return '<span class="line-badge line-'+l+'">'+l.toUpperCase()+'</span>';}).join('')+'</div>'+
+        '<div style="margin-top:5px;display:flex;align-items:center;gap:4px;">'+
+          '<label style="font-size:10px;color:var(--text-muted);">฿/หน่วย:</label>'+
+          '<input type="number" step="0.01" min="0" value="'+(item.price||0)+'" onchange="updateItemPrice(\''+item.id+'\',this.value)" style="width:80px;padding:3px 6px;font-size:11px;border:1px solid var(--border);border-radius:6px;">'+
+        '</div>'+
       '</div>'+
-      '<div style="text-align:right;">'+
+      '<div style="text-align:right;flex-shrink:0;">'+
         '<div style="font-size:11px;color:var(--text-muted);">คงเหลือ</div>'+
         '<div style="font-size:16px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+color+';">'+b.remain.toFixed(2)+' L</div>'+
-        '<button onclick="deleteItem(\''+item.id+'\')" style="margin-top:4px;background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">ลบ</button>'+
+        '<div style="display:flex;gap:4px;margin-top:4px;">'+
+          '<button onclick="editItem(\''+item.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">แก้ไข</button>'+
+          '<button onclick="deleteItem(\''+item.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">ลบ</button>'+
+        '</div>'+
       '</div>'+
     '</div>';
   }).join('');
