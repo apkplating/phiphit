@@ -8782,6 +8782,7 @@ function mcBuildPrintHtml(rec) {
     '.title{text-align:center;background:#1e3a8a;color:#fff;padding:8px;border-radius:6px;font-weight:700;margin-bottom:8px;}' +
     '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;}' +
     '.legend{font-size:10px;color:#475569;margin-top:6px;}' +
+    '.formfooter{display:flex;justify-content:space-between;align-items:center;border-top:2px solid #0f172a;margin-top:40px;padding-top:6px;font-size:10px;color:#0f172a;}' +
     '@media print{ body{padding:0;} }' +
     '</style></head><body>' +
     '<div class="title">ใบรายงานผลการตรวจเช็คเครื่องจักร/อุปกรณ์ประจำวัน (RACK)</div>' +
@@ -8792,9 +8793,7 @@ function mcBuildPrintHtml(rec) {
     '<table><thead><tr><th>ลำดับ</th><th>วันที่</th><th>ชื่อเครื่องจักรและอุปกรณ์</th><th>รายละเอียดของการชำรุด</th><th>รายการอุปกรณ์ที่ใช้</th><th>ผู้ปรับปรุงแก้ไข</th></tr></thead><tbody>' +
       (repairRows || '<tr><td colspan="6" style="text-align:center;border:1px solid #94a3b8;padding:10px;color:#94a3b8;">ไม่มีรายการซ่อม</td></tr>') +
     '</tbody></table>' +
-    '<div style="display:flex;justify-content:flex-end;margin-top:50px;text-align:center;font-size:11px;">' +
-      '<div style="width:200px;border-top:1px solid #94a3b8;padding-top:4px;">ผู้ตรวจสอบ</div>' +
-    '</div>' +
+    '<div class="formfooter"><span>APK-FR-MN-002</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>' +
     '</body></html>';
 }
 function mcPrintDay() {
