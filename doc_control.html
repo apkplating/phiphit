@@ -287,8 +287,10 @@ tr:hover td{background:var(--steel-3);}
         <button data-sub="publish" class="active">รอเผยแพร่</button>
         <button data-sub="import">นำเข้าเอกสารเก่า</button>
         <button data-sub="perm">สิทธิ์ผู้ใช้</button>
+        <button data-sub="types">ประเภทเอกสาร</button>
         <button data-sub="cat">ค่าเริ่มต้นประเภทเอกสาร</button>
         <button data-sub="depts">รายชื่อแผนก</button>
+        <button data-sub="notify">การแจ้งเตือน</button>
       </div>
 
       <div class="card admin-sub" id="admin-publish">
@@ -358,6 +360,18 @@ tr:hover td{background:var(--steel-3);}
         <div id="permTableWrap"><div class="empty">กำลังโหลด…</div></div>
       </div>
 
+      <div class="card admin-sub" id="admin-types" style="display:none;">
+        <h2>ประเภทเอกสาร</h2>
+        <div class="sub">รหัส 2 ตัวอักษร (AA) ใช้ในรหัสเอกสาร APK-AA-BB-CCC — แก้ชื่อหรือเพิ่ม/ลบประเภทได้ที่นี่</div>
+        <div id="typesListWrap"></div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="max-width:110px;"><input type="text" id="newTypeCode" maxlength="4" placeholder="รหัส เช่น OS" class="mono"></div>
+          <div class="field" style="flex:2;"><input type="text" id="newTypeLabel" placeholder="ชื่อประเภท เช่น มาตรฐานการปฏิบัติงาน (Operation Standard)"></div>
+          <div class="field" style="flex:0; align-self:flex-end;"><button class="btn btn-ghost btn-sm" id="addTypeBtn">+ เพิ่ม</button></div>
+        </div>
+        <div class="hint">การลบ/เปลี่ยนรหัสจะไม่กระทบเอกสารที่เผยแพร่ไปแล้ว เพราะรหัสเอกสารเดิมถูกบันทึกไว้ตายตัวในบัญชีแม่บทแล้ว — มีผลแค่กับตัวเลือกตอนสร้างคำขอใหม่เท่านั้น</div>
+      </div>
+
       <div class="card admin-sub" id="admin-cat" style="display:none;">
         <h2>สิทธิ์ดูเริ่มต้นตามประเภทเอกสาร</h2>
         <div class="sub">ใช้เป็นค่าเริ่มต้นตอนเผยแพร่เอกสาร (ปรับเฉพาะฉบับได้ภายหลัง)</div>
@@ -372,6 +386,21 @@ tr:hover td{background:var(--steel-3);}
           <div class="field" style="flex:2;"><input type="text" id="newDeptName" placeholder="ชื่อแผนกใหม่"></div>
           <div class="field" style="flex:0; align-self:flex-end;"><button class="btn btn-ghost btn-sm" id="addDeptBtn">+ เพิ่ม</button></div>
         </div>
+      </div>
+
+      <div class="card admin-sub" id="admin-notify" style="display:none;">
+        <h2>การแจ้งเตือน (Discord)</h2>
+        <div class="sub">ส่งข้อความแจ้งเตือนอัตโนมัติเข้า Discord เมื่อมีคำขอรออนุมัติ และเมื่อเผยแพร่/ยกเลิกเอกสาร — เหมือนระบบ PO จัดซื้อ</div>
+        <div class="field">
+          <label>Discord Webhook URL</label>
+          <input type="text" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/...">
+          <div class="hint">สร้างได้จาก ตั้งค่าช่อง Discord &gt; Integrations &gt; Webhooks &gt; New Webhook แล้ววาง URL ที่ได้ตรงนี้ — เว้นว่างไว้ถ้ายังไม่ต้องการแจ้งเตือน</div>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary btn-sm" id="saveNotifyBtn">บันทึก</button>
+          <button class="btn btn-ghost btn-sm" id="testNotifyBtn">ส่งทดสอบ</button>
+        </div>
+        <div class="login-err" id="notifyErr"></div>
       </div>
     </div>
 
@@ -437,10 +466,12 @@ var PATHS = {
   master:   DB_URL + '/doc_control/master',
   files:    DB_URL + '/doc_control/files',
   catView:  DB_URL + '/doc_control/settings/categoryViewDepts',
-  depts:    DB_URL + '/doc_control/settings/depts'
+  depts:    DB_URL + '/doc_control/settings/depts',
+  docTypes: DB_URL + '/doc_control/settings/docTypes',
+  discordWebhook: DB_URL + '/doc_control/settings/discordWebhook'
 };
 
-var DOC_TYPES = [
+var DEFAULT_DOC_TYPES = [
   {code:'QM', label:'คู่มือคุณภาพ (Quality Manual)'},
   {code:'PM', label:'ขั้นตอนการปฏิบัติ (Procedure Manual)'},
   {code:'WI', label:'คู่มือการทำงาน (Work Instruction)'},
@@ -448,6 +479,7 @@ var DOC_TYPES = [
   {code:'EX', label:'เอกสารภายนอก (External Document)'},
   {code:'FM', label:'แบบฟอร์ม (Format)'}
 ];
+var DOC_TYPES = DEFAULT_DOC_TYPES.slice();
 var DOC_DEPTS = [
   {code:'MR', label:'ฝ่ายบริหาร'},
   {code:'HR', label:'แผนกบุคคล'},
@@ -466,6 +498,8 @@ var DEFAULT_CAT_VIEW = {
   EX:['Management Dept./QMR'],
   FM:['Management Dept./QMR','Production','Quality Assurance','Maintenance','Admin']
 };
+var SITE_URL = 'https://apkplating.github.io/phiphit/doc_control.html';
+var DISCORD_WEBHOOK = '';
 
 var session = null;
 var APPROVAL_DEPTS = DEFAULT_DEPTS.slice();
@@ -524,6 +558,14 @@ function openBase64Pdf(b64, fileName){
     var url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   }catch(e){ toast('เปิดไฟล์ไม่สำเร็จ: '+e.message); }
+}
+function notifyDiscord(content){
+  if (!DISCORD_WEBHOOK) return Promise.resolve();
+  return fetch(DISCORD_WEBHOOK, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content: content})
+  }).catch(function(e){ console.warn('แจ้งเตือน Discord ไม่สำเร็จ', e); });
 }
 function userDepts(u){
   if (!u) return [];
@@ -598,7 +640,9 @@ function firstVisibleTab(){
 function loadSettings(){
   return Promise.all([
     fbGet(PATHS.depts).then(function(d){ if (Array.isArray(d) && d.length) APPROVAL_DEPTS = d; }),
-    fbGet(PATHS.catView).then(function(d){ if (d && typeof d === 'object') CAT_VIEW = d; })
+    fbGet(PATHS.catView).then(function(d){ if (d && typeof d === 'object') CAT_VIEW = d; }),
+    fbGet(PATHS.docTypes).then(function(d){ if (Array.isArray(d) && d.length) DOC_TYPES = d; }),
+    fbGet(PATHS.discordWebhook).then(function(d){ if (typeof d === 'string') DISCORD_WEBHOOK = d; })
   ]);
 }
 
@@ -612,6 +656,7 @@ function populateStaticOptions(){
     var o = document.createElement('option'); o.value = d.code; o.textContent = d.code+' — '+d.label; deptSel.appendChild(o);
   });
   var libType = $('libFilterType');
+  libType.innerHTML = '<option value="">ทั้งหมด</option>';
   DOC_TYPES.forEach(function(t){
     var o = document.createElement('option'); o.value = t.code; o.textContent = t.label; libType.appendChild(o);
   });
@@ -713,8 +758,10 @@ function submitRequest(){
 
   var draftFile = $('fDraftFile').files[0];
   var btn = $('submitReqBtn'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  var darForNotify = null;
 
   nextDarNo().then(function(dar){
+    darForNotify = dar.darNo;
     var approvals = {};
     reqDepts.forEach(function(d){ approvals[d] = {signed:false}; });
     var req = {
@@ -736,6 +783,16 @@ function submitRequest(){
       return reqId;
     });
   }).then(function(){
+    notifyDiscord(
+      '📄 **มีคำขอเอกสารใหม่รออนุมัติ**\n' +
+      'DAR No. `' + darForNotify + '`\n' +
+      'ชื่อเอกสาร: ' + docName + '\n' +
+      'รหัสเอกสาร: `' + docCode + '`\n' +
+      'ประเภทคำขอ: ' + actionLabel(action) + '\n' +
+      'ผู้นำเสนอ: ' + session.user.name + '\n' +
+      'แผนกที่ต้องเซ็นอนุมัติ: ' + reqDepts.join(', ') + '\n' +
+      '👉 เข้าไปเซ็นอนุมัติที่แท็บ "รออนุมัติ": ' + SITE_URL
+    );
     toast('ส่งคำขอสำเร็จ');
     $('fDocName').value = ''; $('fDetail').value = ''; $('fDraftFile').value = '';
     document.querySelectorAll('#reqDeptGroup input').forEach(function(i){ i.checked = false; });
@@ -978,6 +1035,24 @@ function doPublish(){
       published: {fileName: file ? file.name : null, publishedBy: {pin: session.pin, name: session.user.name}, publishedAt: new Date().toISOString(), viewDepts: viewDepts, rev: rev}
     });
   }).then(function(){
+    if (r.action === 'cancel'){
+      notifyDiscord(
+        '🛑 **เอกสารถูกยกเลิก**\n' +
+        'รหัสเอกสาร: `' + r.docCode + '`\n' +
+        'ชื่อเอกสาร: ' + r.docName + '\n' +
+        'กรุณาเรียกคืนสำเนาที่ใช้งานอยู่และหยุดใช้งานเอกสารฉบับนี้\n' +
+        '👉 ' + SITE_URL
+      );
+    } else {
+      notifyDiscord(
+        '✅ **เอกสารเผยแพร่แล้ว — เพิ่มเข้าคลังเอกสาร**\n' +
+        'รหัสเอกสาร: `' + r.docCode + '`\n' +
+        'ชื่อเอกสาร: ' + r.docName + '\n' +
+        'ครั้งที่แก้ไข (Rev): ' + rev + '\n' +
+        'แผนกที่มีสิทธิ์ดู: ' + viewDepts.join(', ') + '\n' +
+        '👉 ดูเอกสารได้ที่แท็บ "คลังเอกสาร": ' + SITE_URL
+      );
+    }
     toast('เผยแพร่เอกสารสำเร็จ');
     closePublishModal();
     refreshPublishQueue();
@@ -1123,6 +1198,35 @@ function renderCatTable(){
   });
 }
 
+/* ── Admin: ประเภทเอกสาร ── */
+function renderDocTypesList(){
+  var wrap = $('typesListWrap');
+  wrap.innerHTML = DOC_TYPES.map(function(t,i){
+    return '<div class="dept-row"><div class="dept-name mono" style="min-width:46px;">'+escapeHtml(t.code)+'</div>'+
+      '<input type="text" class="type-label-input" data-idx="'+i+'" value="'+escapeHtml(t.label)+'" style="flex:1; border:1px solid var(--border); border-radius:6px; padding:6px 9px; font-size:12.5px; margin:0 8px; font-family:inherit;">'+
+      '<button class="btn btn-ghost btn-sm" data-save-type="'+i+'">บันทึก</button>'+
+      '<button class="btn btn-ghost btn-sm" data-del-type="'+i+'">ลบ</button></div>';
+  }).join('');
+  wrap.querySelectorAll('[data-save-type]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.getAttribute('data-save-type'), 10);
+      var input = wrap.querySelector('.type-label-input[data-idx="'+idx+'"]');
+      DOC_TYPES[idx].label = input.value.trim() || DOC_TYPES[idx].label;
+      saveDocTypes(function(){ toast('บันทึกแล้ว'); populateStaticOptions(); });
+    });
+  });
+  wrap.querySelectorAll('[data-del-type]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.getAttribute('data-del-type'), 10);
+      DOC_TYPES.splice(idx, 1);
+      saveDocTypes(function(){ toast('ลบแล้ว'); renderDocTypesList(); populateStaticOptions(); });
+    });
+  });
+}
+function saveDocTypes(cb){
+  fbPut(PATHS.docTypes, DOC_TYPES).then(function(){ if (cb) cb(); });
+}
+
 /* ── Admin: รายชื่อแผนก ── */
 function renderDeptsList(){
   var wrap = $('deptsListWrap');
@@ -1195,9 +1299,22 @@ document.addEventListener('DOMContentLoaded', function(){
       var sub = btn.getAttribute('data-sub');
       $('admin-'+sub).style.display = '';
       if (sub === 'perm') renderPermTable();
+      if (sub === 'types') renderDocTypesList();
       if (sub === 'cat') renderCatTable();
       if (sub === 'depts') renderDeptsList();
       if (sub === 'import') renderImportForm();
+      if (sub === 'notify') $('discordWebhookInput').value = DISCORD_WEBHOOK;
+    });
+  });
+  $('addTypeBtn').addEventListener('click', function(){
+    var code = $('newTypeCode').value.trim().toUpperCase();
+    var label = $('newTypeLabel').value.trim();
+    if (!code || !label){ toast('กรุณากรอกรหัสและชื่อประเภท'); return; }
+    if (DOC_TYPES.some(function(t){ return t.code === code; })){ toast('มีรหัสนี้อยู่แล้ว'); return; }
+    DOC_TYPES.push({code: code, label: label});
+    saveDocTypes(function(){
+      $('newTypeCode').value = ''; $('newTypeLabel').value = '';
+      toast('เพิ่มประเภทเอกสารแล้ว'); renderDocTypesList(); populateStaticOptions();
     });
   });
   $('impCode').addEventListener('blur', onImpCodeInput);
@@ -1210,6 +1327,23 @@ document.addEventListener('DOMContentLoaded', function(){
     fbPut(PATHS.depts, APPROVAL_DEPTS).then(function(){
       $('newDeptName').value = ''; toast('เพิ่มแผนกแล้ว'); renderDeptsList(); renderReqDeptGroup();
     });
+  });
+  $('saveNotifyBtn').addEventListener('click', function(){
+    var url = $('discordWebhookInput').value.trim();
+    fbPut(PATHS.discordWebhook, url).then(function(){
+      DISCORD_WEBHOOK = url; $('notifyErr').textContent = ''; toast('บันทึกแล้ว');
+    });
+  });
+  $('testNotifyBtn').addEventListener('click', function(){
+    var url = $('discordWebhookInput').value.trim();
+    if (!url){ $('notifyErr').textContent = 'กรุณากรอก Webhook URL ก่อนทดสอบ'; return; }
+    fetch(url, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: '🔔 ทดสอบการแจ้งเตือนจากระบบควบคุมเอกสาร APK Plating — ถ้าเห็นข้อความนี้ แปลว่าตั้งค่าสำเร็จ'})
+    }).then(function(res){
+      if (res.ok){ $('notifyErr').textContent = ''; toast('ส่งทดสอบสำเร็จ ไปเช็คใน Discord ได้เลย'); }
+      else { $('notifyErr').textContent = 'ส่งไม่สำเร็จ: HTTP ' + res.status; }
+    }).catch(function(e){ $('notifyErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message; });
   });
 
   // ── เริ่มต้น ──
