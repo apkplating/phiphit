@@ -7370,9 +7370,9 @@ async function confirmJobOut() {
 
     <div style="font-size:10px;color:var(--text-muted);background:var(--sky-pale);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6;">
       <b>สัญลักษณ์การตรวจสอบ</b> &nbsp;
-      <span style="color:#16a34a;font-weight:700;">R</span> = เครื่องจักรปกติ &nbsp;|&nbsp;
-      <span style="color:#dc2626;font-weight:700;">S</span> = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp;|&nbsp;
-      <span style="color:#d97706;font-weight:700;">r</span> = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้
+      <span style="color:#16a34a;font-weight:700;">✓</span> = เครื่องจักรปกติ &nbsp;|&nbsp;
+      <span style="color:#dc2626;font-weight:700;">✗</span> = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp;|&nbsp;
+      <span style="color:#d97706;font-weight:700;">⚠</span> = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้
     </div>
 
     <div id="mcChecklistBody"></div>
@@ -8430,31 +8430,48 @@ function mcRenderChecklist() {
     grouped[key].push(it);
   });
 
+  var COLW = 38; // ความกว้างคอลัมน์ปุ่ม (คงที่ทุกแถว เพื่อให้ตรงกันเหมือนตาราง Excel)
+
+  var headerRow =
+    '<div style="display:flex;align-items:center;padding:6px 10px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:9px;color:var(--text-muted);font-weight:700;">' +
+      '<div style="flex:1;">หัวข้อการตรวจสอบ</div>' +
+      '<div style="width:' + COLW + 'px;text-align:center;color:#16a34a;">✓<br>ปกติ</div>' +
+      '<div style="width:' + COLW + 'px;text-align:center;color:#dc2626;">✗<br>ชำรุด</div>' +
+      '<div style="width:' + COLW + 'px;text-align:center;color:#d97706;">⚠<br>ซ่อมเอง</div>' +
+    '</div>';
+
   el.innerHTML = order.map(function(key) {
     var items = grouped[key];
     var machineName = items[0].machine;
     var machineNo = items[0].no;
     var rows = items.map(function(it) {
       var cur = results[it.id] || '';
-      function btn(val, label, color) {
+      function box(val, symbol, color) {
         var sel = cur === val;
-        return '<button type="button" onclick="mcSetResult(\'' + it.id + '\',\'' + val + '\')" style="width:34px;height:30px;border-radius:7px;border:1.5px solid ' + color + ';background:' + (sel?color:'#fff') + ';color:' + (sel?'#fff':color) + ';font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">' + label + '</button>';
+        return '<div style="width:' + COLW + 'px;display:flex;justify-content:center;">' +
+          '<button type="button" onclick="mcSetResult(&quot;' + it.id + '&quot;,&quot;' + val + '&quot;)" ' +
+            'style="width:30px;height:30px;border-radius:7px;border:1.5px solid ' + color + ';' +
+            'background:' + (sel ? color : '#fff') + ';color:' + (sel ? '#fff' : color) + ';' +
+            'font-weight:700;font-size:15px;line-height:1;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;">' +
+            symbol +
+          '</button>' +
+        '</div>';
       }
-      return '<tr>' +
-        '<td style="font-size:11px;width:28px;text-align:center;color:var(--text-muted);">' + it.itemNo + '</td>' +
-        '<td style="font-size:12px;">' + mcEsc(it.itemName) +
-          (it.standard ? '<div style="font-size:10px;color:var(--text-muted);">' + mcEsc(it.standard) + (it.method ? ' · ' + mcEsc(it.method) : '') + '</div>' : '') +
-        '</td>' +
-        '<td style="white-space:nowrap;"><div style="display:flex;gap:4px;justify-content:center;">' +
-          btn('R','R','#16a34a') + btn('S','S','#dc2626') + btn('r','r','#d97706') +
-        '</div></td>' +
-      '</tr>';
+      return '<div style="display:flex;align-items:center;padding:7px 10px;border-top:1px solid var(--border);">' +
+        '<div style="flex:1;padding-right:6px;">' +
+          '<span style="font-size:9px;color:var(--text-muted);">' + it.itemNo + '.</span> ' +
+          '<span style="font-size:12px;">' + mcEsc(it.itemName) + '</span>' +
+          (it.standard ? '<div style="font-size:10px;color:var(--text-muted);margin-top:1px;">' + mcEsc(it.standard) + (it.method ? ' · ' + mcEsc(it.method) : '') + '</div>' : '') +
+        '</div>' +
+        box('R','✓','#16a34a') + box('S','✗','#dc2626') + box('r','⚠','#d97706') +
+      '</div>';
     }).join('');
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">' +
-      '<div style="background:var(--sky-pale);padding:7px 10px;font-size:12px;font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center;">' +
-        '<span>' + machineNo + '. ' + mcEsc(machineName) + '</span>' +
+      '<div style="background:var(--sky-pale);padding:7px 10px;font-size:12px;font-weight:700;color:var(--navy);">' +
+        machineNo + '. ' + mcEsc(machineName) +
       '</div>' +
-      '<table style="width:100%;"><tbody>' + rows + '</tbody></table>' +
+      headerRow +
+      rows +
     '</div>';
   }).join('');
 }
@@ -8623,7 +8640,7 @@ function mcRenderHistory() {
     var results = r.results || {};
     var counts = { R:0, S:0, r:0 };
     Object.keys(results).forEach(function(k){ if (results[k] && counts[results[k]]!==undefined) counts[results[k]]++; });
-    var resultSummary = '<span style="color:#16a34a;">R:'+counts.R+'</span> <span style="color:#dc2626;">S:'+counts.S+'</span> <span style="color:#d97706;">r:'+counts.r+'</span>';
+    var resultSummary = '<span style="color:#16a34a;">✓'+counts.R+'</span> <span style="color:#dc2626;">✗'+counts.S+'</span> <span style="color:#d97706;">⚠'+counts.r+'</span>';
     var repairCount = (r.repairs||[]).filter(function(rp){return rp.machine||rp.detail;}).length;
     return '<tr>' +
       '<td>' + mcEsc(r.date) + '</td>' +
@@ -8661,6 +8678,9 @@ function mcBuildPrintHtml(rec) {
     var items = grouped[key];
     items.forEach(function(it, i) {
       var cur = results[it.id] || '';
+      var symMap = { R:{s:'✓',c:'#16a34a'}, S:{s:'✗',c:'#dc2626'}, r:{s:'⚠',c:'#d97706'} };
+      var symInfo = symMap[cur];
+      var symHtml = symInfo ? '<span style="color:'+symInfo.c+';">'+symInfo.s+'</span>' : '-';
       rowsHtml += '<tr>' +
         (i===0 ? '<td rowspan="'+items.length+'" style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+items[0].no+'</td>' +
                  '<td rowspan="'+items.length+'" style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(items[0].machine)+'</td>' : '') +
@@ -8668,7 +8688,7 @@ function mcBuildPrintHtml(rec) {
         '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.itemName)+'</td>' +
         '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.standard)+'</td>' +
         '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.method)+'</td>' +
-        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;font-weight:700;">'+(cur||'-')+'</td>' +
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;font-weight:700;font-size:14px;">'+symHtml+'</td>' +
       '</tr>';
     });
   });
@@ -8697,7 +8717,7 @@ function mcBuildPrintHtml(rec) {
     '<div class="title">ใบรายงานผลการตรวจเช็คเครื่องจักร/อุปกรณ์ประจำวัน (BARRAL B-1)</div>' +
     '<div class="meta"><div><b>วันที่ตรวจสอบ:</b> ' + mcEsc(rec?rec.date:'') + '</div><div><b>ผู้ตรวจสอบ:</b> ' + mcEsc(rec?rec.inspector:'') + '</div></div>' +
     '<table><thead><tr><th>ลำดับ</th><th>ชื่อเครื่องจักร/อุปกรณ์</th><th>หัวข้อ</th><th>หัวข้อการตรวจสอบ</th><th>มาตรฐาน</th><th>วิธีการ/เครื่องมือ</th><th>ผล</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
-    '<div class="legend">สัญลักษณ์: R = เครื่องจักรปกติ &nbsp; S = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp; r = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้</div>' +
+    '<div class="legend">สัญลักษณ์: ✓ = เครื่องจักรปกติ &nbsp; ✗ = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp; ⚠ = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้</div>' +
     '<div style="font-weight:700;margin-top:16px;margin-bottom:4px;">บันทึกการปรับปรุงเครื่องจักร / อุปกรณ์</div>' +
     '<table><thead><tr><th>ลำดับ</th><th>วันที่</th><th>ชื่อเครื่องจักรและอุปกรณ์</th><th>รายละเอียดของการชำรุด</th><th>รายการอุปกรณ์ที่ใช้</th><th>ผู้ปรับปรุงแก้ไข</th></tr></thead><tbody>' +
       (repairRows || '<tr><td colspan="6" style="text-align:center;border:1px solid #94a3b8;padding:10px;color:#94a3b8;">ไม่มีรายการซ่อม</td></tr>') +
