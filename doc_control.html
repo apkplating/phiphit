@@ -390,17 +390,9 @@ tr:hover td{background:var(--steel-3);}
 
       <div class="card admin-sub" id="admin-notify" style="display:none;">
         <h2>การแจ้งเตือน (Discord)</h2>
-        <div class="sub">ส่งข้อความแจ้งเตือนอัตโนมัติเข้า Discord เมื่อมีคำขอรออนุมัติ และเมื่อเผยแพร่/ยกเลิกเอกสาร — เหมือนระบบ PO จัดซื้อ</div>
-        <div class="field">
-          <label>Discord Webhook URL</label>
-          <input type="text" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/...">
-          <div class="hint">สร้างได้จาก ตั้งค่าช่อง Discord &gt; Integrations &gt; Webhooks &gt; New Webhook แล้ววาง URL ที่ได้ตรงนี้ — เว้นว่างไว้ถ้ายังไม่ต้องการแจ้งเตือน</div>
-        </div>
-        <div class="row">
-          <button class="btn btn-primary btn-sm" id="saveNotifyBtn">บันทึก</button>
-          <button class="btn btn-ghost btn-sm" id="testNotifyBtn">ส่งทดสอบ</button>
-        </div>
-        <div class="login-err" id="notifyErr"></div>
+        <div class="sub">แยก Webhook ต่อแผนก — แผนกไหนไม่เกี่ยวข้องกับเอกสารนั้นจะไม่เห็นข้อความแจ้งเตือนเลย เว้นว่างแผนกใดไว้ได้ถ้ายังไม่ต้องการแจ้งเตือนแผนกนั้น</div>
+        <div id="notifyListWrap"></div>
+        <div class="hint">สร้าง Webhook ได้จาก ตั้งค่าช่อง Discord ของแต่ละแผนก &gt; Integrations &gt; Webhooks &gt; New Webhook แล้ววาง URL ที่ได้ในช่องของแผนกนั้น</div>
       </div>
     </div>
 
@@ -468,7 +460,7 @@ var PATHS = {
   catView:  DB_URL + '/doc_control/settings/categoryViewDepts',
   depts:    DB_URL + '/doc_control/settings/depts',
   docTypes: DB_URL + '/doc_control/settings/docTypes',
-  discordWebhook: DB_URL + '/doc_control/settings/discordWebhook'
+  discordWebhooks: DB_URL + '/doc_control/settings/discordWebhooks'
 };
 
 var DEFAULT_DOC_TYPES = [
@@ -499,7 +491,7 @@ var DEFAULT_CAT_VIEW = {
   FM:['Management Dept./QMR','Production','Quality Assurance','Maintenance','Admin']
 };
 var SITE_URL = 'https://apkplating.github.io/phiphit/doc_control.html';
-var DISCORD_WEBHOOK = '';
+var DISCORD_WEBHOOKS = {}; // { 'Production': 'https://discord.com/api/webhooks/...', ... }
 
 var session = null;
 var APPROVAL_DEPTS = DEFAULT_DEPTS.slice();
@@ -559,13 +551,19 @@ function openBase64Pdf(b64, fileName){
     window.open(url, '_blank');
   }catch(e){ toast('เปิดไฟล์ไม่สำเร็จ: '+e.message); }
 }
-function notifyDiscord(content){
-  if (!DISCORD_WEBHOOK) return Promise.resolve();
-  return fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({content: content})
-  }).catch(function(e){ console.warn('แจ้งเตือน Discord ไม่สำเร็จ', e); });
+function notifyDeptsDiscord(depts, content){
+  var urls = [];
+  (depts || []).forEach(function(d){
+    var url = DISCORD_WEBHOOKS[d];
+    if (url && urls.indexOf(url) === -1) urls.push(url);
+  });
+  return Promise.all(urls.map(function(url){
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: content})
+    }).catch(function(e){ console.warn('แจ้งเตือน Discord ไม่สำเร็จ', e); });
+  }));
 }
 function userDepts(u){
   if (!u) return [];
@@ -642,7 +640,7 @@ function loadSettings(){
     fbGet(PATHS.depts).then(function(d){ if (Array.isArray(d) && d.length) APPROVAL_DEPTS = d; }),
     fbGet(PATHS.catView).then(function(d){ if (d && typeof d === 'object') CAT_VIEW = d; }),
     fbGet(PATHS.docTypes).then(function(d){ if (Array.isArray(d) && d.length) DOC_TYPES = d; }),
-    fbGet(PATHS.discordWebhook).then(function(d){ if (typeof d === 'string') DISCORD_WEBHOOK = d; })
+    fbGet(PATHS.discordWebhooks).then(function(d){ if (d && typeof d === 'object') DISCORD_WEBHOOKS = d; })
   ]);
 }
 
@@ -783,7 +781,7 @@ function submitRequest(){
       return reqId;
     });
   }).then(function(){
-    notifyDiscord(
+    notifyDeptsDiscord(reqDepts,
       '📄 **มีคำขอเอกสารใหม่รออนุมัติ**\n' +
       'DAR No. `' + darForNotify + '`\n' +
       'ชื่อเอกสาร: ' + docName + '\n' +
@@ -1036,7 +1034,7 @@ function doPublish(){
     });
   }).then(function(){
     if (r.action === 'cancel'){
-      notifyDiscord(
+      notifyDeptsDiscord(r.requiredDepts,
         '🛑 **เอกสารถูกยกเลิก**\n' +
         'รหัสเอกสาร: `' + r.docCode + '`\n' +
         'ชื่อเอกสาร: ' + r.docName + '\n' +
@@ -1044,7 +1042,7 @@ function doPublish(){
         '👉 ' + SITE_URL
       );
     } else {
-      notifyDiscord(
+      notifyDeptsDiscord(viewDepts,
         '✅ **เอกสารเผยแพร่แล้ว — เพิ่มเข้าคลังเอกสาร**\n' +
         'รหัสเอกสาร: `' + r.docCode + '`\n' +
         'ชื่อเอกสาร: ' + r.docName + '\n' +
@@ -1227,6 +1225,54 @@ function saveDocTypes(cb){
   fbPut(PATHS.docTypes, DOC_TYPES).then(function(){ if (cb) cb(); });
 }
 
+/* ── Admin: การแจ้งเตือน (Discord ต่อแผนก) ── */
+function renderNotifyList(){
+  var wrap = $('notifyListWrap');
+  wrap.innerHTML = APPROVAL_DEPTS.map(function(dep, i){
+    var url = DISCORD_WEBHOOKS[dep] || '';
+    return '<div class="field" style="margin-bottom:12px;">' +
+      '<label>' + escapeHtml(dep) + '</label>' +
+      '<div class="row" style="gap:8px; flex-wrap:nowrap;">' +
+        '<input type="text" class="notify-url-input" data-dept="' + escapeHtml(dep) + '" data-idx="' + i + '" value="' + escapeHtml(url) + '" placeholder="https://discord.com/api/webhooks/..." style="flex:1;">' +
+        '<button class="btn btn-ghost btn-sm" data-save-notify="' + i + '">บันทึก</button>' +
+        '<button class="btn btn-ghost btn-sm" data-test-notify="' + i + '">ทดสอบ</button>' +
+      '</div>' +
+      '<div class="login-err" id="notifyErr_' + i + '"></div>' +
+    '</div>';
+  }).join('');
+
+  wrap.querySelectorAll('[data-save-notify]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = btn.getAttribute('data-save-notify');
+      var input = wrap.querySelector('.notify-url-input[data-idx="'+idx+'"]');
+      var dept = input.getAttribute('data-dept');
+      var url = input.value.trim();
+      var next = JSON.parse(JSON.stringify(DISCORD_WEBHOOKS));
+      if (url) next[dept] = url; else delete next[dept];
+      fbPut(PATHS.discordWebhooks, next).then(function(){
+        DISCORD_WEBHOOKS = next; toast('บันทึกแล้ว — ' + dept);
+      });
+    });
+  });
+  wrap.querySelectorAll('[data-test-notify]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = btn.getAttribute('data-test-notify');
+      var input = wrap.querySelector('.notify-url-input[data-idx="'+idx+'"]');
+      var dept = input.getAttribute('data-dept');
+      var url = input.value.trim();
+      var errEl = $('notifyErr_'+idx);
+      if (!url){ errEl.textContent = 'กรุณากรอก Webhook URL ก่อนทดสอบ'; return; }
+      fetch(url, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: '🔔 ทดสอบการแจ้งเตือนแผนก "' + dept + '" จากระบบควบคุมเอกสาร APK Plating — ถ้าเห็นข้อความนี้ แปลว่าตั้งค่าสำเร็จ'})
+      }).then(function(res){
+        if (res.ok){ errEl.textContent = ''; toast('ส่งทดสอบสำเร็จ — ' + dept); }
+        else { errEl.textContent = 'ส่งไม่สำเร็จ: HTTP ' + res.status; }
+      }).catch(function(e){ errEl.textContent = 'ส่งไม่สำเร็จ: ' + e.message; });
+    });
+  });
+}
+
 /* ── Admin: รายชื่อแผนก ── */
 function renderDeptsList(){
   var wrap = $('deptsListWrap');
@@ -1303,7 +1349,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (sub === 'cat') renderCatTable();
       if (sub === 'depts') renderDeptsList();
       if (sub === 'import') renderImportForm();
-      if (sub === 'notify') $('discordWebhookInput').value = DISCORD_WEBHOOK;
+      if (sub === 'notify') renderNotifyList();
     });
   });
   $('addTypeBtn').addEventListener('click', function(){
@@ -1327,23 +1373,6 @@ document.addEventListener('DOMContentLoaded', function(){
     fbPut(PATHS.depts, APPROVAL_DEPTS).then(function(){
       $('newDeptName').value = ''; toast('เพิ่มแผนกแล้ว'); renderDeptsList(); renderReqDeptGroup();
     });
-  });
-  $('saveNotifyBtn').addEventListener('click', function(){
-    var url = $('discordWebhookInput').value.trim();
-    fbPut(PATHS.discordWebhook, url).then(function(){
-      DISCORD_WEBHOOK = url; $('notifyErr').textContent = ''; toast('บันทึกแล้ว');
-    });
-  });
-  $('testNotifyBtn').addEventListener('click', function(){
-    var url = $('discordWebhookInput').value.trim();
-    if (!url){ $('notifyErr').textContent = 'กรุณากรอก Webhook URL ก่อนทดสอบ'; return; }
-    fetch(url, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({content: '🔔 ทดสอบการแจ้งเตือนจากระบบควบคุมเอกสาร APK Plating — ถ้าเห็นข้อความนี้ แปลว่าตั้งค่าสำเร็จ'})
-    }).then(function(res){
-      if (res.ok){ $('notifyErr').textContent = ''; toast('ส่งทดสอบสำเร็จ ไปเช็คใน Discord ได้เลย'); }
-      else { $('notifyErr').textContent = 'ส่งไม่สำเร็จ: HTTP ' + res.status; }
-    }).catch(function(e){ $('notifyErr').textContent = 'ส่งไม่สำเร็จ: ' + e.message; });
   });
 
   // ── เริ่มต้น ──
