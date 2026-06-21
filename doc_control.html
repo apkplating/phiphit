@@ -285,6 +285,7 @@ tr:hover td{background:var(--steel-3);}
     <div class="panel" id="panel-admin">
       <div class="admin-subtabs" id="adminSubtabs">
         <button data-sub="publish" class="active">รอเผยแพร่</button>
+        <button data-sub="import">นำเข้าเอกสารเก่า</button>
         <button data-sub="perm">สิทธิ์ผู้ใช้</button>
         <button data-sub="cat">ค่าเริ่มต้นประเภทเอกสาร</button>
         <button data-sub="depts">รายชื่อแผนก</button>
@@ -294,6 +295,61 @@ tr:hover td{background:var(--steel-3);}
         <h2>คำขอที่อนุมัติครบแล้ว — รอเผยแพร่</h2>
         <div class="sub">อัปโหลดไฟล์ฉบับทางการ และกำหนดสิทธิ์ดู</div>
         <div id="publishList"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
+      <div class="card admin-sub" id="admin-import" style="display:none;">
+        <h2>นำเข้าเอกสารเก่า</h2>
+        <div class="sub">สำหรับเอกสารที่อนุมัติใช้งานอยู่แล้ว (มีตรา MASTER จริง) — เพิ่มเข้าบัญชีแม่บทโดยตรง ไม่ต้องผ่านขั้นตอนขออนุมัติใหม่</div>
+
+        <div class="row">
+          <div class="field">
+            <label>รหัสเอกสาร</label>
+            <input type="text" id="impCode" placeholder="เช่น APK-PM-MR-005" class="mono">
+          </div>
+          <div class="field">
+            <label>ประเภทเอกสาร</label>
+            <select id="impType"></select>
+          </div>
+          <div class="field">
+            <label>แผนกที่จัดทำ</label>
+            <select id="impDept"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>ชื่อเอกสาร</label>
+          <input type="text" id="impName" placeholder="เช่น การควบคุมเอกสารและข้อมูล">
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>ครั้งที่แก้ไข (Rev.)</label>
+            <input type="text" id="impRev" value="00">
+          </div>
+          <div class="field">
+            <label>วันที่บังคับใช้</label>
+            <input type="date" id="impDate">
+          </div>
+          <div class="field">
+            <label>DAR No. (ถ้ามี — รูปแบบ ปี/ลำดับ เช่น 18/006)</label>
+            <input type="text" id="impDar" placeholder="18/006">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>แผนกที่มีสิทธิ์ดู</label>
+          <div class="check-group" id="impViewDepts"></div>
+        </div>
+
+        <div class="field">
+          <label>ไฟล์เอกสาร (PDF)</label>
+          <input type="file" id="impFile" accept="application/pdf">
+          <div class="hint">ไฟล์จากโฟลเดอร์ E-DOCUMENT เดิม — แปลงเป็น base64 เก็บใน Realtime Database เหมือนเอกสารใหม่</div>
+        </div>
+
+        <div class="login-err" id="importErr"></div>
+        <button class="btn btn-primary" id="importBtn">นำเข้าเอกสาร</button>
+        <div class="hint" style="margin-top:10px;">นำเข้าได้ทีละไฟล์ — ถ้าเอกสารรหัสเดียวกันมีอยู่แล้วในบัญชีแม่บท ระบบจะเพิ่มเป็นประวัติการแก้ไขครั้งใหม่ต่อท้ายให้อัตโนมัติ</div>
       </div>
 
       <div class="card admin-sub" id="admin-perm" style="display:none;">
@@ -932,6 +988,77 @@ function doPublish(){
   });
 }
 
+/* ── Admin: นำเข้าเอกสารเก่า ── */
+function renderImportForm(){
+  var typeSel = $('impType'); typeSel.innerHTML = '';
+  DOC_TYPES.forEach(function(t){
+    var o = document.createElement('option'); o.value = t.code; o.textContent = t.code+' — '+t.label; typeSel.appendChild(o);
+  });
+  var deptSel = $('impDept'); deptSel.innerHTML = '';
+  DOC_DEPTS.forEach(function(d){
+    var o = document.createElement('option'); o.value = d.code; o.textContent = d.code+' — '+d.label; deptSel.appendChild(o);
+  });
+  if (!$('impDate').value) $('impDate').value = new Date().toISOString().slice(0,10);
+  renderImportViewDepts();
+}
+function renderImportViewDepts(){
+  var type = $('impType').value;
+  var defaults = CAT_VIEW[type] || [];
+  var wrap = $('impViewDepts'); wrap.innerHTML = '';
+  APPROVAL_DEPTS.forEach(function(dep){
+    var checked = defaults.indexOf(dep) !== -1 ? ' checked' : '';
+    var lab = document.createElement('label'); lab.className = 'check-opt';
+    lab.innerHTML = '<input type="checkbox" value="'+escapeHtml(dep)+'"'+checked+'> '+escapeHtml(dep);
+    wrap.appendChild(lab);
+  });
+}
+function onImpCodeInput(){
+  var code = $('impCode').value.trim().toUpperCase();
+  var parts = code.split('-');
+  if (parts.length === 4 && parts[0] === 'APK'){
+    if (DOC_TYPES.some(function(t){ return t.code === parts[1]; })){ $('impType').value = parts[1]; renderImportViewDepts(); }
+    if (DOC_DEPTS.some(function(d){ return d.code === parts[2]; })) $('impDept').value = parts[2];
+  }
+}
+function doImport(){
+  var code = $('impCode').value.trim().toUpperCase();
+  var name = $('impName').value.trim();
+  var type = $('impType').value, dept = $('impDept').value;
+  var rev = $('impRev').value.trim() || '00';
+  var date = $('impDate').value;
+  var dar = $('impDar').value.trim();
+  var viewDepts = Array.prototype.slice.call(document.querySelectorAll('#impViewDepts input:checked')).map(function(i){ return i.value; });
+  var file = $('impFile').files[0];
+
+  $('importErr').textContent = '';
+  if (!code || !name){ $('importErr').textContent = 'กรุณากรอกรหัสเอกสารและชื่อเอกสาร'; return; }
+  if (!viewDepts.length){ $('importErr').textContent = 'กรุณาเลือกแผนกที่มีสิทธิ์ดูอย่างน้อย 1 แผนก'; return; }
+  if (!file){ $('importErr').textContent = 'กรุณาแนบไฟล์ PDF'; return; }
+
+  var btn = $('importBtn'); btn.disabled = true; btn.textContent = 'กำลังนำเข้า…';
+  var importId = 'import_' + code.replace(/[^A-Za-z0-9]/g,'_') + '_' + Date.now();
+
+  fileToBase64(file).then(function(b64){
+    return fbPut(PATHS.files + '/' + importId + '_final', {fileName: file.name, data: b64});
+  }).then(function(){
+    return fbGet(PATHS.master + '/' + code);
+  }).then(function(existing){
+    var doc = existing || {docCode: code, docType: type, docDept: dept, docName: name, revisions: []};
+    doc.docName = name; doc.docType = type; doc.docDept = dept;
+    doc.status = 'active'; doc.viewDepts = viewDepts; doc.latestReqId = importId;
+    doc.revisions = doc.revisions || [];
+    doc.revisions.push({rev: rev, date: date, darNo: dar || ''});
+    return fbPut(PATHS.master + '/' + code, doc);
+  }).then(function(){
+    toast('นำเข้าเอกสาร '+code+' สำเร็จ');
+    $('impCode').value = ''; $('impName').value = ''; $('impRev').value = '00'; $('impDar').value = ''; $('impFile').value = '';
+  }).catch(function(e){
+    $('importErr').textContent = 'เกิดข้อผิดพลาด: '+e.message;
+  }).finally(function(){
+    btn.disabled = false; btn.textContent = 'นำเข้าเอกสาร';
+  });
+}
+
 /* ── Admin: สิทธิ์ผู้ใช้ ── */
 function renderPermTable(){
   CentralAuth.fetchUsers().then(function(res){
@@ -1070,8 +1197,12 @@ document.addEventListener('DOMContentLoaded', function(){
       if (sub === 'perm') renderPermTable();
       if (sub === 'cat') renderCatTable();
       if (sub === 'depts') renderDeptsList();
+      if (sub === 'import') renderImportForm();
     });
   });
+  $('impCode').addEventListener('blur', onImpCodeInput);
+  $('impType').addEventListener('change', renderImportViewDepts);
+  $('importBtn').addEventListener('click', doImport);
   $('addDeptBtn').addEventListener('click', function(){
     var name = $('newDeptName').value.trim();
     if (!name) return;
