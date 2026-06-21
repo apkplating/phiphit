@@ -7423,6 +7423,33 @@ async function confirmJobOut() {
     <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">APK-FR-PU-XXX · ตรวจรายวันตามมาตรฐาน</div>
   </div>
 
+  <!-- ประวัติย้อนหลัง -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);">
+      <div class="card-label" style="margin:0;">📜 ประวัติการตรวจสอบ</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select id="mcHistMonth" onchange="mcRenderHistory()" style="font-size:11px;padding:5px 8px;width:auto;"></select>
+        <button class="btn btn-outline" style="width:auto;font-size:11px;padding:5px 10px;margin:0;" onclick="mcExportCSV()">📥 CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table style="font-size:11px;">
+        <thead>
+          <tr>
+            <th>วันที่</th>
+            <th>ผู้ตรวจสอบ</th>
+            <th style="text-align:center;">ผลตรวจ</th>
+            <th style="text-align:center;">รายการซ่อม</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mcHistBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ฟอร์มบันทึกผลตรวจวันนี้ -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
@@ -7461,33 +7488,6 @@ async function confirmJobOut() {
     <div class="card-label">🛠️ บันทึกการปรับปรุงเครื่องจักร / อุปกรณ์ (รายละเอียดการซ่อม)</div>
     <div id="mcRepairRows"></div>
     <button class="btn btn-outline" style="margin-top:6px;" onclick="mcAddRepairRow()">➕ เพิ่มรายการซ่อม</button>
-  </div>
-
-  <!-- ประวัติย้อนหลัง -->
-  <div class="card" style="padding:0;overflow:hidden;">
-    <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);">
-      <div class="card-label" style="margin:0;">📜 ประวัติการตรวจสอบ</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <select id="mcHistMonth" onchange="mcRenderHistory()" style="font-size:11px;padding:5px 8px;width:auto;"></select>
-        <button class="btn btn-outline" style="width:auto;font-size:11px;padding:5px 10px;margin:0;" onclick="mcExportCSV()">📥 CSV</button>
-      </div>
-    </div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table style="font-size:11px;">
-        <thead>
-          <tr>
-            <th>วันที่</th>
-            <th>ผู้ตรวจสอบ</th>
-            <th style="text-align:center;">ผลตรวจ</th>
-            <th style="text-align:center;">รายการซ่อม</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="mcHistBody">
-          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
-        </tbody>
-      </table>
-    </div>
   </div>
 
 </div>
@@ -8465,6 +8465,7 @@ async function mcFbLoad() {
       mcRecords = merged;
     }
     mcRenderChecklist();
+    mcPopulateMonthFilter();
     mcRenderHistory();
   } catch(e) { console.warn('mcFbLoad:', e.message); }
 }
@@ -8690,13 +8691,21 @@ function mcSaveEditList() {
 function mcPopulateMonthFilter() {
   var sel = document.getElementById('mcHistMonth');
   if (!sel) return;
+  var prevSelected = sel.value || '';
   var months = {};
   mcRecords.forEach(function(r){ if (r.date) months[r.date.slice(0,7)] = true; });
   var list = Object.keys(months).sort().reverse();
   var cur = isoDate(new Date()).slice(0,7);
-  if (!list.length) list = [cur];
-  sel.innerHTML = list.map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
-  sel.value = list.indexOf(cur)!==-1 ? cur : list[0];
+  var options = '<option value="">— ทุกเดือน —</option>' +
+    list.map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
+  sel.innerHTML = options;
+  // คงตัวเลือกที่ผู้ใช้เลือกไว้ ถ้ายังมีอยู่ในรายการ (รวมถึงค่าว่าง "ทุกเดือน")
+  if (prevSelected !== '' && list.indexOf(prevSelected) === -1) {
+    // เดือนที่เคยเลือกหายไปจากรายการ (ไม่มีข้อมูลแล้ว) → fallback ไปเดือนล่าสุดที่มีข้อมูล หรือเดือนปัจจุบัน
+    sel.value = list.indexOf(cur)!==-1 ? cur : (list[0] || '');
+  } else {
+    sel.value = prevSelected;
+  }
 }
 function mcRenderHistory() {
   var body = document.getElementById('mcHistBody');
