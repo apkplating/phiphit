@@ -7380,10 +7380,8 @@ async function confirmJobOut() {
 
   <!-- ฟอร์มบันทึกผลตรวจวันนี้ -->
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
-      <div class="card-label" style="margin:0;">✏️ บันทึกผลตรวจวันนี้</div>
-      <button class="btn btn-outline" style="width:auto;font-size:11px;padding:6px 12px;margin:0;" onclick="mcOpenEditList()">⚙️ แก้ไขหัวข้อตรวจสอบ</button>
-    </div>
+    <div class="card-label" style="margin-bottom:8px;">✏️ บันทึกผลตรวจวันนี้</div>
+    <button class="btn btn-outline" style="margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;" onclick="mcOpenEditList()">⚙️ แก้ไข / ลบ / เพิ่มหัวข้อตรวจสอบ</button>
     <div class="grid2" style="margin-bottom:10px;">
       <div class="field" style="margin:0;">
         <label>วันที่ตรวจสอบ</label>
@@ -8321,23 +8319,23 @@ function saveBillToRow(dayId, rowIdx) {
 var MC_ITEMS_KEY   = 'mcheck_items_b1';
 var MC_RECORDS_KEY = 'mcheck_records_b1';
 var MC_DEFAULT_ITEMS = [
-  {id:'b1-01',no:1,machine:'ตู้ควบคุม PLC',itemNo:1,itemName:'สภาพทั่วไป',standard:'ไม่มีความชื้นภายในตู้ควบคุม',method:'สายตา'},
-  {id:'b1-02',no:2,machine:'บ่อ PP',itemNo:1,itemName:'สภาพทั่วไปของบ่อ',standard:'บ่อไม่มีน้ำรั่วลงพื้น',method:'สายตา'},
-  {id:'b1-03',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
-  {id:'b1-04',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
-  {id:'b1-05',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
-  {id:'b1-06',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
-  {id:'b1-07',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
-  {id:'b1-08',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
-  {id:'b1-09',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
-  {id:'b1-10',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
-  {id:'b1-11',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
-  {id:'b1-12',no:6,machine:'ตู้ไฟชุบ',itemNo:1,itemName:'ตู้ควบคุม',standard:'เปิดมีไฟสีเขียมติด',method:'สายตา'},
-  {id:'b1-13',no:6,machine:'ตู้ไฟชุบ',itemNo:2,itemName:'การจ่ายกระแสไฟ',standard:'วัดค่าเทียบกับจอ Monitor',method:''},
-  {id:'b1-14',no:7,machine:'Dosing pump บ่อชุบ',itemNo:1,itemName:'Dosing Pump (1533)',standard:'10±5 ml / ครั้ง / 100 amp',method:'ตวงทดสอบ'},
-  {id:'b1-15',no:7,machine:'Dosing pump บ่อชุบ',itemNo:2,itemName:'Dosing Pump (1534)',standard:'38±5 ml / ครั้ง / 100 amp',method:'ตวงทดสอบ'},
-  {id:'b1-16',no:8,machine:'ชิลเลอร์',itemNo:1,itemName:'Temp. Control',standard:'หมายเลขที่โชว์ตรงตามค่าที่วัดได้',method:'เครื่องวัดอุณหภูมิ'},
-  {id:'b1-17',no:9,machine:'เครื่องอบแห้งด้วยความร้อน',itemNo:1,itemName:'สายแก๊ส',standard:'ไม่รั่ว ',method:'เครื่องวัดอุณหภูมิ'}
+  {id:'b1-01',no:1,machine:'ตู้ควบคุม PLC',machineMy:'PLC ထိန်းချုပ်ရေးဗူး',itemNo:1,itemName:'สภาพทั่วไป',itemNameMy:'ယေဘုယျအခြေအနေ',standard:'ไม่มีความชื้นภายในตู้ควบคุม',standardMy:'ထိန်းချုပ်ရေးဗူးအတွင်း စိုထိုင်းမှုမရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-02',no:2,machine:'บ่อ PP',machineMy:'PP ရေကန်',itemNo:1,itemName:'สภาพทั่วไปของบ่อ',itemNameMy:'ရေကန်၏ ယေဘုယျအခြေအနေ',standard:'บ่อไม่มีน้ำรั่วลงพื้น',standardMy:'ရေကန်မှ ကြမ်းပြင်ပေါ်သို့ ရေယိုစိမ့်မှု မရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-03',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-04',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-05',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-06',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-07',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-08',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-09',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-10',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-11',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-12',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:1,itemName:'ตู้ควบคุม',itemNameMy:'ထိန်းချုပ်ရေးဗူး',standard:'เปิดมีไฟสีเขียมติด',standardMy:'ဖွင့်လျှင် အစိမ်းရောင်မီးလင်းရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-13',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:2,itemName:'การจ่ายกระแสไฟ',itemNameMy:'လျှပ်စစ်ဓာတ်အား ပေးချက်',standard:'วัดค่าเทียบกับจอ Monitor',standardMy:'Monitor ဖန်သားပြင်ပေါ်ရှိတန်ဖိုးနှင့် နှိုင်းယှဉ်တိုင်းတာပါ',method:'',methodMy:''},
+  {id:'b1-14',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:1,itemName:'Dosing Pump (1533)',itemNameMy:'Dosing Pump (1533)',standard:'10±5 ml / ครั้ง / 100 amp',standardMy:'10±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
+  {id:'b1-15',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:2,itemName:'Dosing Pump (1534)',itemNameMy:'Dosing Pump (1534)',standard:'38±5 ml / ครั้ง / 100 amp',standardMy:'38±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
+  {id:'b1-16',no:8,machine:'ชิลเลอร์',machineMy:'အေးဆေးစက် (Chiller)',itemNo:1,itemName:'Temp. Control',itemNameMy:'Temp. Control (အပူချိန်ထိန်း)',standard:'หมายเลขที่โชว์ตรงตามค่าที่วัดได้',standardMy:'ပြသနေသောနံပါတ်သည် တိုင်းတာရရှိသော တန်ဖိုးနှင့် ကိုက်ညီရမည်',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'},
+  {id:'b1-17',no:9,machine:'เครื่องอบแห้งด้วยความร้อน',machineMy:'အပူဖြင့် အခြောက်လှောင်စက်',itemNo:1,itemName:'สายแก๊ส',itemNameMy:'ဓာတ်ငွေ့ပိုက်',standard:'ไม่รั่ว ',standardMy:'မယိုစိမ့်ရ',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'}
 ];
 
 var mcItems        = [];   // หัวข้อตรวจสอบ (แก้ไขได้)
@@ -8444,6 +8442,7 @@ function mcRenderChecklist() {
   el.innerHTML = order.map(function(key) {
     var items = grouped[key];
     var machineName = items[0].machine;
+    var machineNameMy = items[0].machineMy || '';
     var machineNo = items[0].no;
     var rows = items.map(function(it) {
       var cur = results[it.id] || '';
@@ -8458,18 +8457,23 @@ function mcRenderChecklist() {
           '</button>' +
         '</div>';
       }
+      var standardLine = it.standard ? mcEsc(it.standard) + (it.method ? ' · ' + mcEsc(it.method) : '') : '';
+      var standardLineMy = it.standardMy ? mcEsc(it.standardMy) + (it.methodMy ? ' · ' + mcEsc(it.methodMy) : '') : '';
       return '<div style="display:flex;align-items:center;padding:7px 10px;border-top:1px solid var(--border);">' +
         '<div style="flex:1;padding-right:6px;">' +
           '<span style="font-size:9px;color:var(--text-muted);">' + it.itemNo + '.</span> ' +
           '<span style="font-size:12px;">' + mcEsc(it.itemName) + '</span>' +
-          (it.standard ? '<div style="font-size:10px;color:var(--text-muted);margin-top:1px;">' + mcEsc(it.standard) + (it.method ? ' · ' + mcEsc(it.method) : '') + '</div>' : '') +
+          (it.itemNameMy ? '<div style="font-size:11px;color:#7c3aed;">' + mcEsc(it.itemNameMy) + '</div>' : '') +
+          (standardLine ? '<div style="font-size:10px;color:var(--text-muted);margin-top:1px;">' + standardLine + '</div>' : '') +
+          (standardLineMy ? '<div style="font-size:10px;color:#a78bfa;">' + standardLineMy + '</div>' : '') +
         '</div>' +
         box('R','✓','#16a34a') + box('S','✗','#dc2626') + box('r','⚠','#d97706') +
       '</div>';
     }).join('');
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">' +
-      '<div style="background:var(--sky-pale);padding:7px 10px;font-size:12px;font-weight:700;color:var(--navy);">' +
-        machineNo + '. ' + mcEsc(machineName) +
+      '<div style="background:var(--sky-pale);padding:7px 10px;">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--navy);">' + machineNo + '. ' + mcEsc(machineName) + '</div>' +
+        (machineNameMy ? '<div style="font-size:11px;font-weight:600;color:#7c3aed;">' + mcEsc(machineNameMy) + '</div>' : '') +
       '</div>' +
       headerRow +
       rows +
@@ -8588,12 +8592,20 @@ function mcRenderEditRows() {
   el.innerHTML = mcEditDraft.map(function(it, idx) {
     return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;">' +
       '<div class="grid2" style="margin-bottom:4px;">' +
-        '<input type="text" value="' + mcEsc(it.machine) + '" oninput="mcEditUpd(' + idx + ',\'machine\',this.value)" placeholder="ชื่อเครื่องจักร/อุปกรณ์" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
-        '<input type="text" value="' + mcEsc(it.itemName) + '" oninput="mcEditUpd(' + idx + ',\'itemName\',this.value)" placeholder="หัวข้อการตรวจสอบ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.machine) + '" oninput="mcEditUpd(' + idx + ',\'machine\',this.value)" placeholder="ชื่อเครื่องจักร/อุปกรณ์ (ไทย)" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.itemName) + '" oninput="mcEditUpd(' + idx + ',\'itemName\',this.value)" placeholder="หัวข้อการตรวจสอบ (ไทย)" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
       '</div>' +
       '<div class="grid2" style="margin-bottom:4px;">' +
-        '<input type="text" value="' + mcEsc(it.standard) + '" oninput="mcEditUpd(' + idx + ',\'standard\',this.value)" placeholder="มาตรฐานการตรวจสอบ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
-        '<input type="text" value="' + mcEsc(it.method) + '" oninput="mcEditUpd(' + idx + ',\'method\',this.value)" placeholder="วิธีการ/เครื่องมือ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.machineMy||'') + '" oninput="mcEditUpd(' + idx + ',\'machineMy\',this.value)" placeholder="ชื่อเครื่องจักร/อุปกรณ์ (မြန်မာ)" style="font-size:11px;padding:6px 8px;border:1px solid #ddd6fe;border-radius:6px;font-family:inherit;color:#7c3aed;">' +
+        '<input type="text" value="' + mcEsc(it.itemNameMy||'') + '" oninput="mcEditUpd(' + idx + ',\'itemNameMy\',this.value)" placeholder="หัวข้อการตรวจสอบ (မြန်မာ)" style="font-size:11px;padding:6px 8px;border:1px solid #ddd6fe;border-radius:6px;font-family:inherit;color:#7c3aed;">' +
+      '</div>' +
+      '<div class="grid2" style="margin-bottom:4px;">' +
+        '<input type="text" value="' + mcEsc(it.standard) + '" oninput="mcEditUpd(' + idx + ',\'standard\',this.value)" placeholder="มาตรฐานการตรวจสอบ (ไทย)" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.method) + '" oninput="mcEditUpd(' + idx + ',\'method\',this.value)" placeholder="วิธีการ/เครื่องมือ (ไทย)" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+      '</div>' +
+      '<div class="grid2" style="margin-bottom:4px;">' +
+        '<input type="text" value="' + mcEsc(it.standardMy||'') + '" oninput="mcEditUpd(' + idx + ',\'standardMy\',this.value)" placeholder="มาตรฐานการตรวจสอบ (မြန်မာ)" style="font-size:11px;padding:6px 8px;border:1px solid #ddd6fe;border-radius:6px;font-family:inherit;color:#7c3aed;">' +
+        '<input type="text" value="' + mcEsc(it.methodMy||'') + '" oninput="mcEditUpd(' + idx + ',\'methodMy\',this.value)" placeholder="วิธีการ/เครื่องมือ (မြန်မာ)" style="font-size:11px;padding:6px 8px;border:1px solid #ddd6fe;border-radius:6px;font-family:inherit;color:#7c3aed;">' +
       '</div>' +
       '<button type="button" onclick="mcEditRemove(' + idx + ')" style="font-size:10px;color:var(--red);background:none;border:1px solid var(--red);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit;">🗑️ ลบหัวข้อนี้</button>' +
     '</div>';
@@ -8603,7 +8615,7 @@ function mcEditUpd(idx, field, val) { if (mcEditDraft[idx]) mcEditDraft[idx][fie
 function mcEditRemove(idx) { mcEditDraft.splice(idx,1); mcRenderEditRows(); }
 function mcAddEditRow() {
   var maxNo = mcEditDraft.reduce(function(m,it){ return Math.max(m,it.no||0); }, 0);
-  mcEditDraft.push({ id:'mc-'+Date.now(), no:maxNo+1, machine:'', itemNo:1, itemName:'', standard:'', method:'' });
+  mcEditDraft.push({ id:'mc-'+Date.now(), no:maxNo+1, machine:'', machineMy:'', itemNo:1, itemName:'', itemNameMy:'', standard:'', standardMy:'', method:'', methodMy:'' });
   mcRenderEditRows();
 }
 function mcSaveEditList() {
@@ -8690,13 +8702,17 @@ function mcBuildPrintHtml(rec) {
       var symMap = { R:{s:'✓',c:'#16a34a'}, S:{s:'✗',c:'#dc2626'}, r:{s:'⚠',c:'#d97706'} };
       var symInfo = symMap[cur];
       var symHtml = symInfo ? '<span style="color:'+symInfo.c+';">'+symInfo.s+'</span>' : '-';
+      var machineCell = mcEsc(items[0].machine) + (items[0].machineMy ? '<div style="color:#7c3aed;font-size:10px;">'+mcEsc(items[0].machineMy)+'</div>' : '');
+      var itemNameCell = mcEsc(it.itemName) + (it.itemNameMy ? '<div style="color:#7c3aed;font-size:10px;">'+mcEsc(it.itemNameMy)+'</div>' : '');
+      var standardCell = mcEsc(it.standard) + (it.standardMy ? '<div style="color:#7c3aed;font-size:10px;">'+mcEsc(it.standardMy)+'</div>' : '');
+      var methodCell = mcEsc(it.method) + (it.methodMy ? '<div style="color:#7c3aed;font-size:10px;">'+mcEsc(it.methodMy)+'</div>' : '');
       rowsHtml += '<tr>' +
         (i===0 ? '<td rowspan="'+items.length+'" style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+items[0].no+'</td>' +
-                 '<td rowspan="'+items.length+'" style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(items[0].machine)+'</td>' : '') +
+                 '<td rowspan="'+items.length+'" style="border:1px solid #94a3b8;padding:5px;">'+machineCell+'</td>' : '') +
         '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+it.itemNo+'</td>' +
-        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.itemName)+'</td>' +
-        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.standard)+'</td>' +
-        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.method)+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+itemNameCell+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+standardCell+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+methodCell+'</td>' +
         '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;font-weight:700;font-size:14px;">'+symHtml+'</td>' +
       '</tr>';
     });
