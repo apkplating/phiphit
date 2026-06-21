@@ -269,6 +269,17 @@ tr:hover td{background:var(--steel-3);}
     <!-- ── TAB: คลังเอกสาร ── -->
     <div class="panel" id="panel-library">
       <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;">
+          <div>
+            <h2 style="margin-bottom:2px;">ภาพรวม KPI เดือนนี้</h2>
+            <div class="sub" style="margin-bottom:0;">สรุปจากระบบ KPI — ดูรายละเอียด/แนวโน้มทั้งหมดได้ที่ kpi.html</div>
+          </div>
+          <a href="kpi.html" class="btn btn-ghost btn-sm" style="text-decoration:none;">เปิดระบบ KPI →</a>
+        </div>
+        <div id="kpiSnapshot" style="margin-top:14px;"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
+      <div class="card">
         <h2>บัญชีแม่บทเอกสาร</h2>
         <div class="sub">เอกสารที่เผยแพร่แล้ว — แสดงเฉพาะที่แผนกคุณมีสิทธิ์ดู</div>
         <div class="row">
@@ -677,7 +688,7 @@ function switchTab(tab){
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id === 'panel-'+tab); });
   if (tab === 'new') refreshMyRequests();
   if (tab === 'pending') refreshPending();
-  if (tab === 'library') refreshLibrary();
+  if (tab === 'library'){ refreshLibrary(); refreshKpiSnapshot(); }
   if (tab === 'admin') refreshAdmin();
 }
 
@@ -914,6 +925,42 @@ function doSign(isReject){
 }
 
 /* ══════════════ คลังเอกสาร ══════════════ */
+/* ══════════════ KPI snapshot (อ่านจากระบบ kpi.html) ══════════════ */
+var KPI_PATHS = {
+  metrics: DB_URL + '/kpi/metrics',
+  entries: DB_URL + '/kpi/entries'
+};
+function kpiCurrentMonthKey(){
+  var d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function kpiMonthLabel(key){
+  var months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var p = key.split('-');
+  return months[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543);
+}
+function refreshKpiSnapshot(){
+  var wrap = $('kpiSnapshot');
+  var monthKey = kpiCurrentMonthKey();
+  Promise.all([fbGet(KPI_PATHS.metrics), fbGet(KPI_PATHS.entries + '/' + monthKey)]).then(function(res){
+    var metrics = res[0] || {}; var entries = res[1] || {};
+    var ids = Object.keys(metrics).filter(function(id){ return metrics[id].active !== false; });
+    if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่มีข้อมูล KPI — ตั้งค่าตัวชี้วัดได้ที่ kpi.html</div>'; return; }
+    wrap.innerHTML = '<div class="hint" style="margin:0 0 8px;">เดือน ' + kpiMonthLabel(monthKey) + '</div>' +
+      '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + ids.map(function(id){
+        var m = metrics[id];
+        var e = entries[id];
+        var v = e ? e.value : null;
+        var met = v == null ? null : (m.direction === 'lower' ? (v <= m.target) : (v >= m.target));
+        var bg = met === null ? '#f1f5f9' : (met ? '#dcfce7' : '#fee2e2');
+        var fg = met === null ? '#64748b' : (met ? '#166534' : '#991b1b');
+        return '<div style="background:'+bg+'; color:'+fg+'; border-radius:9px; padding:8px 12px; font-size:12px;">' +
+          '<b>'+escapeHtml(m.name)+'</b>: ' + (v==null?'ยังไม่กรอก':(v+' '+escapeHtml(m.unit||''))) +
+          ' <span style="opacity:.7;">(เป้า '+(m.direction==='lower'?'≤':'≥')+' '+m.target+')</span></div>';
+      }).join('') + '</div>';
+  });
+}
+
 function refreshLibrary(){
   fbGet(PATHS.master).then(function(m){
     m = m || {}; allMaster = m;

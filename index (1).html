@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APK Plating — ระบบบริหารจัดการ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue2:#3b82f6;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:'IBM Plex Sans Thai',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* ── Header ── */
+header{
+  background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color:#fff;
+  padding:18px 24px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+}
+.brand{display:flex; align-items:center; gap:12px;}
+.brand-mark{
+  width:44px; height:44px; border-radius:10px;
+  background:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.4);
+  overflow:hidden; padding:3px;
+}
+.brand-mark img{width:100%; height:100%; object-fit:contain;}
+.brand-text h1{font-size:17px; font-weight:700; letter-spacing:.5px;}
+.brand-text p{font-size:11px; color:#b9c4de; margin-top:2px;}
+.clock{font-size:12px; color:#b9c4de; text-align:right;}
+.clock .time{font-size:18px; font-weight:600; color:#fff; font-family:'IBM Plex Mono',monospace;}
+
+/* ── Shimmer bar — สื่อถึงผิวชุบโลหะ ── */
+.shimmer{
+  height:4px; width:100%;
+  background:linear-gradient(90deg, var(--steel-2) 0%, var(--steel-3) 25%, var(--steel-1) 50%, var(--steel-3) 75%, var(--steel-2) 100%);
+  background-size:200% 100%;
+  animation:shimmer 6s linear infinite;
+}
+@keyframes shimmer{ from{background-position:0% 0;} to{background-position:-200% 0;} }
+@media (prefers-reduced-motion: reduce){ .shimmer{ animation:none; } }
+
+/* ── Hero ── */
+.hero{ max-width:1100px; margin:0 auto; padding:36px 24px 8px; }
+.hero h2{ font-size:24px; font-weight:700; }
+.hero p{ font-size:13px; color:var(--text-mid); margin-top:6px; }
+
+/* ── Sections / Grid ── */
+main{ max-width:1100px; margin:0 auto; padding:8px 24px 48px; }
+.section{ margin-top:28px; }
+.section-head{
+  display:flex; align-items:baseline; gap:10px; margin-bottom:12px;
+}
+.section-head h3{ font-size:14px; font-weight:700; color:var(--navy); }
+.section-head .eyebrow{
+  font-size:10px; font-weight:600; letter-spacing:1.5px; color:var(--steel-2);
+  font-family:'IBM Plex Mono',monospace; text-transform:uppercase;
+}
+.section-head .line{ flex:1; height:1px; background:var(--border); }
+
+.grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:14px;
+}
+
+/* ── Card ── */
+.card{
+  display:block; text-decoration:none; color:var(--text);
+  background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:18px; position:relative; overflow:hidden;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.card:hover{
+  transform:translateY(-3px);
+  box-shadow:0 8px 24px rgba(15,32,68,0.10);
+  border-color:var(--steel-2);
+}
+.card::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg, var(--steel-1), var(--steel-3), var(--steel-2));
+  opacity:0; transition:opacity .15s ease;
+}
+.card:hover::before{ opacity:1; }
+.card .icon{ font-size:26px; }
+.card h4{ font-size:14px; font-weight:700; margin-top:10px; }
+.card .code{
+  font-size:10px; color:var(--steel-2); letter-spacing:1px; margin-top:2px;
+  text-transform:uppercase;
+}
+.card .desc{ font-size:11.5px; color:var(--text-mid); margin-top:8px; line-height:1.5; }
+.card .go{
+  font-size:11px; color:var(--blue2); font-weight:600; margin-top:12px;
+  display:flex; align-items:center; gap:4px;
+}
+.card .go .arrow{ transition:transform .15s ease; }
+.card:hover .go .arrow{ transform:translateX(3px); }
+
+.card.disabled{ opacity:.55; cursor:default; }
+.card.disabled:hover{ transform:none; box-shadow:none; border-color:var(--border); }
+.card.disabled .go{ color:var(--text-muted); }
+
+/* ── Footer ── */
+footer{
+  text-align:center; font-size:11px; color:var(--text-muted);
+  padding:24px; border-top:1px solid var(--border);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark"><img src="logo.png" alt="APK Plating logo"></div>
+    <div class="brand-text">
+      <h1>APK PLATING</h1>
+      <p>ระบบบริหารจัดการ — Operations Hub</p>
+    </div>
+  </div>
+  <div class="clock">
+    <div id="clockDate">—</div>
+    <div class="time" id="clockTime">--:--:--</div>
+  </div>
+</header>
+<div class="shimmer"></div>
+
+<div class="hero">
+  <h2>เลือกระบบที่ต้องการเข้าใช้งาน</h2>
+  <p>รวมทุกระบบของ APK Plating ไว้ในที่เดียว — แต่ละระบบมีการเข้าสู่ระบบ (PIN) แยกของตัวเองในตอนนี้</p>
+</div>
+
+<main>
+
+  <!-- ── สำนักงาน / ทะเบียนกลาง ── -->
+  <div class="section">
+    <div class="section-head">
+      <span class="eyebrow">Office · Master Data</span>
+      <h3>สำนักงาน &amp; ทะเบียนกลาง</h3>
+      <div class="line"></div>
+    </div>
+    <div class="grid">
+
+      <a class="card" href="job_master.html">
+        <div class="icon">📋</div>
+        <h4>Job Master</h4>
+        <div class="code mono">job_master.html</div>
+        <div class="desc">รับงานเข้า · ออกใบ INV ขาย · ทะเบียนราคา · ทะเบียนลูกค้า · ประวัติ/ยอดขาย</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="part_master.html">
+        <div class="icon">🧩</div>
+        <h4>Part Master</h4>
+        <div class="code mono">part_master.html</div>
+        <div class="desc">ทะเบียนชิ้นงานกลาง — P/No, ลูกค้า, สีชุบ, น้ำหนัก/ชิ้น, จำนวน/แร็ค</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="bl_stock.html">
+        <div class="icon">📦</div>
+        <h4>B/L Stock</h4>
+        <div class="code mono">bl_stock.html</div>
+        <div class="desc">สต็อกรวมจากทุกสายการผลิต (B1/B2/R1) และ Job Master</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="chem_master.html">
+        <div class="icon">🧪</div>
+        <h4>Chem Master</h4>
+        <div class="code mono">chem_master.html</div>
+        <div class="desc">สต็อกเคมีกลาง ใช้ร่วมกันทุกสายการผลิต</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="po_master.html">
+        <div class="icon">🧾</div>
+        <h4>PO จัดซื้อ</h4>
+        <div class="code mono">po_master.html</div>
+        <div class="desc">สร้าง/พิมพ์ใบสั่งซื้อ ทะเบียนผู้ขาย ติดตามสถานะ PO</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── คุณภาพ / ISO 9001 ── -->
+  <div class="section">
+    <div class="section-head">
+      <span class="eyebrow">Quality · ISO 9001</span>
+      <h3>คุณภาพ &amp; ควบคุมเอกสาร</h3>
+      <div class="line"></div>
+    </div>
+    <div class="grid">
+
+      <a class="card" href="doc_control.html">
+        <div class="icon">📄</div>
+        <h4>ควบคุมเอกสาร (ISO)</h4>
+        <div class="code mono">doc_control.html</div>
+        <div class="desc">ขอจัดทำ/แก้ไข/ยกเลิกเอกสาร · เซ็นอนุมัติแต่ละแผนก (PIN) · เผยแพร่และบัญชีแม่บทเอกสาร</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="kpi.html">
+        <div class="icon">📊</div>
+        <h4>KPI</h4>
+        <div class="code mono">kpi.html</div>
+        <div class="desc">ตั้งตัวชี้วัดและเป้าหมายเอง · กรอกผลรายเดือน · แดชบอร์ดเทียบเป้าหมายพร้อมแนวโน้มย้อนหลัง</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── สายการผลิต ── -->
+  <div class="section">
+    <div class="section-head">
+      <span class="eyebrow">Production Lines</span>
+      <h3>สายการผลิต</h3>
+      <div class="line"></div>
+    </div>
+    <div class="grid">
+
+      <a class="card" href="monitor.html" target="_blank" style="border-color:#30363d;background:#0d1117;color:#e6edf3;">
+        <div class="icon">🖥</div>
+        <h4 style="color:#e6edf3;">Live Monitor</h4>
+        <div class="code mono" style="color:#8b949e;">monitor.html</div>
+        <div class="desc" style="color:#8b949e;">จอแสดงผล real-time รายรอบวันนี้ทุกสาย B1/B2/R1 — เหมาะสำหรับ TV / จอใหญ่</div>
+        <div class="go" style="color:#3fb950;">เปิดจอมอนิเตอร์ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="plating_v4.html">
+        <div class="icon">⚙️</div>
+        <h4>B1 — Barrel 1</h4>
+        <div class="code mono">plating_v4.html</div>
+        <div class="desc">บันทึกรอบชุบ, เคมี, รมดำ, QA, กราฟความหนา — สายชุบบาเรล 1</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="plating_v5_B2.html">
+        <div class="icon">⚙️</div>
+        <h4>B2 — Barrel 2</h4>
+        <div class="code mono">plating_v5_B2.html</div>
+        <div class="desc">บันทึกรอบชุบ, เคมี, รมดำ, QA, กราฟความหนา — สายชุบบาเรล 2</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+      <a class="card" href="plating_v6_R1.html">
+        <div class="icon">⚙️</div>
+        <h4>R1 — Rack 1</h4>
+        <div class="code mono">plating_v6_R1.html</div>
+        <div class="desc">บันทึกรอบชุบ, เคมี, รมดำ, QA, กราฟความหนา — สายชุบแร็ค 1</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── บุคคล ── -->
+  <div class="section">
+    <div class="section-head">
+      <span class="eyebrow">People</span>
+      <h3>บุคคล</h3>
+      <div class="line"></div>
+    </div>
+    <div class="grid">
+
+      <a class="card" href="apk_hr.html">
+        <div class="icon">👥</div>
+        <h4>APK HR</h4>
+        <div class="code mono">apk_hr.html</div>
+        <div class="desc">เวลาเข้างาน, ตารางเวร, สลิปเงินเดือน — เข้าสู่ระบบด้วย PIN (Central Auth)</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── ระบบ ── -->
+  <div class="section">
+    <div class="section-head">
+      <span class="eyebrow">System</span>
+      <h3>ระบบ</h3>
+      <div class="line"></div>
+    </div>
+    <div class="grid">
+
+      <a class="card" href="auth_admin.html">
+        <div class="icon">🔐</div>
+        <h4>จัดการผู้ใช้</h4>
+        <div class="code mono">auth_admin.html</div>
+        <div class="desc">กำหนดสิทธิ์ผู้ใช้แต่ละระบบจากที่เดียว — เพิ่ม/ลบผู้ใช้, ตั้งระดับสิทธิ์ (เข้าได้เฉพาะผู้ดูแลระบบ)</div>
+        <div class="go">เปิดระบบ <span class="arrow">→</span></div>
+      </a>
+
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  APK Plating · Internal System Portal
+</footer>
+
+<script>
+function updateClock(){
+  var now = new Date();
+  var days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  var months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var dateStr = 'วัน'+days[now.getDay()]+' '+now.getDate()+' '+months[now.getMonth()]+' '+(now.getFullYear()+543);
+  var timeStr = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clockDate').textContent = dateStr;
+  document.getElementById('clockTime').textContent = timeStr;
+}
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+
+</body>
+</html>

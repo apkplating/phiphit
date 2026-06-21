@@ -6,7 +6,7 @@
      2. ตั้งชื่อระบบของไฟล์นี้ด้วย: var SYSTEM_KEY = 'job_master';
         (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master, po_master,
                        plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin,
-                       doc_control)
+                       doc_control, kpi)
      3. ตอน login เรียก:
           CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
             if (!result.ok) { แสดง error; return; }
@@ -106,6 +106,14 @@
         { id: 'pending', label: 'รออนุมัติ' },
         { id: 'library', label: 'คลังเอกสาร' },
         { id: 'admin',   label: 'ตั้งค่า' }
+      ]
+    },
+    {
+      key: 'kpi', label: 'KPI', group: 'คุณภาพ & ISO',
+      tabs: [
+        { id: 'dashboard', label: 'แดชบอร์ด' },
+        { id: 'entry',     label: 'กรอกข้อมูล' },
+        { id: 'admin',     label: 'ตั้งค่า' }
       ]
     },
     {
