@@ -5,7 +5,8 @@
      1. ใส่ <script src="auth-central.js"></script> ก่อนสคริปต์หลักของหน้า
      2. ตั้งชื่อระบบของไฟล์นี้ด้วย: var SYSTEM_KEY = 'job_master';
         (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master, po_master,
-                       plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin)
+                       plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin,
+                       doc_control)
      3. ตอน login เรียก:
           CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
             if (!result.ok) { แสดง error; return; }
@@ -36,6 +37,9 @@
        เสมอ ไม่มี fallback ไปใช้ค่าที่ cache ไว้ — เพื่อความปลอดภัย
      - ข้อมูลผู้ใช้ทั้งหมดเก็บที่ Firebase path เดียว: /auth-central.json
        ใช้ร่วมกันทุกระบบ (รวม plating_v4/v5_b2/v6_r1 ด้วย)
+     - doc_control ใช้คีย์สิทธิ์เพิ่มเติม permissions.doc_control_depts
+       (array ของชื่อแผนกที่ PIN นี้มีสิทธิ์เซ็นอนุมัติ/ดูเอกสารแทน) —
+       จัดการได้จากหน้า "ตั้งค่า > สิทธิ์ผู้ใช้" ภายใน doc_control.html เอง
    ══════════════════════════════════════════════════════════ */
 
 (function (global) {
@@ -93,6 +97,15 @@
         { id: 'stock', label: 'Stock Card' },
         { id: 'in',    label: 'รับเข้า' },
         { id: 'items', label: 'รายการเคมี' }
+      ]
+    },
+    {
+      key: 'doc_control', label: 'ควบคุมเอกสาร (ISO)', group: 'คุณภาพ & ISO',
+      tabs: [
+        { id: 'new',     label: 'สร้างคำขอ' },
+        { id: 'pending', label: 'รออนุมัติ' },
+        { id: 'library', label: 'คลังเอกสาร' },
+        { id: 'admin',   label: 'ตั้งค่า' }
       ]
     },
     {

@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบควบคุมเอกสาร — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue2:#3b82f6;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --amber:#f59e0b; --green:#16a34a; --red:#dc2626;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+a{color:inherit;}
+
+/* ── Header ── */
+header{
+  background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color:#fff; padding:16px 22px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+}
+.brand{display:flex; align-items:center; gap:12px;}
+.brand h1{font-size:16px; font-weight:700;}
+.brand p{font-size:11px; color:#b9c4de; margin-top:2px;}
+.back-link{font-size:11px; color:#b9c4de; text-decoration:none; display:flex; align-items:center; gap:4px;}
+.who{display:flex; align-items:center; gap:12px; font-size:12px; color:#dbe3f3;}
+.who b{color:#fff;}
+.btn-logout{
+  background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25);
+  border-radius:8px; padding:6px 12px; font-size:11.5px; cursor:pointer; font-family:inherit;
+}
+.btn-logout:hover{background:rgba(255,255,255,.18);}
+
+/* ── Tabs ── */
+.tabbar{
+  display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--border);
+  padding:0 18px; overflow-x:auto;
+}
+.tabbtn{
+  border:none; background:none; font-family:inherit; font-size:13px; font-weight:600;
+  color:var(--text-mid); padding:13px 14px; cursor:pointer; white-space:nowrap;
+  border-bottom:3px solid transparent;
+}
+.tabbtn.active{color:var(--navy); border-bottom-color:var(--blue2);}
+.tabbtn:hover{color:var(--navy);}
+
+main{max-width:1080px; margin:0 auto; padding:22px 18px 60px;}
+.panel{display:none;}
+.panel.active{display:block;}
+
+/* ── Card / form ── */
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px;}
+.card h2{font-size:15px; font-weight:700; color:var(--navy); margin-bottom:4px;}
+.card .sub{font-size:11.5px; color:var(--text-mid); margin-bottom:16px;}
+.row{display:flex; gap:12px; flex-wrap:wrap;}
+.field{flex:1; min-width:180px; margin-bottom:14px;}
+.field label{display:block; font-size:11.5px; font-weight:600; color:var(--text-mid); margin-bottom:5px;}
+.field input[type=text], .field input[type=date], .field textarea, .field select{
+  width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 11px;
+  font-family:inherit; font-size:13px; background:#fff; color:var(--text);
+}
+.field textarea{resize:vertical; min-height:70px;}
+.field input[type=file]{font-size:12px;}
+.radio-group, .check-group{display:flex; gap:14px; flex-wrap:wrap;}
+.radio-opt, .check-opt{display:flex; align-items:center; gap:6px; font-size:12.5px; background:var(--steel-3); padding:7px 11px; border-radius:8px; cursor:pointer; border:1px solid var(--border);}
+.radio-opt input, .check-opt input{cursor:pointer;}
+.code-preview{
+  font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; color:var(--navy);
+  background:var(--steel-3); border:1px dashed var(--steel-2); border-radius:8px; padding:9px 12px; margin-top:4px;
+}
+.btn{
+  border:none; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;
+}
+.btn-primary{background:var(--navy); color:#fff;}
+.btn-primary:hover{background:var(--navy-2);}
+.btn-ghost{background:#fff; color:var(--navy); border:1px solid var(--steel-1);}
+.btn-ghost:hover{background:var(--steel-3);}
+.btn-sm{padding:6px 12px; font-size:12px; border-radius:7px;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+/* ── Badge ── */
+.badge{display:inline-block; font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:99px; letter-spacing:.3px;}
+.badge.pending{background:#fef3c7; color:#92400e;}
+.badge.approved{background:#dcfce7; color:#166534;}
+.badge.rejected{background:#fee2e2; color:#991b1b;}
+.badge.published{background:#dbeafe; color:#1e40af;}
+
+/* ── Request list item ── */
+.req{border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px;}
+.req-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+.req-head .dar{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted);}
+.req-head h3{font-size:13.5px; font-weight:700;}
+.req-meta{font-size:11.5px; color:var(--text-mid); margin-top:3px;}
+.dept-row{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-top:1px solid var(--border); font-size:12.5px;}
+.dept-row:first-of-type{border-top:none; margin-top:8px;}
+.dept-name{display:flex; align-items:center; gap:7px;}
+.sign-ok{color:var(--green); font-weight:700;}
+.sign-wait{color:var(--text-muted);}
+
+/* ── Table ── */
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); padding:8px 10px; border-bottom:2px solid var(--border);}
+td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top;}
+tr:hover td{background:var(--steel-3);}
+
+/* ── Login ── */
+#loginScreen{
+  position:fixed; inset:0; background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
+}
+.login-box{background:#fff; border-radius:16px; padding:32px 28px; width:100%; max-width:340px; text-align:center;}
+.login-box h1{font-size:16px; font-weight:700; color:var(--navy); margin-bottom:2px;}
+.login-box p{font-size:11.5px; color:var(--text-mid); margin-bottom:20px;}
+.login-box input{
+  width:100%; text-align:center; letter-spacing:6px; font-size:20px; font-family:'IBM Plex Mono',monospace;
+  border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px;
+}
+.login-box .btn-primary{width:100%; padding:11px;}
+.login-err{color:var(--red); font-size:11.5px; margin-top:10px; min-height:14px;}
+
+/* ── Modal ── */
+.modal-bg{position:fixed; inset:0; background:rgba(15,32,68,.55); display:none; align-items:center; justify-content:center; z-index:60; padding:16px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff; border-radius:14px; padding:24px; width:100%; max-width:420px; max-height:90vh; overflow:auto;}
+.modal h3{font-size:14.5px; font-weight:700; color:var(--navy); margin-bottom:14px;}
+.modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px;}
+
+.empty{text-align:center; padding:40px 20px; color:var(--text-muted); font-size:12.5px;}
+.toast{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff;
+  padding:11px 20px; border-radius:9px; font-size:12.5px; z-index:80; opacity:0; transition:opacity .2s;
+  pointer-events:none;
+}
+.toast.show{opacity:1;}
+.section-title{font-size:12px; font-weight:700; color:var(--navy); margin:18px 0 8px; text-transform:uppercase; letter-spacing:.4px;}
+.hint{font-size:11px; color:var(--text-muted); margin-top:6px;}
+.admin-subtabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
+.admin-subtabs button{
+  border:1px solid var(--border); background:#fff; border-radius:8px; padding:7px 13px; font-size:12px; cursor:pointer; font-family:inherit;
+}
+.admin-subtabs button.active{background:var(--navy); color:#fff; border-color:var(--navy);}
+</style>
+</head>
+<body>
+
+<!-- ════════ LOGIN ════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>📄 ระบบควบคุมเอกสาร</h1>
+    <p>APK Plating — ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ════════ APP ════════ -->
+<div id="app" style="display:none;">
+  <header>
+    <div class="brand">
+      <div>
+        <h1>📄 ระบบควบคุมเอกสาร</h1>
+        <p>APK Plating · ISO 9001 Document Control</p>
+      </div>
+    </div>
+    <div class="who">
+      <a href="index.html" class="back-link">← หน้าแรก</a>
+      <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+      <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <div class="tabbar" id="tabbar">
+    <button class="tabbtn" data-tab="new">สร้างคำขอ</button>
+    <button class="tabbtn" data-tab="pending">รออนุมัติ</button>
+    <button class="tabbtn" data-tab="library">คลังเอกสาร</button>
+    <button class="tabbtn" data-tab="admin">ตั้งค่า</button>
+  </div>
+
+  <main>
+
+    <!-- ── TAB: สร้างคำขอ ── -->
+    <div class="panel" id="panel-new">
+      <div class="card">
+        <h2>ใบขออนุมัติจัดทำ / แก้ไข / ยกเลิกเอกสาร</h2>
+        <div class="sub">อ้างอิงแบบฟอร์ม APK-FR-MR-012</div>
+
+        <div class="field">
+          <label>สถานะคำขอ</label>
+          <div class="radio-group" id="actionGroup">
+            <label class="radio-opt"><input type="radio" name="action" value="new" checked> จัดทำใหม่</label>
+            <label class="radio-opt"><input type="radio" name="action" value="edit"> แก้ไข</label>
+            <label class="radio-opt"><input type="radio" name="action" value="cancel"> ยกเลิก</label>
+          </div>
+        </div>
+
+        <div id="newDocFields">
+          <div class="row">
+            <div class="field">
+              <label>ประเภทเอกสาร</label>
+              <select id="fDocType"></select>
+            </div>
+            <div class="field">
+              <label>แผนกที่จัดทำ</label>
+              <select id="fDocDept"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label>รหัสเอกสาร (กำหนดให้อัตโนมัติ)</label>
+            <div class="code-preview" id="codePreview">—</div>
+          </div>
+        </div>
+
+        <div id="existingDocFields" style="display:none;">
+          <div class="field">
+            <label>เลือกเอกสารเดิม (จากบัญชีแม่บท)</label>
+            <select id="fExistingDoc"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>ชื่อเอกสาร</label>
+          <input type="text" id="fDocName" placeholder="เช่น ขั้นตอนการควบคุมเอกสารและข้อมูล">
+        </div>
+
+        <div class="field">
+          <label>รายละเอียด / เหตุผลการขอ</label>
+          <textarea id="fDetail" placeholder="เช่น จัดทำใหม่เพื่อรองรับ ISO 9001:2015"></textarea>
+        </div>
+
+        <div class="field">
+          <label>แนบไฟล์ร่างเอกสาร (PDF, ถ้ามี — ใช้ให้ผู้อนุมัติพิจารณา)</label>
+          <input type="file" id="fDraftFile" accept="application/pdf">
+        </div>
+
+        <div class="field">
+          <label>แผนกที่เกี่ยวข้อง / ต้องเซ็นอนุมัติ</label>
+          <div class="check-group" id="reqDeptGroup"></div>
+          <div class="hint">เลือกได้หลายแผนก — ต้องเซ็นอนุมัติครบทุกแผนกที่เลือก คำขอจึงจะผ่าน</div>
+        </div>
+
+        <button class="btn btn-primary" id="submitReqBtn">ส่งคำขอ</button>
+      </div>
+
+      <div class="card">
+        <h2>คำขอล่าสุดของฉัน</h2>
+        <div class="sub">ติดตามสถานะคำขอที่ส่งไปแล้ว</div>
+        <div id="myRequests"><div class="empty">ยังไม่มีคำขอ</div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: รออนุมัติ ── -->
+    <div class="panel" id="panel-pending">
+      <div class="card">
+        <h2>คำขอที่รอเซ็นอนุมัติ</h2>
+        <div class="sub">เซ็นในนามแผนกที่คุณมีสิทธิ์เท่านั้น</div>
+        <div id="pendingList"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: คลังเอกสาร ── -->
+    <div class="panel" id="panel-library">
+      <div class="card">
+        <h2>บัญชีแม่บทเอกสาร</h2>
+        <div class="sub">เอกสารที่เผยแพร่แล้ว — แสดงเฉพาะที่แผนกคุณมีสิทธิ์ดู</div>
+        <div class="row">
+          <div class="field" style="max-width:220px;">
+            <label>กรองตามประเภท</label>
+            <select id="libFilterType"><option value="">ทั้งหมด</option></select>
+          </div>
+        </div>
+        <div id="libraryList"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: ตั้งค่า (admin) ── -->
+    <div class="panel" id="panel-admin">
+      <div class="admin-subtabs" id="adminSubtabs">
+        <button data-sub="publish" class="active">รอเผยแพร่</button>
+        <button data-sub="perm">สิทธิ์ผู้ใช้</button>
+        <button data-sub="cat">ค่าเริ่มต้นประเภทเอกสาร</button>
+        <button data-sub="depts">รายชื่อแผนก</button>
+      </div>
+
+      <div class="card admin-sub" id="admin-publish">
+        <h2>คำขอที่อนุมัติครบแล้ว — รอเผยแพร่</h2>
+        <div class="sub">อัปโหลดไฟล์ฉบับทางการ และกำหนดสิทธิ์ดู</div>
+        <div id="publishList"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
+      <div class="card admin-sub" id="admin-perm" style="display:none;">
+        <h2>สิทธิ์เซ็นอนุมัติ / ดูเอกสารของผู้ใช้</h2>
+        <div class="sub">กำหนดว่าแต่ละ PIN เป็นตัวแทนแผนกใด และมีสิทธิ์ระดับใดในระบบนี้</div>
+        <div id="permTableWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
+      <div class="card admin-sub" id="admin-cat" style="display:none;">
+        <h2>สิทธิ์ดูเริ่มต้นตามประเภทเอกสาร</h2>
+        <div class="sub">ใช้เป็นค่าเริ่มต้นตอนเผยแพร่เอกสาร (ปรับเฉพาะฉบับได้ภายหลัง)</div>
+        <div id="catTableWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
+      <div class="card admin-sub" id="admin-depts" style="display:none;">
+        <h2>รายชื่อแผนก</h2>
+        <div class="sub">ใช้เป็นตัวเลือกตอนเลือกแผนกที่ต้องเซ็น / กำหนดสิทธิ์ดู</div>
+        <div id="deptsListWrap"></div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="flex:2;"><input type="text" id="newDeptName" placeholder="ชื่อแผนกใหม่"></div>
+          <div class="field" style="flex:0; align-self:flex-end;"><button class="btn btn-ghost btn-sm" id="addDeptBtn">+ เพิ่ม</button></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════════ MODAL: เซ็นอนุมัติ ════════ -->
+<div class="modal-bg" id="signModal">
+  <div class="modal">
+    <h3 id="signModalTitle">เซ็นอนุมัติ</h3>
+    <div class="field">
+      <label>PIN ของคุณ</label>
+      <input type="password" id="signPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    </div>
+    <div class="field" id="rejectReasonField" style="display:none;">
+      <label>เหตุผลที่ไม่อนุมัติ</label>
+      <textarea id="rejectReason" placeholder="ระบุเหตุผล"></textarea>
+    </div>
+    <div class="login-err" id="signErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="signCancel">ยกเลิก</button>
+      <button class="btn btn-sm" style="background:var(--red); color:#fff;" id="signReject">ไม่อนุมัติ</button>
+      <button class="btn btn-primary btn-sm" id="signConfirm">เซ็นอนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ MODAL: เผยแพร่เอกสาร ════════ -->
+<div class="modal-bg" id="publishModal">
+  <div class="modal">
+    <h3>เผยแพร่เอกสาร</h3>
+    <div class="field">
+      <label>ไฟล์ฉบับทางการ (PDF)</label>
+      <input type="file" id="publishFile" accept="application/pdf">
+    </div>
+    <div class="field">
+      <label>เลขครั้งที่แก้ไข (Rev.)</label>
+      <input type="text" id="publishRev" value="00">
+    </div>
+    <div class="field">
+      <label>แผนกที่มีสิทธิ์ดู</label>
+      <div class="check-group" id="publishViewDepts"></div>
+    </div>
+    <div class="login-err" id="publishErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="publishCancel">ยกเลิก</button>
+      <button class="btn btn-primary btn-sm" id="publishConfirm">เผยแพร่</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="auth-central.js"></script>
+<script>
+'use strict';
+
+/* ══════════════ ค่าคงที่ ══════════════ */
+var SYSTEM_KEY = 'doc_control';
+var DB_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PATHS = {
+  requests: DB_URL + '/doc_control/requests',
+  master:   DB_URL + '/doc_control/master',
+  files:    DB_URL + '/doc_control/files',
+  catView:  DB_URL + '/doc_control/settings/categoryViewDepts',
+  depts:    DB_URL + '/doc_control/settings/depts'
+};
+
+var DOC_TYPES = [
+  {code:'QM', label:'คู่มือคุณภาพ (Quality Manual)'},
+  {code:'PM', label:'ขั้นตอนการปฏิบัติ (Procedure Manual)'},
+  {code:'WI', label:'คู่มือการทำงาน (Work Instruction)'},
+  {code:'SD', label:'เอกสารสนับสนุน (Support Document)'},
+  {code:'EX', label:'เอกสารภายนอก (External Document)'},
+  {code:'FM', label:'แบบฟอร์ม (Format)'}
+];
+var DOC_DEPTS = [
+  {code:'MR', label:'ฝ่ายบริหาร'},
+  {code:'HR', label:'แผนกบุคคล'},
+  {code:'PU', label:'แผนกจัดซื้อ'},
+  {code:'MK', label:'แผนกการตลาด'},
+  {code:'PR', label:'แผนกผลิต'},
+  {code:'QA', label:'แผนกประกันคุณภาพ'},
+  {code:'MN', label:'แผนกซ่อมบำรุง'}
+];
+var DEFAULT_DEPTS = ['Managing Director','Management Dept./QMR','Marketing','Quality Assurance','Production','Maintenance','Admin'];
+var DEFAULT_CAT_VIEW = {
+  QM:['Managing Director','Management Dept./QMR','Marketing','Quality Assurance','Production','Maintenance','Admin'],
+  PM:['Management Dept./QMR','Production','Quality Assurance','Maintenance'],
+  WI:['Production','Quality Assurance','Maintenance'],
+  SD:['Production','Quality Assurance'],
+  EX:['Management Dept./QMR'],
+  FM:['Management Dept./QMR','Production','Quality Assurance','Maintenance','Admin']
+};
+
+var session = null;
+var APPROVAL_DEPTS = DEFAULT_DEPTS.slice();
+var CAT_VIEW = JSON.parse(JSON.stringify(DEFAULT_CAT_VIEW));
+var allRequests = {};
+var allMaster = {};
+
+/* ══════════════ ยูทิลิตี้ ══════════════ */
+function $(id){ return document.getElementById(id); }
+function toast(msg){
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+function fbGet(url){
+  return fetch(url + '.json', {cache:'no-store'}).then(function(r){ return r.json(); });
+}
+function fbPut(url, data){
+  return fetch(url + '.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+}
+function fbPatch(url, data){
+  return fetch(url + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+}
+function fbPost(url, data){
+  return fetch(url + '.json', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+    .then(function(r){ return r.json(); });
+}
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function fmtDateTime(iso){
+  if (!iso) return '';
+  var d = new Date(iso);
+  var days=['อา','จ','อ','พ','พฤ','ศ','ส'], months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return d.getDate()+' '+months[d.getMonth()]+' '+(d.getFullYear()+543)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function statusBadge(status){
+  var label = {pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ', published:'เผยแพร่แล้ว'}[status] || status;
+  return '<span class="badge '+status+'">'+label+'</span>';
+}
+function fileToBase64(file){
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onload = function(){ resolve(r.result.split(',')[1]); };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+function openBase64Pdf(b64, fileName){
+  try{
+    var byteChars = atob(b64);
+    var bytes = new Uint8Array(byteChars.length);
+    for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([bytes], {type:'application/pdf'});
+    var url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  }catch(e){ toast('เปิดไฟล์ไม่สำเร็จ: '+e.message); }
+}
+function userDepts(u){
+  if (!u) return [];
+  var d = u.permissions && u.permissions.doc_control_depts;
+  return Array.isArray(d) ? d : [];
+}
+function isAdmin(){ return session && session.role === 'admin'; }
+function canSignDept(dept){
+  if (isAdmin()) return true;
+  return userDepts(session.user).indexOf(dept) !== -1;
+}
+function canViewDoc(viewDepts){
+  if (isAdmin()) return true;
+  var mine = userDepts(session.user);
+  if (!Array.isArray(viewDepts)) return false;
+  for (var i=0;i<mine.length;i++) if (viewDepts.indexOf(mine[i]) !== -1) return true;
+  return false;
+}
+
+/* ══════════════ เซสชัน / login ══════════════ */
+function loadSession(){
+  try{ var raw = sessionStorage.getItem('doc_control_session'); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveSession(s){ sessionStorage.setItem('doc_control_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('doc_control_session'); }
+
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok){
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg;
+      return;
+    }
+    session = result;
+    saveSession(result);
+    enterApp();
+  });
+}
+
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = session.user.name || session.pin;
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  applyTabVisibility();
+  loadSettings().then(function(){
+    populateStaticOptions();
+    switchTab(firstVisibleTab());
+  });
+}
+
+function applyTabVisibility(){
+  var allow = {
+    new: session.role === 'admin' || session.role === 'operator',
+    pending: session.role === 'admin' || session.role === 'operator',
+    library: true,
+    admin: session.role === 'admin'
+  };
+  document.querySelectorAll('.tabbtn').forEach(function(btn){
+    var t = btn.getAttribute('data-tab');
+    btn.style.display = allow[t] ? '' : 'none';
+  });
+}
+function firstVisibleTab(){
+  var btn = document.querySelector('.tabbtn:not([style*="display: none"])');
+  return btn ? btn.getAttribute('data-tab') : 'library';
+}
+
+/* ══════════════ การตั้งค่า (แผนก / สิทธิ์ดูตามประเภท) ══════════════ */
+function loadSettings(){
+  return Promise.all([
+    fbGet(PATHS.depts).then(function(d){ if (Array.isArray(d) && d.length) APPROVAL_DEPTS = d; }),
+    fbGet(PATHS.catView).then(function(d){ if (d && typeof d === 'object') CAT_VIEW = d; })
+  ]);
+}
+
+function populateStaticOptions(){
+  var typeSel = $('fDocType'); typeSel.innerHTML = '';
+  DOC_TYPES.forEach(function(t){
+    var o = document.createElement('option'); o.value = t.code; o.textContent = t.code+' — '+t.label; typeSel.appendChild(o);
+  });
+  var deptSel = $('fDocDept'); deptSel.innerHTML = '';
+  DOC_DEPTS.forEach(function(d){
+    var o = document.createElement('option'); o.value = d.code; o.textContent = d.code+' — '+d.label; deptSel.appendChild(o);
+  });
+  var libType = $('libFilterType');
+  DOC_TYPES.forEach(function(t){
+    var o = document.createElement('option'); o.value = t.code; o.textContent = t.label; libType.appendChild(o);
+  });
+  renderReqDeptGroup();
+  updateCodePreview();
+}
+
+function renderReqDeptGroup(){
+  var wrap = $('reqDeptGroup'); wrap.innerHTML = '';
+  APPROVAL_DEPTS.forEach(function(dep){
+    var lab = document.createElement('label'); lab.className = 'check-opt';
+    lab.innerHTML = '<input type="checkbox" value="'+escapeHtml(dep)+'"> '+escapeHtml(dep);
+    wrap.appendChild(lab);
+  });
+}
+
+/* ══════════════ Tab switching ══════════════ */
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id === 'panel-'+tab); });
+  if (tab === 'new') refreshMyRequests();
+  if (tab === 'pending') refreshPending();
+  if (tab === 'library') refreshLibrary();
+  if (tab === 'admin') refreshAdmin();
+}
+
+/* ══════════════ สร้างคำขอ ══════════════ */
+function updateCodePreview(){
+  var type = $('fDocType').value, dept = $('fDocDept').value;
+  if (!type || !dept){ $('codePreview').textContent = '—'; return; }
+  fbGet(PATHS.master).then(function(m){
+    m = m || {};
+    var max = 0, prefix = 'APK-'+type+'-'+dept+'-';
+    Object.keys(m).forEach(function(code){
+      if (code.indexOf(prefix) === 0){
+        var n = parseInt(code.slice(prefix.length), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    });
+    var next = String(max+1).padStart(3,'0');
+    $('codePreview').textContent = prefix + next;
+  });
+}
+
+function populateExistingDocs(){
+  var sel = $('fExistingDoc'); sel.innerHTML = '';
+  fbGet(PATHS.master).then(function(m){
+    m = m || {};
+    var codes = Object.keys(m).filter(function(c){ return m[c].status !== 'cancelled'; }).sort();
+    if (!codes.length){ sel.innerHTML = '<option value="">— ไม่มีเอกสารในบัญชีแม่บท —</option>'; return; }
+    codes.forEach(function(c){
+      var o = document.createElement('option'); o.value = c; o.textContent = c+' — '+m[c].docName; sel.appendChild(o);
+    });
+    onExistingDocChange();
+  });
+}
+function onExistingDocChange(){
+  var code = $('fExistingDoc').value;
+  fbGet(PATHS.master).then(function(m){
+    var doc = (m||{})[code];
+    if (doc) $('fDocName').value = doc.docName;
+  });
+}
+
+function nextDarNo(){
+  var year = new Date().getFullYear();
+  var yy = String(year).slice(-2);
+  return fbGet(PATHS.requests).then(function(reqs){
+    reqs = reqs || {};
+    var max = 0;
+    Object.keys(reqs).forEach(function(k){
+      var r = reqs[k];
+      if (r.darYear === year && r.darSeq > max) max = r.darSeq;
+    });
+    var seq = max+1;
+    return { darNo: yy+'/'+String(seq).padStart(3,'0'), darYear: year, darSeq: seq };
+  });
+}
+
+function submitRequest(){
+  var action = document.querySelector('input[name=action]:checked').value;
+  var docName = $('fDocName').value.trim();
+  var detail = $('fDetail').value.trim();
+  var reqDepts = Array.prototype.slice.call(document.querySelectorAll('#reqDeptGroup input:checked')).map(function(i){ return i.value; });
+
+  if (!docName){ toast('กรุณากรอกชื่อเอกสาร'); return; }
+  if (!reqDepts.length){ toast('กรุณาเลือกแผนกที่ต้องเซ็นอนุมัติอย่างน้อย 1 แผนก'); return; }
+
+  var docCode, docType, docDept;
+  if (action === 'new'){
+    docType = $('fDocType').value; docDept = $('fDocDept').value;
+    docCode = $('codePreview').textContent;
+  } else {
+    docCode = $('fExistingDoc').value;
+    if (!docCode){ toast('กรุณาเลือกเอกสารเดิม'); return; }
+    var parts = docCode.split('-'); // APK-AA-BB-CCC
+    docType = parts[1]; docDept = parts[2];
+  }
+
+  var draftFile = $('fDraftFile').files[0];
+  var btn = $('submitReqBtn'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+
+  nextDarNo().then(function(dar){
+    var approvals = {};
+    reqDepts.forEach(function(d){ approvals[d] = {signed:false}; });
+    var req = {
+      darNo: dar.darNo, darYear: dar.darYear, darSeq: dar.darSeq,
+      action: action, docName: docName, docCode: docCode, docType: docType, docDept: docDept,
+      detail: detail,
+      submittedBy: {pin: session.pin, name: session.user.name},
+      submittedAt: new Date().toISOString(),
+      requiredDepts: reqDepts, approvals: approvals,
+      status: 'pending', hasDraft: !!draftFile
+    };
+    return fbPost(PATHS.requests, req).then(function(res){
+      var reqId = res.name;
+      if (draftFile){
+        return fileToBase64(draftFile).then(function(b64){
+          return fbPut(PATHS.files + '/' + reqId + '_draft', {fileName: draftFile.name, data: b64});
+        }).then(function(){ return reqId; });
+      }
+      return reqId;
+    });
+  }).then(function(){
+    toast('ส่งคำขอสำเร็จ');
+    $('fDocName').value = ''; $('fDetail').value = ''; $('fDraftFile').value = '';
+    document.querySelectorAll('#reqDeptGroup input').forEach(function(i){ i.checked = false; });
+    refreshMyRequests();
+  }).catch(function(e){
+    toast('เกิดข้อผิดพลาด: '+e.message);
+  }).finally(function(){
+    btn.disabled = false; btn.textContent = 'ส่งคำขอ';
+  });
+}
+
+function refreshMyRequests(){
+  fbGet(PATHS.requests).then(function(reqs){
+    reqs = reqs || {}; allRequests = reqs;
+    var mine = Object.keys(reqs).filter(function(k){ return reqs[k].submittedBy && reqs[k].submittedBy.pin === session.pin; })
+      .sort(function(a,b){ return reqs[b].submittedAt.localeCompare(reqs[a].submittedAt); }).slice(0,10);
+    var wrap = $('myRequests');
+    if (!mine.length){ wrap.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
+    wrap.innerHTML = mine.map(function(id){
+      var r = reqs[id];
+      return '<div class="req"><div class="req-head">'+
+        '<div><div class="dar">DAR '+escapeHtml(r.darNo)+'</div><h3>'+escapeHtml(r.docName)+'</h3>'+
+        '<div class="req-meta">'+escapeHtml(r.docCode)+' · '+actionLabel(r.action)+' · '+fmtDateTime(r.submittedAt)+'</div></div>'+
+        statusBadge(r.status)+'</div></div>';
+    }).join('');
+  });
+}
+function actionLabel(a){ return {'new':'จัดทำใหม่','edit':'แก้ไข','cancel':'ยกเลิก'}[a] || a; }
+
+/* ══════════════ รออนุมัติ ══════════════ */
+var signCtx = null; // {reqId, dept}
+
+function refreshPending(){
+  fbGet(PATHS.requests).then(function(reqs){
+    reqs = reqs || {}; allRequests = reqs;
+    var pendingIds = Object.keys(reqs).filter(function(k){ return reqs[k].status === 'pending'; })
+      .sort(function(a,b){ return (reqs[a].darNo||'').localeCompare(reqs[b].darNo||''); });
+    var wrap = $('pendingList');
+    if (!pendingIds.length){ wrap.innerHTML = '<div class="empty">ไม่มีคำขอที่รออนุมัติ</div>'; return; }
+    wrap.innerHTML = pendingIds.map(function(id){ return renderPendingReq(id, reqs[id]); }).join('');
+    wrap.querySelectorAll('[data-sign]').forEach(function(btn){
+      btn.addEventListener('click', function(){ openSignModal(btn.getAttribute('data-sign'), btn.getAttribute('data-dept')); });
+    });
+    wrap.querySelectorAll('[data-view-draft]').forEach(function(btn){
+      btn.addEventListener('click', function(){ viewDraft(btn.getAttribute('data-view-draft')); });
+    });
+  });
+}
+function renderPendingReq(id, r){
+  var rows = r.requiredDepts.map(function(dep){
+    var a = r.approvals[dep] || {};
+    var canI = canSignDept(dep);
+    var right;
+    if (a.signed){
+      right = '<span class="sign-ok">✓ '+escapeHtml(a.by.name)+' · '+fmtDateTime(a.at)+'</span>';
+    } else if (canI){
+      right = '<button class="btn btn-primary btn-sm" data-sign="'+id+'" data-dept="'+escapeHtml(dep)+'">เซ็นอนุมัติ</button>';
+    } else {
+      right = '<span class="sign-wait">รอเซ็น</span>';
+    }
+    return '<div class="dept-row"><div class="dept-name">'+escapeHtml(dep)+'</div>'+right+'</div>';
+  }).join('');
+  var draftBtn = r.hasDraft ? '<button class="btn btn-ghost btn-sm" data-view-draft="'+id+'">ดูไฟล์ร่าง</button>' : '';
+  return '<div class="req"><div class="req-head">'+
+    '<div><div class="dar">DAR '+escapeHtml(r.darNo)+'</div><h3>'+escapeHtml(r.docName)+'</h3>'+
+    '<div class="req-meta">'+escapeHtml(r.docCode||'')+' · '+actionLabel(r.action)+' · ผู้นำเสนอ: '+escapeHtml(r.submittedBy.name)+'</div>'+
+    (r.detail ? '<div class="req-meta">'+escapeHtml(r.detail)+'</div>' : '')+'</div>'+
+    draftBtn+'</div>'+rows+'</div>';
+}
+function viewDraft(reqId){
+  fbGet(PATHS.files + '/' + reqId + '_draft').then(function(f){
+    if (!f || !f.data){ toast('ไม่พบไฟล์'); return; }
+    openBase64Pdf(f.data, f.fileName);
+  });
+}
+
+function openSignModal(reqId, dept){
+  signCtx = {reqId: reqId, dept: dept};
+  $('signModalTitle').textContent = 'เซ็นอนุมัติ — '+dept;
+  $('signPin').value = ''; $('signErr').textContent = '';
+  $('rejectReasonField').style.display = 'none'; $('rejectReason').value = '';
+  $('signModal').classList.add('show');
+  $('signPin').focus();
+}
+function closeSignModal(){ $('signModal').classList.remove('show'); signCtx = null; }
+
+function doSign(isReject){
+  var pin = $('signPin').value.trim();
+  if (!pin){ $('signErr').textContent = 'กรุณาใส่ PIN'; return; }
+  if (isReject && !$('rejectReason').value.trim()){
+    $('rejectReasonField').style.display = 'block';
+    $('signErr').textContent = 'กรุณาระบุเหตุผลที่ไม่อนุมัติ';
+    return;
+  }
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok){ $('signErr').textContent = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์'; return; }
+    var depts = userDepts(result.user);
+    if (result.role !== 'admin' && depts.indexOf(signCtx.dept) === -1){
+      $('signErr').textContent = 'PIN นี้ไม่มีสิทธิ์เซ็นแทนแผนก '+signCtx.dept; return;
+    }
+    var reqId = signCtx.reqId, dept = signCtx.dept;
+    var r = allRequests[reqId];
+    if (isReject){
+      fbPatch(PATHS.requests + '/' + reqId, {
+        status: 'rejected',
+        rejectedBy: {dept: dept, pin: result.pin, name: result.user.name, reason: $('rejectReason').value.trim(), at: new Date().toISOString()}
+      }).then(function(){ toast('บันทึกผลไม่อนุมัติแล้ว'); closeSignModal(); refreshPending(); });
+      return;
+    }
+    var approvalPatch = {};
+    approvalPatch[dept] = {signed:true, by:{pin: result.pin, name: result.user.name}, signature: result.user.signature || null, at: new Date().toISOString()};
+    fbPatch(PATHS.requests + '/' + reqId + '/approvals', approvalPatch).then(function(){
+      var allSigned = r.requiredDepts.every(function(d){ return d === dept || (r.approvals[d] && r.approvals[d].signed); });
+      if (allSigned){
+        return fbPatch(PATHS.requests + '/' + reqId, {status:'approved'});
+      }
+    }).then(function(){
+      toast('เซ็นอนุมัติสำเร็จ'); closeSignModal(); refreshPending();
+    });
+  });
+}
+
+/* ══════════════ คลังเอกสาร ══════════════ */
+function refreshLibrary(){
+  fbGet(PATHS.master).then(function(m){
+    m = m || {}; allMaster = m;
+    renderLibrary();
+  });
+}
+function renderLibrary(){
+  var filterType = $('libFilterType').value;
+  var codes = Object.keys(allMaster).filter(function(c){
+    var d = allMaster[c];
+    if (d.status === 'cancelled') return false;
+    if (filterType && d.docType !== filterType) return false;
+    return canViewDoc(d.viewDepts);
+  }).sort();
+  var wrap = $('libraryList');
+  if (!codes.length){ wrap.innerHTML = '<div class="empty">ไม่มีเอกสารที่คุณมีสิทธิ์ดู</div>'; return; }
+  var rows = codes.map(function(c){
+    var d = allMaster[c];
+    var rev = d.revisions && d.revisions.length ? d.revisions[d.revisions.length-1] : {};
+    return '<tr><td class="mono">'+escapeHtml(c)+'</td><td>'+escapeHtml(d.docName)+'</td>'+
+      '<td>'+escapeHtml(d.docType)+'</td><td>'+escapeHtml(rev.rev||'—')+'</td>'+
+      '<td>'+escapeHtml(rev.date||'')+'</td>'+
+      '<td><button class="btn btn-ghost btn-sm" data-open="'+c+'">เปิดไฟล์</button></td></tr>';
+  }).join('');
+  wrap.innerHTML = '<table><thead><tr><th>รหัสเอกสาร</th><th>ชื่อเอกสาร</th><th>ประเภท</th><th>Rev.</th><th>วันที่บังคับใช้</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  wrap.querySelectorAll('[data-open]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.getAttribute('data-open');
+      var reqId = allMaster[code].latestReqId;
+      fbGet(PATHS.files + '/' + reqId + '_final').then(function(f){
+        if (!f || !f.data){ toast('ไม่พบไฟล์'); return; }
+        openBase64Pdf(f.data, f.fileName);
+      });
+    });
+  });
+}
+
+/* ══════════════ Admin ══════════════ */
+function refreshAdmin(){ refreshPublishQueue(); }
+
+function refreshPublishQueue(){
+  fbGet(PATHS.requests).then(function(reqs){
+    reqs = reqs || {}; allRequests = reqs;
+    var ids = Object.keys(reqs).filter(function(k){ return reqs[k].status === 'approved'; });
+    var wrap = $('publishList');
+    if (!ids.length){ wrap.innerHTML = '<div class="empty">ไม่มีคำขอที่รอเผยแพร่</div>'; return; }
+    wrap.innerHTML = ids.map(function(id){
+      var r = reqs[id];
+      return '<div class="req"><div class="req-head"><div><div class="dar">DAR '+escapeHtml(r.darNo)+'</div>'+
+        '<h3>'+escapeHtml(r.docName)+'</h3><div class="req-meta">'+escapeHtml(r.docCode)+' · '+actionLabel(r.action)+'</div></div>'+
+        '<button class="btn btn-primary btn-sm" data-publish="'+id+'">เผยแพร่</button></div></div>';
+    }).join('');
+    wrap.querySelectorAll('[data-publish]').forEach(function(btn){
+      btn.addEventListener('click', function(){ openPublishModal(btn.getAttribute('data-publish')); });
+    });
+  });
+}
+
+var publishCtx = null;
+function openPublishModal(reqId){
+  publishCtx = reqId;
+  var r = allRequests[reqId];
+  $('publishFile').value = '';
+  $('publishRev').value = r.action === 'new' ? '00' : nextRevNumber(r.docCode);
+  $('publishErr').textContent = '';
+  var wrap = $('publishViewDepts'); wrap.innerHTML = '';
+  var defaults = CAT_VIEW[r.docType] || [];
+  APPROVAL_DEPTS.forEach(function(dep){
+    var checked = defaults.indexOf(dep) !== -1 ? ' checked' : '';
+    var lab = document.createElement('label'); lab.className = 'check-opt';
+    lab.innerHTML = '<input type="checkbox" value="'+escapeHtml(dep)+'"'+checked+'> '+escapeHtml(dep);
+    wrap.appendChild(lab);
+  });
+  $('publishModal').classList.add('show');
+}
+function closePublishModal(){ $('publishModal').classList.remove('show'); publishCtx = null; }
+function nextRevNumber(code){
+  var d = allMaster[code];
+  if (!d || !d.revisions || !d.revisions.length) return '01';
+  var last = parseInt(d.revisions[d.revisions.length-1].rev, 10) || 0;
+  return String(last+1).padStart(2,'0');
+}
+
+function doPublish(){
+  var r = allRequests[publishCtx];
+  var file = $('publishFile').files[0];
+  var rev = $('publishRev').value.trim() || '00';
+  var viewDepts = Array.prototype.slice.call(document.querySelectorAll('#publishViewDepts input:checked')).map(function(i){ return i.value; });
+
+  if (r.action !== 'cancel' && !file){ $('publishErr').textContent = 'กรุณาแนบไฟล์ฉบับทางการ'; return; }
+  if (!viewDepts.length){ $('publishErr').textContent = 'กรุณาเลือกแผนกที่มีสิทธิ์ดูอย่างน้อย 1 แผนก'; return; }
+
+  var btn = $('publishConfirm'); btn.disabled = true; btn.textContent = 'กำลังเผยแพร่…';
+
+  var chain = Promise.resolve();
+  if (file){
+    chain = fileToBase64(file).then(function(b64){
+      return fbPut(PATHS.files + '/' + publishCtx + '_final', {fileName: file.name, data: b64});
+    });
+  }
+  chain.then(function(){
+    return fbGet(PATHS.master + '/' + r.docCode);
+  }).then(function(existing){
+    var doc = existing || {docCode: r.docCode, docType: r.docType, docDept: r.docDept, docName: r.docName, revisions: []};
+    doc.docName = r.docName;
+    doc.status = r.action === 'cancel' ? 'cancelled' : 'active';
+    doc.viewDepts = viewDepts;
+    doc.latestReqId = publishCtx;
+    doc.revisions = doc.revisions || [];
+    if (r.action !== 'cancel'){
+      doc.revisions.push({rev: rev, date: new Date().toISOString().slice(0,10), darNo: r.darNo});
+    }
+    return fbPut(PATHS.master + '/' + r.docCode, doc);
+  }).then(function(){
+    return fbPatch(PATHS.requests + '/' + publishCtx, {
+      status: 'published',
+      published: {fileName: file ? file.name : null, publishedBy: {pin: session.pin, name: session.user.name}, publishedAt: new Date().toISOString(), viewDepts: viewDepts, rev: rev}
+    });
+  }).then(function(){
+    toast('เผยแพร่เอกสารสำเร็จ');
+    closePublishModal();
+    refreshPublishQueue();
+  }).catch(function(e){
+    $('publishErr').textContent = 'เกิดข้อผิดพลาด: '+e.message;
+  }).finally(function(){
+    btn.disabled = false; btn.textContent = 'เผยแพร่';
+  });
+}
+
+/* ── Admin: สิทธิ์ผู้ใช้ ── */
+function renderPermTable(){
+  CentralAuth.fetchUsers().then(function(res){
+    if (!res.ok){ $('permTableWrap').innerHTML = '<div class="empty">โหลดไม่สำเร็จ</div>'; return; }
+    var users = res.users;
+    var pins = Object.keys(users).sort(function(a,b){ return (users[a].name||'').localeCompare(users[b].name||''); });
+    var deptCols = APPROVAL_DEPTS.map(function(d){ return '<th>'+escapeHtml(d)+'</th>'; }).join('');
+    var rows = pins.map(function(pin){
+      var u = users[pin];
+      var role = (u.permissions && u.permissions.doc_control) || 'none';
+      var depts = userDepts(u);
+      var roleSel = ['none','viewer','operator','admin'].map(function(r){
+        return '<option value="'+r+'"'+(r===role?' selected':'')+'>'+r+'</option>';
+      }).join('');
+      var deptCells = APPROVAL_DEPTS.map(function(d){
+        var checked = depts.indexOf(d) !== -1 ? ' checked' : '';
+        return '<td style="text-align:center;"><input type="checkbox" data-dept="'+escapeHtml(d)+'"'+checked+'></td>';
+      }).join('');
+      return '<tr data-pin="'+pin+'"><td>'+escapeHtml(u.name||pin)+'<div class="hint mono">PIN '+pin+'</div></td>'+
+        '<td><select class="role-sel">'+roleSel+'</select></td>'+deptCells+
+        '<td><button class="btn btn-ghost btn-sm" data-save-pin="'+pin+'">บันทึก</button></td></tr>';
+    }).join('');
+    $('permTableWrap').innerHTML = '<table><thead><tr><th>ผู้ใช้</th><th>สิทธิ์ระบบนี้</th>'+deptCols+'<th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    $('permTableWrap').querySelectorAll('[data-save-pin]').forEach(function(btn){
+      btn.addEventListener('click', function(){ savePermRow(btn.getAttribute('data-save-pin'), users); });
+    });
+  });
+}
+function savePermRow(pin, users){
+  var tr = document.querySelector('tr[data-pin="'+pin+'"]');
+  var role = tr.querySelector('.role-sel').value;
+  var depts = Array.prototype.slice.call(tr.querySelectorAll('input[data-dept]:checked')).map(function(i){ return i.getAttribute('data-dept'); });
+  CentralAuth.fetchUsers().then(function(res){
+    if (!res.ok){ toast('โหลดข้อมูลผู้ใช้ไม่สำเร็จ'); return; }
+    var fresh = res.users;
+    if (!fresh[pin]) fresh[pin] = {name:'', permissions:{}};
+    fresh[pin].permissions = fresh[pin].permissions || {};
+    fresh[pin].permissions.doc_control = role;
+    fresh[pin].permissions.doc_control_depts = depts;
+    return CentralAuth.saveUsers(fresh);
+  }).then(function(){ toast('บันทึกสิทธิ์ของ '+pin+' แล้ว'); });
+}
+
+/* ── Admin: ค่าเริ่มต้นประเภทเอกสาร ── */
+function renderCatTable(){
+  var rows = DOC_TYPES.map(function(t){
+    var current = CAT_VIEW[t.code] || [];
+    var checks = APPROVAL_DEPTS.map(function(d){
+      var checked = current.indexOf(d) !== -1 ? ' checked' : '';
+      return '<label class="check-opt" style="margin:2px;"><input type="checkbox" data-type="'+t.code+'" data-dept="'+escapeHtml(d)+'"'+checked+'> '+escapeHtml(d)+'</label>';
+    }).join('');
+    return '<div style="margin-bottom:14px;"><div style="font-weight:700; font-size:12.5px; margin-bottom:6px;">'+t.code+' — '+t.label+'</div><div class="check-group">'+checks+'</div></div>';
+  }).join('');
+  $('catTableWrap').innerHTML = rows + '<button class="btn btn-primary btn-sm" id="saveCatBtn">บันทึกค่าเริ่มต้น</button>';
+  $('saveCatBtn').addEventListener('click', function(){
+    var next = {};
+    DOC_TYPES.forEach(function(t){ next[t.code] = []; });
+    document.querySelectorAll('#catTableWrap input[data-type]:checked').forEach(function(i){
+      next[i.getAttribute('data-type')].push(i.getAttribute('data-dept'));
+    });
+    fbPut(PATHS.catView, next).then(function(){ CAT_VIEW = next; toast('บันทึกค่าเริ่มต้นแล้ว'); });
+  });
+}
+
+/* ── Admin: รายชื่อแผนก ── */
+function renderDeptsList(){
+  var wrap = $('deptsListWrap');
+  wrap.innerHTML = APPROVAL_DEPTS.map(function(d,i){
+    return '<div class="dept-row"><div class="dept-name">'+escapeHtml(d)+'</div>'+
+      '<button class="btn btn-ghost btn-sm" data-del-dept="'+i+'">ลบ</button></div>';
+  }).join('');
+  wrap.querySelectorAll('[data-del-dept]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.getAttribute('data-del-dept'), 10);
+      APPROVAL_DEPTS.splice(idx,1);
+      fbPut(PATHS.depts, APPROVAL_DEPTS).then(function(){ toast('ลบแล้ว'); renderDeptsList(); renderReqDeptGroup(); });
+    });
+  });
+}
+
+/* ══════════════ Event wiring ══════════════ */
+document.addEventListener('DOMContentLoaded', function(){
+  // login
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin($('loginPin').value); });
+
+  // logout
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+
+  // tabs
+  document.querySelectorAll('.tabbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+
+  // action radio (new/edit/cancel)
+  document.querySelectorAll('input[name=action]').forEach(function(r){
+    r.addEventListener('change', function(){
+      var action = document.querySelector('input[name=action]:checked').value;
+      if (action === 'new'){
+        $('newDocFields').style.display = ''; $('existingDocFields').style.display = 'none';
+        $('fDocName').value = '';
+      } else {
+        $('newDocFields').style.display = 'none'; $('existingDocFields').style.display = '';
+        populateExistingDocs();
+      }
+    });
+  });
+  $('fDocType').addEventListener('change', updateCodePreview);
+  $('fDocDept').addEventListener('change', updateCodePreview);
+  $('fExistingDoc').addEventListener('change', onExistingDocChange);
+  $('submitReqBtn').addEventListener('click', submitRequest);
+
+  // sign modal
+  $('signCancel').addEventListener('click', closeSignModal);
+  $('signConfirm').addEventListener('click', function(){ doSign(false); });
+  $('signReject').addEventListener('click', function(){
+    if ($('rejectReasonField').style.display === 'none'){ $('rejectReasonField').style.display = 'block'; return; }
+    doSign(true);
+  });
+
+  // library filter
+  $('libFilterType').addEventListener('change', renderLibrary);
+
+  // publish modal
+  $('publishCancel').addEventListener('click', closePublishModal);
+  $('publishConfirm').addEventListener('click', doPublish);
+
+  // admin subtabs
+  document.querySelectorAll('#adminSubtabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#adminSubtabs button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('.admin-sub').forEach(function(s){ s.style.display = 'none'; });
+      var sub = btn.getAttribute('data-sub');
+      $('admin-'+sub).style.display = '';
+      if (sub === 'perm') renderPermTable();
+      if (sub === 'cat') renderCatTable();
+      if (sub === 'depts') renderDeptsList();
+    });
+  });
+  $('addDeptBtn').addEventListener('click', function(){
+    var name = $('newDeptName').value.trim();
+    if (!name) return;
+    APPROVAL_DEPTS.push(name);
+    fbPut(PATHS.depts, APPROVAL_DEPTS).then(function(){
+      $('newDeptName').value = ''; toast('เพิ่มแผนกแล้ว'); renderDeptsList(); renderReqDeptGroup();
+    });
+  });
+
+  // ── เริ่มต้น ──
+  session = loadSession();
+  if (session){ enterApp(); }
+});
+</script>
+</body>
+</html>
