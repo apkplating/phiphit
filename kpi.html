@@ -115,6 +115,15 @@ tr:hover td{background:var(--steel-3);}
 .entry-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px;}
 .entry-card .ename{font-size:13px; font-weight:700; margin-bottom:2px;}
 .entry-card .etarget{font-size:11px; color:var(--text-muted); margin-bottom:10px;}
+.subtabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
+.subtabs button{border:1px solid var(--border); background:#fff; border-radius:8px; padding:7px 13px; font-size:12px; cursor:pointer; font-family:inherit;}
+.subtabs button.active{background:var(--navy); color:#fff; border-color:var(--navy);}
+.trend-chart{display:flex; align-items:flex-end; gap:4px; height:100px; margin-bottom:6px;}
+.trend-chart .bar{flex:1; background:var(--steel-1); border-radius:2px 2px 0 0; min-height:2px;}
+.trend-chart .bar.ok{background:var(--green);}
+.trend-chart .bar.bad{background:var(--red);}
+.trend-labels{display:flex; gap:4px; margin-bottom:16px;}
+.trend-labels span{flex:1; text-align:center; font-size:9px; color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -156,6 +165,7 @@ tr:hover td{background:var(--steel-3);}
       <div class="card">
         <h2 id="dashTitle">ภาพรวมเดือนนี้</h2>
         <div class="sub">เทียบกับเป้าหมายที่ตั้งไว้ — แท่งกราฟด้านล่างคือ 6 เดือนล่าสุด</div>
+        <div class="subtabs" id="dashDeptTabs"></div>
         <div id="dashGrid"><div class="empty">กำลังโหลด…</div></div>
       </div>
     </div>
@@ -169,6 +179,7 @@ tr:hover td{background:var(--steel-3);}
           <label>เดือน</label>
           <input type="month" id="entryMonth">
         </div>
+        <div class="subtabs" id="entryDeptTabs"></div>
         <div id="entryFields"><div class="empty">กำลังโหลด…</div></div>
         <button class="btn btn-primary" id="saveEntryBtn">บันทึก</button>
       </div>
@@ -185,7 +196,7 @@ tr:hover td{background:var(--steel-3);}
         <div class="metric-edit-card" style="background:var(--steel-3); border-style:dashed;">
           <div class="row">
             <div class="field"><label>ชื่อตัวชี้วัด</label><input type="text" id="newMName" placeholder="เช่น ปริมาณของเสียในกระบวนการผลิต"></div>
-            <div class="field" style="max-width:110px;"><label>แผนก</label><input type="text" id="newMDept" placeholder="PR/QA/HR..."></div>
+            <div class="field" style="max-width:140px;"><label>แผนก</label><select id="newMDept"></select></div>
             <div class="field" style="max-width:170px;"><label>ประเภทการคำนวณ</label>
               <select id="newMType">
                 <option value="ratio">อัตราส่วน (ตัวตั้ง/ตัวหาร)</option>
@@ -227,6 +238,7 @@ tr:hover td{background:var(--steel-3);}
 <div class="modal-bg" id="trendModal">
   <div class="modal">
     <h3 id="trendTitle">แนวโน้มย้อนหลัง</h3>
+    <div id="trendChartArea"></div>
     <table>
       <thead><tr><th>เดือน</th><th>ค่าจริง</th><th>เป้าหมาย</th><th>สถานะ</th></tr></thead>
       <tbody id="trendTableBody"></tbody>
@@ -262,6 +274,40 @@ function fbDelete(url){ return fetch(url+'.json',{method:'DELETE'}); }
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
 /* ตัวชี้วัดเริ่มต้น — สกัดจาก Policy Action Plan (APK-FR-MR-001) ของจริง 9 ฉบับ */
+var KPI_DEPTS = [
+  {code:'MR', label:'ฝ่ายบริหาร'},
+  {code:'HR', label:'แผนกบุคคล'},
+  {code:'PU', label:'แผนกจัดซื้อ'},
+  {code:'MK', label:'แผนกการตลาด'},
+  {code:'PR', label:'แผนกผลิต'},
+  {code:'QA', label:'แผนกประกันคุณภาพ'},
+  {code:'MN', label:'แผนกซ่อมบำรุง'}
+];
+function deptLabel(code){
+  for (var i=0;i<KPI_DEPTS.length;i++) if (KPI_DEPTS[i].code === code) return KPI_DEPTS[i].label;
+  return code;
+}
+function userKpiDepts(u){
+  var d = u && u.permissions && u.permissions.kpi_depts;
+  return Array.isArray(d) ? d : [];
+}
+function deptsInUse(){
+  var set = {};
+  Object.keys(allMetrics).forEach(function(id){
+    var m = allMetrics[id];
+    if (m.active !== false && m.dept) set[m.dept] = true;
+  });
+  return Object.keys(set);
+}
+function myVisibleDepts(){
+  var inUse = deptsInUse();
+  if (session.role === 'admin') return inUse;
+  var mine = userKpiDepts(session.user);
+  return inUse.filter(function(d){ return mine.indexOf(d) !== -1; });
+}
+var currentDashDept = null;
+var currentEntryDept = null;
+
 var SEED_METRICS = [
   {name:'ปริมาณของเสียในกระบวนการผลิต', dept:'PR', type:'ratio', numLabel:'ปริมาณงาน NG (Tons)', denomLabel:'ปริมาณการชุบ (Tons)', unit:'%', target:5, direction:'lower', active:true},
   {name:'ปริมาณชิ้นงานเคลมจากลูกค้า', dept:'QA', type:'ratio', numLabel:'ปริมาณงานเคลม', denomLabel:'ปริมาณส่งมอบ (K)', unit:'%', target:3, direction:'lower', active:true},
@@ -344,13 +390,43 @@ function refreshDashboard(){
   $('dashTitle').textContent = 'ภาพรวมเดือนนี้ — ' + monthLabel(currentMonthKey());
   Promise.all([ fbGet(PATHS.metrics), fbGet(PATHS.entries) ]).then(function(res){
     allMetrics = res[0] || {}; allEntries = res[1] || {};
+    renderDashDeptTabs();
     renderDashboard();
   });
 }
+function renderDashDeptTabs(){
+  var depts = myVisibleDepts();
+  var wrap = $('dashDeptTabs');
+  if (!depts.length){ wrap.innerHTML = ''; currentDashDept = null; return; }
+  if (currentDashDept !== null && depts.indexOf(currentDashDept) === -1){ currentDashDept = null; }
+  if (currentDashDept === null && session.role !== 'admin'){ currentDashDept = depts[0]; }
+  var btns = [];
+  if (session.role === 'admin'){
+    btns.push('<button data-dept="" class="'+(currentDashDept===null?'active':'')+'">ทั้งหมด</button>');
+  }
+  depts.forEach(function(d){
+    btns.push('<button data-dept="'+d+'" class="'+(currentDashDept===d?'active':'')+'">'+escapeHtml(d)+' — '+escapeHtml(deptLabel(d))+'</button>');
+  });
+  wrap.innerHTML = btns.join('');
+  wrap.querySelectorAll('button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      currentDashDept = btn.getAttribute('data-dept') || null;
+      renderDashDeptTabs(); renderDashboard();
+    });
+  });
+}
 function renderDashboard(){
-  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
+  var visible = myVisibleDepts();
+  var ids = Object.keys(allMetrics).filter(function(id){
+    var m = allMetrics[id];
+    if (m.active === false) return false;
+    if (visible.indexOf(m.dept) === -1) return false;
+    if (currentDashDept && m.dept !== currentDashDept) return false;
+    return true;
+  });
   var wrap = $('dashGrid');
-  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่าตัวชี้วัด — ไปที่แท็บ "ตั้งค่า" แล้วกด "นำเข้าตัวชี้วัดเริ่มต้น"</div>'; return; }
+  if (!visible.length){ wrap.innerHTML = '<div class="empty">คุณยังไม่ได้รับสิทธิ์เข้าถึงแผนกใด — ติดต่อผู้ดูแลระบบให้กำหนดสิทธิ์ที่แท็บ "ตั้งค่า"</div>'; return; }
+  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่มีตัวชี้วัดในแผนกนี้</div>'; return; }
   var curKey = currentMonthKey();
   var sixMonths = lastNMonthKeys(6);
   wrap.innerHTML = '<div class="metric-grid">' + ids.map(function(id){
@@ -389,6 +465,16 @@ function openTrendModal(metricId){
   var m = allMetrics[metricId];
   $('trendTitle').textContent = 'แนวโน้มย้อนหลัง — ' + m.name;
   var months = lastNMonthKeys(12);
+  var refScale = m.type === 'ratio' ? 100 : (Math.abs(m.target) || 1);
+  var bars = months.map(function(mk){
+    var e = (allEntries[mk] || {})[metricId];
+    var v = computeValue(m, e);
+    var ok = isMet(m, v);
+    var h = v==null ? 2 : Math.max(4, Math.min(96, (Math.abs(v)/refScale)*96));
+    return '<div class="bar '+(ok===null?'':(ok?'ok':'bad'))+'" style="height:'+h+'px;" title="'+monthLabel(mk)+': '+(v==null?'—':(Math.round(v*100)/100))+'"></div>';
+  }).join('');
+  var labels = months.map(function(mk){ return '<span>'+MONTH_NAMES[parseInt(mk.split('-')[1],10)-1]+'</span>'; }).join('');
+  $('trendChartArea').innerHTML = '<div class="trend-chart">'+bars+'</div><div class="trend-labels">'+labels+'</div>';
   var rows = months.map(function(mk){
     var e = (allEntries[mk] || {})[metricId];
     var v = computeValue(m, e);
@@ -403,13 +489,46 @@ function openTrendModal(metricId){
 
 /* ══════════════ กรอกข้อมูล ══════════════ */
 function refreshEntry(){
-  fbGet(PATHS.metrics).then(function(m){ allMetrics = m || {}; renderEntryFields(); });
+  fbGet(PATHS.metrics).then(function(m){
+    allMetrics = m || {};
+    renderEntryDeptTabs();
+    renderEntryFields();
+  });
+}
+function renderEntryDeptTabs(){
+  var depts = myVisibleDepts();
+  var wrap = $('entryDeptTabs');
+  if (!depts.length){ wrap.innerHTML = ''; currentEntryDept = null; return; }
+  if (currentEntryDept !== null && depts.indexOf(currentEntryDept) === -1){ currentEntryDept = null; }
+  if (currentEntryDept === null && session.role !== 'admin'){ currentEntryDept = depts[0]; }
+  var btns = [];
+  if (session.role === 'admin'){
+    btns.push('<button data-dept="" class="'+(currentEntryDept===null?'active':'')+'">ทั้งหมด</button>');
+  }
+  depts.forEach(function(d){
+    btns.push('<button data-dept="'+d+'" class="'+(currentEntryDept===d?'active':'')+'">'+escapeHtml(d)+' — '+escapeHtml(deptLabel(d))+'</button>');
+  });
+  wrap.innerHTML = btns.join('');
+  wrap.querySelectorAll('button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      currentEntryDept = btn.getAttribute('data-dept') || null;
+      renderEntryDeptTabs(); renderEntryFields();
+    });
+  });
 }
 function renderEntryFields(){
   var monthKey = $('entryMonth').value || currentMonthKey();
-  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
+  var visible = myVisibleDepts();
+  var ids = Object.keys(allMetrics).filter(function(id){
+    var m = allMetrics[id];
+    if (m.active === false) return false;
+    if (visible.indexOf(m.dept) === -1) return false;
+    if (currentEntryDept && m.dept !== currentEntryDept) return false;
+    return true;
+  });
   var wrap = $('entryFields');
-  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่าตัวชี้วัด — ไปที่แท็บ "ตั้งค่า"</div>'; return; }
+  if (!visible.length){ wrap.innerHTML = '<div class="empty">คุณยังไม่ได้รับสิทธิ์เข้าถึงแผนกใด — ติดต่อผู้ดูแลระบบ</div>'; return; }
+  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่มีตัวชี้วัดในแผนกนี้</div>'; return; }
   fbGet(PATHS.entries + '/' + monthKey).then(function(existing){
     existing = existing || {};
     wrap.innerHTML = ids.map(function(id){
@@ -452,8 +571,12 @@ function renderEntryFields(){
 }
 function saveEntry(){
   var monthKey = $('entryMonth').value || currentMonthKey();
-  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
   var wrap = $('entryFields');
+  var ids = [];
+  wrap.querySelectorAll('[data-metric]').forEach(function(el){
+    var id = el.getAttribute('data-metric');
+    if (ids.indexOf(id) === -1) ids.push(id);
+  });
   var patch = {};
   ids.forEach(function(id){
     var m = allMetrics[id];
@@ -489,7 +612,7 @@ function metricEditCardHtml(id, m){
   return '<div class="metric-edit-card" data-mid="'+id+'">' +
     '<div class="row">' +
       '<div class="field"><label>ชื่อตัวชี้วัด</label><input type="text" class="me-name" value="'+escapeHtml(m.name)+'"></div>' +
-      '<div class="field" style="max-width:110px;"><label>แผนก</label><input type="text" class="me-dept" value="'+escapeHtml(m.dept||'')+'"></div>' +
+      '<div class="field" style="max-width:140px;"><label>แผนก</label><select class="me-dept">'+KPI_DEPTS.map(function(d){ return '<option value="'+d.code+'"'+(m.dept===d.code?' selected':'')+'>'+d.code+' — '+d.label+'</option>'; }).join('')+'</select></div>' +
       '<div class="field" style="max-width:170px;"><label>ประเภทการคำนวณ</label>' +
         '<select class="me-type">' +
           '<option value="ratio"'+(isRatio?' selected':'')+'>อัตราส่วน (ตัวตั้ง/ตัวหาร)</option>' +
@@ -612,27 +735,39 @@ function refreshPermTable(){
     if (!res.ok){ $('permTableWrap').innerHTML = '<div class="empty">โหลดไม่สำเร็จ</div>'; return; }
     var users = res.users;
     var pins = Object.keys(users).sort(function(a,b){ return (users[a].name||'').localeCompare(users[b].name||''); });
+    var deptCols = KPI_DEPTS.map(function(d){ return '<th>'+d.code+'</th>'; }).join('');
     var rows = pins.map(function(pin){
       var u = users[pin];
       var role = (u.permissions && u.permissions.kpi) || 'none';
+      var depts = userKpiDepts(u);
       var opts = ['none','viewer','operator','admin'].map(function(r){
         return '<option value="'+r+'"'+(r===role?' selected':'')+'>'+r+'</option>';
       }).join('');
-      return '<tr><td>'+escapeHtml(u.name||pin)+'<div class="hint mono">PIN '+pin+'</div></td>' +
-        '<td><select class="kpi-role-sel" data-pin="'+pin+'">'+opts+'</select></td></tr>';
+      var deptCells = KPI_DEPTS.map(function(d){
+        var checked = depts.indexOf(d.code) !== -1 ? ' checked' : '';
+        return '<td style="text-align:center;"><input type="checkbox" data-dept="'+d.code+'"'+checked+'></td>';
+      }).join('');
+      return '<tr data-pin="'+pin+'"><td>'+escapeHtml(u.name||pin)+'<div class="hint mono">PIN '+pin+'</div></td>' +
+        '<td><select class="kpi-role-sel">'+opts+'</select></td>'+deptCells+
+        '<td><button class="btn btn-ghost btn-sm" data-save-pin="'+pin+'">บันทึก</button></td></tr>';
     }).join('');
-    $('permTableWrap').innerHTML = '<table><thead><tr><th>ผู้ใช้</th><th>สิทธิ์</th></tr></thead><tbody>'+rows+'</tbody></table>';
-    $('permTableWrap').querySelectorAll('.kpi-role-sel').forEach(function(sel){
-      sel.addEventListener('change', function(){
-        var pin = sel.getAttribute('data-pin');
+    $('permTableWrap').innerHTML = '<div class="hint" style="margin-bottom:8px;">ติ๊กแผนกที่ PIN นั้นมีสิทธิ์กรอก/ดูข้อมูล (admin เห็นทุกแผนกเสมอไม่ต้องติ๊ก)</div>' +
+      '<table><thead><tr><th>ผู้ใช้</th><th>สิทธิ์ระบบนี้</th>'+deptCols+'<th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    $('permTableWrap').querySelectorAll('[data-save-pin]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var pin = btn.getAttribute('data-save-pin');
+        var tr = $('permTableWrap').querySelector('tr[data-pin="'+pin+'"]');
+        var role = tr.querySelector('.kpi-role-sel').value;
+        var depts = Array.prototype.slice.call(tr.querySelectorAll('input[data-dept]:checked')).map(function(i){ return i.getAttribute('data-dept'); });
         CentralAuth.fetchUsers().then(function(res2){
           if (!res2.ok){ toast('โหลดข้อมูลผู้ใช้ไม่สำเร็จ'); return; }
           var fresh = res2.users;
           if (!fresh[pin]) fresh[pin] = {name:'', permissions:{}};
           fresh[pin].permissions = fresh[pin].permissions || {};
-          fresh[pin].permissions.kpi = sel.value;
+          fresh[pin].permissions.kpi = role;
+          fresh[pin].permissions.kpi_depts = depts;
           return CentralAuth.saveUsers(fresh);
-        }).then(function(){ toast('บันทึกสิทธิ์แล้ว — ' + pin); });
+        }).then(function(){ toast('บันทึกสิทธิ์ของ ' + pin + ' แล้ว'); });
       });
     });
   });
@@ -640,6 +775,7 @@ function refreshPermTable(){
 
 /* ══════════════ Event wiring ══════════════ */
 document.addEventListener('DOMContentLoaded', function(){
+  $('newMDept').innerHTML = KPI_DEPTS.map(function(d){ return '<option value="'+d.code+'">'+d.code+' — '+d.label+'</option>'; }).join('');
   $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
   $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
   $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
