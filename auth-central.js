@@ -107,6 +107,7 @@
         { id: 'job',      label: 'งาน' },
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'qc100',    label: 'QC 100%' },
+        { id: 'mcheck',   label: 'ตรวจเครื่องจักร' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
@@ -122,6 +123,7 @@
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'job',      label: 'งาน' },
         { id: 'qc100',    label: 'QC 100%' },
+        { id: 'mcheck',   label: 'ตรวจเครื่องจักร' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
@@ -137,6 +139,7 @@
         { id: 'qa',       label: 'บันทึกผล' },
         { id: 'job',      label: 'งาน' },
         { id: 'qc100',    label: 'QC 100%' },
+        { id: 'mcheck',   label: 'ตรวจเครื่องจักร' },
         { id: 'settings', label: 'ตั้งค่า' }
       ]
     },
