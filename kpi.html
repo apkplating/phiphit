@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบ KPI — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue2:#3b82f6;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --green:#16a34a; --red:#dc2626; --amber:#d97706;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+header{
+  background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  color:#fff; padding:16px 22px;
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+}
+.brand h1{font-size:16px; font-weight:700;}
+.brand p{font-size:11px; color:#b9c4de; margin-top:2px;}
+.brand .docref{font-size:10px; color:#8fa3cc; margin-top:1px; font-family:'IBM Plex Mono',monospace;}
+.back-link{font-size:11px; color:#b9c4de; text-decoration:none;}
+.who{display:flex; align-items:center; gap:12px; font-size:12px; color:#dbe3f3;}
+.who b{color:#fff;}
+.btn-logout{background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:6px 12px; font-size:11.5px; cursor:pointer; font-family:inherit;}
+.btn-logout:hover{background:rgba(255,255,255,.18);}
+
+.tabbar{display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--border); padding:0 18px; overflow-x:auto;}
+.tabbtn{border:none; background:none; font-family:inherit; font-size:13px; font-weight:600; color:var(--text-mid); padding:13px 14px; cursor:pointer; white-space:nowrap; border-bottom:3px solid transparent;}
+.tabbtn.active{color:var(--navy); border-bottom-color:var(--blue2);}
+.tabbtn:hover{color:var(--navy);}
+
+main{max-width:1080px; margin:0 auto; padding:22px 18px 60px;}
+.panel{display:none;}
+.panel.active{display:block;}
+
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px;}
+.card h2{font-size:15px; font-weight:700; color:var(--navy); margin-bottom:4px;}
+.card .sub{font-size:11.5px; color:var(--text-mid); margin-bottom:16px;}
+
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:11.5px; font-weight:600; color:var(--text-mid); margin-bottom:5px;}
+.field input[type=text], .field input[type=number], .field input[type=month], .field select, .field textarea{
+  width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px; background:#fff; color:var(--text);
+}
+.row{display:flex; gap:12px; flex-wrap:wrap;}
+.row > .field{flex:1; min-width:160px;}
+
+.btn{border:none; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;}
+.btn-primary{background:var(--navy); color:#fff;}
+.btn-primary:hover{background:var(--navy-2);}
+.btn-ghost{background:#fff; color:var(--navy); border:1px solid var(--steel-1);}
+.btn-ghost:hover{background:var(--steel-3);}
+.btn-sm{padding:6px 12px; font-size:12px; border-radius:7px;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+#loginScreen{position:fixed; inset:0; background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;}
+.login-box{background:#fff; border-radius:16px; padding:32px 28px; width:100%; max-width:340px; text-align:center;}
+.login-box h1{font-size:16px; font-weight:700; color:var(--navy); margin-bottom:2px;}
+.login-box p{font-size:11.5px; color:var(--text-mid); margin-bottom:20px;}
+.login-box input{width:100%; text-align:center; letter-spacing:6px; font-size:20px; font-family:'IBM Plex Mono',monospace; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px;}
+.login-box .btn-primary{width:100%; padding:11px;}
+.login-err{color:var(--red); font-size:11.5px; margin-top:10px; min-height:14px;}
+
+.metric-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:14px;}
+.metric-card{border:1px solid var(--border); border-radius:12px; padding:16px; position:relative;}
+.metric-card .mdept{font-size:9.5px; color:var(--text-muted); font-weight:700; letter-spacing:.5px; text-transform:uppercase;}
+.metric-card .mname{font-size:13px; font-weight:700; margin:2px 0;}
+.metric-card .mtarget{font-size:11px; color:var(--text-muted); margin-bottom:10px;}
+.metric-card .mvalue{font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace;}
+.metric-card .munit{font-size:12px; color:var(--text-mid); font-weight:500;}
+.metric-card .mraw{font-size:10.5px; color:var(--text-muted); margin-top:2px;}
+.status-dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
+.status-dot.ok{background:var(--green);}
+.status-dot.bad{background:var(--red);}
+.status-dot.none{background:var(--steel-2);}
+.bars{display:flex; align-items:flex-end; gap:3px; height:36px; margin-top:12px;}
+.bars .bar{flex:1; background:var(--steel-1); border-radius:2px 2px 0 0; min-height:2px;}
+.bars .bar.ok{background:var(--green);}
+.bars .bar.bad{background:var(--red);}
+.mfoot{display:flex; justify-content:space-between; align-items:center; margin-top:10px;}
+
+.empty{text-align:center; padding:40px 20px; color:var(--text-muted); font-size:12.5px;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); padding:8px 10px; border-bottom:2px solid var(--border);}
+td{padding:9px 10px; border-bottom:1px solid var(--border);}
+tr:hover td{background:var(--steel-3);}
+
+.modal-bg{position:fixed; inset:0; background:rgba(15,32,68,.55); display:none; align-items:center; justify-content:center; z-index:60; padding:16px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff; border-radius:14px; padding:24px; width:100%; max-width:520px; max-height:90vh; overflow:auto;}
+.modal h3{font-size:14.5px; font-weight:700; color:var(--navy); margin-bottom:14px;}
+.modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:16px;}
+
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; padding:11px 20px; border-radius:9px; font-size:12.5px; z-index:80; opacity:0; transition:opacity .2s; pointer-events:none;}
+.toast.show{opacity:1;}
+.hint{font-size:11px; color:var(--text-muted); margin-top:6px;}
+
+.metric-edit-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px;}
+.metric-edit-card .row{margin-bottom:0;}
+.metric-edit-foot{display:flex; justify-content:space-between; align-items:center; margin-top:10px;}
+.toggle-active{font-size:11px; cursor:pointer; padding:3px 9px; border-radius:99px; border:1px solid var(--border); white-space:nowrap;}
+.toggle-active.is-active{background:#dcfce7; color:#166534; border-color:#bbf7d0;}
+.toggle-active.is-inactive{background:var(--steel-3); color:var(--text-muted);}
+.calc-preview{font-size:11.5px; color:var(--navy); font-weight:700; align-self:center; padding-bottom:14px;}
+.entry-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px;}
+.entry-card .ename{font-size:13px; font-weight:700; margin-bottom:2px;}
+.entry-card .etarget{font-size:11px; color:var(--text-muted); margin-bottom:10px;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>📊 ระบบ KPI</h1>
+    <p>APK Plating — ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="brand">
+      <h1>📊 ระบบ KPI</h1>
+      <p>APK Plating · ตัวชี้วัดรายเดือน</p>
+      <p class="docref">อ้างอิงแบบฟอร์ม APK-FR-MR-001 (POLICY ACTION PLAN) · Rev.00</p>
+    </div>
+    <div class="who">
+      <a href="index.html" class="back-link">← หน้าแรก</a>
+      <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+      <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <div class="tabbar" id="tabbar">
+    <button class="tabbtn" data-tab="dashboard">แดชบอร์ด</button>
+    <button class="tabbtn" data-tab="entry">กรอกข้อมูล</button>
+    <button class="tabbtn" data-tab="admin">ตั้งค่า</button>
+  </div>
+
+  <main>
+
+    <!-- ── TAB: แดชบอร์ด ── -->
+    <div class="panel" id="panel-dashboard">
+      <div class="card">
+        <h2 id="dashTitle">ภาพรวมเดือนนี้</h2>
+        <div class="sub">เทียบกับเป้าหมายที่ตั้งไว้ — แท่งกราฟด้านล่างคือ 6 เดือนล่าสุด</div>
+        <div id="dashGrid"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
+    <!-- ── TAB: กรอกข้อมูล ── -->
+    <div class="panel" id="panel-entry">
+      <div class="card">
+        <h2>กรอกข้อมูลรายเดือน</h2>
+        <div class="sub">เลือกเดือน แล้วกรอกค่าจริงของแต่ละตัวชี้วัด — ตัวชี้วัดแบบอัตราส่วนกรอกตัวตั้ง/ตัวหาร ระบบคำนวณ % ให้อัตโนมัติ</div>
+        <div class="field" style="max-width:220px;">
+          <label>เดือน</label>
+          <input type="month" id="entryMonth">
+        </div>
+        <div id="entryFields"><div class="empty">กำลังโหลด…</div></div>
+        <button class="btn btn-primary" id="saveEntryBtn">บันทึก</button>
+      </div>
+    </div>
+
+    <!-- ── TAB: ตั้งค่า (admin) ── -->
+    <div class="panel" id="panel-admin">
+      <div class="card">
+        <h2>ตัวชี้วัด (KPI Metrics)</h2>
+        <div class="sub">อ้างอิงตามแบบฟอร์ม Policy Action Plan (APK-FR-MR-001) ที่ใช้งานจริง — ปรับชื่อ/เป้าหมาย/หน่วยได้ทุกเมื่อ</div>
+        <button class="btn btn-ghost btn-sm" id="seedMetricsBtn" style="margin-bottom:14px;">+ นำเข้าตัวชี้วัดเริ่มต้น 9 ตัว (จากฟอร์มเดิม)</button>
+        <div id="metricsListWrap"></div>
+
+        <div class="metric-edit-card" style="background:var(--steel-3); border-style:dashed;">
+          <div class="row">
+            <div class="field"><label>ชื่อตัวชี้วัด</label><input type="text" id="newMName" placeholder="เช่น ปริมาณของเสียในกระบวนการผลิต"></div>
+            <div class="field" style="max-width:110px;"><label>แผนก</label><input type="text" id="newMDept" placeholder="PR/QA/HR..."></div>
+            <div class="field" style="max-width:170px;"><label>ประเภทการคำนวณ</label>
+              <select id="newMType">
+                <option value="ratio">อัตราส่วน (ตัวตั้ง/ตัวหาร)</option>
+                <option value="simple">ค่าเดี่ยว</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" id="newMRatioFields">
+            <div class="field"><label>ป้ายตัวตั้ง (เช่น ปริมาณงาน NG)</label><input type="text" id="newMNumLabel"></div>
+            <div class="field"><label>ป้ายตัวหาร (เช่น ปริมาณการชุบ)</label><input type="text" id="newMDenomLabel"></div>
+          </div>
+          <div class="row" id="newMSimpleFields" style="display:none;">
+            <div class="field" style="max-width:140px;"><label>หน่วย</label><input type="text" id="newMUnit" placeholder="ครั้ง"></div>
+          </div>
+          <div class="row">
+            <div class="field" style="max-width:120px;"><label>เป้าหมาย</label><input type="number" id="newMTarget" placeholder="5"></div>
+            <div class="field" style="max-width:170px;"><label>ทิศทางที่ดี</label>
+              <select id="newMDirection">
+                <option value="lower">ยิ่งต่ำยิ่งดี</option>
+                <option value="higher">ยิ่งสูงยิ่งดี</option>
+              </select>
+            </div>
+            <div class="field" style="flex:0; align-self:flex-end;"><button class="btn btn-ghost btn-sm" id="addMetricBtn">+ เพิ่มตัวชี้วัด</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>สิทธิ์ผู้ใช้ระบบ KPI</h2>
+        <div class="sub">admin = จัดการตัวชี้วัด+กรอกข้อมูล / operator = กรอกข้อมูลได้ / viewer = ดูแดชบอร์ดอย่างเดียว</div>
+        <div id="permTableWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── MODAL: แนวโน้มย้อนหลัง ── -->
+<div class="modal-bg" id="trendModal">
+  <div class="modal">
+    <h3 id="trendTitle">แนวโน้มย้อนหลัง</h3>
+    <table>
+      <thead><tr><th>เดือน</th><th>ค่าจริง</th><th>เป้าหมาย</th><th>สถานะ</th></tr></thead>
+      <tbody id="trendTableBody"></tbody>
+    </table>
+    <div class="modal-actions"><button class="btn btn-ghost btn-sm" id="trendCloseBtn">ปิด</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="auth-central.js"></script>
+<script>
+'use strict';
+
+var SYSTEM_KEY = 'kpi';
+var DB_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PATHS = {
+  metrics: DB_URL + '/kpi/metrics',
+  entries: DB_URL + '/kpi/entries'
+};
+
+var session = null;
+var allMetrics = {};
+var allEntries = {};
+
+function $(id){ return document.getElementById(id); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2600); }
+function fbGet(url){ return fetch(url+'.json',{cache:'no-store'}).then(function(r){return r.json();}); }
+function fbPut(url,data){ return fetch(url+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function fbPatch(url,data){ return fetch(url+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function fbPost(url,data){ return fetch(url+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){return r.json();}); }
+function fbDelete(url){ return fetch(url+'.json',{method:'DELETE'}); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+/* ตัวชี้วัดเริ่มต้น — สกัดจาก Policy Action Plan (APK-FR-MR-001) ของจริง 9 ฉบับ */
+var SEED_METRICS = [
+  {name:'ปริมาณของเสียในกระบวนการผลิต', dept:'PR', type:'ratio', numLabel:'ปริมาณงาน NG (Tons)', denomLabel:'ปริมาณการชุบ (Tons)', unit:'%', target:5, direction:'lower', active:true},
+  {name:'ปริมาณชิ้นงานเคลมจากลูกค้า', dept:'QA', type:'ratio', numLabel:'ปริมาณงานเคลม', denomLabel:'ปริมาณส่งมอบ (K)', unit:'%', target:3, direction:'lower', active:true},
+  {name:'พนักงานได้รับการฝึกอบรมตามแผน', dept:'HR', type:'ratio', numLabel:'Achieve', denomLabel:'Plan', unit:'%', target:95, direction:'higher', active:true},
+  {name:'สอบเทียบเครื่องมือวัดได้ตามแผน', dept:'QA', type:'ratio', numLabel:'Achieve', denomLabel:'Plan', unit:'%', target:100, direction:'higher', active:true},
+  {name:'การบำรุงรักษาเครื่องจักรได้ตามแผน', dept:'MN', type:'ratio', numLabel:'Achieve', denomLabel:'Plan', unit:'%', target:100, direction:'higher', active:true},
+  {name:'Supplier ส่งมอบได้คุณภาพ (เป้าหมายประเมินทุก 3 เดือน)', dept:'PU', type:'ratio', numLabel:'จำนวนที่ OK', denomLabel:'จำนวนส่งมอบ', unit:'%', target:95, direction:'higher', active:true},
+  {name:'การดำเนินงานเป็นไปตาม QA Plan', dept:'QA', type:'ratio', numLabel:'Achieve', denomLabel:'Plan', unit:'%', target:100, direction:'higher', active:true},
+  {name:'การดำเนินงานเป็นไปตาม QMR Plan', dept:'MR', type:'ratio', numLabel:'Achieve', denomLabel:'Plan', unit:'%', target:100, direction:'higher', active:true},
+  {name:'การร้องเรียนจากลูกค้า', dept:'QA', type:'simple', unit:'ครั้ง', target:3, direction:'lower', active:true}
+];
+
+var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function currentMonthKey(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthLabel(key){ var p=key.split('-'); return MONTH_NAMES[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543); }
+function lastNMonthKeys(n){
+  var arr=[], d=new Date(); d.setDate(1);
+  for (var i=0;i<n;i++){ arr.unshift(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); d.setMonth(d.getMonth()-1); }
+  return arr;
+}
+/* คำนวณค่าที่ใช้แสดง/เทียบเป้า จาก entry ดิบ — รองรับทั้งอัตราส่วนและค่าเดี่ยว */
+function computeValue(metric, entry){
+  if (!entry) return null;
+  if (metric.type === 'ratio'){
+    if (entry.denominator == null || entry.denominator === '' || Number(entry.denominator) === 0) return null;
+    if (entry.numerator == null || entry.numerator === '') return null;
+    return (Number(entry.numerator) / Number(entry.denominator)) * 100;
+  }
+  if (entry.value == null || entry.value === '') return null;
+  return Number(entry.value);
+}
+function isMet(metric, computedValue){
+  if (computedValue == null) return null;
+  return metric.direction === 'lower' ? (computedValue <= metric.target) : (computedValue >= metric.target);
+}
+function fmtValue(metric, v){
+  if (v == null) return '—';
+  return (Math.round(v*100)/100) + ' ' + (metric.unit||'');
+}
+
+/* ══════════════ session / login ══════════════ */
+function loadSession(){ try{ var r=sessionStorage.getItem('kpi_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ sessionStorage.setItem('kpi_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('kpi_session'); }
+
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok){
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg; return;
+    }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = session.user.name || session.pin;
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  document.querySelectorAll('.tabbtn').forEach(function(btn){
+    var t = btn.getAttribute('data-tab');
+    var allow = t === 'dashboard' ? true : (t === 'entry' ? (session.role==='admin'||session.role==='operator') : session.role==='admin');
+    btn.style.display = allow ? '' : 'none';
+  });
+  $('entryMonth').value = currentMonthKey();
+  switchTab('dashboard');
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+tab); });
+  if (tab==='dashboard') refreshDashboard();
+  if (tab==='entry') refreshEntry();
+  if (tab==='admin') { refreshMetricsList(); refreshPermTable(); }
+}
+
+/* ══════════════ แดชบอร์ด ══════════════ */
+function refreshDashboard(){
+  $('dashTitle').textContent = 'ภาพรวมเดือนนี้ — ' + monthLabel(currentMonthKey());
+  Promise.all([ fbGet(PATHS.metrics), fbGet(PATHS.entries) ]).then(function(res){
+    allMetrics = res[0] || {}; allEntries = res[1] || {};
+    renderDashboard();
+  });
+}
+function renderDashboard(){
+  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
+  var wrap = $('dashGrid');
+  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่าตัวชี้วัด — ไปที่แท็บ "ตั้งค่า" แล้วกด "นำเข้าตัวชี้วัดเริ่มต้น"</div>'; return; }
+  var curKey = currentMonthKey();
+  var sixMonths = lastNMonthKeys(6);
+  wrap.innerHTML = '<div class="metric-grid">' + ids.map(function(id){
+    var m = allMetrics[id];
+    var curEntry = (allEntries[curKey] || {})[id];
+    var curVal = computeValue(m, curEntry);
+    var met = isMet(m, curVal);
+    var dotClass = met===null ? 'none' : (met ? 'ok' : 'bad');
+    var rawLine = '';
+    if (m.type === 'ratio' && curEntry){
+      rawLine = '<div class="mraw">'+escapeHtml(m.numLabel)+': '+(curEntry.numerator==null?'—':curEntry.numerator)+' / '+escapeHtml(m.denomLabel)+': '+(curEntry.denominator==null?'—':curEntry.denominator)+'</div>';
+    }
+    var bars = sixMonths.map(function(mk){
+      var e = (allEntries[mk] || {})[id];
+      var v = computeValue(m, e);
+      var ok = isMet(m, v);
+      var refScale = m.type === 'ratio' ? 100 : (Math.abs(m.target) || 1);
+      var h = v==null ? 2 : Math.max(4, Math.min(36, (Math.abs(v)/refScale)*36));
+      return '<div class="bar '+(ok===null?'':(ok?'ok':'bad'))+'" style="height:'+h+'px;" title="'+monthLabel(mk)+': '+(v==null?'—':(Math.round(v*100)/100))+'"></div>';
+    }).join('');
+    return '<div class="metric-card">' +
+      '<div class="mdept">'+escapeHtml(m.dept||'')+'</div>' +
+      '<div class="mname"><span class="status-dot '+dotClass+'"></span>'+escapeHtml(m.name)+'</div>' +
+      '<div class="mtarget">เป้าหมาย: '+(m.direction==='lower'?'≤ ':'≥ ')+m.target+' '+escapeHtml(m.unit||'')+'</div>' +
+      '<div class="mvalue">'+(curVal==null?'—':(Math.round(curVal*100)/100))+' <span class="munit">'+escapeHtml(m.unit||'')+'</span></div>' +
+      rawLine +
+      '<div class="bars">'+bars+'</div>' +
+      '<div class="mfoot"><span class="hint" style="margin:0;">6 เดือนล่าสุด</span><button class="btn btn-ghost btn-sm" data-trend="'+id+'">ดูย้อนหลัง</button></div>' +
+    '</div>';
+  }).join('') + '</div>';
+  wrap.querySelectorAll('[data-trend]').forEach(function(btn){
+    btn.addEventListener('click', function(){ openTrendModal(btn.getAttribute('data-trend')); });
+  });
+}
+function openTrendModal(metricId){
+  var m = allMetrics[metricId];
+  $('trendTitle').textContent = 'แนวโน้มย้อนหลัง — ' + m.name;
+  var months = lastNMonthKeys(12);
+  var rows = months.map(function(mk){
+    var e = (allEntries[mk] || {})[metricId];
+    var v = computeValue(m, e);
+    var met = isMet(m, v);
+    var badge = met===null ? '<span class="hint" style="margin:0;">ยังไม่กรอก</span>' : (met ? '<span style="color:var(--green); font-weight:700;">✓ ผ่านเป้า</span>' : '<span style="color:var(--red); font-weight:700;">✗ ไม่ถึงเป้า</span>');
+    var rawCell = m.type === 'ratio' && e ? '<div class="hint" style="margin:2px 0 0;">'+(e.numerator==null?'—':e.numerator)+' / '+(e.denominator==null?'—':e.denominator)+'</div>' : '';
+    return '<tr><td>'+monthLabel(mk)+'</td><td class="mono">'+(v==null?'—':(Math.round(v*100)/100))+rawCell+'</td><td class="mono">'+(m.direction==='lower'?'≤':'≥')+' '+m.target+'</td><td>'+badge+'</td></tr>';
+  }).join('');
+  $('trendTableBody').innerHTML = rows;
+  $('trendModal').classList.add('show');
+}
+
+/* ══════════════ กรอกข้อมูล ══════════════ */
+function refreshEntry(){
+  fbGet(PATHS.metrics).then(function(m){ allMetrics = m || {}; renderEntryFields(); });
+}
+function renderEntryFields(){
+  var monthKey = $('entryMonth').value || currentMonthKey();
+  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
+  var wrap = $('entryFields');
+  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่ได้ตั้งค่าตัวชี้วัด — ไปที่แท็บ "ตั้งค่า"</div>'; return; }
+  fbGet(PATHS.entries + '/' + monthKey).then(function(existing){
+    existing = existing || {};
+    wrap.innerHTML = ids.map(function(id){
+      var m = allMetrics[id];
+      var e = existing[id];
+      var note = e ? (e.note || '') : '';
+      var fieldsHtml;
+      if (m.type === 'ratio'){
+        var num = e ? e.numerator : '';
+        var denom = e ? e.denominator : '';
+        fieldsHtml =
+          '<div class="row" style="align-items:flex-end;">' +
+            '<div class="field"><label>'+escapeHtml(m.numLabel)+'</label><input type="number" step="any" class="entry-num" data-metric="'+id+'" value="'+escapeHtml(num)+'"></div>' +
+            '<div class="field"><label>'+escapeHtml(m.denomLabel)+'</label><input type="number" step="any" class="entry-denom" data-metric="'+id+'" value="'+escapeHtml(denom)+'"></div>' +
+            '<div class="calc-preview" data-calc="'+id+'">'+(num!==''&&denom!==''&&denom!=null&&Number(denom)!==0 ? (Math.round((Number(num)/Number(denom))*10000)/100)+' %' : '—')+'</div>' +
+          '</div>';
+      } else {
+        var val = e ? e.value : '';
+        fieldsHtml = '<div class="field" style="max-width:220px;"><label>ค่าจริง ('+escapeHtml(m.unit||'')+')</label><input type="number" step="any" class="entry-val" data-metric="'+id+'" value="'+escapeHtml(val)+'"></div>';
+      }
+      return '<div class="entry-card">' +
+        '<div class="ename">'+escapeHtml(m.name)+'</div>' +
+        '<div class="etarget">แผนก '+escapeHtml(m.dept||'-')+' · เป้าหมาย '+(m.direction==='lower'?'≤':'≥')+' '+m.target+' '+escapeHtml(m.unit||'')+'</div>' +
+        fieldsHtml +
+        '<div class="field" style="margin-top:10px;"><label>หมายเหตุ / ปัญหาที่พบ (ถ้ามี)</label><input type="text" class="entry-note" data-metric="'+id+'" value="'+escapeHtml(note)+'"></div>' +
+      '</div>';
+    }).join('');
+    wrap.querySelectorAll('.entry-num, .entry-denom').forEach(function(input){
+      input.addEventListener('input', function(){
+        var id = input.getAttribute('data-metric');
+        var num = wrap.querySelector('.entry-num[data-metric="'+id+'"]').value;
+        var denom = wrap.querySelector('.entry-denom[data-metric="'+id+'"]').value;
+        var calcEl = wrap.querySelector('[data-calc="'+id+'"]');
+        if (num !== '' && denom !== '' && Number(denom) !== 0){
+          calcEl.textContent = (Math.round((Number(num)/Number(denom))*10000)/100) + ' %';
+        } else { calcEl.textContent = '—'; }
+      });
+    });
+  });
+}
+function saveEntry(){
+  var monthKey = $('entryMonth').value || currentMonthKey();
+  var ids = Object.keys(allMetrics).filter(function(id){ return allMetrics[id].active !== false; });
+  var wrap = $('entryFields');
+  var patch = {};
+  ids.forEach(function(id){
+    var m = allMetrics[id];
+    var noteEl = wrap.querySelector('.entry-note[data-metric="'+id+'"]');
+    var note = noteEl ? noteEl.value.trim() : '';
+    if (m.type === 'ratio'){
+      var numEl = wrap.querySelector('.entry-num[data-metric="'+id+'"]');
+      var denomEl = wrap.querySelector('.entry-denom[data-metric="'+id+'"]');
+      var numV = numEl ? numEl.value.trim() : '';
+      var denomV = denomEl ? denomEl.value.trim() : '';
+      if (numV === '' && denomV === '') return;
+      patch[id] = {numerator: numV===''?null:parseFloat(numV), denominator: denomV===''?null:parseFloat(denomV), note: note, enteredBy:{pin:session.pin,name:session.user.name}, enteredAt:new Date().toISOString()};
+    } else {
+      var valEl = wrap.querySelector('.entry-val[data-metric="'+id+'"]');
+      var v = valEl ? valEl.value.trim() : '';
+      if (v === '') return;
+      patch[id] = {value: parseFloat(v), note: note, enteredBy:{pin:session.pin,name:session.user.name}, enteredAt:new Date().toISOString()};
+    }
+  });
+  if (!Object.keys(patch).length){ toast('ยังไม่ได้กรอกค่าใดเลย'); return; }
+  var btn = $('saveEntryBtn'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+  fbPatch(PATHS.entries + '/' + monthKey, patch).then(function(){
+    toast('บันทึกข้อมูลเดือน ' + monthLabel(monthKey) + ' แล้ว');
+  }).finally(function(){ btn.disabled = false; btn.textContent = 'บันทึก'; });
+}
+
+/* ══════════════ Admin: ตัวชี้วัด ══════════════ */
+function refreshMetricsList(){
+  fbGet(PATHS.metrics).then(function(m){ allMetrics = m || {}; renderMetricsList(); });
+}
+function metricEditCardHtml(id, m){
+  var isRatio = m.type === 'ratio';
+  return '<div class="metric-edit-card" data-mid="'+id+'">' +
+    '<div class="row">' +
+      '<div class="field"><label>ชื่อตัวชี้วัด</label><input type="text" class="me-name" value="'+escapeHtml(m.name)+'"></div>' +
+      '<div class="field" style="max-width:110px;"><label>แผนก</label><input type="text" class="me-dept" value="'+escapeHtml(m.dept||'')+'"></div>' +
+      '<div class="field" style="max-width:170px;"><label>ประเภทการคำนวณ</label>' +
+        '<select class="me-type">' +
+          '<option value="ratio"'+(isRatio?' selected':'')+'>อัตราส่วน (ตัวตั้ง/ตัวหาร)</option>' +
+          '<option value="simple"'+(!isRatio?' selected':'')+'>ค่าเดี่ยว</option>' +
+        '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="row me-ratio-fields" style="display:'+(isRatio?'flex':'none')+';">' +
+      '<div class="field"><label>ป้ายตัวตั้ง</label><input type="text" class="me-numlabel" value="'+escapeHtml(m.numLabel||'')+'"></div>' +
+      '<div class="field"><label>ป้ายตัวหาร</label><input type="text" class="me-denomlabel" value="'+escapeHtml(m.denomLabel||'')+'"></div>' +
+    '</div>' +
+    '<div class="row me-simple-fields" style="display:'+(!isRatio?'flex':'none')+';">' +
+      '<div class="field" style="max-width:140px;"><label>หน่วย</label><input type="text" class="me-unit" value="'+escapeHtml(!isRatio?(m.unit||''):'')+'"></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field" style="max-width:120px;"><label>เป้าหมาย</label><input type="number" class="me-target" value="'+m.target+'"></div>' +
+      '<div class="field" style="max-width:170px;"><label>ทิศทางที่ดี</label>' +
+        '<select class="me-dir">' +
+          '<option value="lower"'+(m.direction==='lower'?' selected':'')+'>ยิ่งต่ำยิ่งดี</option>' +
+          '<option value="higher"'+(m.direction==='higher'?' selected':'')+'>ยิ่งสูงยิ่งดี</option>' +
+        '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="metric-edit-foot">' +
+      '<span class="toggle-active '+(m.active!==false?'is-active':'is-inactive')+'" data-toggle-active="'+id+'">'+(m.active!==false?'ใช้งานอยู่':'ปิดใช้งาน')+'</span>' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="btn btn-ghost btn-sm" data-save-metric="'+id+'">บันทึก</button>' +
+        '<button class="btn btn-ghost btn-sm" data-del-metric="'+id+'">ลบ</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+function renderMetricsList(){
+  var ids = Object.keys(allMetrics);
+  var wrap = $('metricsListWrap');
+  if (!ids.length){ wrap.innerHTML = '<div class="empty">ยังไม่มีตัวชี้วัด — กด "นำเข้าตัวชี้วัดเริ่มต้น" หรือเพิ่มเองด้านล่าง</div>'; return; }
+  wrap.innerHTML = ids.map(function(id){ return metricEditCardHtml(id, allMetrics[id]); }).join('');
+
+  wrap.querySelectorAll('.metric-edit-card').forEach(function(card){
+    var typeSel = card.querySelector('.me-type');
+    typeSel.addEventListener('change', function(){
+      var isRatio = typeSel.value === 'ratio';
+      card.querySelector('.me-ratio-fields').style.display = isRatio ? 'flex' : 'none';
+      card.querySelector('.me-simple-fields').style.display = isRatio ? 'none' : 'flex';
+    });
+  });
+  wrap.querySelectorAll('[data-toggle-active]').forEach(function(el){
+    el.addEventListener('click', function(){
+      var id = el.getAttribute('data-toggle-active');
+      allMetrics[id].active = allMetrics[id].active === false ? true : false;
+      renderMetricsList();
+    });
+  });
+  wrap.querySelectorAll('[data-save-metric]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-save-metric');
+      var card = wrap.querySelector('.metric-edit-card[data-mid="'+id+'"]');
+      var type = card.querySelector('.me-type').value;
+      var updated = {
+        name: card.querySelector('.me-name').value.trim(),
+        dept: card.querySelector('.me-dept').value.trim(),
+        type: type,
+        target: parseFloat(card.querySelector('.me-target').value) || 0,
+        direction: card.querySelector('.me-dir').value,
+        active: allMetrics[id].active !== false
+      };
+      if (type === 'ratio'){
+        updated.numLabel = card.querySelector('.me-numlabel').value.trim();
+        updated.denomLabel = card.querySelector('.me-denomlabel').value.trim();
+        updated.unit = '%';
+      } else {
+        updated.unit = card.querySelector('.me-unit').value.trim();
+      }
+      fbPut(PATHS.metrics + '/' + id, updated).then(function(){
+        allMetrics[id] = updated; toast('บันทึกแล้ว'); renderMetricsList();
+      });
+    });
+  });
+  wrap.querySelectorAll('[data-del-metric]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-del-metric');
+      if (!confirm('ลบตัวชี้วัด "'+allMetrics[id].name+'" ออก? ข้อมูลย้อนหลังจะยังอยู่แต่จะไม่แสดงในแดชบอร์ดอีก')) return;
+      fbDelete(PATHS.metrics + '/' + id).then(function(){
+        delete allMetrics[id]; toast('ลบแล้ว'); renderMetricsList();
+      });
+    });
+  });
+}
+function addMetric(){
+  var name = $('newMName').value.trim();
+  var dept = $('newMDept').value.trim();
+  var type = $('newMType').value;
+  var target = parseFloat($('newMTarget').value);
+  var direction = $('newMDirection').value;
+  if (!name){ toast('กรุณากรอกชื่อตัวชี้วัด'); return; }
+  if (isNaN(target)){ toast('กรุณากรอกเป้าหมายเป็นตัวเลข'); return; }
+  var metric = {name:name, dept:dept, type:type, target:target, direction:direction, active:true};
+  if (type === 'ratio'){
+    metric.numLabel = $('newMNumLabel').value.trim();
+    metric.denomLabel = $('newMDenomLabel').value.trim();
+    metric.unit = '%';
+  } else {
+    metric.unit = $('newMUnit').value.trim();
+  }
+  fbPost(PATHS.metrics, metric).then(function(){
+    $('newMName').value=''; $('newMDept').value=''; $('newMNumLabel').value=''; $('newMDenomLabel').value=''; $('newMUnit').value=''; $('newMTarget').value='';
+    toast('เพิ่มตัวชี้วัดแล้ว'); refreshMetricsList();
+  });
+}
+function seedDefaultMetrics(){
+  if (!confirm('จะเพิ่มตัวชี้วัดเริ่มต้น 9 ตัวตามฟอร์ม Policy Action Plan เดิม (APK-FR-MR-001) เข้าไปเพิ่มเติมจากที่มีอยู่ ดำเนินการต่อ?')) return;
+  Promise.all(SEED_METRICS.map(function(m){ return fbPost(PATHS.metrics, m); })).then(function(){
+    toast('นำเข้าตัวชี้วัดเริ่มต้นสำเร็จ'); refreshMetricsList();
+  });
+}
+
+/* ══════════════ Admin: สิทธิ์ผู้ใช้ ══════════════ */
+function refreshPermTable(){
+  CentralAuth.fetchUsers().then(function(res){
+    if (!res.ok){ $('permTableWrap').innerHTML = '<div class="empty">โหลดไม่สำเร็จ</div>'; return; }
+    var users = res.users;
+    var pins = Object.keys(users).sort(function(a,b){ return (users[a].name||'').localeCompare(users[b].name||''); });
+    var rows = pins.map(function(pin){
+      var u = users[pin];
+      var role = (u.permissions && u.permissions.kpi) || 'none';
+      var opts = ['none','viewer','operator','admin'].map(function(r){
+        return '<option value="'+r+'"'+(r===role?' selected':'')+'>'+r+'</option>';
+      }).join('');
+      return '<tr><td>'+escapeHtml(u.name||pin)+'<div class="hint mono">PIN '+pin+'</div></td>' +
+        '<td><select class="kpi-role-sel" data-pin="'+pin+'">'+opts+'</select></td></tr>';
+    }).join('');
+    $('permTableWrap').innerHTML = '<table><thead><tr><th>ผู้ใช้</th><th>สิทธิ์</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    $('permTableWrap').querySelectorAll('.kpi-role-sel').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var pin = sel.getAttribute('data-pin');
+        CentralAuth.fetchUsers().then(function(res2){
+          if (!res2.ok){ toast('โหลดข้อมูลผู้ใช้ไม่สำเร็จ'); return; }
+          var fresh = res2.users;
+          if (!fresh[pin]) fresh[pin] = {name:'', permissions:{}};
+          fresh[pin].permissions = fresh[pin].permissions || {};
+          fresh[pin].permissions.kpi = sel.value;
+          return CentralAuth.saveUsers(fresh);
+        }).then(function(){ toast('บันทึกสิทธิ์แล้ว — ' + pin); });
+      });
+    });
+  });
+}
+
+/* ══════════════ Event wiring ══════════════ */
+document.addEventListener('DOMContentLoaded', function(){
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+
+  document.querySelectorAll('.tabbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+
+  $('entryMonth').addEventListener('change', renderEntryFields);
+  $('saveEntryBtn').addEventListener('click', saveEntry);
+
+  $('newMType').addEventListener('change', function(){
+    var isRatio = $('newMType').value === 'ratio';
+    $('newMRatioFields').style.display = isRatio ? 'flex' : 'none';
+    $('newMSimpleFields').style.display = isRatio ? 'none' : 'flex';
+  });
+  $('addMetricBtn').addEventListener('click', addMetric);
+  $('seedMetricsBtn').addEventListener('click', seedDefaultMetrics);
+
+  $('trendCloseBtn').addEventListener('click', function(){ $('trendModal').classList.remove('show'); });
+  $('trendModal').addEventListener('click', function(e){ if (e.target === e.currentTarget) $('trendModal').classList.remove('show'); });
+
+  session = loadSession();
+  if (session){ enterApp(); }
+});
+</script>
+</body>
+</html>

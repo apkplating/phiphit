@@ -950,12 +950,19 @@ function refreshKpiSnapshot(){
       '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + ids.map(function(id){
         var m = metrics[id];
         var e = entries[id];
-        var v = e ? e.value : null;
+        var v = null;
+        if (e){
+          if (m.type === 'ratio'){
+            if (e.denominator != null && Number(e.denominator) !== 0 && e.numerator != null){
+              v = (Number(e.numerator) / Number(e.denominator)) * 100;
+            }
+          } else if (e.value != null){ v = Number(e.value); }
+        }
         var met = v == null ? null : (m.direction === 'lower' ? (v <= m.target) : (v >= m.target));
         var bg = met === null ? '#f1f5f9' : (met ? '#dcfce7' : '#fee2e2');
         var fg = met === null ? '#64748b' : (met ? '#166534' : '#991b1b');
         return '<div style="background:'+bg+'; color:'+fg+'; border-radius:9px; padding:8px 12px; font-size:12px;">' +
-          '<b>'+escapeHtml(m.name)+'</b>: ' + (v==null?'ยังไม่กรอก':(v+' '+escapeHtml(m.unit||''))) +
+          '<b>'+escapeHtml(m.name)+'</b>: ' + (v==null?'ยังไม่กรอก':((Math.round(v*100)/100)+' '+escapeHtml(m.unit||''))) +
           ' <span style="opacity:.7;">(เป้า '+(m.direction==='lower'?'≤':'≥')+' '+m.target+')</span></div>';
       }).join('') + '</div>';
   });
