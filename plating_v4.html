@@ -376,6 +376,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('job')">📋 งาน</button>
   <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn" onclick="tab('qc100')">✅ QC 100%</button>
+  <button class="tab-btn" onclick="tab('mcheck')">🔧 ตรวจเครื่องจักร</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
 
@@ -1466,6 +1467,7 @@ function init() {
   setTimeout(qaFbLoadRecords, 2500);
   setTimeout(qaFbLoadProcesses, 2800);
   setTimeout(masterLoad, 1500); // sync Firebase
+  setTimeout(jobMasterLoad, 1800); // โหลด Job Master สำหรับ dropdown P/No
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
   loadAutoDiscordSetting();
@@ -1482,7 +1484,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','qc100','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1496,6 +1498,7 @@ function tab(t) {
   if (t === 'job')   { jobMasterLoad(); }
   if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
   if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); }
+  if (t === 'mcheck') { mcInit(); }
 }
 
 // ═══════════════════════════════════════
@@ -5671,7 +5674,7 @@ function exportIntakeCSV() {
 // ═══════════════════════════════════════
 
 var SYSTEM_KEY = 'plating_v4';
-var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','qc100','settings'];
+var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
 
 var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
@@ -6355,6 +6358,13 @@ function barrelPmAcPick(idx) {
   if (cust) document.getElementById('bCustomer').value = cust;
 
   var statusEl = document.getElementById('bPartSearchStatus');
+
+  // ── ป้องกัน: ถ้า Job Master ยังโหลดไม่เสร็จ (ว่างเปล่า) อย่าฟันธงว่า "ไม่มีสต็อก" ──
+  if (!jobMasterItems || !jobMasterItems.length) {
+    statusEl.innerHTML = '<span style="color:#d97706;">⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่</span>';
+    jobMasterLoad().then(function(){ barrelPmAcPick(idx); }); // โหลดแล้วลองเลือกซ้ำอัตโนมัติ
+    return;
+  }
 
   // ตรวจว่ามีบิลมีคงเหลือไหม
   var normSel = normalizePartKey(partNo);
@@ -7330,6 +7340,86 @@ async function confirmJobOut() {
 
 </div>
 
+
+<!-- ══════════════════════════════════ -->
+<!--  MACHINE CHECK — ใบตรวจสอบเครื่องจักรประจำวัน -->
+<!-- ══════════════════════════════════ -->
+<div id="v-mcheck" class="view">
+
+  <div style="background:var(--navy);border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+    <div style="font-size:14px;font-weight:700;color:#fff;">🔧 ใบตรวจสอบเครื่องจักร/อุปกรณ์ประจำวัน</div>
+    <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">APK-FR-PU-XXX · ตรวจรายวันตามมาตรฐาน</div>
+  </div>
+
+  <!-- ฟอร์มบันทึกผลตรวจวันนี้ -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+      <div class="card-label" style="margin:0;">✏️ บันทึกผลตรวจวันนี้</div>
+      <button class="btn btn-outline" style="width:auto;font-size:11px;padding:6px 12px;margin:0;" onclick="mcOpenEditList()">⚙️ แก้ไขหัวข้อตรวจสอบ</button>
+    </div>
+    <div class="grid2" style="margin-bottom:10px;">
+      <div class="field" style="margin:0;">
+        <label>วันที่ตรวจสอบ</label>
+        <input type="date" id="mcDate" onchange="mcLoadDateRecord()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ผู้ตรวจสอบ</label>
+        <input type="text" id="mcInspector" placeholder="ชื่อผู้ตรวจ">
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--text-muted);background:var(--sky-pale);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6;">
+      <b>สัญลักษณ์การตรวจสอบ</b> &nbsp;
+      <span style="color:#16a34a;font-weight:700;">R</span> = เครื่องจักรปกติ &nbsp;|&nbsp;
+      <span style="color:#dc2626;font-weight:700;">S</span> = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp;|&nbsp;
+      <span style="color:#d97706;font-weight:700;">r</span> = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้
+    </div>
+
+    <div id="mcChecklistBody"></div>
+
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn btn-primary" style="margin:0;" onclick="mcSaveDay()">💾 บันทึกผลตรวจวันนี้</button>
+      <button class="btn btn-outline" style="margin:0;width:auto;padding:10px 16px;" onclick="mcPrintDay()">🖨️ พิมพ์ / PDF</button>
+    </div>
+    <div id="toast-mcheck" class="toast"></div>
+  </div>
+
+  <!-- บันทึกการปรับปรุงเครื่องจักร / รายละเอียดการซ่อม -->
+  <div class="card">
+    <div class="card-label">🛠️ บันทึกการปรับปรุงเครื่องจักร / อุปกรณ์ (รายละเอียดการซ่อม)</div>
+    <div id="mcRepairRows"></div>
+    <button class="btn btn-outline" style="margin-top:6px;" onclick="mcAddRepairRow()">➕ เพิ่มรายการซ่อม</button>
+  </div>
+
+  <!-- ประวัติย้อนหลัง -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);">
+      <div class="card-label" style="margin:0;">📜 ประวัติการตรวจสอบ</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select id="mcHistMonth" onchange="mcRenderHistory()" style="font-size:11px;padding:5px 8px;width:auto;"></select>
+        <button class="btn btn-outline" style="width:auto;font-size:11px;padding:5px 10px;margin:0;" onclick="mcExportCSV()">📥 CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table style="font-size:11px;">
+        <thead>
+          <tr>
+            <th>วันที่</th>
+            <th>ผู้ตรวจสอบ</th>
+            <th style="text-align:center;">ผลตรวจ</th>
+            <th style="text-align:center;">รายการซ่อม</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mcHistBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 //  QA CONTROL CHART — v2 with Titration & Coefficient
@@ -8223,6 +8313,437 @@ function saveBillToRow(dayId, rowIdx) {
     document.getElementById('addBillModal').remove();
     renderHistory();
   });
+}
+
+// ═══════════════════════════════════════════════
+//  MACHINE CHECK — ใบตรวจสอบเครื่องจักร/อุปกรณ์ประจำวัน
+// ═══════════════════════════════════════════════
+var MC_ITEMS_KEY   = 'mcheck_items_b1';
+var MC_RECORDS_KEY = 'mcheck_records_b1';
+var MC_DEFAULT_ITEMS = [
+  {id:'b1-01',no:1,machine:'ตู้ควบคุม PLC',itemNo:1,itemName:'สภาพทั่วไป',standard:'ไม่มีความชื้นภายในตู้ควบคุม',method:'สายตา'},
+  {id:'b1-02',no:2,machine:'บ่อ PP',itemNo:1,itemName:'สภาพทั่วไปของบ่อ',standard:'บ่อไม่มีน้ำรั่วลงพื้น',method:'สายตา'},
+  {id:'b1-03',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
+  {id:'b1-04',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
+  {id:'b1-05',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
+  {id:'b1-06',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
+  {id:'b1-07',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
+  {id:'b1-08',no:4,machine:'เครนยกโม่ชุบ ( 2 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
+  {id:'b1-09',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:1,itemName:'สภาพทั่วไปของเครน',standard:'เครนมีสภาพไม่ชำรุด',method:'สายตา'},
+  {id:'b1-10',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',method:'มือโยกสวิทซ์'},
+  {id:'b1-11',no:5,machine:'เครนยกโม่ทำสี ( 3 )',itemNo:3,itemName:'สายพาน',standard:'มีจารบีที่รางสายพาน',method:'สายตา'},
+  {id:'b1-12',no:6,machine:'ตู้ไฟชุบ',itemNo:1,itemName:'ตู้ควบคุม',standard:'เปิดมีไฟสีเขียมติด',method:'สายตา'},
+  {id:'b1-13',no:6,machine:'ตู้ไฟชุบ',itemNo:2,itemName:'การจ่ายกระแสไฟ',standard:'วัดค่าเทียบกับจอ Monitor',method:''},
+  {id:'b1-14',no:7,machine:'Dosing pump บ่อชุบ',itemNo:1,itemName:'Dosing Pump (1533)',standard:'10±5 ml / ครั้ง / 100 amp',method:'ตวงทดสอบ'},
+  {id:'b1-15',no:7,machine:'Dosing pump บ่อชุบ',itemNo:2,itemName:'Dosing Pump (1534)',standard:'38±5 ml / ครั้ง / 100 amp',method:'ตวงทดสอบ'},
+  {id:'b1-16',no:8,machine:'ชิลเลอร์',itemNo:1,itemName:'Temp. Control',standard:'หมายเลขที่โชว์ตรงตามค่าที่วัดได้',method:'เครื่องวัดอุณหภูมิ'},
+  {id:'b1-17',no:9,machine:'เครื่องอบแห้งด้วยความร้อน',itemNo:1,itemName:'สายแก๊ส',standard:'ไม่รั่ว ',method:'เครื่องวัดอุณหภูมิ'}
+];
+
+var mcItems        = [];   // หัวข้อตรวจสอบ (แก้ไขได้)
+var mcRecords       = [];  // ผลตรวจรายวัน [{id,date,inspector,results:{itemId:'R'/'S'/'r'},repairs:[{no,date,machine,detail,equipment,fixedBy}],savedAt}]
+var mcCurrentRepairs = [];
+
+function mcEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+function mcLoadItems() {
+  try {
+    var d = JSON.parse(localStorage.getItem(MC_ITEMS_KEY) || 'null');
+    if (Array.isArray(d) && d.length) { mcItems = d; return; }
+  } catch(e){}
+  mcItems = MC_DEFAULT_ITEMS.slice();
+  mcSaveItems();
+}
+function mcSaveItems() { try { localStorage.setItem(MC_ITEMS_KEY, JSON.stringify(mcItems)); } catch(e){} }
+
+function mcLoadRecords() {
+  try { return JSON.parse(localStorage.getItem(MC_RECORDS_KEY) || '[]'); } catch(e) { return []; }
+}
+function mcSaveRecords(arr) { try { localStorage.setItem(MC_RECORDS_KEY, JSON.stringify(arr)); } catch(e){} }
+
+// ── Firebase sync ──
+async function mcFbSave() {
+  if (!fbIsConfigured()) return;
+  try {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-mcheck.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: mcItems, records: mcLoadRecords(), savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('mcFbSave:', e.message); }
+}
+async function mcFbLoad() {
+  if (!fbIsConfigured()) return;
+  try {
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-mcheck.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data) return;
+    if (Array.isArray(data.items) && data.items.length) {
+      mcItems = data.items;
+      mcSaveItems();
+    }
+    if (Array.isArray(data.records) && data.records.length) {
+      var local = mcLoadRecords();
+      var localIds = {};
+      local.forEach(function(r){ localIds[r.id] = true; });
+      var merged = local.slice();
+      data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
+      merged.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+      mcSaveRecords(merged);
+      mcRecords = merged;
+    }
+    mcRenderChecklist();
+    mcRenderHistory();
+  } catch(e) { console.warn('mcFbLoad:', e.message); }
+}
+
+// ── Init ──
+function mcInit() {
+  mcLoadItems();
+  mcRecords = mcLoadRecords();
+  var dateEl = document.getElementById('mcDate');
+  if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
+  mcPopulateMonthFilter();
+  mcLoadDateRecord();
+  mcRenderHistory();
+  mcFbLoad();
+}
+
+// ── Render checklist (ติ๊ก R/S/r) ──
+function mcRenderChecklist() {
+  var el = document.getElementById('mcChecklistBody');
+  if (!el) return;
+  if (!mcItems.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีหัวข้อตรวจสอบ — กด "แก้ไขหัวข้อตรวจสอบ" เพื่อเพิ่ม</div>';
+    return;
+  }
+  var dateEl = document.getElementById('mcDate');
+  var rec = mcRecords.find(function(r){ return r.date === (dateEl?dateEl.value:''); });
+  var results = rec ? (rec.results||{}) : {};
+
+  var grouped = {};
+  var order = [];
+  mcItems.forEach(function(it) {
+    var key = it.no + '|' + it.machine;
+    if (!grouped[key]) { grouped[key] = []; order.push(key); }
+    grouped[key].push(it);
+  });
+
+  el.innerHTML = order.map(function(key) {
+    var items = grouped[key];
+    var machineName = items[0].machine;
+    var machineNo = items[0].no;
+    var rows = items.map(function(it) {
+      var cur = results[it.id] || '';
+      function btn(val, label, color) {
+        var sel = cur === val;
+        return '<button type="button" onclick="mcSetResult(\'' + it.id + '\',\'' + val + '\')" style="width:34px;height:30px;border-radius:7px;border:1.5px solid ' + color + ';background:' + (sel?color:'#fff') + ';color:' + (sel?'#fff':color) + ';font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">' + label + '</button>';
+      }
+      return '<tr>' +
+        '<td style="font-size:11px;width:28px;text-align:center;color:var(--text-muted);">' + it.itemNo + '</td>' +
+        '<td style="font-size:12px;">' + mcEsc(it.itemName) +
+          (it.standard ? '<div style="font-size:10px;color:var(--text-muted);">' + mcEsc(it.standard) + (it.method ? ' · ' + mcEsc(it.method) : '') + '</div>' : '') +
+        '</td>' +
+        '<td style="white-space:nowrap;"><div style="display:flex;gap:4px;justify-content:center;">' +
+          btn('R','R','#16a34a') + btn('S','S','#dc2626') + btn('r','r','#d97706') +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">' +
+      '<div style="background:var(--sky-pale);padding:7px 10px;font-size:12px;font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center;">' +
+        '<span>' + machineNo + '. ' + mcEsc(machineName) + '</span>' +
+      '</div>' +
+      '<table style="width:100%;"><tbody>' + rows + '</tbody></table>' +
+    '</div>';
+  }).join('');
+}
+
+function mcSetResult(itemId, val) {
+  var dateEl = document.getElementById('mcDate');
+  var date = dateEl ? dateEl.value : isoDate(new Date());
+  var rec = mcRecords.find(function(r){ return r.date === date; });
+  if (!rec) {
+    rec = { id: Date.now(), date: date, inspector: '', results: {}, repairs: [] };
+    mcRecords.unshift(rec);
+  }
+  // toggle: กดซ้ำค่าเดิม → ล้างค่า
+  rec.results = rec.results || {};
+  rec.results[itemId] = (rec.results[itemId] === val) ? '' : val;
+  mcRenderChecklist();
+}
+
+// ── โหลด/สลับวันที่ ──
+function mcLoadDateRecord() {
+  var dateEl = document.getElementById('mcDate');
+  var date = dateEl ? dateEl.value : '';
+  var rec = mcRecords.find(function(r){ return r.date === date; });
+  var inspEl = document.getElementById('mcInspector');
+  if (inspEl) inspEl.value = rec ? (rec.inspector||'') : '';
+  mcCurrentRepairs = rec ? (rec.repairs||[]).slice() : [];
+  mcRenderRepairRows();
+  mcRenderChecklist();
+}
+
+// ── ตารางบันทึกการซ่อม ──
+function mcRenderRepairRows() {
+  var el = document.getElementById('mcRepairRows');
+  if (!el) return;
+  if (!mcCurrentRepairs.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px 0;">ยังไม่มีรายการซ่อมสำหรับวันนี้</div>';
+    return;
+  }
+  el.innerHTML = mcCurrentRepairs.map(function(rp, idx) {
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">' +
+      '<div class="grid2" style="margin-bottom:6px;">' +
+        '<div class="field" style="margin:0;"><label style="font-size:10px;">ชื่อเครื่องจักร/อุปกรณ์</label>' +
+          '<input type="text" value="' + mcEsc(rp.machine||'') + '" oninput="mcUpdRepair(' + idx + ',\'machine\',this.value)" placeholder="เช่น เครนยกโม่ชุบ" style="font-size:12px;"></div>' +
+        '<div class="field" style="margin:0;"><label style="font-size:10px;">ผู้ปรับปรุงแก้ไข</label>' +
+          '<input type="text" value="' + mcEsc(rp.fixedBy||'') + '" oninput="mcUpdRepair(' + idx + ',\'fixedBy\',this.value)" placeholder="ชื่อผู้ซ่อม" style="font-size:12px;"></div>' +
+      '</div>' +
+      '<div class="field" style="margin-bottom:6px;"><label style="font-size:10px;">รายละเอียดของการชำรุด</label>' +
+        '<textarea oninput="mcUpdRepair(' + idx + ',\'detail\',this.value)" rows="2" placeholder="พิมพ์รายละเอียดการซ่อม..." style="font-size:12px;width:100%;font-family:inherit;border:1px solid var(--border);border-radius:8px;padding:8px;">' + mcEsc(rp.detail||'') + '</textarea></div>' +
+      '<div class="field" style="margin:0;"><label style="font-size:10px;">รายการอุปกรณ์ที่ใช้</label>' +
+        '<input type="text" value="' + mcEsc(rp.equipment||'') + '" oninput="mcUpdRepair(' + idx + ',\'equipment\',this.value)" placeholder="อะไหล่/อุปกรณ์ที่ใช้ซ่อม" style="font-size:12px;"></div>' +
+      '<button type="button" onclick="mcRemoveRepair(' + idx + ')" style="margin-top:8px;font-size:10px;color:var(--red);background:none;border:1px solid var(--red);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit;">🗑️ ลบรายการนี้</button>' +
+    '</div>';
+  }).join('');
+}
+function mcAddRepairRow() {
+  mcCurrentRepairs.push({ machine:'', detail:'', equipment:'', fixedBy:'' });
+  mcRenderRepairRows();
+}
+function mcUpdRepair(idx, field, val) {
+  if (mcCurrentRepairs[idx]) mcCurrentRepairs[idx][field] = val;
+}
+function mcRemoveRepair(idx) {
+  mcCurrentRepairs.splice(idx, 1);
+  mcRenderRepairRows();
+}
+
+// ── บันทึกผลตรวจวันนี้ ──
+function mcSaveDay() {
+  var dateEl = document.getElementById('mcDate');
+  var date = dateEl ? dateEl.value : '';
+  if (!date) { showToast('mcheck','กรุณาเลือกวันที่','err'); return; }
+  var inspEl = document.getElementById('mcInspector');
+  var rec = mcRecords.find(function(r){ return r.date === date; });
+  if (!rec) {
+    rec = { id: Date.now(), date: date, inspector: '', results: {}, repairs: [] };
+    mcRecords.unshift(rec);
+  }
+  rec.inspector = inspEl ? inspEl.value : '';
+  rec.repairs = mcCurrentRepairs.filter(function(r){ return r.machine || r.detail; });
+  rec.savedAt = new Date().toISOString();
+  mcSaveRecords(mcRecords);
+  mcFbSave();
+  showToast('mcheck','✅ บันทึกผลตรวจวันที่ ' + date + ' สำเร็จ','ok');
+  mcRenderHistory();
+}
+
+// ── แก้ไขหัวข้อตรวจสอบ (เพิ่ม/ลบ/แก้) ──
+function mcOpenEditList() {
+  var existing = document.getElementById('mcEditModal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'mcEditModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML =
+    '<div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25);">' +
+      '<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:10px;">⚙️ แก้ไขหัวข้อตรวจสอบ</div>' +
+      '<div id="mcEditRows"></div>' +
+      '<button class="btn btn-outline" style="margin-top:6px;" onclick="mcAddEditRow()">➕ เพิ่มหัวข้อใหม่</button>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;">' +
+        '<button class="btn btn-primary" style="margin:0;" onclick="mcSaveEditList()">💾 บันทึก</button>' +
+        '<button class="btn btn-outline" style="margin:0;width:auto;padding:10px 16px;" onclick="document.getElementById(&quot;mcEditModal&quot;).remove()">ยกเลิก</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  modal.onclick = function(e){ if (e.target===modal) modal.remove(); };
+  mcEditDraft = mcItems.map(function(it){ return Object.assign({}, it); });
+  mcRenderEditRows();
+}
+var mcEditDraft = [];
+function mcRenderEditRows() {
+  var el = document.getElementById('mcEditRows');
+  if (!el) return;
+  el.innerHTML = mcEditDraft.map(function(it, idx) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;">' +
+      '<div class="grid2" style="margin-bottom:4px;">' +
+        '<input type="text" value="' + mcEsc(it.machine) + '" oninput="mcEditUpd(' + idx + ',\'machine\',this.value)" placeholder="ชื่อเครื่องจักร/อุปกรณ์" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.itemName) + '" oninput="mcEditUpd(' + idx + ',\'itemName\',this.value)" placeholder="หัวข้อการตรวจสอบ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+      '</div>' +
+      '<div class="grid2" style="margin-bottom:4px;">' +
+        '<input type="text" value="' + mcEsc(it.standard) + '" oninput="mcEditUpd(' + idx + ',\'standard\',this.value)" placeholder="มาตรฐานการตรวจสอบ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+        '<input type="text" value="' + mcEsc(it.method) + '" oninput="mcEditUpd(' + idx + ',\'method\',this.value)" placeholder="วิธีการ/เครื่องมือ" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;">' +
+      '</div>' +
+      '<button type="button" onclick="mcEditRemove(' + idx + ')" style="font-size:10px;color:var(--red);background:none;border:1px solid var(--red);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit;">🗑️ ลบหัวข้อนี้</button>' +
+    '</div>';
+  }).join('') || '<div style="font-size:11px;color:var(--text-muted);">ยังไม่มีหัวข้อ — กด "เพิ่มหัวข้อใหม่"</div>';
+}
+function mcEditUpd(idx, field, val) { if (mcEditDraft[idx]) mcEditDraft[idx][field] = val; }
+function mcEditRemove(idx) { mcEditDraft.splice(idx,1); mcRenderEditRows(); }
+function mcAddEditRow() {
+  var maxNo = mcEditDraft.reduce(function(m,it){ return Math.max(m,it.no||0); }, 0);
+  mcEditDraft.push({ id:'mc-'+Date.now(), no:maxNo+1, machine:'', itemNo:1, itemName:'', standard:'', method:'' });
+  mcRenderEditRows();
+}
+function mcSaveEditList() {
+  mcItems = mcEditDraft.filter(function(it){ return it.machine && it.itemName; });
+  mcSaveItems();
+  mcFbSave();
+  document.getElementById('mcEditModal').remove();
+  mcRenderChecklist();
+  showToast('mcheck','✅ บันทึกหัวข้อตรวจสอบแล้ว','ok');
+}
+
+// ── ประวัติย้อนหลัง ──
+function mcPopulateMonthFilter() {
+  var sel = document.getElementById('mcHistMonth');
+  if (!sel) return;
+  var months = {};
+  mcRecords.forEach(function(r){ if (r.date) months[r.date.slice(0,7)] = true; });
+  var list = Object.keys(months).sort().reverse();
+  var cur = isoDate(new Date()).slice(0,7);
+  if (!list.length) list = [cur];
+  sel.innerHTML = list.map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
+  sel.value = list.indexOf(cur)!==-1 ? cur : list[0];
+}
+function mcRenderHistory() {
+  var body = document.getElementById('mcHistBody');
+  if (!body) return;
+  var monthSel = document.getElementById('mcHistMonth');
+  var month = monthSel ? monthSel.value : '';
+  var list = mcRecords.filter(function(r){ return !month || (r.date||'').slice(0,7) === month; });
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function(r) {
+    var results = r.results || {};
+    var counts = { R:0, S:0, r:0 };
+    Object.keys(results).forEach(function(k){ if (results[k] && counts[results[k]]!==undefined) counts[results[k]]++; });
+    var resultSummary = '<span style="color:#16a34a;">R:'+counts.R+'</span> <span style="color:#dc2626;">S:'+counts.S+'</span> <span style="color:#d97706;">r:'+counts.r+'</span>';
+    var repairCount = (r.repairs||[]).filter(function(rp){return rp.machine||rp.detail;}).length;
+    return '<tr>' +
+      '<td>' + mcEsc(r.date) + '</td>' +
+      '<td>' + mcEsc(r.inspector||'-') + '</td>' +
+      '<td style="text-align:center;">' + resultSummary + '</td>' +
+      '<td style="text-align:center;">' + (repairCount ? repairCount + ' รายการ' : '-') + '</td>' +
+      '<td style="text-align:center;white-space:nowrap;">' +
+        '<button onclick="mcViewRecord(\'' + r.id + '\')" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:inherit;">ดู/แก้</button> ' +
+        '<button onclick="mcPrintRecord(\'' + r.id + '\')" style="font-size:10px;color:var(--navy);background:none;border:1px solid var(--navy);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:inherit;">🖨️</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+function mcViewRecord(id) {
+  var rec = mcRecords.find(function(r){ return String(r.id) === String(id); });
+  if (!rec) return;
+  document.getElementById('mcDate').value = rec.date;
+  mcLoadDateRecord();
+  tab('mcheck');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── พิมพ์ / Export PDF (เปิดหน้าต่างพิมพ์ → เลือก Save as PDF) ──
+function mcBuildPrintHtml(rec) {
+  var results = rec ? (rec.results||{}) : {};
+  var grouped = {};
+  var order = [];
+  mcItems.forEach(function(it) {
+    var key = it.no + '|' + it.machine;
+    if (!grouped[key]) { grouped[key] = []; order.push(key); }
+    grouped[key].push(it);
+  });
+  var rowsHtml = '';
+  order.forEach(function(key) {
+    var items = grouped[key];
+    items.forEach(function(it, i) {
+      var cur = results[it.id] || '';
+      rowsHtml += '<tr>' +
+        (i===0 ? '<td rowspan="'+items.length+'" style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+items[0].no+'</td>' +
+                 '<td rowspan="'+items.length+'" style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(items[0].machine)+'</td>' : '') +
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+it.itemNo+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.itemName)+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.standard)+'</td>' +
+        '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(it.method)+'</td>' +
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;font-weight:700;">'+(cur||'-')+'</td>' +
+      '</tr>';
+    });
+  });
+  var repairRows = (rec && rec.repairs ? rec.repairs : []).filter(function(rp){return rp.machine||rp.detail;}).map(function(rp,i) {
+    return '<tr>' +
+      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+(i+1)+'</td>' +
+      '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(rec.date)+'</td>' +
+      '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(rp.machine)+'</td>' +
+      '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(rp.detail)+'</td>' +
+      '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(rp.equipment)+'</td>' +
+      '<td style="border:1px solid #94a3b8;padding:5px;">'+mcEsc(rp.fixedBy)+'</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">' +
+    '<title>ใบตรวจสอบเครื่องจักร B-1 ' + mcEsc(rec?rec.date:'') + '</title>' +
+    '<style>' +
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:12px;color:#0f172a;padding:18px;}' +
+    'table{width:100%;border-collapse:collapse;margin-top:8px;}' +
+    'th{background:#dbeafe;border:1px solid #94a3b8;padding:5px;font-size:11px;}' +
+    '.title{text-align:center;background:#1e3a8a;color:#fff;padding:8px;border-radius:6px;font-weight:700;margin-bottom:8px;}' +
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:12px;}' +
+    '.legend{font-size:10px;color:#475569;margin-top:6px;}' +
+    '@media print{ body{padding:0;} }' +
+    '</style></head><body>' +
+    '<div class="title">ใบรายงานผลการตรวจเช็คเครื่องจักร/อุปกรณ์ประจำวัน (BARRAL B-1)</div>' +
+    '<div class="meta"><div><b>วันที่ตรวจสอบ:</b> ' + mcEsc(rec?rec.date:'') + '</div><div><b>ผู้ตรวจสอบ:</b> ' + mcEsc(rec?rec.inspector:'') + '</div></div>' +
+    '<table><thead><tr><th>ลำดับ</th><th>ชื่อเครื่องจักร/อุปกรณ์</th><th>หัวข้อ</th><th>หัวข้อการตรวจสอบ</th><th>มาตรฐาน</th><th>วิธีการ/เครื่องมือ</th><th>ผล</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<div class="legend">สัญลักษณ์: R = เครื่องจักรปกติ &nbsp; S = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp; r = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้</div>' +
+    '<div style="font-weight:700;margin-top:16px;margin-bottom:4px;">บันทึกการปรับปรุงเครื่องจักร / อุปกรณ์</div>' +
+    '<table><thead><tr><th>ลำดับ</th><th>วันที่</th><th>ชื่อเครื่องจักรและอุปกรณ์</th><th>รายละเอียดของการชำรุด</th><th>รายการอุปกรณ์ที่ใช้</th><th>ผู้ปรับปรุงแก้ไข</th></tr></thead><tbody>' +
+      (repairRows || '<tr><td colspan="6" style="text-align:center;border:1px solid #94a3b8;padding:10px;color:#94a3b8;">ไม่มีรายการซ่อม</td></tr>') +
+    '</tbody></table>' +
+    '<div style="display:flex;justify-content:flex-end;margin-top:50px;text-align:center;font-size:11px;">' +
+      '<div style="width:200px;border-top:1px solid #94a3b8;padding-top:4px;">ผู้ตรวจสอบ</div>' +
+    '</div>' +
+    '</body></html>';
+}
+function mcPrintDay() {
+  var dateEl = document.getElementById('mcDate');
+  var date = dateEl ? dateEl.value : '';
+  var rec = mcRecords.find(function(r){ return r.date === date; }) || { date: date, inspector: (document.getElementById('mcInspector')||{}).value||'', results:{}, repairs: mcCurrentRepairs };
+  var w = window.open('', '_blank');
+  w.document.write(mcBuildPrintHtml(rec));
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 400);
+}
+function mcPrintRecord(id) {
+  var rec = mcRecords.find(function(r){ return String(r.id) === String(id); });
+  if (!rec) return;
+  var w = window.open('', '_blank');
+  w.document.write(mcBuildPrintHtml(rec));
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 400);
+}
+
+// ── Export CSV ──
+function mcExportCSV() {
+  if (!mcRecords.length) { showToast('mcheck','ยังไม่มีข้อมูล','err'); return; }
+  var h = 'วันที่,ผู้ตรวจสอบ,เครื่องจักร,หัวข้อตรวจสอบ,มาตรฐาน,ผลตรวจ';
+  var rows = [];
+  mcRecords.forEach(function(r) {
+    var results = r.results || {};
+    mcItems.forEach(function(it) {
+      var v = results[it.id];
+      if (!v) return;
+      rows.push([r.date, r.inspector||'', it.machine, it.itemName, it.standard, v]
+        .map(function(x){ return '"'+String(x||'').replace(/"/g,'""')+'"'; }).join(','));
+    });
+  });
+  var csv = '\uFEFF' + h + '\n' + rows.join('\n');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download = 'ตรวจเครื่องจักร_B1_' + isoDate(new Date()) + '.csv';
+  a.click();
 }
 
 </script>
