@@ -117,6 +117,13 @@
       ]
     },
     {
+      key: 'production_order', label: 'ใบสั่งผลิต', group: 'สายการผลิต',
+      tabs: [
+        { id: 'orders', label: 'รายการใบสั่งผลิต' },
+        { id: 'create', label: 'สร้างใบสั่งผลิต' }
+      ]
+    },
+    {
       key: 'plating_v4', label: 'B1 — Barrel 1', group: 'สายการผลิต',
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
