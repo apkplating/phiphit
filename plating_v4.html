@@ -353,7 +353,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
 </style>
 <!-- ── PO Status Bar ── -->
-<div id="poStatusBar" style="display:none;background:#1e3a5f;color:#fff;padding:0;position:sticky;top:0;z-index:199;font-family:'IBM Plex Sans Thai',sans-serif;">
+<div id="poStatusBar" style="display:none;background:#1e3a5f;color:#fff;padding:0;position:fixed;left:0;right:0;z-index:198;font-family:'IBM Plex Sans Thai',sans-serif;">
   <div style="padding:6px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
     <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow-x:auto;" id="poStatusItems"></div>
     <div style="font-size:10px;color:#93c5fd;white-space:nowrap;" id="poStatusUpdated"></div>
@@ -3449,11 +3449,19 @@ function updateLiveBanner(data) {
   if (time) time.textContent = 'อัปเดต ' + timeStr;
 
   banner.style.display = 'flex';
+  if (typeof repositionPOBar === 'function') {
+    var poBar = document.getElementById('poStatusBar');
+    repositionPOBar(poBar && poBar.style.display !== 'none');
+  }
 
   // ซ่อนหลัง 30 วิถ้าไม่มีการอัปเดตใหม่
   clearTimeout(banner._hideTimer);
   banner._hideTimer = setTimeout(function(){
     banner.style.display = 'none';
+    if (typeof repositionPOBar === 'function') {
+      var poBar = document.getElementById('poStatusBar');
+      repositionPOBar(poBar && poBar.style.display !== 'none');
+    }
   }, 30000);
 }
 
@@ -8935,6 +8943,26 @@ function startPOStatusBar(lineFilter) {
   _poStatusTimer = setInterval(function(){ updatePOStatusBar(lineFilter); }, 60000);
 }
 
+// ── คำนวณและตั้งค่า top ของ PO bar ตาม live banner จริง ──
+function repositionPOBar(visible) {
+  var bar = document.getElementById('poStatusBar');
+  if (!bar) return;
+  var liveBanner = document.getElementById('liveSyncBanner');
+  var liveH = (liveBanner && liveBanner.style.display !== 'none') ? liveBanner.offsetHeight : 0;
+  bar.style.top = liveH + 'px';
+  // ชดเชย padding-top ให้ appContent เพื่อไม่ให้ถูกบัง
+  var app = document.getElementById('appContent');
+  if (app) {
+    var barH = visible ? bar.offsetHeight : 0;
+    // เก็บ base padding เดิมไว้ครั้งแรก
+    if (!app._baseTopPad) {
+      var cs = window.getComputedStyle(app);
+      app._baseTopPad = parseInt(cs.paddingTop)||0;
+    }
+    app.style.paddingTop = (app._baseTopPad + liveH + barH) + 'px';
+  }
+}
+
 async function updatePOStatusBar(lineFilter) {
   var bar = document.getElementById('poStatusBar');
   var itemsEl = document.getElementById('poStatusItems');
@@ -8945,13 +8973,16 @@ async function updatePOStatusBar(lineFilter) {
   var pending = items.filter(function(it){ return !it.complete; });
 
   if (!pending.length) {
-    // ทุกรายการครบแล้ว ซ่อน bar
     bar.style.display = 'none';
+    repositionPOBar(false);
     if (_poStatusTimer) { clearInterval(_poStatusTimer); _poStatusTimer = null; }
     return;
   }
 
   bar.style.display = 'block';
+  // คำนวณ top ตาม live banner ที่แสดงอยู่จริง
+  repositionPOBar(true);
+
   var now = new Date();
   var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
   if (updEl) updEl.textContent = 'อัปเดต ' + timeStr;
