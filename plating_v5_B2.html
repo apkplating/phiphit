@@ -5798,6 +5798,7 @@ function checkPin() {
     currentTabs = result.tabs;
     try { sessionStorage.setItem('plating_v5_b2_pin', input); } catch(e){}
     showApp(currentRole);
+    showPOPopup('B2');
   });
 }
 
@@ -8870,6 +8871,81 @@ function mcExportCSV() {
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download = 'ตรวจเครื่องจักร_B2_' + isoDate(new Date()) + '.csv';
   a.click();
+}
+
+// ══════════════════════════════════════════════
+//  PRODUCTION ORDER POPUP — แสดงใบสั่งผลิตหลัง login
+// ══════════════════════════════════════════════
+var PO_FB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/production-orders.json';
+
+async function showPOPopup(lineFilter) {
+  // ปิด popup เก่าถ้ามี
+  var old = document.getElementById('poPopupOverlay');
+  if (old) old.remove();
+
+  var orders = [];
+  try {
+    var r = await fetch(PO_FB_PATH);
+    if (!r.ok) return;
+    var d = await r.json();
+    orders = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+  } catch(e) { return; }
+
+  // กรองเฉพาะรายการที่ตรงกับสายนี้ และยังไม่ครบ (qty > 0)
+  var items = [];
+  orders.forEach(function(po) {
+    (po.items||[]).forEach(function(it) {
+      if (it.line !== lineFilter && it.line !== 'ALL') return;
+      if (!it.qty) return;
+      items.push({ poDate:po.date, planner:po.planner, customer:it.customer, partNo:it.partNo, partName:it.partName, qty:it.qty, line:it.line });
+    });
+  });
+
+  if (!items.length) return; // ไม่มีรายการ ไม่ต้องแสดง
+
+  var esc2 = function(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+
+  var rows = items.map(function(it,i) {
+    return '<tr style="border-top:1px solid #e2e8f0;">' +
+      '<td style="padding:7px 10px;font-size:11px;color:#64748b;">' + esc2(it.poDate) + '</td>' +
+      '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + esc2(it.customer) + '</td>' +
+      '<td style="padding:7px 10px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">' + esc2(it.partNo) + '</td>' +
+      '<td style="padding:7px 10px;font-size:12px;">' + esc2(it.partName) + '</td>' +
+      '<td style="padding:7px 10px;text-align:center;font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.id = 'poPopupOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,32,68,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:620px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35);">' +
+      '<div style="background:linear-gradient(135deg,#0f2044,#16305e);color:#fff;padding:14px 18px;border-radius:16px 16px 0 0;display:flex;align-items:center;justify-content:space-between;">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700;">📋 ใบสั่งผลิตวันนี้ — สาย ' + lineFilter + '</div>' +
+          '<div style="font-size:11px;color:#93c5fd;margin-top:2px;">' + items.length + ' รายการที่ต้องผลิต</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'poPopupOverlay\').remove()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;">ปิด ✕</button>' +
+      '</div>' +
+      '<div style="padding:0;">' +
+        '<table style="width:100%;border-collapse:collapse;">' +
+          '<thead><tr style="background:#f8fafc;">' +
+            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">วันที่</th>' +
+            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">ลูกค้า</th>' +
+            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">หมายเลขชิ้นงาน</th>' +
+            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">ชื่อชิ้นงาน</th>' +
+            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:center;">เป้าหมาย (Pcs)</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div style="padding:12px 16px;border-top:1px solid #e2e8f0;text-align:right;">' +
+        '<button onclick="document.getElementById(\'poPopupOverlay\').remove()" style="background:#0f2044;color:#fff;border:none;padding:9px 24px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">รับทราบ — เริ่มผลิต</button>' +
+      '</div>' +
+    '</div>';
+
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 </script>

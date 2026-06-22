@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APK Plating — ใบสั่งผลิต (Production Order)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="auth-central.js"></script>
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue:#3b82f6; --blue-light:#93c5fd;
+  --green:#16a34a; --red:#dc2626; --yellow:#d97706;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --sky-pale:#f0f7ff;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── Login ── */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-2) 100%);}
+.login-box{background:#fff;border-radius:16px;padding:32px;width:320px;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.25);}
+.login-box .logo{font-size:28px;margin-bottom:8px;}
+.login-box h2{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+.login-box p{font-size:12px;color:var(--text-muted);margin-bottom:20px;}
+#pinInput{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:20px;text-align:center;letter-spacing:8px;font-family:'IBM Plex Mono',monospace;margin-bottom:10px;outline:none;}
+#pinInput:focus{border-color:var(--blue);}
+.btn-login{width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-login:hover{background:var(--navy-2);}
+#loginError{font-size:11px;color:var(--red);margin-top:8px;display:none;}
+
+/* ── Header ── */
+header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-2) 100%);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-icon{width:38px;height:38px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;}
+.brand-text h1{font-size:16px;font-weight:700;}
+.brand-text p{font-size:10px;color:var(--blue-light);margin-top:1px;}
+.user-bar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--blue-light);}
+.btn-logout{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px;}
+.btn-logout:hover{background:rgba(255,255,255,.25);}
+
+/* ── Main layout ── */
+#appContent{display:none;}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 48px;}
+
+/* ── Card ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;}
+.card-label{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px;}
+
+/* ── Grid ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+@media(max-width:600px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+/* ── Form ── */
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;color:var(--text-mid);font-weight:600;margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;outline:none;background:#fff;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);}
+
+/* ── Buttons ── */
+.btn{display:block;width:100%;padding:11px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.btn-primary{background:var(--navy);color:#fff;}
+.btn-success{background:var(--green);color:#fff;}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text-mid);}
+.btn-sm{width:auto;padding:5px 12px;font-size:11px;margin:0;}
+.btn-danger{background:var(--red);color:#fff;}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;font-weight:600;}
+td{padding:8px 10px;border-bottom:1px solid var(--border);}
+tr:hover td{background:var(--sky-pale);}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.badge-b1{background:#dbeafe;color:#1d4ed8;}
+.badge-b2{background:#ede9fe;color:#6d28d9;}
+.badge-r1{background:#fce7f3;color:#be185d;}
+.badge-all{background:#dcfce7;color:#15803d;}
+
+/* ── Progress bar ── */
+.progress-wrap{background:#e2e8f0;border-radius:99px;height:8px;overflow:hidden;margin-top:4px;}
+.progress-bar{height:100%;border-radius:99px;transition:width .4s;}
+
+/* ── Status tag ── */
+.tag-pending{color:var(--yellow);font-weight:700;}
+.tag-done{color:var(--green);font-weight:700;}
+.tag-over{color:var(--red);font-weight:700;}
+
+/* ── Toast ── */
+.toast{font-size:11px;padding:6px 10px;border-radius:8px;margin-top:8px;display:none;}
+.toast.ok{background:#dcfce7;color:#15803d;display:block;}
+.toast.err{background:#fee2e2;color:#b91c1c;display:block;}
+
+/* ── Section header ── */
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+.sec-head h3{font-size:14px;font-weight:700;color:var(--navy);}
+</style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="logo">📋</div>
+    <h2>ใบสั่งผลิต</h2>
+    <p>Production Order · APK Plating</p>
+    <input type="password" id="pinInput" placeholder="PIN" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="appContent">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📋</div>
+      <div class="brand-text">
+        <h1>ใบสั่งผลิต (Production Order)</h1>
+        <p>APK-FR-PR-004 · ระบบวางแผนการผลิต</p>
+      </div>
+    </div>
+    <div class="user-bar">
+      <span id="userName"></span>
+      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── สร้าง/แก้ไข PO ── -->
+    <div class="card" id="poFormCard">
+      <div class="sec-head">
+        <div class="card-label" style="margin:0;" id="formTitle">➕ สร้างใบสั่งผลิตใหม่</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" id="cancelEditBtn" onclick="cancelEdit()" style="display:none;">ยกเลิก</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>ผู้สั่งผลิต</label>
+          <input type="text" id="poPlanner" placeholder="ชื่อผู้วางแผน">
+        </div>
+        <div class="field">
+          <label>วันที่สั่งผลิต</label>
+          <input type="date" id="poDate">
+        </div>
+      </div>
+      <div class="card-label" style="margin-bottom:6px;margin-top:4px;">รายการชิ้นงาน</div>
+      <div id="poItemRows"></div>
+      <button class="btn btn-outline" style="margin-bottom:10px;" onclick="addPoRow()">➕ เพิ่มรายการ</button>
+      <button class="btn btn-success" onclick="savePO()">💾 บันทึกใบสั่งผลิต</button>
+      <div class="toast" id="toast-po"></div>
+    </div>
+
+    <!-- ── รายการ PO ทั้งหมด ── -->
+    <div class="card">
+      <div class="sec-head">
+        <h3>📜 ใบสั่งผลิตทั้งหมด</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="filterLine" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="">— ทุกสาย —</option>
+            <option value="B1">B-1 Barrel</option>
+            <option value="B2">B-2 Barrel</option>
+            <option value="R1">R-1 Rack</option>
+          </select>
+          <select id="filterStatus" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="">— ทุกสถานะ —</option>
+            <option value="pending">ยังไม่ครบ</option>
+            <option value="done">ครบแล้ว</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>ลูกค้า</th>
+              <th>หมายเลขชิ้นงาน</th>
+              <th>ชื่อชิ้นงาน</th>
+              <th>สาย</th>
+              <th style="text-align:center;">เป้า</th>
+              <th style="text-align:center;">ผลิตจริง</th>
+              <th style="min-width:100px;">ความคืบหน้า</th>
+              <th style="text-align:center;">สถานะ</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="poListBody">
+            <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════
+var SYSTEM_KEY = 'production_order';
+var FB_BASE    = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PO_PATH    = FB_BASE + '/production-orders.json';
+
+// Firebase URL ของแต่ละสาย (สำหรับดึงยอดผลิตจริง)
+var FB_LINES = {
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
+};
+
+var currentRole = null;
+var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,line,qty}]}]
+var editingId = null;
+var poRowCount = 0;
+var actualOutput = {}; // {partNo: totalPcs} จากทุกสาย
+
+// ══════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════
+function doLogin() {
+  var input = (document.getElementById('pinInput').value||'').trim();
+  if (!input) return;
+  var btn = document.querySelector('.btn-login');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+  // ใช้ Central Auth — ถ้าไม่ได้ตั้ง SYSTEM_KEY ใน Firebase ก็ fallback ให้ใช้ admin เข้าได้
+  // (เนื่องจาก production_order เป็นระบบใหม่ที่อาจยังไม่มีใน permissions)
+  fetch('https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/auth-central.json', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+      var users = (data && data.users) ? data.users : {};
+      var user = users[input];
+      if (!user) { showLoginError('PIN ไม่ถูกต้อง'); return; }
+      var perms = user.permissions || {};
+      // อนุญาต: admin ระบบไหนก็ได้, หรือ auth_admin, หรือ po_master
+      var hasAccess = perms.auth_admin === 'admin' ||
+        Object.values(perms).indexOf('admin') !== -1 ||
+        perms.production_order;
+      if (!hasAccess) { showLoginError('ไม่มีสิทธิ์เข้าระบบนี้'); return; }
+      currentRole = perms.auth_admin === 'admin' ? 'admin' : 'operator';
+      document.getElementById('userName').textContent =
+        (currentRole === 'admin' ? '👑 Admin' : '✏️ Operator') + ' · ' + (user.name||'');
+      showApp();
+    })
+    .catch(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+      showLoginError('เชื่อมต่อ Firebase ไม่ได้: ' + e.message);
+    });
+}
+
+function showLoginError(msg) {
+  var el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinInput').focus();
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'block';
+  var dateEl = document.getElementById('poDate');
+  if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
+  addPoRow(); // เพิ่มแถวแรกให้พร้อม
+  loadData();
+}
+
+function doLogout() {
+  if (!confirm('ออกจากระบบ?')) return;
+  location.reload();
+}
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function isoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function esc(s) {
+  return String(s||'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+}
+function showToast(id, msg, type) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  setTimeout(function(){ el.className = 'toast'; }, 3000);
+}
+
+// ══════════════════════════════════════════════
+//  FIREBASE
+// ══════════════════════════════════════════════
+async function loadData() {
+  // โหลด PO orders
+  try {
+    var r = await fetch(PO_PATH);
+    var d = await r.json();
+    poOrders = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+    poOrders.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  } catch(e) { poOrders = []; }
+
+  // โหลดยอดผลิตจริงจากทุกสาย (job records)
+  await loadActualOutput();
+  renderPOList();
+}
+
+async function loadActualOutput() {
+  actualOutput = {};
+  for (var line in FB_LINES) {
+    try {
+      var r = await fetch(FB_LINES[line] + '/job-master.json');
+      if (!r.ok) continue;
+      var data = await r.json();
+      var records = Array.isArray(data && data.records) ? data.records : [];
+      records.forEach(function(rec) {
+        if (!rec || !rec.partNo) return;
+        var key = rec.partNo;
+        actualOutput[key] = (actualOutput[key]||0) + Number(rec.pcs||0);
+      });
+    } catch(e) {}
+  }
+}
+
+async function savePOToFB() {
+  await fetch(PO_PATH, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(poOrders)
+  });
+}
+
+// ══════════════════════════════════════════════
+//  PO FORM
+// ══════════════════════════════════════════════
+function addPoRow() {
+  poRowCount++;
+  var idx = poRowCount;
+  var wrap = document.getElementById('poItemRows');
+  var div = document.createElement('div');
+  div.id = 'po-row-' + idx;
+  div.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;position:relative;';
+  div.innerHTML =
+    '<button type="button" onclick="removePoRow('+idx+')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;font-family:inherit;">✕</button>' +
+    '<div class="grid2" style="margin-bottom:6px;">' +
+      '<div class="field" style="margin:0;"><label>ลูกค้า</label><input type="text" id="poc-'+idx+'" placeholder="ชื่อลูกค้า"></div>' +
+      '<div class="field" style="margin:0;"><label>หมายเลขชิ้นงาน</label><input type="text" id="pop-'+idx+'" placeholder="เช่น 43458-K3M-T000"></div>' +
+    '</div>' +
+    '<div class="grid3">' +
+      '<div class="field" style="margin:0;"><label>ชื่อชิ้นงาน</label><input type="text" id="pon-'+idx+'" placeholder="ชื่อชิ้นงาน"></div>' +
+      '<div class="field" style="margin:0;"><label>สายผลิต</label>' +
+        '<select id="pol-'+idx+'"><option value="B1">B-1 Barrel</option><option value="B2">B-2 Barrel</option><option value="R1">R-1 Rack</option><option value="ALL">ทุกสาย</option></select>' +
+      '</div>' +
+      '<div class="field" style="margin:0;"><label>จำนวนที่ต้องการ (Pcs)</label><input type="number" id="poq-'+idx+'" placeholder="0" min="0" inputmode="numeric"></div>' +
+    '</div>';
+  wrap.appendChild(div);
+}
+
+function removePoRow(idx) {
+  var el = document.getElementById('po-row-' + idx);
+  if (el) el.remove();
+}
+
+function collectPoRows() {
+  var items = [];
+  document.querySelectorAll('[id^="po-row-"]').forEach(function(row) {
+    var idx = row.id.replace('po-row-','');
+    var customer = (document.getElementById('poc-'+idx)||{}).value||'';
+    var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
+    var partName = (document.getElementById('pon-'+idx)||{}).value||'';
+    var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
+    var qty      = parseInt((document.getElementById('poq-'+idx)||{}).value)||0;
+    if (customer || partNo || qty) items.push({customer,partNo,partName,line,qty});
+  });
+  return items;
+}
+
+async function savePO() {
+  var planner = (document.getElementById('poPlanner')||{}).value||'';
+  var date    = (document.getElementById('poDate')||{}).value || isoDate(new Date());
+  var items   = collectPoRows();
+  if (!items.length) { showToast('toast-po','กรุณาเพิ่มอย่างน้อย 1 รายการ','err'); return; }
+  if (!planner) { showToast('toast-po','กรุณาระบุผู้สั่งผลิต','err'); return; }
+
+  if (editingId) {
+    var idx = poOrders.findIndex(function(o){ return o.id === editingId; });
+    if (idx !== -1) poOrders[idx] = { id: editingId, date, planner, items };
+  } else {
+    poOrders.unshift({ id: Date.now(), date, planner, items });
+  }
+
+  try {
+    await savePOToFB();
+    showToast('toast-po','✅ บันทึกใบสั่งผลิตสำเร็จ','ok');
+    cancelEdit();
+    renderPOList();
+  } catch(e) { showToast('toast-po','❌ บันทึกไม่สำเร็จ: ' + e.message,'err'); }
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('formTitle').textContent = '➕ สร้างใบสั่งผลิตใหม่';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  document.getElementById('poPlanner').value = '';
+  document.getElementById('poDate').value = isoDate(new Date());
+  document.getElementById('poItemRows').innerHTML = '';
+  poRowCount = 0;
+  addPoRow();
+}
+
+function editPO(id) {
+  var po = poOrders.find(function(o){ return o.id === id; });
+  if (!po) return;
+  editingId = id;
+  document.getElementById('formTitle').textContent = '✏️ แก้ไขใบสั่งผลิต';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+  document.getElementById('poPlanner').value = po.planner||'';
+  document.getElementById('poDate').value = po.date||isoDate(new Date());
+  document.getElementById('poItemRows').innerHTML = '';
+  poRowCount = 0;
+  (po.items||[]).forEach(function(it) {
+    addPoRow();
+    var idx = poRowCount;
+    setTimeout(function(){
+      var el = function(s){ return document.getElementById(s+idx); };
+      if(el('poc')) el('poc').value = it.customer||'';
+      if(el('pop')) el('pop').value = it.partNo||'';
+      if(el('pon')) el('pon').value = it.partName||'';
+      if(el('pol')) el('pol').value = it.line||'B1';
+      if(el('poq')) el('poq').value = it.qty||0;
+    }, 50);
+  });
+  document.getElementById('poFormCard').scrollIntoView({behavior:'smooth'});
+}
+
+async function deletePO(id) {
+  if (!confirm('ลบใบสั่งผลิตนี้?')) return;
+  poOrders = poOrders.filter(function(o){ return o.id !== id; });
+  await savePOToFB();
+  renderPOList();
+}
+
+// ══════════════════════════════════════════════
+//  RENDER LIST
+// ══════════════════════════════════════════════
+function renderPOList() {
+  var body = document.getElementById('poListBody');
+  var filterLine   = (document.getElementById('filterLine')||{}).value||'';
+  var filterStatus = (document.getElementById('filterStatus')||{}).value||'';
+
+  // แตก PO items ออกมาเป็นแถวๆ
+  var rows = [];
+  poOrders.forEach(function(po) {
+    (po.items||[]).forEach(function(it) {
+      if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
+      var actual = actualOutput[it.partNo] || 0;
+      var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
+      var status = actual >= it.qty ? 'done' : 'pending';
+      if (filterStatus === 'pending' && status !== 'pending') return;
+      if (filterStatus === 'done'    && status !== 'done')    return;
+      rows.push({ po, it, actual, pct, status });
+    });
+  });
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีรายการ</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(function(r) {
+    var lineBadge = {B1:'badge-b1',B2:'badge-b2',R1:'badge-r1',ALL:'badge-all'}[r.it.line]||'badge-b1';
+    var barColor  = r.status === 'done' ? '#16a34a' : r.pct >= 70 ? '#d97706' : '#3b82f6';
+    var statusTag = r.status === 'done'
+      ? '<span class="tag-done">✓ ครบแล้ว</span>'
+      : '<span class="tag-pending">⏳ ' + r.pct + '%</span>';
+    var canEdit = currentRole === 'admin' || currentRole === 'operator';
+    return '<tr>' +
+      '<td style="white-space:nowrap;font-size:11px;">' + esc(r.po.date) + '</td>' +
+      '<td>' + esc(r.it.customer) + '</td>' +
+      '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(r.it.partNo) + '</td>' +
+      '<td>' + esc(r.it.partName) + '</td>' +
+      '<td><span class="badge '+lineBadge+'">' + esc(r.it.line) + '</span></td>' +
+      '<td style="text-align:center;font-weight:700;">' + (r.it.qty||0).toLocaleString() + '</td>' +
+      '<td style="text-align:center;font-weight:700;color:' + barColor + ';">' + r.actual.toLocaleString() + '</td>' +
+      '<td><div class="progress-wrap"><div class="progress-bar" style="width:'+r.pct+'%;background:'+barColor+';"></div></div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+r.pct+'%</div></td>' +
+      '<td style="text-align:center;">' + statusTag + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        (canEdit ? '<button class="btn btn-outline btn-sm" onclick="editPO('+r.po.id+')" style="margin-right:4px;">✏️</button>' : '') +
+        (currentRole==='admin' ? '<button class="btn btn-sm" style="background:var(--red);color:#fff;" onclick="deletePO('+r.po.id+')">🗑️</button>' : '') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  PUBLIC API — ให้ v4/v5/v6 fetch ไปแสดง popup
+//  โครงสร้างที่ return: [{customer,partNo,partName,line,qty,actual,pct}]
+// ══════════════════════════════════════════════
+window.fetchProductionOrders = async function(lineFilter) {
+  try {
+    var r = await fetch(PO_PATH);
+    var d = await r.json();
+    var orders = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+    var result = [];
+    orders.forEach(function(po) {
+      (po.items||[]).forEach(function(it) {
+        if (lineFilter && it.line !== lineFilter && it.line !== 'ALL') return;
+        result.push({
+          poDate:   po.date,
+          planner:  po.planner,
+          customer: it.customer,
+          partNo:   it.partNo,
+          partName: it.partName,
+          line:     it.line,
+          qty:      it.qty || 0,
+        });
+      });
+    });
+    return result;
+  } catch(e) { return []; }
+};
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+document.getElementById('pinInput').focus();
+</script>
+</body>
+</html>
