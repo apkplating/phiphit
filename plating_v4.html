@@ -352,6 +352,14 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 <style>
 @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
 </style>
+<!-- ── PO Status Bar ── -->
+<div id="poStatusBar" style="display:none;background:#1e3a5f;color:#fff;padding:0;position:sticky;top:0;z-index:199;font-family:'IBM Plex Sans Thai',sans-serif;">
+  <div style="padding:6px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow-x:auto;" id="poStatusItems"></div>
+    <div style="font-size:10px;color:#93c5fd;white-space:nowrap;" id="poStatusUpdated"></div>
+  </div>
+</div>
+
 <div class="app-header">
   <div class="hdr-top">
     <div>
@@ -8805,41 +8813,82 @@ function mcExportCSV() {
 //  PRODUCTION ORDER POPUP — แสดงใบสั่งผลิตหลัง login
 // ══════════════════════════════════════════════
 var PO_FB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/production-orders.json';
+var PO_LINE_FILTER = 'B1'; // กำหนดสายที่กรองใน v4
+var _poStatusTimer = null;
+var _poJobPath = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/job-master.json';
 
-async function showPOPopup(lineFilter) {
-  // ปิด popup เก่าถ้ามี
-  var old = document.getElementById('poPopupOverlay');
-  if (old) old.remove();
-
+// ── ดึง PO orders + actual pcs แล้ว return items พร้อม progress ──
+async function fetchPOStatus(lineFilter) {
   var orders = [];
   try {
     var r = await fetch(PO_FB_PATH);
-    if (!r.ok) return;
+    if (!r.ok) return [];
     var d = await r.json();
     orders = Array.isArray(d) ? d : (d ? Object.values(d) : []);
-  } catch(e) { return; }
+  } catch(e) { return []; }
 
-  // กรองเฉพาะรายการที่ตรงกับสายนี้ และยังไม่ครบ (qty > 0)
+  // ดึงยอดผลิตจริงจาก job-master
+  var actual = {}; // {partNo: {pcs, kg}}
+  try {
+    var rj = await fetch(_poJobPath);
+    if (rj.ok) {
+      var jd = await rj.json();
+      var recs = Array.isArray(jd && jd.records) ? jd.records : [];
+      recs.forEach(function(rec) {
+        if (!rec || !rec.partNo) return;
+        if (!actual[rec.partNo]) actual[rec.partNo] = {pcs:0, kg:0};
+        actual[rec.partNo].pcs += Number(rec.pcs||0);
+        actual[rec.partNo].kg  += Number(rec.kg||rec.kgC||0);
+      });
+    }
+  } catch(e) {}
+
   var items = [];
   orders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
-      items.push({ poDate:po.date, planner:po.planner, customer:it.customer, partNo:it.partNo, partName:it.partName, qty:it.qty, unit:it.unit||'pcs', line:it.line });
+      var ao = actual[it.partNo] || {pcs:0, kg:0};
+      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var pct  = Math.min(100, Math.round(done / it.qty * 100));
+      items.push({
+        poDate: po.date, customer: it.customer, partNo: it.partNo,
+        partName: it.partName, qty: it.qty, unit: it.unit||'pcs',
+        done: done, pct: pct, complete: done >= it.qty
+      });
     });
   });
+  return items;
+}
 
-  if (!items.length) return; // ไม่มีรายการ ไม่ต้องแสดง
+// ── Popup ครั้งแรกตอน login ──
+async function showPOPopup(lineFilter) {
+  PO_LINE_FILTER = lineFilter;
+  var old = document.getElementById('poPopupOverlay');
+  if (old) old.remove();
+
+  var items = await fetchPOStatus(lineFilter);
+  var pending = items.filter(function(it){ return !it.complete; });
+  if (!pending.length) {
+    // ไม่มีรายการค้าง เริ่ม status bar เลยโดยไม่โชว์ popup
+    startPOStatusBar(lineFilter);
+    return;
+  }
 
   var esc2 = function(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
 
-  var rows = items.map(function(it,i) {
+  var rows = pending.map(function(it) {
+    var barColor = it.pct >= 80 ? '#16a34a' : it.pct >= 40 ? '#d97706' : '#3b82f6';
     return '<tr style="border-top:1px solid #e2e8f0;">' +
       '<td style="padding:7px 10px;font-size:11px;color:#64748b;">' + esc2(it.poDate) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + esc2(it.customer) + '</td>' +
-      '<td style="padding:7px 10px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">' + esc2(it.partNo) + '</td>' +
+      '<td style="padding:7px 10px;font-size:11px;font-family:monospace;">' + esc2(it.partNo) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;">' + esc2(it.partName) + '</td>' +
-      '<td style="padding:7px 10px;text-align:center;font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + ' <span style="font-size:11px;color:#94a3b8;">' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
+      '<td style="padding:7px 10px;text-align:center;">' +
+        '<div style="font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + ' <span style="font-size:10px;color:#94a3b8;">' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span></div>' +
+        '<div style="background:#e2e8f0;border-radius:99px;height:5px;margin-top:4px;"><div style="height:100%;width:' + it.pct + '%;background:' + barColor + ';border-radius:99px;"></div></div>' +
+        '<div style="font-size:10px;color:' + barColor + ';font-weight:700;">' + it.pct + '%</div>' +
+      '</td>' +
     '</tr>';
   }).join('');
 
@@ -8847,35 +8896,83 @@ async function showPOPopup(lineFilter) {
   overlay.id = 'poPopupOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,32,68,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;width:100%;max-width:620px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35);">' +
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35);">' +
       '<div style="background:linear-gradient(135deg,#0f2044,#16305e);color:#fff;padding:14px 18px;border-radius:16px 16px 0 0;display:flex;align-items:center;justify-content:space-between;">' +
         '<div>' +
           '<div style="font-size:14px;font-weight:700;">📋 ใบสั่งผลิตวันนี้ — สาย ' + lineFilter + '</div>' +
-          '<div style="font-size:11px;color:#93c5fd;margin-top:2px;">' + items.length + ' รายการที่ต้องผลิต</div>' +
+          '<div style="font-size:11px;color:#93c5fd;margin-top:2px;">' + pending.length + ' รายการที่ต้องผลิต</div>' +
         '</div>' +
-        '<button onclick="document.getElementById(\'poPopupOverlay\').remove()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;">ปิด ✕</button>' +
+        '<button onclick="closePOPopup()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;">ปิด ✕</button>' +
       '</div>' +
-      '<div style="padding:0;">' +
-        '<table style="width:100%;border-collapse:collapse;">' +
-          '<thead><tr style="background:#f8fafc;">' +
-            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">วันที่</th>' +
-            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">ลูกค้า</th>' +
-            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">หมายเลขชิ้นงาน</th>' +
-            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:left;">ชื่อชิ้นงาน</th>' +
-            '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:#475569;text-align:center;">เป้าหมาย (Pcs)</th>' +
-          '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
-        '</table>' +
-      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;">' +
+        '<thead><tr style="background:#f8fafc;">' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">วันที่</th>' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">ลูกค้า</th>' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">หมายเลขชิ้นงาน</th>' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">ชื่อชิ้นงาน</th>' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:center;font-weight:700;">เป้าหมาย</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
       '<div style="padding:12px 16px;border-top:1px solid #e2e8f0;text-align:right;">' +
-        '<button onclick="document.getElementById(\'poPopupOverlay\').remove()" style="background:#0f2044;color:#fff;border:none;padding:9px 24px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">รับทราบ — เริ่มผลิต</button>' +
+        '<button onclick="closePOPopup()" style="background:#0f2044;color:#fff;border:none;padding:9px 24px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">รับทราบ — เริ่มผลิต</button>' +
       '</div>' +
     '</div>';
-
-  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) closePOPopup(); });
   document.body.appendChild(overlay);
+  startPOStatusBar(lineFilter);
 }
 
+function closePOPopup() {
+  var old = document.getElementById('poPopupOverlay');
+  if (old) old.remove();
+}
+
+// ── Sticky status bar ── 
+function startPOStatusBar(lineFilter) {
+  updatePOStatusBar(lineFilter);
+  if (_poStatusTimer) clearInterval(_poStatusTimer);
+  _poStatusTimer = setInterval(function(){ updatePOStatusBar(lineFilter); }, 60000);
+}
+
+async function updatePOStatusBar(lineFilter) {
+  var bar = document.getElementById('poStatusBar');
+  var itemsEl = document.getElementById('poStatusItems');
+  var updEl   = document.getElementById('poStatusUpdated');
+  if (!bar || !itemsEl) return;
+
+  var items = await fetchPOStatus(lineFilter);
+  var pending = items.filter(function(it){ return !it.complete; });
+
+  if (!pending.length) {
+    // ทุกรายการครบแล้ว ซ่อน bar
+    bar.style.display = 'none';
+    if (_poStatusTimer) { clearInterval(_poStatusTimer); _poStatusTimer = null; }
+    return;
+  }
+
+  bar.style.display = 'block';
+  var now = new Date();
+  var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  if (updEl) updEl.textContent = 'อัปเดต ' + timeStr;
+
+  var esc2 = function(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+
+  itemsEl.innerHTML = pending.map(function(it) {
+    var barColor = it.pct >= 80 ? '#34d399' : it.pct >= 40 ? '#fbbf24' : '#60a5fa';
+    return '<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);border-radius:8px;padding:4px 10px;flex-shrink:0;">' +
+      '<span style="font-size:11px;font-weight:700;color:#e2e8f0;">' + esc2(it.partNo) + '</span>' +
+      '<span style="font-size:10px;color:#93c5fd;">' + esc2(it.customer) + '</span>' +
+      '<div style="display:flex;align-items:center;gap:4px;">' +
+        '<div style="width:60px;height:5px;background:rgba(255,255,255,.2);border-radius:99px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + it.pct + '%;background:' + barColor + ';border-radius:99px;transition:width .4s;"></div>' +
+        '</div>' +
+        '<span style="font-size:11px;font-weight:800;color:' + barColor + ';">' + it.pct + '%</span>' +
+      '</div>' +
+      '<span style="font-size:10px;color:#93c5fd;">' + it.done.toLocaleString() + '/' + it.qty.toLocaleString() + ' ' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span>' +
+    '</div>';
+  }).join('<span style="color:rgba(255,255,255,.3);font-size:12px;margin:0 4px;">·</span>');
+}
 </script>
 
 </body></html>
