@@ -8825,7 +8825,7 @@ async function showPOPopup(lineFilter) {
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
-      items.push({ poDate:po.date, planner:po.planner, customer:it.customer, partNo:it.partNo, partName:it.partName, qty:it.qty, line:it.line });
+      items.push({ poDate:po.date, planner:po.planner, customer:it.customer, partNo:it.partNo, partName:it.partName, qty:it.qty, unit:it.unit||'pcs', line:it.line });
     });
   });
 
@@ -8839,7 +8839,7 @@ async function showPOPopup(lineFilter) {
       '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + esc2(it.customer) + '</td>' +
       '<td style="padding:7px 10px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">' + esc2(it.partNo) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;">' + esc2(it.partName) + '</td>' +
-      '<td style="padding:7px 10px;text-align:center;font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + '</td>' +
+      '<td style="padding:7px 10px;text-align:center;font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + ' <span style="font-size:11px;color:#94a3b8;">' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
     '</tr>';
   }).join('');
 

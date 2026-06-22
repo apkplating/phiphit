@@ -91,6 +91,8 @@ tr:hover td{background:var(--sky-pale);}
 .tag-over{color:var(--red);font-weight:700;}
 
 /* ── Toast ── */
+.pm-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;}
+.pm-item:hover{background:#f0f7ff;}
 .toast{font-size:11px;padding:6px 10px;border-radius:8px;margin-top:8px;display:none;}
 .toast.ok{background:#dcfce7;color:#15803d;display:block;}
 .toast.err{background:#fee2e2;color:#b91c1c;display:block;}
@@ -220,7 +222,7 @@ var currentRole = null;
 var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,line,qty}]}]
 var editingId = null;
 var poRowCount = 0;
-var actualOutput = {}; // {partNo: totalPcs} จากทุกสาย
+var actualOutput = {}; // {partNo: {pcs, kg}} จากทุกสาย
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -323,7 +325,9 @@ async function loadActualOutput() {
       records.forEach(function(rec) {
         if (!rec || !rec.partNo) return;
         var key = rec.partNo;
-        actualOutput[key] = (actualOutput[key]||0) + Number(rec.pcs||0);
+        if (!actualOutput[key]) actualOutput[key] = {pcs:0, kg:0};
+        actualOutput[key].pcs += Number(rec.pcs||0);
+        actualOutput[key].kg  += Number(rec.kg||rec.kgC||rec.totalKg||0);
       });
     } catch(e) {}
   }
@@ -338,6 +342,73 @@ async function savePOToFB() {
 }
 
 // ══════════════════════════════════════════════
+//  PART MASTER INTEGRATION
+// ══════════════════════════════════════════════
+var pmParts = [];
+var pmLoaded = false;
+
+async function loadPM() {
+  if (pmLoaded) return;
+  try {
+    var r = await fetch('https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json');
+    if (!r.ok) return;
+    var d = await r.json();
+    if (!d) return;
+    pmParts = Array.isArray(d.parts) ? d.parts : (d.parts ? Object.values(d.parts) : []);
+    pmLoaded = true;
+  } catch(e) { console.warn('PM load:', e.message); }
+}
+
+function pmSearch(query, idx) {
+  var q = (query||'').toLowerCase().trim();
+  var dropdown = document.getElementById('pm-drop-' + idx);
+  if (!dropdown) return;
+  if (!q) { dropdown.style.display = 'none'; return; }
+  var matched = pmParts.filter(function(p) {
+    return (p.partNo||'').toLowerCase().includes(q) ||
+           (p.name||'').toLowerCase().includes(q) ||
+           (p.customer||'').toLowerCase().includes(q);
+  }).slice(0, 8);
+  if (!matched.length) { dropdown.style.display = 'none'; return; }
+  // เก็บ index ของ part ใน pmParts เพื่อหลีกเลี่ยงปัญหา quote ใน onclick
+  dropdown.innerHTML = matched.map(function(p, i) {
+    var arrIdx = pmParts.indexOf(p);
+    return '<div data-pmidx="' + arrIdx + '" data-rowidx="' + idx + '" ' +
+      'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;" ' +
+      'class="pm-item">' +
+      '<div style="font-weight:700;color:#0f2044;">' + esc(p.partNo||'') + '</div>' +
+      '<div style="color:#475569;">' + esc(p.customer||'') + ' · ' + esc(p.name||'') + '</div>' +
+    '</div>';
+  }).join('');
+  // ใช้ event delegation บน dropdown element
+  dropdown.onclick = function(e) {
+    var item = e.target.closest('[data-pmidx]');
+    if (!item) return;
+    var pmIdx = parseInt(item.getAttribute('data-pmidx'));
+    var rowIdx = parseInt(item.getAttribute('data-rowidx'));
+    pmSelect(rowIdx, pmIdx);
+  };
+  dropdown.style.display = 'block';
+}
+
+function pmSelect(idx, pmIdx) {
+  var part = pmParts[pmIdx];
+  if (!part) return;
+  var searchEl = document.getElementById('pm-search-' + idx);
+  if (searchEl) searchEl.value = (part.partNo||'') + ' — ' + (part.name||'');
+  var pocEl = document.getElementById('poc-' + idx);
+  var popEl = document.getElementById('pop-' + idx);
+  var ponEl = document.getElementById('pon-' + idx);
+  if (pocEl) pocEl.value = part.customer || '';
+  if (popEl) popEl.value = part.partNo || '';
+  if (ponEl) ponEl.value = part.name || '';
+  var dropdown = document.getElementById('pm-drop-' + idx);
+  if (dropdown) dropdown.style.display = 'none';
+  var polEl = document.getElementById('pol-' + idx);
+  if (polEl) polEl.focus();
+}
+
+// ══════════════════════════════════════════════
 //  PO FORM
 // ══════════════════════════════════════════════
 function addPoRow() {
@@ -349,6 +420,16 @@ function addPoRow() {
   div.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;position:relative;';
   div.innerHTML =
     '<button type="button" onclick="removePoRow('+idx+')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;font-family:inherit;">✕</button>' +
+    '<div class="field" style="margin-bottom:8px;">' +
+      '<label>🔍 ค้นหาจาก Part Master</label>' +
+      '<div style="position:relative;">' +
+        '<input type="text" id="pm-search-'+idx+'" autocomplete="off" ' +
+          'placeholder="พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า..." ' +
+          'id="pm-search-'+idx+'">' +
+        '<div id="pm-drop-'+idx+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;"></div>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">หรือกรอกด้านล่างด้วยตนเอง</div>' +
+    '</div>' +
     '<div class="grid2" style="margin-bottom:6px;">' +
       '<div class="field" style="margin:0;"><label>ลูกค้า</label><input type="text" id="poc-'+idx+'" placeholder="ชื่อลูกค้า"></div>' +
       '<div class="field" style="margin:0;"><label>หมายเลขชิ้นงาน</label><input type="text" id="pop-'+idx+'" placeholder="เช่น 43458-K3M-T000"></div>' +
@@ -358,11 +439,36 @@ function addPoRow() {
       '<div class="field" style="margin:0;"><label>สายผลิต</label>' +
         '<select id="pol-'+idx+'"><option value="B1">B-1 Barrel</option><option value="B2">B-2 Barrel</option><option value="R1">R-1 Rack</option><option value="ALL">ทุกสาย</option></select>' +
       '</div>' +
-      '<div class="field" style="margin:0;"><label>จำนวนที่ต้องการ (Pcs)</label><input type="number" id="poq-'+idx+'" placeholder="0" min="0" inputmode="numeric"></div>' +
+      '<div class="field" style="margin:0;">' +
+        '<label>จำนวนที่ต้องการ</label>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<input type="number" id="poq-'+idx+'" placeholder="0" min="0" inputmode="numeric" style="flex:1;min-width:0;">' +
+          '<select id="pou-'+idx+'" style="width:80px;flex-shrink:0;">' +
+            '<option value="pcs">ชิ้น</option>' +
+            '<option value="kg">กก.</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
     '</div>';
   wrap.appendChild(div);
+  loadPM();
+  // Attach events หลัง DOM ready (หลีกเลี่ยง inline handler ที่มี quote ซับซ้อน)
+  setTimeout(function() {
+    var searchEl = document.getElementById('pm-search-' + idx);
+    if (searchEl) {
+      searchEl.setAttribute('autocomplete', 'off');
+      searchEl.setAttribute('placeholder', 'พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า...');
+      searchEl.addEventListener('input', function(){ pmSearch(this.value, idx); });
+      searchEl.addEventListener('focus', function(){ pmSearch(this.value, idx); });
+      searchEl.addEventListener('blur', function(){
+        setTimeout(function(){
+          var d = document.getElementById('pm-drop-' + idx);
+          if (d) d.style.display = 'none';
+        }, 200);
+      });
+    }
+  }, 0);
 }
-
 function removePoRow(idx) {
   var el = document.getElementById('po-row-' + idx);
   if (el) el.remove();
@@ -376,8 +482,9 @@ function collectPoRows() {
     var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
     var partName = (document.getElementById('pon-'+idx)||{}).value||'';
     var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
-    var qty      = parseInt((document.getElementById('poq-'+idx)||{}).value)||0;
-    if (customer || partNo || qty) items.push({customer,partNo,partName,line,qty});
+    var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
+    var unit     = (document.getElementById('pou-'+idx)||{}).value || 'pcs';
+    if (customer || partNo || qty) items.push({customer,partNo,partName,line,qty,unit});
   });
   return items;
 }
@@ -435,6 +542,7 @@ function editPO(id) {
       if(el('pon')) el('pon').value = it.partName||'';
       if(el('pol')) el('pol').value = it.line||'B1';
       if(el('poq')) el('poq').value = it.qty||0;
+      if(el('pou')) el('pou').value = it.unit||'pcs';
     }, 50);
   });
   document.getElementById('poFormCard').scrollIntoView({behavior:'smooth'});
@@ -460,7 +568,8 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var actual = actualOutput[it.partNo] || 0;
+      var ao     = actualOutput[it.partNo] || {pcs:0, kg:0};
+      var actual = (it.unit === 'kg') ? ao.kg : ao.pcs;
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
       if (filterStatus === 'pending' && status !== 'pending') return;
@@ -487,8 +596,8 @@ function renderPOList() {
       '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(r.it.partNo) + '</td>' +
       '<td>' + esc(r.it.partName) + '</td>' +
       '<td><span class="badge '+lineBadge+'">' + esc(r.it.line) + '</span></td>' +
-      '<td style="text-align:center;font-weight:700;">' + (r.it.qty||0).toLocaleString() + '</td>' +
-      '<td style="text-align:center;font-weight:700;color:' + barColor + ';">' + r.actual.toLocaleString() + '</td>' +
+      '<td style="text-align:center;font-weight:700;">' + (r.it.qty||0).toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">' + (r.it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
+      '<td style="text-align:center;font-weight:700;color:' + barColor + ';">' + r.actual.toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">' + (r.it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
       '<td><div class="progress-wrap"><div class="progress-bar" style="width:'+r.pct+'%;background:'+barColor+';"></div></div>' +
         '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+r.pct+'%</div></td>' +
       '<td style="text-align:center;">' + statusTag + '</td>' +
@@ -521,6 +630,7 @@ window.fetchProductionOrders = async function(lineFilter) {
           partName: it.partName,
           line:     it.line,
           qty:      it.qty || 0,
+          unit:     it.unit || 'pcs',
         });
       });
     });
