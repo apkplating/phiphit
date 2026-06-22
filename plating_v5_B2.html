@@ -1144,9 +1144,13 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <input type="number" id="masterOutLiter" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
         </div>
         <div class="field" style="margin:0;">
-          <label>หมายเหตุ</label>
-          <input type="text" id="masterOutNote" placeholder="เช่น เติมบ่อ">
+          <label>วันที่เบิก</label>
+          <input type="date" id="masterOutDate">
         </div>
+      </div>
+      <div class="field" style="margin-bottom:8px;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="masterOutNote" placeholder="เช่น เติมบ่อ">
       </div>
       <button class="btn btn-primary" onclick="doMasterOut()" style="margin-bottom:0;">📤 เบิกออก</button>
       <div id="toast-master" class="toast"></div>
@@ -6238,11 +6242,11 @@ async function masterLoad() {
   } catch(e) { console.warn('masterLoad:', e.message); }
 }
 
-async function execMasterOut(chemId, liter, note) {
+async function execMasterOut(chemId, liter, note, date) {
   if (!chemId || !liter) return;
   var rec = {
     id: Date.now(), chemId: chemId, type: 'out-b2',
-    date: new Date().toISOString().slice(0,10),
+    date: date || isoDate(new Date()),
     liter: liter, bucket: 0, note: note || 'B2 เบิก'
   };
   masterRecords.unshift(rec);
@@ -6275,6 +6279,9 @@ function renderMasterStock() {
   var el  = document.getElementById('masterStockList');
   var sel = document.getElementById('masterChemSel');
   if (!el) return;
+  // ตั้งค่า default วันที่เบิกเป็นวันปัจจุบัน (ถ้ายังไม่มีค่า)
+  var dateEl = document.getElementById('masterOutDate');
+  if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
   if (sel) {
     var cur = sel.value;
     sel.innerHTML = '<option value="">\u2014 เลือก \u2014</option>' +
@@ -6303,11 +6310,14 @@ function doMasterOut() {
   var chemId = (document.getElementById('masterChemSel')||{}).value;
   var liter  = parseFloat((document.getElementById('masterOutLiter')||{}).value) || 0;
   var note   = (document.getElementById('masterOutNote')||{}).value || '';
+  var dateEl = document.getElementById('masterOutDate');
+  var date   = (dateEl && dateEl.value) ? dateEl.value : isoDate(new Date());
   if (!chemId) { showToast('master','กรุณาเลือกรายการเคมี','err'); return; }
   if (!liter)  { showToast('master','กรุณากรอกปริมาณ','err'); return; }
-  execMasterOut(chemId, liter, note);
+  execMasterOut(chemId, liter, note, date);
   document.getElementById('masterOutLiter').value = '';
   document.getElementById('masterOutNote').value  = '';
+  // คงวันที่ไว้ ไม่ clear เผื่อเบิกหลายรายการในวันเดียวกัน
 }
 
 // ══════════════════════════════════════
