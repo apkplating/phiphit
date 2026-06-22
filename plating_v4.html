@@ -8934,13 +8934,31 @@ async function showPOPopup(lineFilter) {
 function closePOPopup() {
   var old = document.getElementById('poPopupOverlay');
   if (old) old.remove();
+  // บันทึกว่ารับทราบแล้ว (ใช้ sessionStorage เก็บ timestamp ล่าสุดที่รับทราบ)
+  try {
+    var lastUpdated = localStorage.getItem('po_updated') || Date.now().toString();
+    sessionStorage.setItem('po_ack_' + PO_LINE_FILTER, lastUpdated);
+  } catch(e) {}
+  // โชว์ bar หลังรับทราบ
+  startPOStatusBar(PO_LINE_FILTER);
 }
 
-// ── Sticky status bar ── 
+// ── Sticky status bar ──
 function startPOStatusBar(lineFilter) {
   updatePOStatusBar(lineFilter);
   if (_poStatusTimer) clearInterval(_poStatusTimer);
   _poStatusTimer = setInterval(function(){ updatePOStatusBar(lineFilter); }, 60000);
+  // รับ broadcast จาก production_order.html เมื่อมีการบันทึกใหม่
+  window.addEventListener('storage', function(e) {
+    if (e.key !== 'po_updated') return;
+    var lastAck = sessionStorage.getItem('po_ack_' + lineFilter) || '0';
+    // ถ้ายังไม่เคยรับทราบรายการนี้ → โชว์ popup ให้รับทราบก่อน
+    if (e.newValue && e.newValue !== lastAck) {
+      showPOPopup(lineFilter);
+    } else {
+      updatePOStatusBar(lineFilter);
+    }
+  });
 }
 
 // ── คำนวณและตั้งค่า top ของ PO bar ตาม live banner จริง ──
