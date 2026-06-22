@@ -152,10 +152,18 @@ tr:hover td{background:var(--sky-pale);}
           <input type="date" id="poDate">
         </div>
       </div>
-      <div class="card-label" style="margin-bottom:6px;margin-top:4px;">รายการชิ้นงาน</div>
-      <div id="poItemRows"></div>
-      <button class="btn btn-outline" style="margin-bottom:10px;" onclick="addPoRow()">➕ เพิ่มรายการ</button>
-      <button class="btn btn-success" onclick="savePO()">💾 บันทึกใบสั่งผลิต</button>
+      <div class="card-label" style="margin-bottom:6px;margin-top:4px;">กรอกรายการชิ้นงาน</div>
+      <!-- ฟอร์ม 1 รายการ (fixed, เคลียร์หลังเพิ่ม) -->
+      <div id="poSingleRow"></div>
+      <button class="btn btn-outline" style="margin-bottom:10px;" onclick="addItemToStaged()">➕ เพิ่มรายการนี้</button>
+
+      <!-- Staged list: รายการที่เพิ่มแล้ว รอบันทึก -->
+      <div id="poStagedList" style="display:none;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;">รายการที่เพิ่มแล้ว <span id="poStagedCount" style="color:var(--blue);">(0 รายการ)</span></div>
+        <div id="poStagedItems"></div>
+      </div>
+
+      <button class="btn btn-success" onclick="savePO()" id="savePOBtn" style="display:none;">💾 บันทึกใบสั่งผลิต</button>
       <div class="toast" id="toast-po"></div>
     </div>
 
@@ -219,7 +227,8 @@ var FB_LINES = {
 };
 
 var currentRole = null;
-var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,line,qty}]}]
+var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,line,qty,unit}]}]
+var stagedItems = []; // รายการที่เพิ่มแล้ว รอบันทึก
 var editingId = null;
 var poRowCount = 0;
 var actualOutput = {}; // {partNo: {pcs, kg}} จากทุกสาย
@@ -271,7 +280,7 @@ function showApp() {
   document.getElementById('appContent').style.display = 'block';
   var dateEl = document.getElementById('poDate');
   if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
-  addPoRow(); // เพิ่มแถวแรกให้พร้อม
+  initSingleRow(); // เตรียมฟอร์มรายการเดียว
   loadData();
 }
 
@@ -409,23 +418,30 @@ function pmSelect(idx, pmIdx) {
 }
 
 // ══════════════════════════════════════════════
-//  PO FORM
+//  STAGED ITEMS HELPERS
 // ══════════════════════════════════════════════
-function addPoRow() {
-  poRowCount++;
-  var idx = poRowCount;
-  var wrap = document.getElementById('poItemRows');
+
+function initSingleRow() {
+  poRowCount = 1;
+  var wrap = document.getElementById('poSingleRow');
+  if (!wrap) return;
+  wrap.innerHTML = ''; // clear เก่าออก
   var div = document.createElement('div');
-  div.id = 'po-row-' + idx;
-  div.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;position:relative;';
-  div.innerHTML =
-    '<button type="button" onclick="removePoRow('+idx+')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;font-family:inherit;">✕</button>' +
+  div.id = 'po-row-1';
+  div.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;';
+  // สร้าง innerHTML เหมือน addPoRow เดิม แต่ idx คงที่ = 1 เสมอ
+  div.innerHTML = buildRowHTML(1);
+  wrap.appendChild(div);
+  loadPM();
+  attachRowEvents(1);
+}
+
+function buildRowHTML(idx) {
+  return (
     '<div class="field" style="margin-bottom:8px;">' +
       '<label>🔍 ค้นหาจาก Part Master</label>' +
       '<div style="position:relative;">' +
-        '<input type="text" id="pm-search-'+idx+'" autocomplete="off" ' +
-          'placeholder="พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า..." ' +
-          'id="pm-search-'+idx+'">' +
+        '<input type="text" id="pm-search-'+idx+'" autocomplete="off">' +
         '<div id="pm-drop-'+idx+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;"></div>' +
       '</div>' +
       '<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">หรือกรอกด้านล่างด้วยตนเอง</div>' +
@@ -439,8 +455,7 @@ function addPoRow() {
       '<div class="field" style="margin:0;"><label>สายผลิต</label>' +
         '<select id="pol-'+idx+'"><option value="B1">B-1 Barrel</option><option value="B2">B-2 Barrel</option><option value="R1">R-1 Rack</option><option value="ALL">ทุกสาย</option></select>' +
       '</div>' +
-      '<div class="field" style="margin:0;">' +
-        '<label>จำนวนที่ต้องการ</label>' +
+      '<div class="field" style="margin:0;"><label>จำนวนที่ต้องการ</label>' +
         '<div style="display:flex;gap:6px;">' +
           '<input type="number" id="poq-'+idx+'" placeholder="0" min="0" inputmode="numeric" style="flex:1;min-width:0;">' +
           '<select id="pou-'+idx+'" style="width:80px;flex-shrink:0;">' +
@@ -449,10 +464,11 @@ function addPoRow() {
           '</select>' +
         '</div>' +
       '</div>' +
-    '</div>';
-  wrap.appendChild(div);
-  loadPM();
-  // Attach events หลัง DOM ready (หลีกเลี่ยง inline handler ที่มี quote ซับซ้อน)
+    '</div>'
+  );
+}
+
+function attachRowEvents(idx) {
   setTimeout(function() {
     var searchEl = document.getElementById('pm-search-' + idx);
     if (searchEl) {
@@ -469,32 +485,76 @@ function addPoRow() {
     }
   }, 0);
 }
-function removePoRow(idx) {
-  var el = document.getElementById('po-row-' + idx);
-  if (el) el.remove();
+
+function addItemToStaged() {
+  var idx = 1; // ฟอร์มใช้ idx=1 เสมอ
+  var customer = (document.getElementById('poc-'+idx)||{}).value||'';
+  var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
+  var partName = (document.getElementById('pon-'+idx)||{}).value||'';
+  var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
+  var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
+  var unit     = (document.getElementById('pou-'+idx)||{}).value||'pcs';
+
+  if (!customer && !partNo) { showToast('toast-po','กรุณาระบุลูกค้าหรือหมายเลขชิ้นงาน','err'); return; }
+  if (!qty) { showToast('toast-po','กรุณากรอกจำนวน','err'); return; }
+
+  stagedItems.push({customer, partNo, partName, line, qty, unit});
+  renderStagedList();
+  // เคลียร์ฟอร์ม (reset fields แต่คง line ไว้)
+  var curLine = line;
+  initSingleRow();
+  setTimeout(function(){
+    var polEl = document.getElementById('pol-1');
+    if (polEl) polEl.value = curLine; // คง line เดิมไว้เผื่อเพิ่มรายการซ้ำสาย
+  }, 20);
+  // โชว์ save button ถ้ามีรายการแล้ว
+  var saveBtn = document.getElementById('savePOBtn');
+  if (saveBtn) saveBtn.style.display = 'block';
 }
 
-function collectPoRows() {
-  var items = [];
-  document.querySelectorAll('[id^="po-row-"]').forEach(function(row) {
-    var idx = row.id.replace('po-row-','');
-    var customer = (document.getElementById('poc-'+idx)||{}).value||'';
-    var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
-    var partName = (document.getElementById('pon-'+idx)||{}).value||'';
-    var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
-    var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
-    var unit     = (document.getElementById('pou-'+idx)||{}).value || 'pcs';
-    if (customer || partNo || qty) items.push({customer,partNo,partName,line,qty,unit});
-  });
-  return items;
+function renderStagedList() {
+  var wrap = document.getElementById('poStagedItems');
+  var listDiv = document.getElementById('poStagedList');
+  var countEl = document.getElementById('poStagedCount');
+  if (!wrap) return;
+
+  if (!stagedItems.length) {
+    if (listDiv) listDiv.style.display = 'none';
+    var saveBtn = document.getElementById('savePOBtn');
+    if (saveBtn) saveBtn.style.display = 'none';
+    return;
+  }
+  if (listDiv) listDiv.style.display = 'block';
+  if (countEl) countEl.textContent = '(' + stagedItems.length + ' รายการ)';
+
+  var lineBadge = {B1:'badge-b1',B2:'badge-b2',R1:'badge-r1',ALL:'badge-all'};
+  wrap.innerHTML = stagedItems.map(function(it, i) {
+    var badgeClass = lineBadge[it.line]||'badge-b1';
+    return '<div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;gap:8px;flex-wrap:wrap;">' +
+      '<span class="badge ' + badgeClass + '">' + esc(it.line) + '</span>' +
+      '<span style="font-family:monospace;font-size:11px;color:var(--navy);font-weight:700;">' + esc(it.partNo||'-') + '</span>' +
+      '<span style="font-size:12px;flex:1;">' + esc(it.partName||'') + '</span>' +
+      '<span style="font-size:11px;color:var(--text-muted);">' + esc(it.customer||'-') + '</span>' +
+      '<span style="font-size:12px;font-weight:700;color:var(--green);">' + it.qty.toLocaleString() + ' ' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span>' +
+      '<button onclick="removeStagedItem(' + i + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px;font-family:inherit;">✕</button>' +
+    '</div>';
+  }).join('');
 }
 
+function removeStagedItem(i) {
+  stagedItems.splice(i, 1);
+  renderStagedList();
+}
+
+// ══════════════════════════════════════════════
+//  PO FORM
+// ══════════════════════════════════════════════
 async function savePO() {
   var planner = (document.getElementById('poPlanner')||{}).value||'';
   var date    = (document.getElementById('poDate')||{}).value || isoDate(new Date());
-  var items   = collectPoRows();
-  if (!items.length) { showToast('toast-po','กรุณาเพิ่มอย่างน้อย 1 รายการ','err'); return; }
+  if (!stagedItems.length) { showToast('toast-po','กรุณาเพิ่มอย่างน้อย 1 รายการก่อน','err'); return; }
   if (!planner) { showToast('toast-po','กรุณาระบุผู้สั่งผลิต','err'); return; }
+  var items = stagedItems.slice();
 
   if (editingId) {
     var idx = poOrders.findIndex(function(o){ return o.id === editingId; });
@@ -513,13 +573,15 @@ async function savePO() {
 
 function cancelEdit() {
   editingId = null;
+  stagedItems = [];
   document.getElementById('formTitle').textContent = '➕ สร้างใบสั่งผลิตใหม่';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('poPlanner').value = '';
   document.getElementById('poDate').value = isoDate(new Date());
-  document.getElementById('poItemRows').innerHTML = '';
-  poRowCount = 0;
-  addPoRow();
+  renderStagedList(); // เคลียร์ staged list
+  initSingleRow();    // reset ฟอร์ม
+  var saveBtn = document.getElementById('savePOBtn');
+  if (saveBtn) saveBtn.style.display = 'none';
 }
 
 function editPO(id) {
@@ -530,21 +592,15 @@ function editPO(id) {
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
   document.getElementById('poPlanner').value = po.planner||'';
   document.getElementById('poDate').value = po.date||isoDate(new Date());
-  document.getElementById('poItemRows').innerHTML = '';
-  poRowCount = 0;
-  (po.items||[]).forEach(function(it) {
-    addPoRow();
-    var idx = poRowCount;
-    setTimeout(function(){
-      var el = function(s){ return document.getElementById(s+idx); };
-      if(el('poc')) el('poc').value = it.customer||'';
-      if(el('pop')) el('pop').value = it.partNo||'';
-      if(el('pon')) el('pon').value = it.partName||'';
-      if(el('pol')) el('pol').value = it.line||'B1';
-      if(el('poq')) el('poq').value = it.qty||0;
-      if(el('pou')) el('pou').value = it.unit||'pcs';
-    }, 50);
+  // โหลดรายการเดิมเข้า stagedItems
+  stagedItems = (po.items||[]).map(function(it){
+    return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
+             line:it.line||'B1', qty:it.qty||0, unit:it.unit||'pcs' };
   });
+  renderStagedList();
+  initSingleRow();
+  var saveBtn = document.getElementById('savePOBtn');
+  if (saveBtn) saveBtn.style.display = stagedItems.length ? 'block' : 'none';
   document.getElementById('poFormCard').scrollIntoView({behavior:'smooth'});
 }
 
