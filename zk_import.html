@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ZKTeco Import Tool</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;padding:30px;}
+.card{background:white;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+h1{color:#1a2236;margin-bottom:6px;}
+.sub{color:#9ca3af;font-size:0.88em;margin-bottom:20px;}
+.btn{padding:11px 20px;border:none;border-radius:8px;cursor:pointer;font-size:0.9em;font-weight:600;}
+.btn-green{background:#10b981;color:white;}
+.btn-red{background:#ef4444;color:white;}
+.btn-blue{background:#3b82f6;color:white;}
+.alert{padding:13px 16px;border-radius:8px;margin:12px 0;font-size:0.88em;}
+.ok{background:#d1fae5;border:2px solid #10b981;color:#065f46;}
+.err{background:#fee2e2;border:2px solid #ef4444;color:#991b1b;}
+.warn{background:#fef3c7;border:2px solid #f59e0b;color:#92400e;}
+table{width:100%;border-collapse:collapse;margin-top:12px;}
+th{background:#f8fafc;padding:10px;text-align:left;font-size:0.82em;color:#6b7280;border-bottom:2px solid #e5e7eb;}
+td{padding:10px;border-bottom:1px solid #f0f0f0;font-size:0.85em;}
+.scroll{overflow-x:auto;max-height:400px;overflow-y:auto;}
+select,input[type=file]{padding:9px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>📥 ZKTeco Import Tool</h1>
+  <p class="sub">นำเข้าข้อมูลจากเครื่อง ZKTeco Bio30 แล้วส่งไปยัง APK HR</p>
+
+  <div style="background:#eff6ff;padding:16px;border-radius:10px;border:2px solid #3b82f6;margin-bottom:16px;">
+    <b style="color:#1e40af;">รูปแบบไฟล์ที่รองรับ:</b><br>
+    <code style="font-size:0.85em;">1,อาภาพร,03-01-2569,17:10,0</code><br>
+    <small style="color:#6b7280;">ID, ชื่อ, วันที่(dd-MM-พ.ศ.), เวลา, สถานะ</small>
+  </div>
+
+  <input type="file" id="csvFile" accept=".csv,.txt" style="margin-bottom:12px;display:block;">
+  <button class="btn btn-green" onclick="loadCSV()">📂 โหลดและวิเคราะห์ไฟล์</button>
+</div>
+
+<div class="card" id="resultCard" style="display:none;">
+  <div id="summary"></div>
+  <div class="scroll" id="preview"></div>
+  <div style="margin-top:16px;display:flex;gap:12px;">
+    <button class="btn btn-green" onclick="doImport()" id="importBtn">✅ Import เข้า APK HR</button>
+    <button class="btn btn-red" onclick="clearData()">🗑️ ยกเลิก</button>
+  </div>
+</div>
+
+<div id="msg"></div>
+
+<script>
+// รายชื่อพนักงาน (ต้องตรงกับ apk_hr.html)
+const EMPLOYEES=[
+  {id:'1',name:'อาภาพร แก้วหลง',hourlyRate:100,otRate:150},
+  {id:'2',name:'ซอ ติก เพียว',hourlyRate:100,otRate:150},
+  {id:'3',name:'ซิน มา ทุน',hourlyRate:100,otRate:150},
+  {id:'6',name:'แนน ฉ่วย',hourlyRate:100,otRate:150},
+  {id:'8',name:'ออง ซอ',hourlyRate:100,otRate:150},
+  {id:'11',name:'นาย ตุน',hourlyRate:100,otRate:150},
+  {id:'12',name:'สาย โพ',hourlyRate:100,otRate:150},
+  {id:'15',name:'ซอว์ คิน มินท์ ซเว',hourlyRate:100,otRate:150},
+  {id:'21',name:'เอ็มจี ไหวตุน',hourlyRate:100,otRate:150},
+  {id:'23',name:'ทัพโยธิน คำแสน',hourlyRate:120,otRate:180},
+  {id:'25',name:'ยุ ยุ ไค',hourlyRate:100,otRate:150},
+  {id:'30',name:'อัง ยัง ซี',hourlyRate:100,otRate:150},
+  {id:'32',name:'Sombat Airumram',hourlyRate:100,otRate:150},
+  {id:'33',name:'พยู',hourlyRate:100,otRate:150},
+  {id:'40',name:'นาน เต็ง พู ไว',hourlyRate:100,otRate:150},
+  {id:'46',name:'ตะนอย',hourlyRate:100,otRate:150},
+  {id:'50',name:'มาริอานโน',hourlyRate:100,otRate:150},
+  {id:'51',name:'แตงโม',hourlyRate:100,otRate:150},
+  {id:'54',name:'เชย์ลาร์',hourlyRate:100,otRate:150},
+  {id:'56',name:'เดช',hourlyRate:100,otRate:150},
+  {id:'58',name:'SAW THEIN ZAW',hourlyRate:100,otRate:150},
+  {id:'59',name:'MANN HWEI DE KHALAINE',hourlyRate:100,otRate:150},
+  {id:'60',name:'พ่อไต',hourlyRate:100,otRate:150},
+  {id:'61',name:'เพียว โซ นาย',hourlyRate:100,otRate:150},
+  {id:'62',name:'เอ',hourlyRate:100,otRate:150},
+  {id:'63',name:'เอวา',hourlyRate:100,otRate:150},
+  {id:'64',name:'MOE HTET ZAW',hourlyRate:100,otRate:150},
+  {id:'65',name:'MYAW MI SAY',hourlyRate:100,otRate:150},
+  {id:'66',name:'NINR NINE AUNG',hourlyRate:100,otRate:150},
+  {id:'69',name:'มิ โช วิน',hourlyRate:100,otRate:150},
+  {id:'70',name:'ซอ ยาดา นา เท',hourlyRate:100,otRate:150},
+  {id:'71',name:'เบอะ',hourlyRate:100,otRate:150},
+  {id:'72',name:'มิน เซน',hourlyRate:100,otRate:150},
+  {id:'73',name:'KYAW EH MOUY',hourlyRate:100,otRate:150},
+];
+
+const SHIFTS={1:{name:'กะที่ 1 เช้า'},2:{name:'กะที่ 2 บ่าย'},3:{name:'กะที่ 3 ดึก'}};
+let parsedPairs=[];
+
+function parseTHDate(ds){
+  if(!ds)return null;
+  ds=ds.trim();
+  const thM={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
+  for(const[k,v]of Object.entries(thM))if(ds.includes(k)){ds=ds.replace(k,v);break;}
+  const p=ds.split(/[-\/]/);
+  if(p.length!==3)return null;
+  let[a,b,c]=p;
+  let d,m,y;
+  if(a.length===4){y=a;m=b;d=c;}else{d=a;m=b;y=c;}
+  if(parseInt(y)>2500)y=String(parseInt(y)-543);
+  return`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+
+function loadCSV(){
+  const file=document.getElementById('csvFile').files[0];
+  if(!file){alert('กรุณาเลือกไฟล์');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    parseAndShow(text);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function parseAndShow(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  const firstLine=lines[0].toLowerCase();
+  const start=firstLine.includes('id')||firstLine.includes('รหัส')||firstLine.includes('name')?1:0;
+
+  const byEmp={}, errs=[];
+  let total=0;
+
+  for(let i=start;i<lines.length;i++){
+    const c=lines[i].split(',').map(s=>s.trim());
+    if(c.length<4)continue;
+    const eid=String(parseInt(c[0]));
+    const ds=c[2], ts=c[3];
+    if(!eid||eid==='NaN'||!ds||!ts)continue;
+    const emp=EMPLOYEES.find(e=>e.id===eid);
+    if(!emp){errs.push(eid);continue;}
+    const pd=parseTHDate(ds);
+    if(!pd)continue;
+    const dt=new Date(`${pd}T${ts}`);
+    if(isNaN(dt))continue;
+    if(!byEmp[eid])byEmp[eid]=[];
+    byEmp[eid].push({emp,dt});
+    total++;
+  }
+
+  parsedPairs=[];
+  Object.keys(byEmp).forEach(eid=>{
+    const recs=byEmp[eid].sort((a,b)=>a.dt-b.dt);
+    const byDay={};
+    recs.forEach(r=>{
+      const dk=r.dt.toDateString();
+      if(!byDay[dk])byDay[dk]=[];
+      byDay[dk].push(r);
+    });
+    Object.values(byDay).forEach(dr=>{
+      dr.sort((a,b)=>a.dt-b.dt);
+      for(let i=0;i<dr.length;i+=2){
+        parsedPairs.push({ci:dr[i],co:dr[i+1]||null});
+      }
+    });
+  });
+
+  const complete=parsedPairs.filter(p=>p.co).length;
+  const incomplete=parsedPairs.filter(p=>!p.co).length;
+  const uniqueIds=[...new Set(Object.keys(byEmp))];
+
+  document.getElementById('resultCard').style.display='block';
+  document.getElementById('summary').innerHTML=`
+    <div class="alert ok">
+      ✅ <b>วิเคราะห์สำเร็จ!</b><br>
+      📊 บรรทัดทั้งหมด: <b>${total}</b> แถว<br>
+      👥 พนักงาน: <b>${uniqueIds.length}</b> คน<br>
+      ✅ คู่เข้า-ออกครบ: <b>${complete}</b> คู่<br>
+      ⚠️ ไม่มีเวลาออก: <b>${incomplete}</b> รายการ<br>
+      ❌ ไม่พบรหัส: <b>${[...new Set(errs)].join(', ')||'ไม่มี'}</b>
+    </div>`;
+
+  // Preview 50 รายการแรก
+  let h='<table><thead><tr><th>รหัส</th><th>ชื่อ</th><th>วันที่</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ชม.</th></tr></thead><tbody>';
+  parsedPairs.slice(0,50).forEach(p=>{
+    const h2=p.co?((p.co.dt-p.ci.dt)/3600000).toFixed(2)+' ชม.':'<span style="color:#f59e0b">ไม่มี</span>';
+    const coT=p.co?p.co.dt.toLocaleTimeString('th-TH'):'—';
+    h+=`<tr><td>${p.ci.emp.id}</td><td>${p.ci.emp.name}</td><td>${p.ci.dt.toLocaleDateString('th-TH')}</td><td>${p.ci.dt.toLocaleTimeString('th-TH')}</td><td>${coT}</td><td>${h2}</td></tr>`;
+  });
+  if(parsedPairs.length>50)h+=`<tr><td colspan="6" style="text-align:center;color:#9ca3af">... และอีก ${parsedPairs.length-50} รายการ</td></tr>`;
+  h+='</tbody></table>';
+  document.getElementById('preview').innerHTML=h;
+}
+
+function doImport(){
+  if(!parsedPairs.length){alert('ไม่มีข้อมูล');return;}
+
+  // โหลดข้อมูลเดิมจาก localStorage
+  let existing=[];
+  try{existing=JSON.parse(localStorage.getItem('apk_att')||'[]');}catch(e){}
+
+  let ok=0,skip=0;
+  parsedPairs.forEach(p=>{
+    const{ci,co}=p;
+    // ตรวจซ้ำ
+    const dup=existing.find(r=>r.empId===ci.emp.id&&Math.abs(new Date(r.checkIn)-ci.dt)<60000);
+    if(dup){skip++;return;}
+
+    const hr=ci.dt.getHours();
+    const sh=hr>=5&&hr<13?1:hr>=13&&hr<21?2:3;
+    const rec={
+      id:Date.now()+Math.random(),
+      empId:ci.emp.id,
+      empName:ci.emp.name,
+      shift:sh,
+      shiftName:SHIFTS[sh].name,
+      checkIn:ci.dt.toISOString(),
+      checkOut:null,
+      importedFromZK:true
+    };
+    if(co){
+      const wh=(co.dt-ci.dt)/3600000;
+      const rh=Math.min(wh,8),ot=Math.max(0,wh-8);
+      rec.checkOut=co.dt.toISOString();
+      rec.workedH=wh.toFixed(2);
+      rec.regH=rh.toFixed(2);
+      rec.otH=ot.toFixed(2);
+      rec.regPay=(rh*ci.emp.hourlyRate).toFixed(2);
+      rec.otPay=(ot*ci.emp.otRate).toFixed(2);
+      rec.totalPay=(rh*ci.emp.hourlyRate+ot*ci.emp.otRate).toFixed(2);
+    }
+    existing.push(rec);
+    ok++;
+  });
+
+  localStorage.setItem('apk_att',JSON.stringify(existing));
+
+  document.getElementById('msg').innerHTML=`
+    <div class="alert ok" style="font-size:1.1em;">
+      🎉 <b>Import สำเร็จ!</b><br>
+      ✅ นำเข้าแล้ว: <b>${ok} รายการ</b><br>
+      ⏭️ ข้ามซ้ำ: <b>${skip} รายการ</b><br><br>
+      <a href="apk_hr.html" style="background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:700;">
+        → เปิด APK HR ดูข้อมูล
+      </a>
+    </div>`;
+  document.getElementById('importBtn').disabled=true;
+}
+
+function clearData(){
+  parsedPairs=[];
+  document.getElementById('resultCard').style.display='none';
+  document.getElementById('csvFile').value='';
+  document.getElementById('msg').innerHTML='';
+}
+</script>
+</body>
+</html>
