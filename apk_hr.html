@@ -191,10 +191,27 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           <div class="shift-opt" id="shiftBtn2" onclick="selectShift(2)"><div class="sname">☀️ กะที่ 2 บ่าย</div><div class="stime">13:00 – 21:00</div></div>
           <div class="shift-opt" id="shiftBtn3" onclick="selectShift(3)"><div class="sname">🌙 กะที่ 3 ดึก</div><div class="stime">21:00 – 05:00</div></div>
         </div>
+        <!-- Auto Scan Toggle -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#f8fafc;padding:12px 16px;border-radius:10px;border:2px solid #e5e7eb;">
+          <div>
+            <div style="font-weight:700;font-size:0.95em;color:#1a2236;">⚡ Auto Scan Mode</div>
+            <div style="font-size:0.78em;color:#9ca3af;margin-top:2px;">เปิด = สแกนบาร์โค้ดแล้วบันทึกทันที ไม่ต้องกด Enter</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;">
+            <input type="checkbox" id="autoScanToggle" checked onchange="toggleAutoScan()" style="opacity:0;width:0;height:0;">
+            <span id="autoScanSlider" style="position:absolute;inset:0;background:#00c9a7;border-radius:28px;transition:0.3s;">
+              <span style="position:absolute;left:4px;top:4px;width:20px;height:20px;background:white;border-radius:50%;transition:0.3s;transform:translateX(24px);display:block;"></span>
+            </span>
+          </label>
+        </div>
+
         <div class="scan-input">
-          <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter">
+          <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64" autofocus autocomplete="off">
           <button class="btn btn-primary" onclick="scanCard()">สแกนบัตร</button>
         </div>
+
+        <!-- Big display สำหรับติดผนัง -->
+        <div id="scanResult" style="display:none;margin-top:16px;padding:20px;border-radius:12px;text-align:center;font-size:1.5em;font-weight:700;"></div>
         <div id="scanMsg"></div>
       </div>
       <div class="card"><div class="card-title">📋 บันทึกวันนี้</div><div class="tbl-wrap" id="todayTable"></div></div>
@@ -479,13 +496,58 @@ function gotoPage(id,el){
 
 // ========== SCAN ==========
 function selectShift(n){selShift=n;[1,2,3].forEach(i=>document.getElementById('shiftBtn'+i).classList.toggle('selected',i===n));}
-document.getElementById('cardInput').addEventListener('keypress',e=>{if(e.key==='Enter')scanCard();});
+// ========== AUTO SCAN ==========
+let autoScanTimer = null;
+let autoScanEnabled = true;
+
+function toggleAutoScan(){
+  autoScanEnabled = document.getElementById('autoScanToggle').checked;
+  const slider = document.getElementById('autoScanSlider');
+  const knob = slider.querySelector('span');
+  if(autoScanEnabled){
+    slider.style.background = '#00c9a7';
+    knob.style.transform = 'translateX(24px)';
+    document.getElementById('cardInput').placeholder = 'สแกนบาร์โค้ด หรือกรอกรหัส (Auto)';
+  } else {
+    slider.style.background = '#d1d5db';
+    knob.style.transform = 'translateX(0)';
+    document.getElementById('cardInput').placeholder = 'กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter';
+  }
+}
+
+document.getElementById('cardInput').addEventListener('keypress', e => {
+  if(e.key === 'Enter') { scanCard(); return; }
+  // Auto scan: ถ้าเปิด auto mode รอ 500ms หลังพิมพ์หยุด
+  if(autoScanEnabled){
+    clearTimeout(autoScanTimer);
+    autoScanTimer = setTimeout(() => {
+      const val = document.getElementById('cardInput').value.trim();
+      if(val) scanCard();
+    }, 500);
+  }
+});
+
+document.getElementById('cardInput').addEventListener('input', e => {
+  if(!autoScanEnabled) return;
+  clearTimeout(autoScanTimer);
+  autoScanTimer = setTimeout(() => {
+    const val = document.getElementById('cardInput').value.trim();
+    if(val) scanCard();
+  }, 500);
+});
 
 function scanCard(){
+  clearTimeout(autoScanTimer);
   const raw=document.getElementById('cardInput').value.trim();
-  if(!raw){showMsg('scanMsg','กรุณากรอกรหัสพนักงาน','warn');return;}
+  if(!raw) return;
   const emp=EMPLOYEES.find(e=>e.id===raw||e.id===String(parseInt(raw)));
-  if(!emp){showMsg('scanMsg',`❌ ไม่พบรหัส "${raw}" ในระบบ (มีพนักงาน ${EMPLOYEES.length} คน)`,'err');return;}
+  if(!emp){
+    showScanResult(`❌ ไม่พบรหัส "${raw}"`, '#fee2e2', '#991b1b');
+    showMsg('scanMsg',`❌ ไม่พบรหัส "${raw}" ในระบบ`,'err');
+    document.getElementById('cardInput').value='';
+    document.getElementById('cardInput').focus();
+    return;
+  }
   const now=new Date();
   const cutoff=new Date(now.getTime()-24*3600000);
   const active=attendance.find(r=>r.empId===emp.id&&!r.checkOut&&new Date(r.checkIn)>cutoff);
@@ -494,16 +556,44 @@ function scanCard(){
     active.checkOut=co.toISOString();active.workedH=wh.toFixed(2);active.regH=rh.toFixed(2);active.otH=ot.toFixed(2);
     active.regPay=(rh*emp.hourlyRate).toFixed(2);active.otPay=(ot*emp.otRate).toFixed(2);active.totalPay=(rh*emp.hourlyRate+ot*emp.otRate).toFixed(2);
     saveAtt();
+    showScanResult(`🏁 ออกงาน\n${emp.name}\n${co.toLocaleTimeString('th-TH')}\n💰 ฿${active.totalPay}`, '#d1fae5', '#065f46');
     showMsg('scanMsg',`✅ ออกงาน: ${emp.name} | ${wh.toFixed(2)} ชม. | 💰 ฿${active.totalPay}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🏁 **ออกงาน** — ${emp.name}\n⏰ ${co.toLocaleTimeString('th-TH')} | ${wh.toFixed(2)} ชม. | ฿${active.totalPay}`);
   } else {
     attendance.push({id:Date.now(),empId:emp.id,empName:emp.name,shift:selShift,shiftName:SHIFTS[selShift].name,checkIn:now.toISOString(),checkOut:null});
     saveAtt();
+    showScanResult(`🚀 เข้างาน\n${emp.name}\n${now.toLocaleTimeString('th-TH')}\n${SHIFTS[selShift].name}`, '#dbeafe', '#1e40af');
     showMsg('scanMsg',`✅ เข้างาน: ${emp.name} | ${SHIFTS[selShift].name} | ${now.toLocaleTimeString('th-TH')}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🚀 **เข้างาน** — ${emp.name}\n${SHIFTS[selShift].name} | ⏰ ${now.toLocaleTimeString('th-TH')}`);
   }
   document.getElementById('cardInput').value='';
+  document.getElementById('cardInput').focus();
   renderTodayTable();renderDashboard();
+}
+
+function showScanResult(text, bg, color){
+  const el = document.getElementById('scanResult');
+  el.style.display = 'block';
+  el.style.background = bg;
+  el.style.color = color;
+  el.style.border = `2px solid ${color}`;
+  el.style.whiteSpace = 'pre-line';
+  el.textContent = text;
+  // เสียงแจ้งเตือน
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = color === '#065f46' ? 600 : 900;
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
+  } catch(e){}
+  // ซ่อนหลัง 3 วินาที
+  setTimeout(() => {
+    el.style.display = 'none';
+  }, 3000);
 }
 
 function showMsg(id,msg,type){
