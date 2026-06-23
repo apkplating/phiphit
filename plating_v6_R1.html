@@ -8887,17 +8887,42 @@ var _poStatusTimer = null;
 var _poJobPath = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app/job-master.json';
 
 // ── ดึง PO orders + actual pcs แล้ว return items พร้อม progress ──
-async function fetchPOStatus(lineFilter) {
-  var orders = [];
+// ── cache สั้นๆ ลด fetch ซ้ำ ──
+var _poOrdersCache = null;
+var _poActualCache = null;
+var _poCacheTime   = 0;
+var PO_CACHE_TTL   = 30000; // 30 วิ
+
+function _buildItems(orders, actual, lineFilter) {
+  var items = [];
+  orders.forEach(function(po) {
+    (po.items||[]).forEach(function(it) {
+      if (it.line !== lineFilter && it.line !== 'ALL') return;
+      if (!it.qty) return;
+      var ao   = actual[it.partNo] || {pcs:0, kg:0};
+      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var pct  = Math.min(100, Math.round(done / it.qty * 100));
+      items.push({
+        poDate:it.poDate||po.date, customer:it.customer, partNo:it.partNo,
+        partName:it.partName, qty:it.qty, unit:it.unit||'pcs',
+        done:done, pct:pct, complete:done >= it.qty
+      });
+    });
+  });
+  return items;
+}
+
+async function fetchPOOrders() {
   try {
     var r = await fetch(PO_FB_PATH);
     if (!r.ok) return [];
     var d = await r.json();
-    orders = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+    return Array.isArray(d) ? d : (d ? Object.values(d) : []);
   } catch(e) { return []; }
+}
 
-  // ดึงยอดผลิตจริงจาก job-master
-  var actual = {}; // {partNo: {pcs, kg}}
+async function fetchActual() {
+  var actual = {};
   try {
     var rj = await fetch(_poJobPath);
     if (rj.ok) {
@@ -8911,24 +8936,27 @@ async function fetchPOStatus(lineFilter) {
       });
     }
   } catch(e) {}
-
-  var items = [];
-  orders.forEach(function(po) {
-    (po.items||[]).forEach(function(it) {
-      if (it.line !== lineFilter && it.line !== 'ALL') return;
-      if (!it.qty) return;
-      var ao = actual[it.partNo] || {pcs:0, kg:0};
-      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
-      var pct  = Math.min(100, Math.round(done / it.qty * 100));
-      items.push({
-        poDate: po.date, customer: it.customer, partNo: it.partNo,
-        partName: it.partName, qty: it.qty, unit: it.unit||'pcs',
-        done: done, pct: pct, complete: done >= it.qty
-      });
-    });
-  });
-  return items;
+  return actual;
 }
+
+async function fetchPOStatus(lineFilter) {
+  var now = Date.now();
+  // ใช้ cache ถ้าไม่เกิน TTL
+  if (_poOrdersCache && _poActualCache && (now - _poCacheTime) < PO_CACHE_TTL) {
+    return _buildItems(_poOrdersCache, _poActualCache, lineFilter);
+  }
+  // fetch ทั้งสองพร้อมกัน (ไม่รอทีละอัน)
+  var results = await Promise.all([fetchPOOrders(), fetchActual()]);
+  _poOrdersCache = results[0];
+  _poActualCache = results[1];
+  _poCacheTime   = now;
+  return _buildItems(_poOrdersCache, _poActualCache, lineFilter);
+}
+
+// เคลียร์ cache เมื่อมีการบันทึกใหม่
+window.addEventListener('storage', function(e) {
+  if (e.key === 'po_updated') { _poOrdersCache = null; _poActualCache = null; }
+});
 
 // ── Popup ครั้งแรกตอน login ──
 async function showPOPopup(lineFilter) {
@@ -8936,18 +8964,31 @@ async function showPOPopup(lineFilter) {
   var old = document.getElementById('poPopupOverlay');
   if (old) old.remove();
 
-  var items = await fetchPOStatus(lineFilter);
-  var pending = items.filter(function(it){ return !it.complete; });
-  if (!pending.length) {
-    // ไม่มีรายการค้าง เริ่ม status bar เลยโดยไม่โชว์ popup
-    startPOStatusBar(lineFilter);
-    return;
-  }
+  // ── โหลด PO orders ก่อน (เร็ว) แล้ว render popup ทันทีโดยไม่รอ actual ──
+  var orders = [];
+  try {
+    var r0 = await fetch(PO_FB_PATH);
+    if (r0.ok) {
+      var d0 = await r0.json();
+      orders = Array.isArray(d0) ? d0 : (d0 ? Object.values(d0) : []);
+    }
+  } catch(e) {}
+
+  var pending = [];
+  orders.forEach(function(po) {
+    (po.items||[]).forEach(function(it) {
+      if (it.line !== lineFilter && it.line !== 'ALL') return;
+      if (!it.qty) return;
+      pending.push({ poDate:po.date, customer:it.customer, partNo:it.partNo,
+        partName:it.partName, qty:it.qty, unit:it.unit||'pcs', done:0, pct:0, complete:false });
+    });
+  });
+
+  if (!pending.length) { startPOStatusBar(lineFilter); return; }
 
   var esc2 = function(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
 
   var rows = pending.map(function(it) {
-    var barColor = it.pct >= 80 ? '#16a34a' : it.pct >= 40 ? '#d97706' : '#3b82f6';
     return '<tr style="border-top:1px solid #e2e8f0;">' +
       '<td style="padding:7px 10px;font-size:11px;color:#64748b;">' + esc2(it.poDate) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + esc2(it.customer) + '</td>' +
@@ -8955,8 +8996,8 @@ async function showPOPopup(lineFilter) {
       '<td style="padding:7px 10px;font-size:12px;">' + esc2(it.partName) + '</td>' +
       '<td style="padding:7px 10px;text-align:center;">' +
         '<div style="font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + ' <span style="font-size:10px;color:#94a3b8;">' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span></div>' +
-        '<div style="background:#e2e8f0;border-radius:99px;height:5px;margin-top:4px;"><div style="height:100%;width:' + it.pct + '%;background:' + barColor + ';border-radius:99px;"></div></div>' +
-        '<div style="font-size:10px;color:' + barColor + ';font-weight:700;">' + it.pct + '%</div>' +
+        '<div style="background:#e2e8f0;border-radius:99px;height:5px;margin-top:4px;"><div style="height:100%;width:0%;background:#3b82f6;border-radius:99px;" class="po-pbar-' + esc2(it.partNo) + '"></div></div>' +
+        '<div style="font-size:10px;color:#94a3b8;font-weight:700;" class="po-ppct-' + esc2(it.partNo) + '">กำลังโหลด...</div>' +
       '</td>' +
     '</tr>';
   }).join('');
@@ -8990,6 +9031,20 @@ async function showPOPopup(lineFilter) {
   overlay.addEventListener('click', function(e){ if(e.target===overlay) closePOPopup(); });
   document.body.appendChild(overlay);
   startPOStatusBar(lineFilter);
+
+  // โหลด actual แบบ background แล้วอัปเดต progress bar ใน popup
+  fetchActual().then(function(actual) {
+    pending.forEach(function(it) {
+      var ao   = actual[it.partNo] || {pcs:0, kg:0};
+      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var pct  = Math.min(100, Math.round(done / it.qty * 100));
+      var barColor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#d97706' : '#3b82f6';
+      var bars = document.querySelectorAll('.po-pbar-' + it.partNo.replace(/[^a-zA-Z0-9]/g,'-'));
+      var pcts = document.querySelectorAll('.po-ppct-' + it.partNo.replace(/[^a-zA-Z0-9]/g,'-'));
+      bars.forEach(function(b){ b.style.width = pct + '%'; b.style.background = barColor; });
+      pcts.forEach(function(p){ p.textContent = pct + '%'; p.style.color = barColor; });
+    });
+  }).catch(function(){});
 }
 
 function closePOPopup() {
