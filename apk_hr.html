@@ -724,27 +724,27 @@ function parseZKCSV(text){
   const start=lines[0].toLowerCase().match(/id|name|date|รหัส|ชื่อ|วันที่/)?1:0;
   const pairs=[],errs=[],byEmp={};
 
-  // แปลงเดือนภาษาไทยเป็นตัวเลข
+  // แปลงเดือนภาษาไทย
   const thMonths={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
 
   function parseDate(ds){
     ds = ds.trim();
-    // รูปแบบ: 03-ม.ค.-2569 หรือ 03/ม.ค./2569
+    // แปลงเดือนภาษาไทย
+    const thMonths={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
     for(const [th,num] of Object.entries(thMonths)){
-      if(ds.includes(th)){
-        ds = ds.replace(th, num);
-        break;
-      }
+      if(ds.includes(th)){ ds=ds.replace(th,num); break; }
     }
-    // แปลง พ.ศ. → ค.ศ. (ถ้าปี > 2500)
+    // แยก parts ด้วย - หรือ /
     const parts = ds.split(/[-\/]/);
-    if(parts.length === 3){
-      let [d,m,y] = parts;
-      if(parseInt(y) > 2500) y = String(parseInt(y) - 543);
-      if(d.length === 4){ return `${d}-${m.padStart(2,'0')}-${y.padStart(2,'0')}`; } // yyyy-mm-dd
-      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; // dd-mm-yyyy → yyyy-mm-dd
-    }
-    return ds;
+    if(parts.length !== 3) return null;
+    let [a,b,c] = parts.map(s=>s.trim());
+    let d,m,y;
+    // ถ้า part แรกมี 4 หลัก = yyyy-mm-dd
+    if(a.length===4){ y=a;m=b;d=c; }
+    else { d=a;m=b;y=c; }
+    // แปลง พ.ศ. → ค.ศ.
+    if(parseInt(y)>2500) y=String(parseInt(y)-543);
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
   }
 
   for(let i=start;i<lines.length;i++){
