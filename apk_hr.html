@@ -721,35 +721,81 @@ function handleCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
 function parseZKCSV(text){
   const fmt=document.querySelector('input[name="csvFmt"]:checked').value;
   const lines=text.split('\n').filter(l=>l.trim());
-  const start=lines[0].toLowerCase().match(/id|name|date/)?1:0;
+  const start=lines[0].toLowerCase().match(/id|name|date|รหัส|ชื่อ|วันที่/)?1:0;
   const pairs=[],errs=[],byEmp={};
+
+  // แปลงเดือนภาษาไทยเป็นตัวเลข
+  const thMonths={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
+
+  function parseDate(ds){
+    ds = ds.trim();
+    // รูปแบบ: 03-ม.ค.-2569 หรือ 03/ม.ค./2569
+    for(const [th,num] of Object.entries(thMonths)){
+      if(ds.includes(th)){
+        ds = ds.replace(th, num);
+        break;
+      }
+    }
+    // แปลง พ.ศ. → ค.ศ. (ถ้าปี > 2500)
+    const parts = ds.split(/[-\/]/);
+    if(parts.length === 3){
+      let [d,m,y] = parts;
+      if(parseInt(y) > 2500) y = String(parseInt(y) - 543);
+      if(d.length === 4){ return `${d}-${m.padStart(2,'0')}-${y.padStart(2,'0')}`; } // yyyy-mm-dd
+      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; // dd-mm-yyyy → yyyy-mm-dd
+    }
+    return ds;
+  }
+
   for(let i=start;i<lines.length;i++){
     const c=lines[i].split(/[,\t|;]/).map(s=>s.trim().replace(/"/g,''));
     let eid,ds,ts,stat;
-    if(fmt==='std'){eid=c[0]?.toUpperCase();if(c.length>=5){ds=c[2];ts=c[3];stat=c[4];}else{const p=c[1]?.split(' ')||[];ds=p[0];ts=p[1]||c[2];stat=c[c.length-1];}}
-    else{eid=c[0]?.toUpperCase();ds=c[1];ts=c[2];stat=c[3]||'auto';}
+    if(fmt==='std'){
+      eid=c[0];
+      if(c.length>=5){ds=c[2];ts=c[3];stat=c[4];}
+      else{const p=c[1]?.split(' ')||[];ds=p[0];ts=p[1]||c[2];stat=c[c.length-1];}
+    } else {eid=c[0];ds=c[1];ts=c[2];stat=c[3]||'auto';}
     if(!eid||!ds||!ts)continue;
+
     const nid=String(parseInt(eid));
     const emp=EMPLOYEES.find(e=>e.id===nid||e.id===eid);
     if(!emp){errs.push(`บรรทัด ${i+1}: ไม่พบรหัส "${eid}"`);continue;}
-    let nd=ds.trim();
-    if(/^\d{2}\/\d{2}\/\d{4}$/.test(nd)){const[d,m,y]=nd.split('/');nd=`${y}-${m}-${d}`;}
-    const dt=new Date(`${nd}T${ts.trim()}`);
-    if(isNaN(dt)){errs.push(`บรรทัด ${i+1}: วันที่ไม่ถูกต้อง`);continue;}
-    const s=stat.toLowerCase();
-    const isIn=s.includes('in')||s==='0'||s==='เข้า'?true:s.includes('out')||s==='1'||s==='ออก'?false:null;
+
+    const parsedDate = parseDate(ds);
+    const dt=new Date(`${parsedDate}T${ts.trim()}`);
+    if(isNaN(dt)){errs.push(`บรรทัด ${i+1}: วันที่ไม่ถูกต้อง "${ds}"`);continue;}
+
+    // ระบุสถานะเข้า/ออก จากค่า status
+    const s = String(stat||'').toLowerCase().trim();
+    const isIn = s==='0'||s.includes('in')||s==='เข้า' ? true
+               : s==='1'||s.includes('out')||s==='ออก' ? false : null;
+
     if(!byEmp[emp.id])byEmp[emp.id]=[];
     byEmp[emp.id].push({emp,dt,isIn});
   }
+
   Object.keys(byEmp).forEach(eid=>{
     const recs=byEmp[eid].sort((a,b)=>a.dt-b.dt);
     const hasStat=recs.some(r=>r.isIn!==null);
-    if(hasStat){let ci=null;recs.forEach(r=>{if(r.isIn===true)ci=r;else if(r.isIn===false&&ci){pairs.push({ci,co:r});ci=null;}});if(ci)pairs.push({ci,co:null});}
-    else{for(let i=0;i<recs.length;i+=2)pairs.push({ci:recs[i],co:recs[i+1]||null});}
+    if(hasStat){
+      let ci=null;
+      recs.forEach(r=>{
+        if(r.isIn===true) ci=r;
+        else if(r.isIn===false&&ci){pairs.push({ci,co:r});ci=null;}
+      });
+      if(ci)pairs.push({ci,co:null});
+    } else {
+      for(let i=0;i<recs.length;i+=2)pairs.push({ci:recs[i],co:recs[i+1]||null});
+    }
   });
+
   pendingCSVData=pairs;
   let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>วันที่</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ชม.</th><th>สถานะ</th></tr></thead><tbody>`;
-  pairs.forEach(p=>{const hrs=p.co?((p.co.dt-p.ci.dt)/3600000).toFixed(2)+' ชม.':'-';const st=p.co?`<span class="badge badge-ok">✅ ครบ</span>`:`<span class="badge badge-working">⚠️ ไม่มีเวลาออก</span>`;h+=`<tr><td>${p.ci.emp.id}</td><td>${p.ci.emp.name}</td><td>${p.ci.dt.toLocaleDateString('th-TH')}</td><td>${p.ci.dt.toLocaleTimeString('th-TH')}</td><td>${p.co?p.co.dt.toLocaleTimeString('th-TH'):'-'}</td><td>${hrs}</td><td>${st}</td></tr>`;});
+  pairs.forEach(p=>{
+    const hrs=p.co?((p.co.dt-p.ci.dt)/3600000).toFixed(2)+' ชม.':'-';
+    const st=p.co?`<span class="badge badge-ok">✅ ครบ</span>`:`<span class="badge badge-working">⚠️ ไม่มีเวลาออก</span>`;
+    h+=`<tr><td>${p.ci.emp.id}</td><td>${p.ci.emp.name}</td><td>${p.ci.dt.toLocaleDateString('th-TH')}</td><td>${p.ci.dt.toLocaleTimeString('th-TH')}</td><td>${p.co?p.co.dt.toLocaleTimeString('th-TH'):'-'}</td><td>${hrs}</td><td>${st}</td></tr>`;
+  });
   document.getElementById('csvPreviewTbl').innerHTML=h+'</tbody></table>';
   if(errs.length)document.getElementById('csvPreviewTbl').innerHTML+=`<div class="alert alert-warn">⚠️ ข้าม ${errs.length} รายการ: ${errs.slice(0,3).join(' | ')}</div>`;
   document.getElementById('csvPreview').style.display='block';
