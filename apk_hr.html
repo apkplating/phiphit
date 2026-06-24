@@ -191,27 +191,10 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           <div class="shift-opt" id="shiftBtn2" onclick="selectShift(2)"><div class="sname">☀️ กะที่ 2 บ่าย</div><div class="stime">13:00 – 21:00</div></div>
           <div class="shift-opt" id="shiftBtn3" onclick="selectShift(3)"><div class="sname">🌙 กะที่ 3 ดึก</div><div class="stime">21:00 – 05:00</div></div>
         </div>
-        <!-- Auto Scan Toggle -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:#f8fafc;padding:12px 16px;border-radius:10px;border:2px solid #e5e7eb;">
-          <div>
-            <div style="font-weight:700;font-size:0.95em;color:#1a2236;">⚡ Auto Scan Mode</div>
-            <div style="font-size:0.78em;color:#9ca3af;margin-top:2px;">เปิด = สแกนบาร์โค้ดแล้วบันทึกทันที ไม่ต้องกด Enter</div>
-          </div>
-          <label style="position:relative;display:inline-block;width:52px;height:28px;cursor:pointer;">
-            <input type="checkbox" id="autoScanToggle" checked onchange="toggleAutoScan()" style="opacity:0;width:0;height:0;">
-            <span id="autoScanSlider" style="position:absolute;inset:0;background:#00c9a7;border-radius:28px;transition:0.3s;">
-              <span style="position:absolute;left:4px;top:4px;width:20px;height:20px;background:white;border-radius:50%;transition:0.3s;transform:translateX(24px);display:block;"></span>
-            </span>
-          </label>
-        </div>
-
         <div class="scan-input">
-          <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64" autofocus autocomplete="off">
+          <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter">
           <button class="btn btn-primary" onclick="scanCard()">สแกนบัตร</button>
         </div>
-
-        <!-- Big display สำหรับติดผนัง -->
-        <div id="scanResult" style="display:none;margin-top:16px;padding:20px;border-radius:12px;text-align:center;font-size:1.5em;font-weight:700;"></div>
         <div id="scanMsg"></div>
       </div>
       <div class="card"><div class="card-title">📋 บันทึกวันนี้</div><div class="tbl-wrap" id="todayTable"></div></div>
@@ -300,14 +283,6 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
             <button class="btn btn-danger" onclick="cancelImport()" style="flex:1;">❌ ยกเลิก</button>
           </div>
         </div>
-
-        <!-- ปุ่มล้างข้อมูล -->
-        <div style="margin-top:16px;padding:14px;background:#fff7ed;border:2px solid #f97316;border-radius:10px;">
-          <div style="font-weight:700;color:#9a3412;margin-bottom:8px;">🗑️ ล้างข้อมูลการลงเวลาทั้งหมด</div>
-          <div style="font-size:0.82em;color:#9ca3af;margin-bottom:10px;">ใช้เมื่อต้องการ Import ข้อมูลใหม่ทั้งหมด หรือมีข้อมูลซ้ำ</div>
-          <button class="btn btn-danger" onclick="clearAllAttendance()">🗑️ ล้างข้อมูลและ Import ใหม่</button>
-        </div>
-
         <div id="importResult"></div>
       </div>
     </div>
@@ -334,7 +309,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       </div>
       <div class="card">
         <div class="card-title">👥 รายชื่อพนักงาน (34 คน)</div>
-        <div class="tbl-wrap"><table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>ตำแหน่ง</th><th>แผนก</th><th>ค่าแรง/ชม.</th><th>OT/ชม.</th></tr></thead><tbody id="empTable"></tbody></table></div>
+        <div class="tbl-wrap"><table class="data"><thead><tr><th>รหัส</th><th>รหัสระบบ</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>วันเริ่มงาน</th><th>เบอร์โทร</th><th>ประเภทค่าจ้าง</th></tr></thead><tbody id="empTable"></tbody></table></div>
       </div>
     </div>
 
@@ -390,40 +365,42 @@ global.CentralAuth={fetchUsers:fetchUsers,saveUsers:saveUsers,login:login,isAuth
 <script>
 // ========== EMPLOYEES (34 คน จาก ZKTeco) ==========
 const EMPLOYEES = [
-  {id:'1',  name:'อาภาพร แก้วหลง',      position:'พนักงาน',        dept:'แผนก',           color:'#f59e0b', hourlyRate:100, otRate:150},
-  {id:'2',  name:'ซอ ติก เพียว',         position:'พนักงาน',        dept:'Maintenance',    color:'#10b981', hourlyRate:100, otRate:150},
-  {id:'3',  name:'ซิน มา ทุน',           position:'พนักงาน',        dept:'Zinc Barrl 1',   color:'#3b82f6', hourlyRate:100, otRate:150},
-  {id:'6',  name:'แนน ฉ่วย',             position:'พนักงาน',        dept:'QC Barrl',       color:'#8b5cf6', hourlyRate:100, otRate:150},
-  {id:'8',  name:'ออง ซอ',               position:'พนักงาน',        dept:'Zinc Barrl 2-3', color:'#ef4444', hourlyRate:100, otRate:150},
-  {id:'11', name:'นาย ตุน',              position:'พนักงาน',        dept:'Zinc Rack',      color:'#06b6d4', hourlyRate:100, otRate:150},
-  {id:'12', name:'สาย โพ',               position:'พนักงาน',        dept:'แผนก',           color:'#84cc16', hourlyRate:100, otRate:150},
-  {id:'15', name:'ซอว์ คิน มินท์ ซเว',   position:'พนักงาน',        dept:'เตรียมผิว',      color:'#f97316', hourlyRate:100, otRate:150},
-  {id:'21', name:'เอ็มจี ไหวตุน',         position:'พนักงาน',        dept:'แผนก',           color:'#ec4899', hourlyRate:100, otRate:150},
-  {id:'23', name:'ทัพโยธิน คำแสน',       position:'หัวหน้าแผนก QA', dept:'QA',             color:'#a855f7', hourlyRate:120, otRate:180},
-  {id:'25', name:'ยุ ยุ ไค',             position:'พนักงาน',        dept:'แผนก',           color:'#14b8a6', hourlyRate:100, otRate:150},
-  {id:'30', name:'อัง ยัง ซี',           position:'พนักงาน',        dept:'แผนก',           color:'#f59e0b', hourlyRate:100, otRate:150},
-  {id:'32', name:'Sombat Airumram',       position:'พนักงาน',        dept:'แผนก',           color:'#10b981', hourlyRate:100, otRate:150},
-  {id:'33', name:'พยู',                  position:'พนักงาน',        dept:'แผนก',           color:'#3b82f6', hourlyRate:100, otRate:150},
-  {id:'40', name:'นาน เต็ง พู ไว',       position:'พนักงาน',        dept:'QC Barrl',       color:'#8b5cf6', hourlyRate:100, otRate:150},
-  {id:'46', name:'ตะนอย',                position:'พนักงาน',        dept:'แผนก',           color:'#ef4444', hourlyRate:100, otRate:150},
-  {id:'50', name:'มาริอานโน',            position:'พนักงาน',        dept:'แผนก',           color:'#06b6d4', hourlyRate:100, otRate:150},
-  {id:'51', name:'แตงโม',                position:'พนักงาน',        dept:'แผนก',           color:'#84cc16', hourlyRate:100, otRate:150},
-  {id:'54', name:'เชย์ลาร์',             position:'พนักงาน',        dept:'QC Rack',        color:'#f97316', hourlyRate:100, otRate:150},
-  {id:'56', name:'เดช',                  position:'พนักงาน',        dept:'แผนก',           color:'#ec4899', hourlyRate:100, otRate:150},
-  {id:'58', name:'SAW THEIN ZAW',         position:'พนักงาน',        dept:'แผนก',           color:'#a855f7', hourlyRate:100, otRate:150},
-  {id:'59', name:'MANN HWEI DE KHALAINE', position:'พนักงาน',        dept:'Zinc Barrl 2',   color:'#14b8a6', hourlyRate:100, otRate:150},
-  {id:'60', name:'พ่อไต',                position:'พนักงาน',        dept:'แผนก',           color:'#f59e0b', hourlyRate:100, otRate:150},
-  {id:'61', name:'เพียว โซ นาย',         position:'พนักงาน',        dept:'แผนก',           color:'#10b981', hourlyRate:100, otRate:150},
-  {id:'62', name:'เอ',                   position:'พนักงาน',        dept:'QC Barrl',       color:'#3b82f6', hourlyRate:100, otRate:150},
-  {id:'63', name:'เอวา',                 position:'พนักงาน',        dept:'QC Barrl',       color:'#8b5cf6', hourlyRate:100, otRate:150},
-  {id:'64', name:'MOE HTET ZAW',          position:'พนักงาน',        dept:'Zinc Barrl 1',   color:'#ef4444', hourlyRate:100, otRate:150},
-  {id:'65', name:'MYAW MI SAY',           position:'พนักงาน',        dept:'Zinc Barrl 1',   color:'#06b6d4', hourlyRate:100, otRate:150},
-  {id:'66', name:'NINR NINE AUNG',        position:'พนักงาน',        dept:'QC Barrl',       color:'#84cc16', hourlyRate:100, otRate:150},
-  {id:'69', name:'มิ โช วิน',            position:'พนักงาน',        dept:'QC Rack',        color:'#f97316', hourlyRate:100, otRate:150},
-  {id:'70', name:'ซอ ยาดา นา เท',        position:'พนักงาน',        dept:'QC Rack',        color:'#ec4899', hourlyRate:100, otRate:150},
-  {id:'71', name:'เบอะ',                 position:'พนักงาน',        dept:'Zinc Barrl 1',   color:'#a855f7', hourlyRate:100, otRate:150},
-  {id:'72', name:'มิน เซน',              position:'พนักงาน',        dept:'QC Rack',        color:'#14b8a6', hourlyRate:100, otRate:150},
-  {id:'73', name:'KYAW EH MOUY',          position:'พนักงาน',        dept:'Zinc Barrl 1',   color:'#f59e0b', hourlyRate:100, otRate:150},
+  // รายชื่อพนักงานจาก ByteHR (Employees_2.xlsx) — อัปเดต 24/06/2569
+  // field: id, sysCode, prefix, name, nameTH, nameEN, position, dept, contractType, salary, payType, startDate, phone, color, hourlyRate, otRate
+  {id:'1',  sysCode:'0001', prefix:'นางสาว', name:'อาภาพร แก้วหลง',       nameTH:'อาภาพร แก้วหลง',       nameEN:'Arpaporn Kaewlorn',          position:'หัวหน้าฝ่ายผลิต', dept:'หัวหน้าฝ่ายผลิต', contractType:'ฟูลไทม์',  salary:17500, payType:'รายเดือน', startDate:'2018-07-02', phone:'0969249149', color:'#f59e0b', hourlyRate:72.92, otRate:109},
+  {id:'2',  sysCode:'0002', prefix:'นาย',    name:'ซอ ติก เพียว',          nameTH:'ซอ ติก เพียว',          nameEN:'Saw hla win kyaing',         position:'พนักงาน',          dept:'Maintenance',       contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2016-08-01', phone:'0945852201', color:'#10b981', hourlyRate:100,   otRate:150},
+  {id:'3',  sysCode:'0003', prefix:'นางสาว', name:'ซิน มา ทุน',            nameTH:'ซิน มา ทุน',            nameEN:'Zin mar tun',                position:'พนักงาน',          dept:'Zinc Barrl 1',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายเดือน', startDate:'2016-09-20', phone:'0951139570', color:'#3b82f6', hourlyRate:100,   otRate:150},
+  {id:'6',  sysCode:'0006', prefix:'นางสาว', name:'แนน ฉ่วย',              nameTH:'แนน ฉ่วย',              nameEN:'Nan shwe',                   position:'พนักงาน',          dept:'QC Barrl',          contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2019-07-02', phone:'0942750613', color:'#8b5cf6', hourlyRate:100,   otRate:150},
+  {id:'8',  sysCode:'0008', prefix:'นาย',    name:'ออง ซอ',                nameTH:'ออง ซอ',                nameEN:'Aung zaw',                   position:'พนักงาน',          dept:'Zinc Barrl 2-3',    contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2019-03-04', phone:'0652283970', color:'#ef4444', hourlyRate:100,   otRate:150},
+  {id:'11', sysCode:'0011', prefix:'นาย',    name:'นาย ตุน',               nameTH:'นาย ตุน',               nameEN:'Naing tun',                  position:'พนักงาน',          dept:'Zinc Rack',         contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2019-09-11', phone:'0634155940', color:'#06b6d4', hourlyRate:100,   otRate:150},
+  {id:'12', sysCode:'0012', prefix:'นาย',    name:'สาย โพ',                nameTH:'สาย โพ',                nameEN:'Sai pho my inng',            position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2023-09-04', phone:'0947421579', color:'#84cc16', hourlyRate:100,   otRate:150},
+  {id:'15', sysCode:'0015', prefix:'นาย',    name:'ซอว์ คิน มินท์ ซเว',    nameTH:'ซอว์ คิน มินท์ ซเว',    nameEN:'Saw khin myint shwe',         position:'พนักงาน',          dept:'เตรียมผิว',         contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2022-05-03', phone:'0627875345', color:'#f97316', hourlyRate:100,   otRate:150},
+  {id:'21', sysCode:'0021', prefix:'นาย',    name:'เอ็มจี ไหวตุน',          nameTH:'เอ็มจี ไหวตุน',          nameEN:'Mg wai tun',                 position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2023-12-09', phone:'0992309383', color:'#ec4899', hourlyRate:100,   otRate:150},
+  {id:'23', sysCode:'0023', prefix:'นาย',    name:'ทัพโยธิน คำแสน',        nameTH:'ทัพโยธิน คำแสน',        nameEN:'Thapphayotin Kamsaen',        position:'หัวหน้าแผนก QA',   dept:'QA',                contractType:'ฟูลไทม์',  salary:0,     payType:'รายเดือน', startDate:'2024-01-16', phone:'0809645227', color:'#a855f7', hourlyRate:120,   otRate:180},
+  {id:'25', sysCode:'0025', prefix:'นาง',    name:'ยุ ยุ ไค',              nameTH:'ยุ ยุ ไค',              nameEN:'YU YU KHAING',               position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2024-05-23', phone:'',           color:'#14b8a6', hourlyRate:100,   otRate:150},
+  {id:'30', sysCode:'0030', prefix:'นาย',    name:'อัง ยัง ซี',            nameTH:'อัง ยัง ซี',            nameEN:'AUNG NYUNT SWE',             position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายเดือน', startDate:'2024-06-25', phone:'',           color:'#f59e0b', hourlyRate:100,   otRate:150},
+  {id:'32', sysCode:'0032', prefix:'นาย',    name:'สมบัต อรุมรัมย์',       nameTH:'สมบัต อรุมรัมย์',       nameEN:'Sombat Airumram',            position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายเดือน', startDate:'2024-06-22', phone:'0871130649', color:'#10b981', hourlyRate:100,   otRate:150},
+  {id:'33', sysCode:'0033', prefix:'นาย',    name:'พยู',                   nameTH:'พยู',                   nameEN:'PAUK PAUK',                  position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2024-05-15', phone:'',           color:'#3b82f6', hourlyRate:100,   otRate:150},
+  {id:'40', sysCode:'0040', prefix:'นาง',    name:'นาน เต็ง พู ไว',        nameTH:'นาน เต็ง พู ไว',        nameEN:'Nan Thet Poo Wai',           position:'พนักงาน',          dept:'QC Barrl',          contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-06-09', phone:'',           color:'#8b5cf6', hourlyRate:100,   otRate:150},
+  {id:'46', sysCode:'0046', prefix:'นางสาว', name:'ตะนอย',                 nameTH:'ตะนอย',                 nameEN:'NAN KYU KYU THIN',           position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-07-08', phone:'',           color:'#ef4444', hourlyRate:100,   otRate:150},
+  {id:'50', sysCode:'0052', prefix:'นาย',    name:'มาริอานโน',             nameTH:'มาริอานโน',             nameEN:'MARIANO',                    position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-09-16', phone:'',           color:'#06b6d4', hourlyRate:100,   otRate:150},
+  {id:'51', sysCode:'0051', prefix:'นาง',    name:'แตงโม',                 nameTH:'แตงโม',                 nameEN:'THAM NOE OO',                position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-09-16', phone:'',           color:'#84cc16', hourlyRate:100,   otRate:150},
+  {id:'54', sysCode:'0054', prefix:'นางสาว', name:'เชย์ลาร์',              nameTH:'เชย์ลาร์',              nameEN:'SAY LAR PHAW',               position:'พนักงาน',          dept:'QC Rack',           contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-11-04', phone:'',           color:'#f97316', hourlyRate:100,   otRate:150},
+  {id:'56', sysCode:'0056', prefix:'นาย',    name:'เดช',                   nameTH:'เดช',                   nameEN:'KAW NAY OO',                 position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-11-06', phone:'',           color:'#ec4899', hourlyRate:100,   otRate:150},
+  {id:'58', sysCode:'0058', prefix:'นาย',    name:'SAW THEIN ZAW',         nameTH:'SAW THEIN ZAW',         nameEN:'SAW THEIN ZAW',              position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2025-12-01', phone:'',           color:'#a855f7', hourlyRate:100,   otRate:150},
+  {id:'59', sysCode:'0059', prefix:'นาย',    name:'MANN HWEI DE KHALAINE', nameTH:'MANN HWEI DE KHALAINE', nameEN:'MANN HWEI DE KHALAINE',      position:'พนักงาน',          dept:'Zinc Barrl 2',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-01-03', phone:'',           color:'#14b8a6', hourlyRate:100,   otRate:150},
+  {id:'60', sysCode:'0060', prefix:'นาย',    name:'พ่อไต',                 nameTH:'พ่อไต',                 nameEN:'พ่อไต',                      position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-02-02', phone:'',           color:'#f59e0b', hourlyRate:100,   otRate:150},
+  {id:'61', sysCode:'0061', prefix:'นาย',    name:'เพียว โซ นาย',          nameTH:'เพียว โซ นาย',          nameEN:'PYAE SONE NAING',            position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-02-16', phone:'',           color:'#10b981', hourlyRate:100,   otRate:150},
+  {id:'62', sysCode:'0062', prefix:'นางสาว', name:'เอ',                    nameTH:'เอ',                    nameEN:'AYE SAN NWE',                position:'พนักงาน',          dept:'QC Barrl',          contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-03-02', phone:'',           color:'#3b82f6', hourlyRate:100,   otRate:150},
+  {id:'63', sysCode:'0063', prefix:'นางสาว', name:'เอวา',                  nameTH:'เอวา',                  nameEN:'NAW SAN CHO CHO AYE',        position:'พนักงาน',          dept:'QC Barrl',          contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-02', phone:'',           color:'#8b5cf6', hourlyRate:100,   otRate:150},
+  {id:'64', sysCode:'0064', prefix:'นาย',    name:'MOE HTET ZAW',          nameTH:'MOE HTET ZAW',          nameEN:'MOE HTET ZAW',               position:'พนักงาน',          dept:'Zinc Barrl 1',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-04', phone:'',           color:'#ef4444', hourlyRate:100,   otRate:150},
+  {id:'65', sysCode:'0065', prefix:'นาย',    name:'MYAW MI SAY',           nameTH:'MYAW MI SAY',           nameEN:'MYAW MI SAY',                position:'พนักงาน',          dept:'Zinc Barrl 1',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-04', phone:'',           color:'#06b6d4', hourlyRate:100,   otRate:150},
+  {id:'66', sysCode:'0066', prefix:'นาย',    name:'NINR NINE AUNG',        nameTH:'NINR NINE AUNG',        nameEN:'NINR NINE AUNG',             position:'พนักงาน',          dept:'QC Barrl',          contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-09', phone:'',           color:'#84cc16', hourlyRate:100,   otRate:150},
+  {id:'69', sysCode:'0069', prefix:'นางสาว', name:'มิ โช วิน',             nameTH:'มิ โช วิน',             nameEN:'MI CHO WIN',                 position:'พนักงาน',          dept:'QC Rack',           contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-13', phone:'',           color:'#f97316', hourlyRate:100,   otRate:150},
+  {id:'70', sysCode:'0070', prefix:'นางสาว', name:'ซอ ยาดา นา เท',         nameTH:'ซอ ยาดา นา เท',         nameEN:'CHAW YADA NAR HTAY',         position:'พนักงาน',          dept:'QC Rack',           contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-13', phone:'',           color:'#ec4899', hourlyRate:100,   otRate:150},
+  {id:'71', sysCode:'0071', prefix:'นาย',    name:'เบอะ',                  nameTH:'เบอะ',                  nameEN:'Cha boe boe',                position:'พนักงาน',          dept:'Zinc Barrl 1',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-12', phone:'',           color:'#a855f7', hourlyRate:100,   otRate:150},
+  {id:'72', sysCode:'0072', prefix:'นางสาว', name:'มิน เซน',               nameTH:'มิน เซน',               nameEN:'Myint Sein',                 position:'พนักงาน',          dept:'QC Rack',           contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-18', phone:'',           color:'#14b8a6', hourlyRate:100,   otRate:150},
+  {id:'73', sysCode:'0073', prefix:'นาย',    name:'KYAW EH MOUY',          nameTH:'KYAW EH MOUY',          nameEN:'KYAW EH MOUY',               position:'พนักงาน',          dept:'Zinc Barrl 1',      contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-05-18', phone:'',           color:'#f59e0b', hourlyRate:100,   otRate:150},
 ];
 
 const SHIFTS={1:{name:'กะที่ 1 เช้า',short:'05-13',emoji:'🌅',cls:'cs1',badge:'badge-s1'},2:{name:'กะที่ 2 บ่าย',short:'13-21',emoji:'☀️',cls:'cs2',badge:'badge-s2'},3:{name:'กะที่ 3 ดึก',short:'21-05',emoji:'🌙',cls:'cs3',badge:'badge-s3'},off:{name:'หยุด',short:'OFF',emoji:'🏖️',cls:'csoff',badge:'badge-off'}};
@@ -504,58 +481,13 @@ function gotoPage(id,el){
 
 // ========== SCAN ==========
 function selectShift(n){selShift=n;[1,2,3].forEach(i=>document.getElementById('shiftBtn'+i).classList.toggle('selected',i===n));}
-// ========== AUTO SCAN ==========
-let autoScanTimer = null;
-let autoScanEnabled = true;
-
-function toggleAutoScan(){
-  autoScanEnabled = document.getElementById('autoScanToggle').checked;
-  const slider = document.getElementById('autoScanSlider');
-  const knob = slider.querySelector('span');
-  if(autoScanEnabled){
-    slider.style.background = '#00c9a7';
-    knob.style.transform = 'translateX(24px)';
-    document.getElementById('cardInput').placeholder = 'สแกนบาร์โค้ด หรือกรอกรหัส (Auto)';
-  } else {
-    slider.style.background = '#d1d5db';
-    knob.style.transform = 'translateX(0)';
-    document.getElementById('cardInput').placeholder = 'กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter';
-  }
-}
-
-document.getElementById('cardInput').addEventListener('keypress', e => {
-  if(e.key === 'Enter') { scanCard(); return; }
-  // Auto scan: ถ้าเปิด auto mode รอ 500ms หลังพิมพ์หยุด
-  if(autoScanEnabled){
-    clearTimeout(autoScanTimer);
-    autoScanTimer = setTimeout(() => {
-      const val = document.getElementById('cardInput').value.trim();
-      if(val) scanCard();
-    }, 500);
-  }
-});
-
-document.getElementById('cardInput').addEventListener('input', e => {
-  if(!autoScanEnabled) return;
-  clearTimeout(autoScanTimer);
-  autoScanTimer = setTimeout(() => {
-    const val = document.getElementById('cardInput').value.trim();
-    if(val) scanCard();
-  }, 500);
-});
+document.getElementById('cardInput').addEventListener('keypress',e=>{if(e.key==='Enter')scanCard();});
 
 function scanCard(){
-  clearTimeout(autoScanTimer);
   const raw=document.getElementById('cardInput').value.trim();
-  if(!raw) return;
+  if(!raw){showMsg('scanMsg','กรุณากรอกรหัสพนักงาน','warn');return;}
   const emp=EMPLOYEES.find(e=>e.id===raw||e.id===String(parseInt(raw)));
-  if(!emp){
-    showScanResult(`❌ ไม่พบรหัส "${raw}"`, '#fee2e2', '#991b1b');
-    showMsg('scanMsg',`❌ ไม่พบรหัส "${raw}" ในระบบ`,'err');
-    document.getElementById('cardInput').value='';
-    document.getElementById('cardInput').focus();
-    return;
-  }
+  if(!emp){showMsg('scanMsg',`❌ ไม่พบรหัส "${raw}" ในระบบ (มีพนักงาน ${EMPLOYEES.length} คน)`,'err');return;}
   const now=new Date();
   const cutoff=new Date(now.getTime()-24*3600000);
   const active=attendance.find(r=>r.empId===emp.id&&!r.checkOut&&new Date(r.checkIn)>cutoff);
@@ -564,44 +496,16 @@ function scanCard(){
     active.checkOut=co.toISOString();active.workedH=wh.toFixed(2);active.regH=rh.toFixed(2);active.otH=ot.toFixed(2);
     active.regPay=(rh*emp.hourlyRate).toFixed(2);active.otPay=(ot*emp.otRate).toFixed(2);active.totalPay=(rh*emp.hourlyRate+ot*emp.otRate).toFixed(2);
     saveAtt();
-    showScanResult(`🏁 ออกงาน\n${emp.name}\n${co.toLocaleTimeString('th-TH')}\n💰 ฿${active.totalPay}`, '#d1fae5', '#065f46');
     showMsg('scanMsg',`✅ ออกงาน: ${emp.name} | ${wh.toFixed(2)} ชม. | 💰 ฿${active.totalPay}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🏁 **ออกงาน** — ${emp.name}\n⏰ ${co.toLocaleTimeString('th-TH')} | ${wh.toFixed(2)} ชม. | ฿${active.totalPay}`);
   } else {
     attendance.push({id:Date.now(),empId:emp.id,empName:emp.name,shift:selShift,shiftName:SHIFTS[selShift].name,checkIn:now.toISOString(),checkOut:null});
     saveAtt();
-    showScanResult(`🚀 เข้างาน\n${emp.name}\n${now.toLocaleTimeString('th-TH')}\n${SHIFTS[selShift].name}`, '#dbeafe', '#1e40af');
     showMsg('scanMsg',`✅ เข้างาน: ${emp.name} | ${SHIFTS[selShift].name} | ${now.toLocaleTimeString('th-TH')}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🚀 **เข้างาน** — ${emp.name}\n${SHIFTS[selShift].name} | ⏰ ${now.toLocaleTimeString('th-TH')}`);
   }
   document.getElementById('cardInput').value='';
-  document.getElementById('cardInput').focus();
   renderTodayTable();renderDashboard();
-}
-
-function showScanResult(text, bg, color){
-  const el = document.getElementById('scanResult');
-  el.style.display = 'block';
-  el.style.background = bg;
-  el.style.color = color;
-  el.style.border = `2px solid ${color}`;
-  el.style.whiteSpace = 'pre-line';
-  el.textContent = text;
-  // เสียงแจ้งเตือน
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = color === '#065f46' ? 600 : 900;
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
-  } catch(e){}
-  // ซ่อนหลัง 3 วินาที
-  setTimeout(() => {
-    el.style.display = 'none';
-  }, 3000);
 }
 
 function showMsg(id,msg,type){
@@ -729,81 +633,35 @@ function handleCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
 function parseZKCSV(text){
   const fmt=document.querySelector('input[name="csvFmt"]:checked').value;
   const lines=text.split('\n').filter(l=>l.trim());
-  const start=lines[0].toLowerCase().match(/id|name|date|รหัส|ชื่อ|วันที่/)?1:0;
+  const start=lines[0].toLowerCase().match(/id|name|date/)?1:0;
   const pairs=[],errs=[],byEmp={};
-
-  // แปลงเดือนภาษาไทย
-  const thMonths={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
-
-  function parseDate(ds){
-    ds = ds.trim();
-    // แปลงเดือนภาษาไทย
-    const thMonths={'ม.ค.':'01','ก.พ.':'02','มี.ค.':'03','เม.ย.':'04','พ.ค.':'05','มิ.ย.':'06','ก.ค.':'07','ส.ค.':'08','ก.ย.':'09','ต.ค.':'10','พ.ย.':'11','ธ.ค.':'12'};
-    for(const [th,num] of Object.entries(thMonths)){
-      if(ds.includes(th)){ ds=ds.replace(th,num); break; }
-    }
-    // แยก parts ด้วย - หรือ /
-    const parts = ds.split(/[-\/]/);
-    if(parts.length !== 3) return null;
-    let [a,b,c] = parts.map(s=>s.trim());
-    let d,m,y;
-    // ถ้า part แรกมี 4 หลัก = yyyy-mm-dd
-    if(a.length===4){ y=a;m=b;d=c; }
-    else { d=a;m=b;y=c; }
-    // แปลง พ.ศ. → ค.ศ.
-    if(parseInt(y)>2500) y=String(parseInt(y)-543);
-    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-  }
-
   for(let i=start;i<lines.length;i++){
     const c=lines[i].split(/[,\t|;]/).map(s=>s.trim().replace(/"/g,''));
     let eid,ds,ts,stat;
-    if(fmt==='std'){
-      eid=c[0];
-      if(c.length>=5){ds=c[2];ts=c[3];stat=c[4];}
-      else{const p=c[1]?.split(' ')||[];ds=p[0];ts=p[1]||c[2];stat=c[c.length-1];}
-    } else {eid=c[0];ds=c[1];ts=c[2];stat=c[3]||'auto';}
+    if(fmt==='std'){eid=c[0]?.toUpperCase();if(c.length>=5){ds=c[2];ts=c[3];stat=c[4];}else{const p=c[1]?.split(' ')||[];ds=p[0];ts=p[1]||c[2];stat=c[c.length-1];}}
+    else{eid=c[0]?.toUpperCase();ds=c[1];ts=c[2];stat=c[3]||'auto';}
     if(!eid||!ds||!ts)continue;
-
     const nid=String(parseInt(eid));
     const emp=EMPLOYEES.find(e=>e.id===nid||e.id===eid);
     if(!emp){errs.push(`บรรทัด ${i+1}: ไม่พบรหัส "${eid}"`);continue;}
-
-    const parsedDate = parseDate(ds);
-    const dt=new Date(`${parsedDate}T${ts.trim()}`);
-    if(isNaN(dt)){errs.push(`บรรทัด ${i+1}: วันที่ไม่ถูกต้อง "${ds}"`);continue;}
-
-    // ระบุสถานะเข้า/ออก จากค่า status
-    const s = String(stat||'').toLowerCase().trim();
-    const isIn = s==='0'||s.includes('in')||s==='เข้า' ? true
-               : s==='1'||s.includes('out')||s==='ออก' ? false : null;
-
+    let nd=ds.trim();
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(nd)){const[d,m,y]=nd.split('/');nd=`${y}-${m}-${d}`;}
+    const dt=new Date(`${nd}T${ts.trim()}`);
+    if(isNaN(dt)){errs.push(`บรรทัด ${i+1}: วันที่ไม่ถูกต้อง`);continue;}
+    const s=stat.toLowerCase();
+    const isIn=s.includes('in')||s==='0'||s==='เข้า'?true:s.includes('out')||s==='1'||s==='ออก'?false:null;
     if(!byEmp[emp.id])byEmp[emp.id]=[];
     byEmp[emp.id].push({emp,dt,isIn});
   }
-
   Object.keys(byEmp).forEach(eid=>{
     const recs=byEmp[eid].sort((a,b)=>a.dt-b.dt);
     const hasStat=recs.some(r=>r.isIn!==null);
-    if(hasStat){
-      let ci=null;
-      recs.forEach(r=>{
-        if(r.isIn===true) ci=r;
-        else if(r.isIn===false&&ci){pairs.push({ci,co:r});ci=null;}
-      });
-      if(ci)pairs.push({ci,co:null});
-    } else {
-      for(let i=0;i<recs.length;i+=2)pairs.push({ci:recs[i],co:recs[i+1]||null});
-    }
+    if(hasStat){let ci=null;recs.forEach(r=>{if(r.isIn===true)ci=r;else if(r.isIn===false&&ci){pairs.push({ci,co:r});ci=null;}});if(ci)pairs.push({ci,co:null});}
+    else{for(let i=0;i<recs.length;i+=2)pairs.push({ci:recs[i],co:recs[i+1]||null});}
   });
-
   pendingCSVData=pairs;
   let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>วันที่</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ชม.</th><th>สถานะ</th></tr></thead><tbody>`;
-  pairs.forEach(p=>{
-    const hrs=p.co?((p.co.dt-p.ci.dt)/3600000).toFixed(2)+' ชม.':'-';
-    const st=p.co?`<span class="badge badge-ok">✅ ครบ</span>`:`<span class="badge badge-working">⚠️ ไม่มีเวลาออก</span>`;
-    h+=`<tr><td>${p.ci.emp.id}</td><td>${p.ci.emp.name}</td><td>${p.ci.dt.toLocaleDateString('th-TH')}</td><td>${p.ci.dt.toLocaleTimeString('th-TH')}</td><td>${p.co?p.co.dt.toLocaleTimeString('th-TH'):'-'}</td><td>${hrs}</td><td>${st}</td></tr>`;
-  });
+  pairs.forEach(p=>{const hrs=p.co?((p.co.dt-p.ci.dt)/3600000).toFixed(2)+' ชม.':'-';const st=p.co?`<span class="badge badge-ok">✅ ครบ</span>`:`<span class="badge badge-working">⚠️ ไม่มีเวลาออก</span>`;h+=`<tr><td>${p.ci.emp.id}</td><td>${p.ci.emp.name}</td><td>${p.ci.dt.toLocaleDateString('th-TH')}</td><td>${p.ci.dt.toLocaleTimeString('th-TH')}</td><td>${p.co?p.co.dt.toLocaleTimeString('th-TH'):'-'}</td><td>${hrs}</td><td>${st}</td></tr>`;});
   document.getElementById('csvPreviewTbl').innerHTML=h+'</tbody></table>';
   if(errs.length)document.getElementById('csvPreviewTbl').innerHTML+=`<div class="alert alert-warn">⚠️ ข้าม ${errs.length} รายการ: ${errs.slice(0,3).join(' | ')}</div>`;
   document.getElementById('csvPreview').style.display='block';
@@ -826,14 +684,7 @@ function confirmImport(){
   document.getElementById('importResult').innerHTML=`<div class="alert alert-success">✅ นำเข้าสำเร็จ ${ok} รายการ | ข้ามซ้ำ ${sk} รายการ</div>`;
   renderTodayTable();renderDashboard();
 }
-function clearAllAttendance(){
-  if(!confirm('⚠️ ยืนยันล้างข้อมูลการลงเวลาทั้งหมด?\n\nข้อมูลที่ลบจะไม่สามารถกู้คืนได้\nกด OK เพื่อยืนยัน'))return;
-  attendance=[];
-  saveAtt();
-  document.getElementById('importResult').innerHTML='<div class="alert alert-success">✅ ล้างข้อมูลสำเร็จ! กด "เลือกไฟล์ CSV" เพื่อ Import ใหม่ได้เลย</div>';
-  renderTodayTable();
-  renderDashboard();
-}
+function cancelImport(){pendingCSVData=[];document.getElementById('csvPreview').style.display='none';document.getElementById('csvFile').value='';}
 
 // ========== DISCORD ==========
 async function discordSend(msg){const url=document.getElementById('webhookUrl').value;if(!url)return;try{await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:msg})});}catch(e){}}
@@ -850,7 +701,21 @@ async function sendReport(){
 
 // ========== SETTINGS ==========
 function renderSettings(){
-  document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>`<tr><td><span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:${e.color};border-radius:50%;color:white;font-size:0.8em;font-weight:700;">${e.name[0]}</span> ${e.id}</td><td>${e.name}</td><td>${e.position}</td><td>${e.dept}</td><td>฿${e.hourlyRate}/ชม.</td><td>฿${e.otRate}/ชม.</td></tr>`).join('');
+  document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
+    const sd=e.startDate?new Date(e.startDate).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}):'—';
+    const payBadge=e.payType==='รายเดือน'?'<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายเดือน</span>':'<span style="background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายวัน</span>';
+    const nameEN=e.nameEN&&e.nameEN!==e.name?`<br><small style="color:#9ca3af;">${e.nameEN}</small>`:'';
+    return `<tr>
+      <td><span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:${e.color};border-radius:50%;color:white;font-size:0.8em;font-weight:700;">${e.name[0]}</span> ${e.id}</td>
+      <td style="font-family:monospace;color:#6b7280;">${e.sysCode||'—'}</td>
+      <td><strong>${e.prefix||''} ${e.name}</strong>${nameEN}</td>
+      <td>${e.position}</td>
+      <td>${e.dept}</td>
+      <td style="white-space:nowrap;">${sd}</td>
+      <td>${e.phone||'—'}</td>
+      <td>${payBadge}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ========== INIT ==========
