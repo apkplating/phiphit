@@ -309,12 +309,77 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       </div>
       <div class="card">
         <div class="card-title">👥 รายชื่อพนักงาน (34 คน)</div>
-        <div class="tbl-wrap"><table class="data"><thead><tr><th>รหัส</th><th>รหัสระบบ</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>วันเริ่มงาน</th><th>เบอร์โทร</th><th>ประเภทค่าจ้าง</th></tr></thead><tbody id="empTable"></tbody></table></div>
+        <div class="tbl-wrap"><table class="data"><thead><tr><th>รหัส</th><th>รหัสระบบ</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>วันเริ่มงาน</th><th>เบอร์โทร</th><th>ประเภทค่าจ้าง</th><th>แก้ไข</th></tr></thead><tbody id="empTable"></tbody></table></div>
       </div>
     </div>
 
   </div>
 </div>
+</div>
+
+<!-- MODAL: แก้ไขพนักงาน -->
+<div class="modal-ov" id="editEmpModal">
+  <div class="modal-box" style="width:92%;max-width:600px;max-height:90vh;overflow-y:auto;">
+    <h3 style="margin-bottom:18px;">✏️ แก้ไขข้อมูลพนักงาน</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">รหัสพนักงาน</label>
+        <input id="eId" class="form-control" style="background:#f3f4f6;cursor:not-allowed;" readonly>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">คำนำหน้า</label>
+        <select id="ePrefix" class="form-control">
+          <option>นาย</option><option>นาง</option><option>นางสาว</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ชื่อ (ไทย)</label>
+        <input id="eName" class="form-control" placeholder="ชื่อ-นามสกุล">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ชื่อ (อังกฤษ)</label>
+        <input id="eNameEN" class="form-control" placeholder="Name (EN)">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เบอร์โทร</label>
+        <input id="ePhone" class="form-control" placeholder="0812345678">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ตำแหน่ง</label>
+        <input id="ePosition" class="form-control" placeholder="ตำแหน่งงาน">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">แผนก</label>
+        <input id="eDept" class="form-control" placeholder="แผนก">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ประเภทค่าจ้าง</label>
+        <select id="ePayType" class="form-control">
+          <option>รายวัน</option><option>รายเดือน</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เงินเดือน/ค่าจ้าง (บาท)</label>
+        <input id="eSalary" class="form-control" type="number" placeholder="0">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ค่าแรง/ชม. (บาท)</label>
+        <input id="eHourly" class="form-control" type="number" placeholder="100">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">OT/ชม. (บาท)</label>
+        <input id="eOT" class="form-control" type="number" placeholder="150">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">วันเริ่มงาน</label>
+        <input id="eStart" class="form-control" type="date">
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="document.getElementById('editEmpModal').classList.remove('show')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveEmpEdit()">💾 บันทึก</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: กะ -->
@@ -714,12 +779,71 @@ function renderSettings(){
       <td style="white-space:nowrap;">${sd}</td>
       <td>${e.phone||'—'}</td>
       <td>${payBadge}</td>
+      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;" onclick="openEmpEdit('${e.id}')">✏️ แก้ไข</button></td>
     </tr>`;
   }).join('');
 }
 
+
+// ========== EDIT EMPLOYEE ==========
+// เก็บการแก้ไขใน localStorage เพื่อ override ข้อมูล default
+let empOverrides = JSON.parse(localStorage.getItem('apk_emp_overrides')||'{}');
+
+function applyOverrides(){
+  Object.keys(empOverrides).forEach(id=>{
+    const idx=EMPLOYEES.findIndex(e=>e.id===id);
+    if(idx>=0) Object.assign(EMPLOYEES[idx], empOverrides[id]);
+  });
+}
+applyOverrides();
+
+function openEmpEdit(id){
+  const e=EMPLOYEES.find(x=>x.id===id);
+  if(!e)return;
+  document.getElementById('eId').value=e.id;
+  document.getElementById('ePrefix').value=e.prefix||'นาย';
+  document.getElementById('eName').value=e.name||'';
+  document.getElementById('eNameEN').value=e.nameEN||'';
+  document.getElementById('ePhone').value=e.phone||'';
+  document.getElementById('ePosition').value=e.position||'';
+  document.getElementById('eDept').value=e.dept||'';
+  document.getElementById('ePayType').value=e.payType||'รายวัน';
+  document.getElementById('eSalary').value=e.salary||0;
+  document.getElementById('eHourly').value=e.hourlyRate||100;
+  document.getElementById('eOT').value=e.otRate||150;
+  document.getElementById('eStart').value=e.startDate||'';
+  document.getElementById('editEmpModal').classList.add('show');
+}
+
+function saveEmpEdit(){
+  const id=document.getElementById('eId').value;
+  const idx=EMPLOYEES.findIndex(e=>e.id===id);
+  if(idx<0)return;
+  const updates={
+    prefix: document.getElementById('ePrefix').value,
+    name: document.getElementById('eName').value,
+    nameTH: document.getElementById('eName').value,
+    nameEN: document.getElementById('eNameEN').value,
+    phone: document.getElementById('ePhone').value,
+    position: document.getElementById('ePosition').value,
+    dept: document.getElementById('eDept').value,
+    payType: document.getElementById('ePayType').value,
+    salary: parseFloat(document.getElementById('eSalary').value)||0,
+    hourlyRate: parseFloat(document.getElementById('eHourly').value)||100,
+    otRate: parseFloat(document.getElementById('eOT').value)||150,
+    startDate: document.getElementById('eStart').value,
+  };
+  Object.assign(EMPLOYEES[idx], updates);
+  empOverrides[id]=updates;
+  localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+  document.getElementById('editEmpModal').classList.remove('show');
+  renderSettings();
+  showToast('✅ บันทึกข้อมูลพนักงาน '+EMPLOYEES[idx].name+' แล้ว');
+}
+
 // ========== INIT ==========
 document.getElementById('shiftModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeShiftModal();});
+document.getElementById('editEmpModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 document.getElementById('payslipModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 initSalaryMonths();
 setHistToday();
