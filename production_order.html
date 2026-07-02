@@ -148,8 +148,9 @@ tr:hover td{background:var(--sky-pale);}
           <input type="text" id="poPlanner" placeholder="ชื่อผู้วางแผน">
         </div>
         <div class="field">
-          <label>วันที่สั่งผลิต</label>
-          <input type="date" id="poDate">
+          <label>วันที่/เวลาสั่งผลิต</label>
+          <div id="poTimestampDisplay" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;background:#f8fafc;color:var(--text-mid);">จะบันทึกอัตโนมัติตอนกด "บันทึก"</div>
+          <input type="hidden" id="poTimestamp">
         </div>
       </div>
       <div class="card-label" style="margin-bottom:6px;margin-top:4px;">กรอกรายการชิ้นงาน</div>
@@ -347,6 +348,7 @@ async function loadActualOutput() {
           if (!pno) return;
           allBarrelData[line].push({
             date:   day.date || '',
+            time:   barrel.time || '00:00',
             partNo: pno,
             pcs:    Number(barrel.pcs||0),
             kg:     Number(barrel.kg||barrel.kgC||0)
@@ -361,6 +363,7 @@ async function loadActualOutput() {
         if (!pno) return;
         allBarrelData[line].push({
           date:   today,
+          time:   barrel.time || '00:00',
           partNo: pno,
           pcs:    Number(barrel.pcs||0),
           kg:     Number(barrel.kg||barrel.kgC||0)
@@ -371,24 +374,24 @@ async function loadActualOutput() {
 }
 
 // นับยอดจริงตั้งแต่ poDate เป็นต้นไป สำหรับสาย/partNo ที่ระบุ
-function calcActual(line, partNo, poDate, unit) {
+function calcActual(line, partNo, poTimestamp, unit) {
   var lineKey = line === 'ALL' ? null : line;
   var pno = (partNo || '').toUpperCase();
   var total = 0;
+  // แปลง timestamp เป็น "YYYY-MM-DD HH:MM" เพื่อเปรียบเทียบ string
+  // barrel record มี date (YYYY-MM-DD) และ time (HH:MM) แยกกัน
   var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
-  // DEBUG: log once per call
-  console.log('[calcActual] line='+line+' partNo='+pno+' poDate='+poDate+' unit='+unit);
-  console.log('[calcActual] allBarrelData keys:', Object.keys(allBarrelData), 'R1 count:', (allBarrelData['R1']||[]).length);
-  var sample = (allBarrelData['R1']||[]).slice(0,2);
-  if (sample.length) console.log('[calcActual] R1 sample:', JSON.stringify(sample));
   linesToCheck.forEach(function(ln) {
     (allBarrelData[ln] || []).forEach(function(b) {
       if (b.partNo !== pno) return;
-      if (poDate && b.date && b.date < poDate) return;
+      if (poTimestamp) {
+        // สร้าง barrel datetime string "YYYY-MM-DD HH:MM"
+        var bDatetime = (b.date || '') + (b.time ? ' ' + b.time : ' 00:00');
+        if (bDatetime < poTimestamp) return; // กรองออกถ้าผลิตก่อนเวลาสั่ง
+      }
       total += unit === 'kg' ? b.kg : b.pcs;
     });
   });
-  console.log('[calcActual] result:', total);
   return total;
 }
 
@@ -603,16 +606,22 @@ function removeStagedItem(i) {
 // ══════════════════════════════════════════════
 async function savePO() {
   var planner = (document.getElementById('poPlanner')||{}).value||'';
-  var date    = (document.getElementById('poDate')||{}).value || isoDate(new Date());
+  var now = new Date();
+  var date = isoDate(now);
+  var timestamp = now.getFullYear() + '-' +
+    String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0') + ' ' +
+    String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0');
   if (!stagedItems.length) { showToast('toast-po','กรุณาเพิ่มอย่างน้อย 1 รายการก่อน','err'); return; }
   if (!planner) { showToast('toast-po','กรุณาระบุผู้สั่งผลิต','err'); return; }
   var items = stagedItems.slice();
 
   if (editingId) {
     var idx = poOrders.findIndex(function(o){ return o.id === editingId; });
-    if (idx !== -1) poOrders[idx] = { id: editingId, date, planner, items };
+    if (idx !== -1) poOrders[idx] = { id: editingId, date, timestamp, planner, items };
   } else {
-    poOrders.unshift({ id: Date.now(), date, planner, items });
+    poOrders.unshift({ id: Date.now(), date, timestamp, planner, items });
   }
 
   try {
@@ -629,7 +638,10 @@ function cancelEdit() {
   document.getElementById('formTitle').textContent = '➕ สร้างใบสั่งผลิตใหม่';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('poPlanner').value = '';
-  document.getElementById('poDate').value = isoDate(new Date());
+  var tsDisp = document.getElementById('poTimestampDisplay');
+  if (tsDisp) tsDisp.textContent = 'จะบันทึกอัตโนมัติตอนกด "บันทึก"';
+  var tsInp = document.getElementById('poTimestamp');
+  if (tsInp) tsInp.value = '';
   renderStagedList(); // เคลียร์ staged list
   initSingleRow();    // reset ฟอร์ม
   var saveBtn = document.getElementById('savePOBtn');
@@ -643,7 +655,10 @@ function editPO(id) {
   document.getElementById('formTitle').textContent = '✏️ แก้ไขใบสั่งผลิต';
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
   document.getElementById('poPlanner').value = po.planner||'';
-  document.getElementById('poDate').value = po.date||isoDate(new Date());
+  var tsDisp = document.getElementById('poTimestampDisplay');
+  if (tsDisp) tsDisp.textContent = po.timestamp || po.date || 'ไม่ทราบเวลา';
+  var tsInp = document.getElementById('poTimestamp');
+  if (tsInp) tsInp.value = po.timestamp || '';
   // โหลดรายการเดิมเข้า stagedItems
   stagedItems = (po.items||[]).map(function(it){
     return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
@@ -676,7 +691,7 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var actual = calcActual(it.line, it.partNo, po.date, it.unit);
+      var actual = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit);
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
       if (filterStatus === 'pending' && status !== 'pending') return;
@@ -698,7 +713,7 @@ function renderPOList() {
       : '<span class="tag-pending">⏳ ' + r.pct + '%</span>';
     var canEdit = currentRole === 'admin' || currentRole === 'operator';
     return '<tr>' +
-      '<td style="white-space:nowrap;font-size:11px;">' + esc(r.po.date) + '</td>' +
+      '<td style="white-space:nowrap;font-size:11px;">' + esc(r.po.timestamp || r.po.date) + '</td>' +
       '<td>' + esc(r.it.customer) + '</td>' +
       '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(r.it.partNo) + '</td>' +
       '<td>' + esc(r.it.partName) + '</td>' +
