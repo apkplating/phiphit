@@ -231,7 +231,8 @@ var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,li
 var stagedItems = []; // รายการที่เพิ่มแล้ว รอบันทึก
 var editingId = null;
 var poRowCount = 0;
-var actualOutput = {}; // {partNo: {pcs, kg}} จากทุกสาย
+var actualOutput = {}; // {partNo: {pcs, kg}} — legacy, ไม่ใช้แล้ว
+var allBarrelData = {}; // {line: [{date, partNo, pcs, kg}]} — แยกตามวันเพื่อกรอง PO date
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -323,44 +324,66 @@ async function loadData() {
   renderPOList();
 }
 
+// ── helper: ดึง partNo จาก partName ("M80-164NA CLAMPER..." → "M80-164NA") ──
+function extractPartNo(partName) {
+  return (partName || '').trim().split(' ')[0].toUpperCase();
+}
+
 async function loadActualOutput() {
-  actualOutput = {};
+  allBarrelData = {};
   var pathMap = { B1: '/plating-b1.json', B2: '/plating-b2.json', R1: '/plating-r1.json' };
   for (var line in FB_LINES) {
+    allBarrelData[line] = [];
     try {
       var r = await fetch(FB_LINES[line] + (pathMap[line] || '/plating-b1.json'));
       if (!r.ok) continue;
       var data = await r.json();
       if (!data) continue;
-      // dayRecords — ข้อมูลสะสมทุกวันที่บันทึกแล้ว [{date, rows:[{partName,pcs,kg}]}]
+      // dayRecords: [{date, rows:[{partName,pcs,kg}]}]
       var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
-      // helper: ดึง partNo จาก partName (ส่วนแรกก่อน space เช่น "M80-164NA CLAMPER..." → "M80-164NA")
-      function extractPartNo(partName) {
-        return (partName || '').trim().split(/\s+/)[0].toUpperCase();
-      }
-      function addActual(barrel) {
-        var key = extractPartNo(barrel.partName);
-        if (!key) return;
-        // เก็บทั้งแบบ full name และ partNo เพื่อ match ได้ทั้งสองกรณี
-        if (!actualOutput[key]) actualOutput[key] = {pcs:0, kg:0};
-        actualOutput[key].pcs += Number(barrel.pcs||0);
-        actualOutput[key].kg  += Number(barrel.kg||barrel.kgC||0);
-        // เก็บ full partName ด้วย (กรณีสั่งผลิตระบุชื่อเต็ม)
-        var fullKey = (barrel.partName||'').trim().toUpperCase();
-        if (fullKey && fullKey !== key) {
-          if (!actualOutput[fullKey]) actualOutput[fullKey] = {pcs:0, kg:0};
-          actualOutput[fullKey].pcs += Number(barrel.pcs||0);
-          actualOutput[fullKey].kg  += Number(barrel.kg||barrel.kgC||0);
-        }
-      }
       dayRecords.forEach(function(day) {
-        (day.rows || day.barrels || []).forEach(addActual);
+        (day.rows || day.barrels || []).forEach(function(barrel) {
+          var pno = extractPartNo(barrel.partName);
+          if (!pno) return;
+          allBarrelData[line].push({
+            date:   day.date || '',
+            partNo: pno,
+            pcs:    Number(barrel.pcs||0),
+            kg:     Number(barrel.kg||barrel.kgC||0)
+          });
+        });
       });
-      // todayBarrels — ข้อมูลวันนี้ที่ยังไม่บันทึกรอบ
+      // todayBarrels: วันนี้ที่ยังไม่บันทึก
+      var today = isoDate(new Date());
       var todayBarrels = Array.isArray(data.todayBarrels) ? data.todayBarrels : [];
-      todayBarrels.forEach(addActual);
+      todayBarrels.forEach(function(barrel) {
+        var pno = extractPartNo(barrel.partName);
+        if (!pno) return;
+        allBarrelData[line].push({
+          date:   today,
+          partNo: pno,
+          pcs:    Number(barrel.pcs||0),
+          kg:     Number(barrel.kg||barrel.kgC||0)
+        });
+      });
     } catch(e) {}
   }
+}
+
+// นับยอดจริงตั้งแต่ poDate เป็นต้นไป สำหรับสาย/partNo ที่ระบุ
+function calcActual(line, partNo, poDate, unit) {
+  var lineKey = line === 'ALL' ? null : line;
+  var pno = (partNo || '').toUpperCase();
+  var total = 0;
+  var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
+  linesToCheck.forEach(function(ln) {
+    (allBarrelData[ln] || []).forEach(function(b) {
+      if (b.partNo !== pno) return;
+      if (poDate && b.date && b.date < poDate) return; // กรองเฉพาะตั้งแต่วันสั่งผลิต
+      total += unit === 'kg' ? b.kg : b.pcs;
+    });
+  });
+  return total;
 }
 
 async function savePOToFB() {
@@ -647,10 +670,7 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      // ค้นหายอดจริงแบบ case-insensitive: ลอง partNo ตรงๆ ก่อน แล้วลอง uppercase
-      var _pn = (it.partNo || '').toUpperCase();
-      var ao  = actualOutput[_pn] || actualOutput[it.partNo] || {pcs:0, kg:0};
-      var actual = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var actual = calcActual(it.line, it.partNo, po.date, it.unit);
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
       if (filterStatus === 'pending' && status !== 'pending') return;
