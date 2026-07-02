@@ -376,13 +376,19 @@ function calcActual(line, partNo, poDate, unit) {
   var pno = (partNo || '').toUpperCase();
   var total = 0;
   var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
+  // DEBUG: log once per call
+  console.log('[calcActual] line='+line+' partNo='+pno+' poDate='+poDate+' unit='+unit);
+  console.log('[calcActual] allBarrelData keys:', Object.keys(allBarrelData), 'R1 count:', (allBarrelData['R1']||[]).length);
+  var sample = (allBarrelData['R1']||[]).slice(0,2);
+  if (sample.length) console.log('[calcActual] R1 sample:', JSON.stringify(sample));
   linesToCheck.forEach(function(ln) {
     (allBarrelData[ln] || []).forEach(function(b) {
       if (b.partNo !== pno) return;
-      if (poDate && b.date && b.date < poDate) return; // กรองเฉพาะตั้งแต่วันสั่งผลิต
+      if (poDate && b.date && b.date < poDate) return;
       total += unit === 'kg' ? b.kg : b.pcs;
     });
   });
+  console.log('[calcActual] result:', total);
   return total;
 }
 
