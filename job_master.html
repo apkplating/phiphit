@@ -384,6 +384,15 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="number" id="invLinePrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
       </div>
       <div class="field" style="margin:0;">
+        <label>หน่วยราคา <span style="color:var(--red);">*</span></label>
+        <select id="invLinePriceUnit">
+          <option value="pcs">ชิ้น (Pcs)</option>
+          <option value="kg">กิโลกรัม (Kg)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
         <label>เลขที่ LOT / อ้างอิง</label>
         <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02">
       </div>
@@ -1426,14 +1435,17 @@ function onInvLineJobSelect() {
 
   // auto-fill ราคา/หน่วย + น้ำหนัก — เช็คทะเบียนราคาก่อน ถ้าไม่มีค่อย fallback ไป INV ล่าสุด
   var found = getPriceForPart(job.partName, job.customer);
-  var priceInput  = document.getElementById('invLinePrice');
-  var weightInput = document.getElementById('invLineWeight');
+  var priceInput     = document.getElementById('invLinePrice');
+  var weightInput    = document.getElementById('invLineWeight');
+  var priceUnitInput = document.getElementById('invLinePriceUnit');
+  if (priceUnitInput) priceUnitInput.value = 'pcs'; // ค่าเริ่มต้น ก่อนเช็คทะเบียนราคา
   if (found) {
     var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
     infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+
       (found.weight ? ' · น้ำหนัก '+found.weight.toFixed(2)+' กก.' : '') +
       ' ('+esc(found.source)+')';
     priceInput.value = found.price;
+    if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
     if (found.weight) weightInput.value = found.weight;
   }
   infoEl.innerHTML = infoText;
@@ -1478,7 +1490,7 @@ function getLastPriceForPart(partName, customer) {
     for (var j=0;j<inv.items.length;j++) {
       var it = inv.items[j];
       if (String(it.partName||'').trim().toLowerCase()!==k) continue;
-      var entry = { price: Number(it.price)||0, weight: Number(it.weight)||0, invNo: inv.invNo, date: inv.date };
+      var entry = { price: Number(it.price)||0, weight: Number(it.weight)||0, priceUnit: it.priceUnit||'pcs', invNo: inv.invNo, date: inv.date };
       var itCust = (it.customer||'').trim();
       if (customer && itCust && itCust===customer) return entry; // ตรงลูกค้า — ใช้เลย
       if (!fallback) fallback = entry; // เก็บไว้เผื่อไม่เจอที่ตรงลูกค้า
@@ -1607,22 +1619,27 @@ function renderPriceList() {
 
 // เพิ่มรายการสินค้าลงในบิล INV (draft)
 function addInvLine() {
-  var jobId  = document.getElementById('invLineJobSel').value;
-  var qty    = parseFloat(document.getElementById('invLineQty').value)||0;
-  var weight = parseFloat(document.getElementById('invLineWeight').value)||0;
-  var price  = parseFloat(document.getElementById('invLinePrice').value)||0;
-  var lot    = document.getElementById('invLineLot').value.trim();
+  var jobId     = document.getElementById('invLineJobSel').value;
+  var qty       = parseFloat(document.getElementById('invLineQty').value)||0;
+  var weight    = parseFloat(document.getElementById('invLineWeight').value)||0;
+  var price     = parseFloat(document.getElementById('invLinePrice').value)||0;
+  var priceUnit = (document.getElementById('invLinePriceUnit') && document.getElementById('invLinePriceUnit').value) || 'pcs';
+  var lot       = document.getElementById('invLineLot').value.trim();
 
   if (!jobId) { showToast('invline','กรุณาเลือกบิล/P.No','err'); return; }
   if (!qty)   { showToast('invline','กรุณากรอกจำนวน','err'); return; }
   if (!price) { showToast('invline','กรุณากรอกราคา/หน่วย','err'); return; }
+  if (priceUnit==='kg' && !weight) {
+    showToast('invline','⚠️ ราคาต่อกิโลกรัม ต้องกรอกน้ำหนักรวม (กก.) ด้วย','err'); return;
+  }
 
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { showToast('invline','ไม่พบรายการบิลนี้','err'); return; }
   var isKg = job.unit==='kg';
   var b = calcJob(jobId);
 
-  // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย)
+  // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย) — เทียบตามหน่วยของ "บิลผลิต" (ชิ้น/กก.) เสมอ
+  // ไม่ใช่หน่วยราคา เพราะสต็อกยังนับเป็นชิ้น/กก.ตามที่ผลิตจริง
   var alreadyInDraft = invDraft
     .filter(function(l){ return l.jobId===jobId; })
     .reduce(function(s,l){ return s + l.qty; }, 0);
@@ -1632,16 +1649,22 @@ function addInvLine() {
     return;
   }
 
+  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก ไม่ใช่ตามหน่วยจำนวนเสมอไป
+  // เช่น จำนวน 7,000 ชิ้น แต่ตั้งราคาเป็นบาท/กก. ต้องคูณด้วยน้ำหนักรวม (กก.) ไม่ใช่จำนวนชิ้น
+  var amount = (priceUnit==='kg') ? (weight * price) : (qty * price);
+
   invDraft.push({
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
-    unit: job.unit||'pcs', qty: qty, weight: weight, price: price, lot: lot,
-    amount: qty * price
+    unit: job.unit||'pcs', qty: qty, weight: weight, price: price, priceUnit: priceUnit, lot: lot,
+    amount: amount
   });
 
   // clear inputs + reset search
   ['invLineQty','invLineWeight','invLinePrice','invLineLot'].forEach(function(id){
     document.getElementById(id).value='';
   });
+  var puEl = document.getElementById('invLinePriceUnit');
+  if (puEl) puEl.value = 'pcs';
   var searchEl = document.getElementById('invPartSearch');
   if (searchEl) searchEl.value = '';
   invSelectedPartName = '';
@@ -1673,11 +1696,12 @@ function renderInvLines() {
     tbody.innerHTML = invDraft.map(function(l,idx){
       var qtyStr = l.unit==='kg' ? l.qty.toFixed(2)+' กก.' : l.qty.toLocaleString()+' ชิ้น';
       var wStr   = l.weight ? l.weight.toFixed(2) : '–';
+      var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
       return '<tr>'+
         '<td class="td-l">'+esc(l.partName)+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
         '<td>'+qtyStr+'</td>'+
         '<td>'+wStr+'</td>'+
-        '<td>'+l.price.toFixed(2)+'</td>'+
+        '<td>'+l.price.toFixed(2)+'<span style="font-size:9px;color:var(--text-muted);">'+puTH+'</span></td>'+
         '<td style="font-weight:700;color:var(--blue);">'+l.amount.toFixed(2)+'</td>'+
         '<td><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button></td>'+
       '</tr>';
