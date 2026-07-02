@@ -231,7 +231,7 @@ var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,li
 var stagedItems = []; // รายการที่เพิ่มแล้ว รอบันทึก
 var editingId = null;
 var poRowCount = 0;
-var actualOutput = {}; // {partNo(normalize): [{date,pcs,kg}, ...]} จากทุกสาย — ดูยอดจริงผ่าน sumActualSince()
+var actualOutput = {}; // {partNo: {pcs, kg}} จากทุกสาย
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -324,63 +324,43 @@ async function loadData() {
 }
 
 async function loadActualOutput() {
-  // ต้องมี Part Master ก่อน เพื่อใช้ตัด P/No ออกจาก partName ของ job แต่ละใบ
-  await loadPM();
-  actualOutput = {}; // {partNo(normalize): [{date, pcs, kg}, ...]} — เก็บเป็นรายการ ไม่รวมยอดตรงนี้
+  actualOutput = {};
+  var pathMap = { B1: '/plating-b1.json', B2: '/plating-b2.json', R1: '/plating-r1.json' };
   for (var line in FB_LINES) {
     try {
-      var r = await fetch(FB_LINES[line] + '/job-master.json');
+      var r = await fetch(FB_LINES[line] + (pathMap[line] || '/plating-b1.json'));
       if (!r.ok) continue;
-      var data  = await r.json();
-      var items = Array.isArray(data && data.items)   ? data.items   : [];
-      var recs  = Array.isArray(data && data.records)  ? data.records : [];
-
-      // สร้าง map jobId -> partNo (normalize แล้ว) จาก items ของสายนี้
-      var jobPartNo = {};
-      items.forEach(function(it) {
-        jobPartNo[it.id] = normalizePartKey(partNoFromName(it.partName || ''));
+      var data = await r.json();
+      if (!data) continue;
+      // dayRecords — ข้อมูลสะสมทุกวันที่บันทึกแล้ว [{date, rows:[{partName,pcs,kg}]}]
+      var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+      // helper: ดึง partNo จาก partName (ส่วนแรกก่อน space เช่น "M80-164NA CLAMPER..." → "M80-164NA")
+      function extractPartNo(partName) {
+        return (partName || '').trim().split(/\s+/)[0].toUpperCase();
+      }
+      function addActual(barrel) {
+        var key = extractPartNo(barrel.partName);
+        if (!key) return;
+        // เก็บทั้งแบบ full name และ partNo เพื่อ match ได้ทั้งสองกรณี
+        if (!actualOutput[key]) actualOutput[key] = {pcs:0, kg:0};
+        actualOutput[key].pcs += Number(barrel.pcs||0);
+        actualOutput[key].kg  += Number(barrel.kg||barrel.kgC||0);
+        // เก็บ full partName ด้วย (กรณีสั่งผลิตระบุชื่อเต็ม)
+        var fullKey = (barrel.partName||'').trim().toUpperCase();
+        if (fullKey && fullKey !== key) {
+          if (!actualOutput[fullKey]) actualOutput[fullKey] = {pcs:0, kg:0};
+          actualOutput[fullKey].pcs += Number(barrel.pcs||0);
+          actualOutput[fullKey].kg  += Number(barrel.kg||barrel.kgC||0);
+        }
+      }
+      dayRecords.forEach(function(day) {
+        (day.rows || day.barrels || []).forEach(addActual);
       });
-
-      // เก็บเฉพาะ "จ่ายออก" (type==='out') พร้อมวันที่ ให้ผู้เรียกกรองตามวันที่ใบสั่งผลิตเอง
-      recs.forEach(function(rec) {
-        if (!rec || rec.type !== 'out' || !rec.jobId) return;
-        var pn = jobPartNo[rec.jobId];
-        if (!pn) return;
-        if (!actualOutput[pn]) actualOutput[pn] = [];
-        actualOutput[pn].push({ date: rec.date || '', pcs: Number(rec.qty||0), kg: Number(rec.qtyKg||0) });
-      });
+      // todayBarrels — ข้อมูลวันนี้ที่ยังไม่บันทึกรอบ
+      var todayBarrels = Array.isArray(data.todayBarrels) ? data.todayBarrels : [];
+      todayBarrels.forEach(addActual);
     } catch(e) {}
   }
-}
-
-// รวมยอดผลิตจริงของ partNo หนึ่งๆ เฉพาะรายการที่บันทึกวันที่ >= วันที่สั่งผลิต (poDate)
-// กัน "ยอดผลิตสะสมของ P/No เดิมจากใบสั่งเก่า" ไปนับรวมกับใบสั่งใหม่จนดูเหมือนเสร็จแล้วทันที
-function sumActualSince(partNo, sinceDate) {
-  var list = actualOutput[normalizePartKey(partNo)] || [];
-  var pcs = 0, kg = 0;
-  list.forEach(function(e) {
-    if (sinceDate && e.date && e.date < sinceDate) return; // ก่อนวันที่สั่งผลิต ไม่นับ
-    pcs += e.pcs; kg += e.kg;
-  });
-  return { pcs:pcs, kg:kg };
-}
-
-// ─── ตัด P/No ออกจาก partName เต็ม โดยเทียบกับ Part Master (pmParts) ───
-function normalizePartKey(s) {
-  return (s||'').trim().toLowerCase().replace(/\s+/g,' ');
-}
-function partNoFromName(fullName) {
-  if (!fullName) return '';
-  var n = normalizePartKey(fullName);
-  for (var i = 0; i < pmParts.length; i++) {
-    var pk = normalizePartKey(pmParts[i].partNo);
-    if (pk && (n === pk || n.startsWith(pk + ' ') || n.startsWith(pk))) return pk;
-  }
-  for (var j = 0; j < pmParts.length; j++) {
-    var pk2 = normalizePartKey(pmParts[j].partNo);
-    if (pk2 && n.includes(pk2)) return pk2;
-  }
-  return n;
 }
 
 async function savePOToFB() {
@@ -389,6 +369,8 @@ async function savePOToFB() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(poOrders)
   });
+  // แจ้ง tab อื่น (v4/v5/v6) ให้ refresh PO bar ทันที
+  try { localStorage.setItem('po_updated', Date.now().toString()); } catch(e) {}
 }
 
 // ══════════════════════════════════════════════
@@ -665,7 +647,9 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var ao     = sumActualSince(it.partNo, po.date || '');
+      // ค้นหายอดจริงแบบ case-insensitive: ลอง partNo ตรงๆ ก่อน แล้วลอง uppercase
+      var _pn = (it.partNo || '').toUpperCase();
+      var ao  = actualOutput[_pn] || actualOutput[it.partNo] || {pcs:0, kg:0};
       var actual = (it.unit === 'kg') ? ao.kg : ao.pcs;
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
