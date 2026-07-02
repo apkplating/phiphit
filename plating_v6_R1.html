@@ -8899,7 +8899,8 @@ function _buildItems(orders, actual, lineFilter) {
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
-      var ao   = actual[normalizePartKey(it.partNo)] || {pcs:0, kg:0};
+      var sinceDate = it.poDate || po.date || '';
+      var ao   = _sumActualSince(actual, it.partNo, sinceDate);
       var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
       var pct  = Math.min(100, Math.round(done / it.qty * 100));
       items.push({
@@ -8922,7 +8923,7 @@ async function fetchPOOrders() {
 }
 
 async function fetchActual() {
-  var actual = {};
+  var actual = {}; // partNo(normalized) -> [{date, pcs, kg}, ...]
   try {
     // ⚠️ ต้องใช้ FB_JOB_PATH ตัวเดียวกับที่หน้ารายรอบบันทึกจริง (DB หลัก B1)
     // ไม่ใช่ _poJobPath คนละฐานข้อมูล ซึ่งไม่เคยมีการเขียนข้อมูลเข้าไปเลย
@@ -8938,18 +8939,31 @@ async function fetchActual() {
         jobPartNo[it.id] = normalizePartKey(partNoFromName(it.partName || ''));
       });
 
-      // รวมยอด "จ่ายออก" (type==='out') ต่อ partNo จาก records จริง (qty/qtyKg)
+      // เก็บ "จ่ายออก" (type==='out') แต่ละรายการพร้อมวันที่ ไว้ให้ผู้เรียกกรองตามวันที่ใบสั่งผลิตเอง
+      // (ห้ามรวมยอดทั้งหมดข้ามเวลาที่นี่ — ไม่งั้นยอดผลิตเก่าของ P/No เดิมจากงานคนละใบสั่ง
+      //  จะไปทำให้ใบสั่งผลิตใหม่ดูเหมือนเสร็จแล้วทันที)
       recs.forEach(function(rec) {
         if (!rec || rec.type !== 'out' || !rec.jobId) return;
         var pn = jobPartNo[rec.jobId];
         if (!pn) return;
-        if (!actual[pn]) actual[pn] = {pcs:0, kg:0};
-        actual[pn].pcs += Number(rec.qty||0);
-        actual[pn].kg  += Number(rec.qtyKg||0);
+        if (!actual[pn]) actual[pn] = [];
+        actual[pn].push({ date: rec.date || '', pcs: Number(rec.qty||0), kg: Number(rec.qtyKg||0) });
       });
     }
   } catch(e) {}
   return actual;
+}
+
+// รวมยอดผลิตจริงของ partNo หนึ่งๆ เฉพาะรายการที่บันทึกวันที่ >= วันที่สั่งผลิต (poDate)
+// กัน "ยอดผลิตสะสมของ P/No เดิมจากใบสั่งเก่า" ไปนับรวมกับใบสั่งใหม่จนดูเหมือนเสร็จแล้ว
+function _sumActualSince(actual, partNo, sinceDate) {
+  var list = actual[normalizePartKey(partNo)] || [];
+  var pcs = 0, kg = 0;
+  list.forEach(function(e) {
+    if (sinceDate && e.date && e.date < sinceDate) return; // ก่อนวันที่สั่งผลิต ไม่นับ
+    pcs += e.pcs; kg += e.kg;
+  });
+  return { pcs:pcs, kg:kg };
 }
 
 async function fetchPOStatus(lineFilter) {
@@ -9048,7 +9062,11 @@ async function showPOPopup(lineFilter) {
   // โหลด actual แบบ background แล้วอัปเดต progress bar ใน popup
   fetchActual().then(function(actual) {
     pending.forEach(function(it) {
-      var ao   = actual[normalizePartKey(it.partNo)] || {pcs:0, kg:0};
+      var sinceDate = it.poDate || '';
+      var ao   = _sumActualSince(actual, it.partNo, sinceDate);
+      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var pct  = Math.min(100, Math.round(done / it.qty * 100));
+      var barColor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#d97706' : '#3b82f6';
       var bars = document.querySelectorAll('.po-pbar-' + it.partNo.replace(/[^a-zA-Z0-9]/g,'-'));
       var pcts = document.querySelectorAll('.po-ppct-' + it.partNo.replace(/[^a-zA-Z0-9]/g,'-'));
       bars.forEach(function(b){ b.style.width = pct + '%'; b.style.background = barColor; });
@@ -9108,7 +9126,13 @@ async function updatePOStatusBar(lineFilter) {
   var updEl   = document.getElementById('poStatusUpdated');
   if (!bar || !itemsEl) return;
 
-  var items = await fetchPOStatus(lineFilter);
+  var items;
+  try {
+    items = await fetchPOStatus(lineFilter);
+  } catch(e) {
+    console.warn('updatePOStatusBar error:', e);
+    return; // เกิดข้อผิดพลาด — ไม่แตะสถานะ bar เดิม รอรอบถัดไป (60 วิ) แทน
+  }
   var pending = items.filter(function(it){ return !it.complete; });
 
   if (!pending.length) {

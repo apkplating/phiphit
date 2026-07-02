@@ -231,7 +231,7 @@ var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,li
 var stagedItems = []; // รายการที่เพิ่มแล้ว รอบันทึก
 var editingId = null;
 var poRowCount = 0;
-var actualOutput = {}; // {partNo: {pcs, kg}} จากทุกสาย
+var actualOutput = {}; // {partNo(normalize): [{date,pcs,kg}, ...]} จากทุกสาย — ดูยอดจริงผ่าน sumActualSince()
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -324,22 +324,63 @@ async function loadData() {
 }
 
 async function loadActualOutput() {
-  actualOutput = {};
+  // ต้องมี Part Master ก่อน เพื่อใช้ตัด P/No ออกจาก partName ของ job แต่ละใบ
+  await loadPM();
+  actualOutput = {}; // {partNo(normalize): [{date, pcs, kg}, ...]} — เก็บเป็นรายการ ไม่รวมยอดตรงนี้
   for (var line in FB_LINES) {
     try {
       var r = await fetch(FB_LINES[line] + '/job-master.json');
       if (!r.ok) continue;
-      var data = await r.json();
-      var records = Array.isArray(data && data.records) ? data.records : [];
-      records.forEach(function(rec) {
-        if (!rec || !rec.partNo) return;
-        var key = rec.partNo;
-        if (!actualOutput[key]) actualOutput[key] = {pcs:0, kg:0};
-        actualOutput[key].pcs += Number(rec.pcs||0);
-        actualOutput[key].kg  += Number(rec.kg||rec.kgC||rec.totalKg||0);
+      var data  = await r.json();
+      var items = Array.isArray(data && data.items)   ? data.items   : [];
+      var recs  = Array.isArray(data && data.records)  ? data.records : [];
+
+      // สร้าง map jobId -> partNo (normalize แล้ว) จาก items ของสายนี้
+      var jobPartNo = {};
+      items.forEach(function(it) {
+        jobPartNo[it.id] = normalizePartKey(partNoFromName(it.partName || ''));
+      });
+
+      // เก็บเฉพาะ "จ่ายออก" (type==='out') พร้อมวันที่ ให้ผู้เรียกกรองตามวันที่ใบสั่งผลิตเอง
+      recs.forEach(function(rec) {
+        if (!rec || rec.type !== 'out' || !rec.jobId) return;
+        var pn = jobPartNo[rec.jobId];
+        if (!pn) return;
+        if (!actualOutput[pn]) actualOutput[pn] = [];
+        actualOutput[pn].push({ date: rec.date || '', pcs: Number(rec.qty||0), kg: Number(rec.qtyKg||0) });
       });
     } catch(e) {}
   }
+}
+
+// รวมยอดผลิตจริงของ partNo หนึ่งๆ เฉพาะรายการที่บันทึกวันที่ >= วันที่สั่งผลิต (poDate)
+// กัน "ยอดผลิตสะสมของ P/No เดิมจากใบสั่งเก่า" ไปนับรวมกับใบสั่งใหม่จนดูเหมือนเสร็จแล้วทันที
+function sumActualSince(partNo, sinceDate) {
+  var list = actualOutput[normalizePartKey(partNo)] || [];
+  var pcs = 0, kg = 0;
+  list.forEach(function(e) {
+    if (sinceDate && e.date && e.date < sinceDate) return; // ก่อนวันที่สั่งผลิต ไม่นับ
+    pcs += e.pcs; kg += e.kg;
+  });
+  return { pcs:pcs, kg:kg };
+}
+
+// ─── ตัด P/No ออกจาก partName เต็ม โดยเทียบกับ Part Master (pmParts) ───
+function normalizePartKey(s) {
+  return (s||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function partNoFromName(fullName) {
+  if (!fullName) return '';
+  var n = normalizePartKey(fullName);
+  for (var i = 0; i < pmParts.length; i++) {
+    var pk = normalizePartKey(pmParts[i].partNo);
+    if (pk && (n === pk || n.startsWith(pk + ' ') || n.startsWith(pk))) return pk;
+  }
+  for (var j = 0; j < pmParts.length; j++) {
+    var pk2 = normalizePartKey(pmParts[j].partNo);
+    if (pk2 && n.includes(pk2)) return pk2;
+  }
+  return n;
 }
 
 async function savePOToFB() {
@@ -624,7 +665,7 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var ao     = actualOutput[it.partNo] || {pcs:0, kg:0};
+      var ao     = sumActualSince(it.partNo, po.date || '');
       var actual = (it.unit === 'kg') ? ao.kg : ao.pcs;
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
