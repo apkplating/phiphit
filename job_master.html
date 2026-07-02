@@ -1411,13 +1411,15 @@ function renderInvLineSelect() {
       var b = calcJob(j.id);
       return j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
     });
-    if (!stillExists) {
-      sel.value = '';
-      sel.size = 1;
-      document.getElementById('invLineRemainInfo').style.display = 'none';
+    if (stillExists) {
+      // เลือกบิลไปแล้วและยังใช้ได้อยู่ — ไม่ต้องรีเซ็ต/เปิดลิสต์ใหม่ (เลือกครั้งเดียวพอ)
+      return;
     }
+    sel.value = '';
+    sel.size = 1;
+    document.getElementById('invLineRemainInfo').style.display = 'none';
   }
-  // re-run ถ้ามี P/No เลือกอยู่
+  // ยังไม่ได้เลือกบิล — ถ้ามี P/No เลือกไว้แล้ว ให้ขึ้นลิสต์บิลให้เลือก
   if (invSelectedPartName) {
     var pmMatch = pmParts.find(function(p){
       return normalizePartKey(p.partNo||p.name||'') === normalizePartKey(invSelectedPartName);
@@ -1506,6 +1508,8 @@ function onInvLineQtyOrWeightChange() {
   var price     = parseFloat(document.getElementById('invLinePrice').value) || 0;
   var priceUnitEl = document.getElementById('invLinePriceUnit');
   var priceUnit = priceUnitEl ? priceUnitEl.value : 'pcs';
+  var jobSelEl  = document.getElementById('invLineJobSel');
+  var jobId     = jobSelEl ? jobSelEl.value : '';
 
   var totalKg  = qtyUnit === 'kg' ? qty : (qty * wPerUnit);
   var totalPcs = qtyUnit === 'pcs' ? qty : (wPerUnit > 0 ? Math.round(qty / wPerUnit) : 0);
@@ -1516,9 +1520,15 @@ function onInvLineQtyOrWeightChange() {
   var amount = priceUnit === 'kg' ? (totalKg * price) : (totalPcs * price);
   var prevEl = document.getElementById('invLineAmountPreview');
   if (prevEl) {
-    if (qty && price) {
+    if (!jobId && (qty || price) && jobSelEl) {
+      // ยังไม่ได้คลิกเลือกบิลจากลิสต์ ② ด้านบน — กดเพิ่มลงในบิล INV ตอนนี้จะไม่สำเร็จ
+      prevEl.innerHTML = '⚠️ กรุณาคลิกเลือก <b>"② เลือกบิล"</b> ด้านบนก่อน ระบบยังไม่ได้ผูกรายการนี้กับบิลไหน';
+      prevEl.style.color = 'var(--red)';
+      prevEl.style.display = 'block';
+    } else if (qty && price) {
       prevEl.innerHTML = '💰 จำนวนเงินโดยประมาณ: <b>' +
         amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</b> บาท';
+      prevEl.style.color = 'var(--green)';
       prevEl.style.display = 'block';
     } else {
       prevEl.style.display = 'none';
