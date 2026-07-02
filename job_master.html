@@ -370,27 +370,41 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div id="invLineRemainInfo" style="display:none;font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label id="invLineQtyLabel">จำนวน (ชิ้น) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="invLineQty" placeholder="0" min="0" step="1" inputmode="numeric">
+        <label id="invLineQtyLabel">จำนวน <span style="color:var(--red);">*</span></label>
+        <input type="number" id="invLineQty" placeholder="0" min="0" step="1" inputmode="numeric" oninput="onInvLineQtyOrWeightChange()">
       </div>
       <div class="field" style="margin:0;">
-        <label>น้ำหนัก/หน่วย (กก.) <span style="color:var(--text-muted);">(ไม่บังคับ)</span></label>
-        <input type="number" id="invLineWeight" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
-      </div>
-    </div>
-    <div class="grid2">
-      <div class="field" style="margin:0;">
-        <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="invLinePrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>หน่วยราคา <span style="color:var(--red);">*</span></label>
-        <select id="invLinePriceUnit">
+        <label>หน่วยจำนวน <span style="color:var(--red);">*</span></label>
+        <select id="invLineQtyUnit" onchange="onInvLineQtyUnitChange()">
           <option value="pcs">ชิ้น (Pcs)</option>
           <option value="kg">กิโลกรัม (Kg)</option>
         </select>
       </div>
     </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/หน่วย (กก. ต่อ 1 ชิ้น) <span style="font-size:10px;color:var(--text-muted);">(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)</span> <span id="invLineWeightAutoBadge" style="font-size:10px;color:var(--green);"></span></label>
+        <input type="number" id="invLineWeight" placeholder="0.00" min="0" step="0.0001" inputmode="decimal" oninput="onInvLineQtyOrWeightChange()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนักรวม (กก.) <span style="font-size:10px;color:var(--text-muted);">(คำนวณอัตโนมัติ)</span></label>
+        <input type="text" id="invLineTotalWeight" placeholder="0.00" readonly style="background:#f8fafc;color:var(--text-mid);">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
+        <input type="number" id="invLinePrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal" oninput="onInvLineQtyOrWeightChange()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หน่วยราคา <span style="color:var(--red);">*</span></label>
+        <select id="invLinePriceUnit" onchange="onInvLineQtyOrWeightChange()">
+          <option value="pcs">ชิ้น (Pcs)</option>
+          <option value="kg">กิโลกรัม (Kg)</option>
+        </select>
+      </div>
+    </div>
+    <div id="invLineAmountPreview" style="display:none;font-size:12px;color:var(--green);font-weight:600;margin:-4px 0 10px;"></div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>เลขที่ LOT / อ้างอิง</label>
@@ -1415,8 +1429,8 @@ function renderInvLineSelect() {
 function onInvLineJobSelect() {
   var jobId = document.getElementById('invLineJobSel').value;
   var infoEl = document.getElementById('invLineRemainInfo');
-  var qtyLabel = document.getElementById('invLineQtyLabel');
   var qtyInput = document.getElementById('invLineQty');
+  var qtyUnitSel = document.getElementById('invLineQtyUnit');
   if (!jobId) { infoEl.style.display='none'; return; }
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { infoEl.style.display='none'; return; }
@@ -1426,30 +1440,91 @@ function onInvLineJobSelect() {
   var isKg = job.unit==='kg';
   var rem = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
   var infoText = '📦 ' + job.partName + ' · ลูกค้า: ' + (job.customer||'–') + ' · คงเหลือ: ' + rem;
-  qtyLabel.innerHTML = (isKg ? 'น้ำหนัก (กก.)' : 'จำนวน (ชิ้น)') + ' <span style="color:var(--red);">*</span>';
+
+  // ตั้งหน่วยจำนวนเริ่มต้น = หน่วยของบิลรับเข้า (เปลี่ยนเป็นชิ้น/กก. เองได้ภายหลัง)
+  if (qtyUnitSel) qtyUnitSel.value = isKg ? 'kg' : 'pcs';
   qtyInput.step = isKg ? '0.01' : '1';
   qtyInput.placeholder = isKg ? '0.00' : '0';
+
   // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
   var custEl = document.getElementById('invCustomer');
   if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
 
-  // auto-fill ราคา/หน่วย + น้ำหนัก — เช็คทะเบียนราคาก่อน ถ้าไม่มีค่อย fallback ไป INV ล่าสุด
+  // auto-fill ราคา/หน่วย + น้ำหนัก/หน่วย — เช็คทะเบียนราคาก่อน ถ้าไม่มีค่อย fallback ไป INV ล่าสุด แล้วจึงดึงจาก Part Master
   var found = getPriceForPart(job.partName, job.customer);
   var priceInput     = document.getElementById('invLinePrice');
   var weightInput    = document.getElementById('invLineWeight');
   var priceUnitInput = document.getElementById('invLinePriceUnit');
+  var badgeEl         = document.getElementById('invLineWeightAutoBadge');
   if (priceUnitInput) priceUnitInput.value = 'pcs'; // ค่าเริ่มต้น ก่อนเช็คทะเบียนราคา
+  weightInput.value = '';
+  if (badgeEl) badgeEl.textContent = '';
+
   if (found) {
     var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
     infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+
-      (found.weight ? ' · น้ำหนัก '+found.weight.toFixed(2)+' กก.' : '') +
+      (found.weight ? ' · น้ำหนัก/หน่วย '+found.weight.toFixed(3)+' กก.' : '') +
       ' ('+esc(found.source)+')';
     priceInput.value = found.price;
     if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
-    if (found.weight) weightInput.value = found.weight;
+    if (found.weight) { weightInput.value = found.weight; if (badgeEl) badgeEl.textContent = '✓ จากทะเบียนราคา'; }
   }
+
+  // ถ้ายังไม่มีน้ำหนัก/หน่วย → ดึงจาก Part Master (weightPerPc หน่วยกรัม → แปลงเป็น กก.)
+  if (!weightInput.value) {
+    var pmPart = pmLookup(job.partName);
+    var pmKg = (pmPart && pmPart.weightPerPc) ? (Number(pmPart.weightPerPc)/1000) : 0;
+    if (pmKg > 0) {
+      weightInput.value = pmKg.toFixed(4);
+      if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
+    }
+  }
+
   infoEl.innerHTML = infoText;
   infoEl.style.display = 'block';
+  onInvLineQtyOrWeightChange();
+}
+
+// เปลี่ยนหน่วยจำนวน (ชิ้น/กก.) — ปรับ step/placeholder แล้วคำนวณใหม่
+function onInvLineQtyUnitChange() {
+  var qtyUnitSel = document.getElementById('invLineQtyUnit');
+  var qtyInput = document.getElementById('invLineQty');
+  var isKg = qtyUnitSel && qtyUnitSel.value === 'kg';
+  qtyInput.step = isKg ? '0.01' : '1';
+  qtyInput.placeholder = isKg ? '0.00' : '0';
+  onInvLineQtyOrWeightChange();
+}
+
+// คำนวณน้ำหนักรวม + จำนวนเงินโดยประมาณ แบบเรียลไทม์ ทุกครั้งที่จำนวน/หน่วยจำนวน/น้ำหนักต่อหน่วย/ราคา เปลี่ยน
+// - ถ้าใส่จำนวนเป็น "กก." → น้ำหนักรวม = จำนวนที่ใส่ตรงๆ
+// - ถ้าใส่จำนวนเป็น "ชิ้น" → น้ำหนักรวม = จำนวน (ชิ้น) × น้ำหนัก/หน่วย (กก.) ที่ได้จาก PM หรือทะเบียนราคา
+function onInvLineQtyOrWeightChange() {
+  var qty       = parseFloat(document.getElementById('invLineQty').value) || 0;
+  var qtyUnitEl = document.getElementById('invLineQtyUnit');
+  var qtyUnit   = qtyUnitEl ? qtyUnitEl.value : 'pcs';
+  var wPerUnit  = parseFloat(document.getElementById('invLineWeight').value) || 0;
+  var price     = parseFloat(document.getElementById('invLinePrice').value) || 0;
+  var priceUnitEl = document.getElementById('invLinePriceUnit');
+  var priceUnit = priceUnitEl ? priceUnitEl.value : 'pcs';
+
+  var totalKg  = qtyUnit === 'kg' ? qty : (qty * wPerUnit);
+  var totalPcs = qtyUnit === 'pcs' ? qty : (wPerUnit > 0 ? Math.round(qty / wPerUnit) : 0);
+
+  var totalWeightInput = document.getElementById('invLineTotalWeight');
+  if (totalWeightInput) totalWeightInput.value = totalKg ? totalKg.toFixed(3) : '';
+
+  var amount = priceUnit === 'kg' ? (totalKg * price) : (totalPcs * price);
+  var prevEl = document.getElementById('invLineAmountPreview');
+  if (prevEl) {
+    if (qty && price) {
+      prevEl.innerHTML = '💰 จำนวนเงินโดยประมาณ: <b>' +
+        amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</b> บาท';
+      prevEl.style.display = 'block';
+    } else {
+      prevEl.style.display = 'none';
+    }
+  }
+  return { totalKg: totalKg, totalPcs: totalPcs, amount: amount };
 }
 
 // หาราคา/น้ำหนัก: 1) ทะเบียนราคา (ตรง P/No+ลูกค้า) 2) ทะเบียนราคา (P/No ทุกลูกค้า)
@@ -1621,7 +1696,9 @@ function renderPriceList() {
 function addInvLine() {
   var jobId     = document.getElementById('invLineJobSel').value;
   var qty       = parseFloat(document.getElementById('invLineQty').value)||0;
-  var weight    = parseFloat(document.getElementById('invLineWeight').value)||0;
+  var qtyUnitEl = document.getElementById('invLineQtyUnit');
+  var qtyUnit   = qtyUnitEl ? qtyUnitEl.value : 'pcs';
+  var wPerUnit  = parseFloat(document.getElementById('invLineWeight').value)||0;
   var price     = parseFloat(document.getElementById('invLinePrice').value)||0;
   var priceUnit = (document.getElementById('invLinePriceUnit') && document.getElementById('invLinePriceUnit').value) || 'pcs';
   var lot       = document.getElementById('invLineLot').value.trim();
@@ -1629,33 +1706,51 @@ function addInvLine() {
   if (!jobId) { showToast('invline','กรุณาเลือกบิล/P.No','err'); return; }
   if (!qty)   { showToast('invline','กรุณากรอกจำนวน','err'); return; }
   if (!price) { showToast('invline','กรุณากรอกราคา/หน่วย','err'); return; }
-  if (priceUnit==='kg' && !weight) {
-    showToast('invline','⚠️ ราคาต่อกิโลกรัม ต้องกรอกน้ำหนักรวม (กก.) ด้วย','err'); return;
-  }
 
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { showToast('invline','ไม่พบรายการบิลนี้','err'); return; }
   var isKg = job.unit==='kg';
   var b = calcJob(jobId);
 
+  // แปลงจำนวนที่กรอก → น้ำหนักรวม (กก.) และ จำนวนชิ้นรวม โดยใช้ "น้ำหนัก/หน่วย" (จาก PM/ทะเบียนราคา)
+  var totalKg  = qtyUnit === 'kg' ? qty : (qty * wPerUnit);
+  var totalPcs = qtyUnit === 'pcs' ? qty : (wPerUnit > 0 ? Math.round(qty / wPerUnit) : 0);
+
+  // ต้องรู้ "น้ำหนัก/หน่วย" เมื่อต้องแปลงหน่วยข้ามกัน (จำนวนที่กรอก ไม่ตรงกับหน่วยบิลรับเข้า หรือ ไม่ตรงกับหน่วยราคา)
+  if (qtyUnit !== (isKg?'kg':'pcs') && !wPerUnit) {
+    showToast('invline','⚠️ กรุณากรอก "น้ำหนัก/หน่วย" ก่อน เพื่อแปลงจำนวนให้ตรงกับบิลรับเข้า ('+(isKg?'กก.':'ชิ้น')+')','err');
+    return;
+  }
+  if (priceUnit==='kg' && !totalKg) {
+    showToast('invline','⚠️ ราคาต่อกิโลกรัม ต้องทราบน้ำหนักรวม — กรุณากรอก "น้ำหนัก/หน่วย" (ระบบจะดึงจาก Part Master ให้อัตโนมัติถ้ามีข้อมูล)','err');
+    return;
+  }
+  if (priceUnit==='pcs' && qtyUnit==='kg' && !totalPcs) {
+    showToast('invline','⚠️ ราคาต่อชิ้น ต้องทราบ "น้ำหนัก/หน่วย" เพื่อแปลงจาก กก. เป็นจำนวนชิ้น','err');
+    return;
+  }
+
+  // จำนวนที่ใช้ตัดสต็อก ต้องอยู่ในหน่วยเดียวกับบิลรับเข้า (job.unit) เสมอ
+  var stockQty = isKg ? totalKg : totalPcs;
+
   // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย) — เทียบตามหน่วยของ "บิลผลิต" (ชิ้น/กก.) เสมอ
-  // ไม่ใช่หน่วยราคา เพราะสต็อกยังนับเป็นชิ้น/กก.ตามที่ผลิตจริง
   var alreadyInDraft = invDraft
     .filter(function(l){ return l.jobId===jobId; })
     .reduce(function(s,l){ return s + l.qty; }, 0);
   var remain = isKg ? b.remainKg : b.remain;
-  if (qty + alreadyInDraft > remain) {
+  if (stockQty + alreadyInDraft > remain + 0.0001) {
     showToast('invline','⚠️ เกินคงเหลือ ('+(remain-alreadyInDraft)+(isKg?' กก.':' ชิ้น')+')','err');
     return;
   }
 
-  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก ไม่ใช่ตามหน่วยจำนวนเสมอไป
-  // เช่น จำนวน 7,000 ชิ้น แต่ตั้งราคาเป็นบาท/กก. ต้องคูณด้วยน้ำหนักรวม (กก.) ไม่ใช่จำนวนชิ้น
-  var amount = (priceUnit==='kg') ? (weight * price) : (qty * price);
+  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ
+  var amount = (priceUnit==='kg') ? (totalKg * price) : (totalPcs * price);
 
   invDraft.push({
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
-    unit: job.unit||'pcs', qty: qty, weight: weight, price: price, priceUnit: priceUnit, lot: lot,
+    unit: job.unit||'pcs', qty: stockQty,
+    qtyEntered: qty, qtyUnit: qtyUnit, weightPerUnit: wPerUnit,
+    weight: parseFloat(totalKg.toFixed(3)), price: price, priceUnit: priceUnit, lot: lot,
     amount: amount
   });
 
@@ -1665,6 +1760,12 @@ function addInvLine() {
   });
   var puEl = document.getElementById('invLinePriceUnit');
   if (puEl) puEl.value = 'pcs';
+  var totalWEl = document.getElementById('invLineTotalWeight');
+  if (totalWEl) totalWEl.value = '';
+  var prevEl = document.getElementById('invLineAmountPreview');
+  if (prevEl) prevEl.style.display = 'none';
+  var badgeEl = document.getElementById('invLineWeightAutoBadge');
+  if (badgeEl) badgeEl.textContent = '';
   var searchEl = document.getElementById('invPartSearch');
   if (searchEl) searchEl.value = '';
   invSelectedPartName = '';
@@ -1694,8 +1795,10 @@ function renderInvLines() {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีรายการ — เพิ่มจากด้านบน</td></tr>';
   } else {
     tbody.innerHTML = invDraft.map(function(l,idx){
-      var qtyStr = l.unit==='kg' ? l.qty.toFixed(2)+' กก.' : l.qty.toLocaleString()+' ชิ้น';
-      var wStr   = l.weight ? l.weight.toFixed(2) : '–';
+      var qU = l.qtyUnit || l.unit || 'pcs';
+      var qVal = (l.qtyEntered!=null) ? l.qtyEntered : l.qty;
+      var qtyStr = (qU==='kg' ? Number(qVal).toFixed(2) : Number(qVal).toLocaleString()) + (qU==='kg'?' กก.':' ชิ้น');
+      var wStr   = l.weight ? Number(l.weight).toFixed(2)+' กก.' : '–';
       var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
       return '<tr>'+
         '<td class="td-l">'+esc(l.partName)+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
