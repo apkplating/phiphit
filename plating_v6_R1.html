@@ -8893,15 +8893,31 @@ var _poActualCache = null;
 var _poCacheTime   = 0;
 var PO_CACHE_TTL   = 30000; // 30 วิ
 
-function _buildItems(orders, actual, lineFilter) {
+function _buildItems(orders, liveRows, lineFilter) {
   var items = [];
   orders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
-      var ao   = actual[it.partNo] || {pcs:0, kg:0};
-      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
-      var pct  = Math.min(100, Math.round(done / it.qty * 100));
+      var pno = (it.partNo||'').toUpperCase();
+      var poTs = po.timestamp || (po.date ? po.date + ' 00:00' : '');
+      // นับ barrel ที่ datetime >= po.timestamp เท่านั้น
+      var totalPcs = 0, totalKg = 0;
+      liveRows.forEach(function(b) {
+        if (b.partNo !== pno) return;
+        var bDt = (b.date||'') + ' ' + (b.time||'00:00');
+        if (poTs && bDt < poTs) return;
+        totalPcs += Number(b.pcs||0);
+        totalKg  += Number(b.kg||0);
+      });
+      // auto-select: PO สั่งชิ้นแต่ barrel มีแค่ kg → ใช้ kg แทน (และกลับกัน)
+      var done;
+      if (it.unit === 'kg') {
+        done = totalKg > 0 ? totalKg : totalPcs;
+      } else {
+        done = totalPcs > 0 ? totalPcs : totalKg;
+      }
+      var pct = Math.min(100, Math.round(done / it.qty * 100));
       items.push({
         poDate:it.poDate||po.date, customer:it.customer, partNo:it.partNo,
         partName:it.partName, qty:it.qty, unit:it.unit||'pcs',
@@ -8922,28 +8938,54 @@ async function fetchPOOrders() {
 }
 
 async function fetchActual() {
-  var actual = {};
+  var liveRows = [];
+  var today = new Date();
+  var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  var seenIds = {};
+
   try {
-    // ดึงจาก live.json (real-time รายรอบวันนี้)
-    var rj = await fetch('https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app/live.json');
-    if (rj.ok) {
-      var live = await rj.json();
+    // ── 1. live.json: real-time ระหว่างกะ ──
+    var rLive = await fetch('https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app/live.json');
+    if (rLive.ok) {
+      var live = await rLive.json();
       if (live) {
+        var liveDate = (live.date||'').slice(0,10);
         var rows = Array.isArray(live.rows) ? live.rows :
                    (live.rows && typeof live.rows === 'object' ? Object.values(live.rows) : []);
-        rows.forEach(function(barrel) {
-          if (!barrel || !barrel.partName) return;
-          // ดึง partNo จาก partName (ส่วนแรกก่อน space)
-          var pno = (barrel.partName || '').trim().split(' ')[0].toUpperCase();
-          if (!pno) return;
-          if (!actual[pno]) actual[pno] = {pcs:0, kg:0};
-          actual[pno].pcs += Number(barrel.pcs||0);
-          actual[pno].kg  += Number(barrel.kg||barrel.kgC||0);
+        if (liveDate === todayStr) {
+          rows.forEach(function(b) {
+            var pno = (b.partName||'').trim().split(' ')[0].toUpperCase();
+            if (!pno) return;
+            if (b.id) seenIds[b.id] = true;
+            liveRows.push({ partNo:pno, time:b.time||'00:00', date:liveDate, pcs:Number(b.pcs||0), kg:Number(b.kg||b.kgC||0) });
+          });
+        }
+      }
+    }
+  } catch(e) {}
+
+  try {
+    // ── 2. dayRecords: กะที่กดบันทึกแล้ว (วันนี้และย้อนหลัง) ──
+    var rDay = await fetch('https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app/plating-r1.json');
+    if (rDay.ok) {
+      var data = await rDay.json();
+      if (data) {
+        var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+        dayRecords.forEach(function(day) {
+          if (!day || !day.date) return;
+          (day.rows || day.barrels || []).forEach(function(barrel) {
+            var pno = (barrel.partName||'').trim().split(' ')[0].toUpperCase();
+            if (!pno) return;
+            // ข้าม barrel ที่อยู่ใน live แล้ว (ป้องกันนับซ้ำ)
+            if (barrel.id && seenIds[barrel.id]) return;
+            liveRows.push({ partNo:pno, time:barrel.time||'00:00', date:day.date, pcs:Number(barrel.pcs||0), kg:Number(barrel.kg||barrel.kgC||0) });
+          });
         });
       }
     }
   } catch(e) {}
-  return actual;
+
+  return liveRows;
 }
 
 async function fetchPOStatus(lineFilter) {
