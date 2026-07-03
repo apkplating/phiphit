@@ -333,34 +333,66 @@ function extractPartNo(partName) {
 async function loadActualOutput() {
   allBarrelData = {};
   var pathMap = { B1: '/plating-b1.json', B2: '/plating-b2.json', R1: '/plating-r1.json' };
+  var today = isoDate(new Date());
 
   for (var line in FB_LINES) {
     allBarrelData[line] = [];
     try {
-      var r = await fetch(FB_LINES[line] + (pathMap[line] || '/plating-b1.json'));
-      if (!r.ok) continue;
-      var data = await r.json();
-      if (!data) continue;
+      // ── 1. live.json: real-time ระหว่างกะที่กำลังทำงาน ──
+      var hasLiveToday = false;
+      var rLive = await fetch(FB_LINES[line] + '/live.json');
+      if (rLive.ok) {
+        var live = await rLive.json();
+        if (live) {
+          var liveDate = (live.date || '').slice(0, 10);
+          var liveRows = Array.isArray(live.rows) ? live.rows :
+                         (live.rows && typeof live.rows === 'object' ? Object.values(live.rows) : []);
+          if (liveDate === today && liveRows.length) {
+            hasLiveToday = true;
+            liveRows.forEach(function(barrel) {
+              var pno = extractPartNo(barrel.partName);
+              if (!pno) return;
+              allBarrelData[line].push({
+                date:    liveDate,
+                time:    barrel.time || '00:00',
+                shiftId: 'live_' + liveDate,
+                partNo:  pno,
+                pcs:     Number(barrel.pcs||0),
+                kg:      Number(barrel.kg||barrel.kgC||0)
+              });
+            });
+          }
+        }
+      }
 
-      // ดึงเฉพาะ dayRecords (สรุปหลังกดบันทึกแต่ละกะ)
-      var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
-      dayRecords.forEach(function(day, dayIdx) {
-        if (!day || !day.date) return;
-        // shiftId = id ของ dayRecord หรือ date+index (แยกแต่ละกดบันทึก)
-        var shiftId = String(day.id || (day.date + '_' + dayIdx));
-        (day.rows || day.barrels || []).forEach(function(barrel) {
-          var pno = extractPartNo(barrel.partName);
-          if (!pno) return;
-          allBarrelData[line].push({
-            date:    day.date,
-            time:    barrel.time || '00:00',
-            shiftId: shiftId,
-            partNo:  pno,
-            pcs:     Number(barrel.pcs||0),
-            kg:      Number(barrel.kg||barrel.kgC||0)
+      // ── 2. dayRecords: กะที่กดบันทึกแล้ว ──
+      // วันก่อนหน้า: นับเสมอ (PO ข้ามวัน)
+      // วันนี้: นับเมื่อ live ว่าง (= กดบันทึกสรุปวันนี้แล้ว live clear)
+      var rDay = await fetch(FB_LINES[line] + (pathMap[line] || '/plating-b1.json'));
+      if (rDay.ok) {
+        var data = await rDay.json();
+        if (data) {
+          var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+          dayRecords.forEach(function(day, dayIdx) {
+            if (!day || !day.date) return;
+            // ถ้า live วันนี้มีข้อมูล → ข้าม dayRecord วันนี้ (ป้องกันนับซ้ำ)
+            if (day.date === today && hasLiveToday) return;
+            var shiftId = String(day.id || (day.date + '_' + dayIdx));
+            (day.rows || day.barrels || []).forEach(function(barrel) {
+              var pno = extractPartNo(barrel.partName);
+              if (!pno) return;
+              allBarrelData[line].push({
+                date:    day.date,
+                time:    barrel.time || '00:00',
+                shiftId: shiftId,
+                partNo:  pno,
+                pcs:     Number(barrel.pcs||0),
+                kg:      Number(barrel.kg||barrel.kgC||0)
+              });
+            });
           });
-        });
-      });
+        }
+      }
     } catch(e) {}
   }
 }
@@ -368,48 +400,49 @@ async function loadActualOutput() {
 
 // นับยอดจริงตั้งแต่ poDate เป็นต้นไป สำหรับสาย/partNo ที่ระบุ
 function calcActual(line, partNo, poTimestamp, unit, maxQty) {
-  // poTimestamp = "YYYY-MM-DD HH:MM" — ใช้แค่วันที่เปรียบเทียบ
-  var poDate = poTimestamp ? poTimestamp.slice(0, 10) : '';
+  // poTimestamp = "YYYY-MM-DD HH:MM"
+  // นับ barrel ที่ date+time >= poTimestamp เท่านั้น
   var lineKey = line === 'ALL' ? null : line;
   var pno = (partNo || '').toUpperCase();
-  var cap = maxQty > 0 ? maxQty : Infinity;
   var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
 
-  // รวม barrel ที่ตรง partNo และวันที่ >= poDate
+  // รวม barrel ที่ตรง partNo และ datetime >= poTimestamp
   var relevant = [];
   linesToCheck.forEach(function(ln) {
     (allBarrelData[ln] || []).forEach(function(b) {
       if (b.partNo !== pno) return;
-      if (poDate && b.date && b.date < poDate) return;
+      if (poTimestamp) {
+        var bDatetime = (b.date || '') + ' ' + (b.time || '00:00');
+        if (bDatetime < poTimestamp) return; // ก่อน PO timestamp → ไม่นับ
+      }
       relevant.push(b);
     });
   });
   if (!relevant.length) return 0;
 
-  // จัดกลุ่มตาม shiftId (แต่ละ dayRecord = 1 กะ = 1 กลุ่ม)
-  // รักษาลำดับเวลา: เรียง shiftId ตาม date+time ของ barrel แรกในกลุ่ม
+  // จัดกลุ่มตาม shiftId (แต่ละกดบันทึก = 1 กะ)
   var groupMap = {};
   var groupOrder = [];
   relevant.forEach(function(b) {
     var gk = b.shiftId || b.date || 'unknown';
     if (!groupMap[gk]) {
-      groupMap[gk] = { key: gk, firstDatetime: (b.date||'') + ' ' + (b.time||'00:00'), total: 0 };
+      groupMap[gk] = { firstDatetime: (b.date||'') + ' ' + (b.time||'00:00'), total: 0 };
       groupOrder.push(gk);
     }
     groupMap[gk].total += unit === 'kg' ? b.kg : b.pcs;
   });
 
-  // เรียงกลุ่มตาม firstDatetime (เก่า→ใหม่)
+  // เรียงตามเวลา (เก่า→ใหม่)
   groupOrder.sort(function(a, b) {
     return groupMap[a].firstDatetime < groupMap[b].firstDatetime ? -1 : 1;
   });
 
-  // นับสะสมทีละกะ — หยุดเมื่อกะใดทำให้รวม >= qty
+  // นับสะสมทีละกะ — หยุดเมื่อกะใดทำให้รวม >= qty (ไม่นับกะถัดไป)
+  var cap = maxQty > 0 ? maxQty : Infinity;
   var total = 0;
   for (var i = 0; i < groupOrder.length; i++) {
-    var grpTotal = groupMap[groupOrder[i]].total;
-    total += grpTotal;
-    if (total >= cap) break; // ครบในกะนี้ → หยุด ไม่นับกะถัดไป
+    total += groupMap[groupOrder[i]].total;
+    if (total >= cap) break;
   }
   return total;
 }
