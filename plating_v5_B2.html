@@ -8935,16 +8935,23 @@ async function fetchPOOrders() {
 async function fetchActual() {
   var actual = {};
   try {
-    var rj = await fetch(_poJobPath);
+    // ดึงจาก live.json (real-time รายรอบวันนี้)
+    var rj = await fetch('https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app/live.json');
     if (rj.ok) {
-      var jd = await rj.json();
-      var recs = Array.isArray(jd && jd.records) ? jd.records : [];
-      recs.forEach(function(rec) {
-        if (!rec || !rec.partNo) return;
-        if (!actual[rec.partNo]) actual[rec.partNo] = {pcs:0, kg:0};
-        actual[rec.partNo].pcs += Number(rec.pcs||0);
-        actual[rec.partNo].kg  += Number(rec.kg||rec.kgC||0);
-      });
+      var live = await rj.json();
+      if (live) {
+        var rows = Array.isArray(live.rows) ? live.rows :
+                   (live.rows && typeof live.rows === 'object' ? Object.values(live.rows) : []);
+        rows.forEach(function(barrel) {
+          if (!barrel || !barrel.partName) return;
+          // ดึง partNo จาก partName (ส่วนแรกก่อน space)
+          var pno = (barrel.partName || '').trim().split(' ')[0].toUpperCase();
+          if (!pno) return;
+          if (!actual[pno]) actual[pno] = {pcs:0, kg:0};
+          actual[pno].pcs += Number(barrel.pcs||0);
+          actual[pno].kg  += Number(barrel.kg||barrel.kgC||0);
+        });
+      }
     }
   } catch(e) {}
   return actual;
