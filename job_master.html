@@ -1810,8 +1810,10 @@ function renderInvLines() {
       var qtyStr = (qU==='kg' ? Number(qVal).toFixed(2) : Number(qVal).toLocaleString()) + (qU==='kg'?' กก.':' ชิ้น');
       var wStr   = l.weight ? Number(l.weight).toFixed(2)+' กก.' : '–';
       var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
+      var pmPartL = pmLookup(l.partName);
+      var pmNameL = pmPartL ? (pmPartL.name||'') : '';
       return '<tr>'+
-        '<td class="td-l">'+esc(l.partName)+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
+        '<td class="td-l">'+esc(l.partName)+(pmNameL?' <span style="color:var(--text-muted);font-weight:400;">'+esc(pmNameL)+'</span>':'')+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
         '<td>'+qtyStr+'</td>'+
         '<td>'+wStr+'</td>'+
         '<td>'+l.price.toFixed(2)+'<span style="font-size:9px;color:var(--text-muted);">'+puTH+'</span></td>'+
@@ -2127,9 +2129,12 @@ function printInvoice(inv) {
   var rowsHtml = inv.items.map(function(l,i){
     var qtyStr = l.unit==='kg' ? l.qty.toFixed(2) : l.qty.toLocaleString();
     var wStr   = l.weight ? l.weight.toFixed(2) : '';
+    var pmPart = pmLookup(l.partName);
+    var pmName = pmPart ? (pmPart.name||'') : '';
     return '<tr>'+
       '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+(i+1)+'</td>'+
       '<td style="border:1px solid #94a3b8;padding:6px;">'+esc(l.partName)+
+        (pmName?' <span style="color:#475569;">'+esc(pmName)+'</span>':'')+
         (l.lot?'<br><span style="font-size:10px;color:#64748b;">'+esc(l.lot)+'</span>':'')+'</td>'+
       '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+qtyStr+'</td>'+
       '<td style="text-align:center;border:1px solid #94a3b8;padding:6px;">'+wStr+'</td>'+
@@ -2310,7 +2315,9 @@ function buildFormOverlayBody(inv) {
     var qtyStr = l.unit==='kg' ? Number(l.qty).toFixed(2) : Number(l.qty).toLocaleString();
     var wStr   = l.weight ? Number(l.weight).toFixed(2) : '';
     html += fldC(P.itemX, y, (i+1));
-    html += fld(P.descX, y, esc(l.partName));
+    var pmPartF = pmLookup(l.partName);
+    var pmNameF = pmPartF ? (pmPartF.name||'') : '';
+    html += fld(P.descX, y, esc(l.partName) + (pmNameF ? ' ' + esc(pmNameF) : ''));
     if (l.lot) html += fld(P.descX, y+P.subLineDy, esc(l.lot));
     html += fldR(P.qtyRightX, y, qtyStr);
     if (wStr) html += fldC(P.weightCenterX, y, wStr);
