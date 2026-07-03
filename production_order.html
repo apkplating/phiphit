@@ -148,9 +148,8 @@ tr:hover td{background:var(--sky-pale);}
           <input type="text" id="poPlanner" placeholder="ชื่อผู้วางแผน">
         </div>
         <div class="field">
-          <label>วันที่/เวลาสั่งผลิต</label>
-          <div id="poTimestampDisplay" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;background:#f8fafc;color:var(--text-mid);">จะบันทึกอัตโนมัติตอนกด "บันทึก"</div>
-          <input type="hidden" id="poTimestamp">
+          <label>วันที่/เวลาสั่งผลิต <span style="color:var(--text-muted);font-weight:400;">(ปล่อยว่าง = ใช้เวลาปัจจุบัน)</span></label>
+          <input type="datetime-local" id="poTimestamp" style="padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;width:100%;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
         </div>
       </div>
       <div class="card-label" style="margin-bottom:6px;margin-top:4px;">กรอกรายการชิ้นงาน</div>
@@ -659,12 +658,21 @@ function removeStagedItem(i) {
 async function savePO() {
   var planner = (document.getElementById('poPlanner')||{}).value||'';
   var now = new Date();
-  var date = isoDate(now);
-  var timestamp = now.getFullYear() + '-' +
-    String(now.getMonth()+1).padStart(2,'0') + '-' +
-    String(now.getDate()).padStart(2,'0') + ' ' +
-    String(now.getHours()).padStart(2,'0') + ':' +
-    String(now.getMinutes()).padStart(2,'0');
+  // ถ้าผู้ใช้ระบุวันที่/เวลาเอง ใช้ค่านั้น มิฉะนั้นใช้เวลาปัจจุบัน
+  var tsInput = (document.getElementById('poTimestamp')||{}).value || '';
+  var timestamp, date;
+  if (tsInput) {
+    // datetime-local format: "YYYY-MM-DDTHH:MM" → แปลงเป็น "YYYY-MM-DD HH:MM"
+    timestamp = tsInput.replace('T', ' ').slice(0, 16);
+    date = timestamp.slice(0, 10);
+  } else {
+    date = isoDate(now);
+    timestamp = now.getFullYear() + '-' +
+      String(now.getMonth()+1).padStart(2,'0') + '-' +
+      String(now.getDate()).padStart(2,'0') + ' ' +
+      String(now.getHours()).padStart(2,'0') + ':' +
+      String(now.getMinutes()).padStart(2,'0');
+  }
   if (!stagedItems.length) { showToast('toast-po','กรุณาเพิ่มอย่างน้อย 1 รายการก่อน','err'); return; }
   if (!planner) { showToast('toast-po','กรุณาระบุผู้สั่งผลิต','err'); return; }
   var items = stagedItems.slice();
@@ -690,8 +698,6 @@ function cancelEdit() {
   document.getElementById('formTitle').textContent = '➕ สร้างใบสั่งผลิตใหม่';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('poPlanner').value = '';
-  var tsDisp = document.getElementById('poTimestampDisplay');
-  if (tsDisp) tsDisp.textContent = 'จะบันทึกอัตโนมัติตอนกด "บันทึก"';
   var tsInp = document.getElementById('poTimestamp');
   if (tsInp) tsInp.value = '';
   renderStagedList(); // เคลียร์ staged list
@@ -707,10 +713,12 @@ function editPO(id) {
   document.getElementById('formTitle').textContent = '✏️ แก้ไขใบสั่งผลิต';
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
   document.getElementById('poPlanner').value = po.planner||'';
-  var tsDisp = document.getElementById('poTimestampDisplay');
-  if (tsDisp) tsDisp.textContent = po.timestamp || po.date || 'ไม่ทราบเวลา';
   var tsInp = document.getElementById('poTimestamp');
-  if (tsInp) tsInp.value = po.timestamp || '';
+  if (tsInp) {
+    // แปลง "YYYY-MM-DD HH:MM" → "YYYY-MM-DDTHH:MM" สำหรับ datetime-local input
+    var tsVal = po.timestamp || (po.date ? po.date + ' 00:00' : '');
+    tsInp.value = tsVal ? tsVal.replace(' ', 'T').slice(0, 16) : '';
+  }
   // โหลดรายการเดิมเข้า stagedItems
   stagedItems = (po.items||[]).map(function(it){
     return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
