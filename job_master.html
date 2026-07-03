@@ -698,7 +698,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <datalist id="plCustList"></datalist>
       </div>
     </div>
-    <div class="grid3">
+    <div class="grid2">
       <div class="field" style="margin:0;">
         <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
         <input type="number" id="plPrice" step="0.01" min="0" placeholder="0.00">
@@ -709,10 +709,6 @@ input:focus,select:focus{border-color:var(--blue2);}
           <option value="pcs">ชิ้น (Pcs)</option>
           <option value="kg">กิโลกรัม (Kg)</option>
         </select>
-      </div>
-      <div class="field" style="margin:0;">
-        <label>น้ำหนัก/หน่วย (กก.) <span style="color:var(--text-muted);">(ไม่บังคับ)</span></label>
-        <input type="number" id="plWeight" step="0.01" min="0" placeholder="0.00">
       </div>
     </div>
     <div class="field">
@@ -737,11 +733,10 @@ input:focus,select:focus{border-color:var(--blue2);}
           <th class="td-l">P/No</th>
           <th class="td-l">ลูกค้า</th>
           <th>ราคา/หน่วย</th>
-          <th>น้ำหนัก</th>
           <th style="min-width:70px;">จัดการ</th>
         </tr></thead>
         <tbody id="plBody">
-          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
         </tbody>
       </table>
     </div>
@@ -1452,7 +1447,7 @@ function onInvLineJobSelect() {
   var custEl = document.getElementById('invCustomer');
   if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
 
-  // auto-fill ราคา/หน่วย + น้ำหนัก/หน่วย — เช็คทะเบียนราคาก่อน ถ้าไม่มีค่อย fallback ไป INV ล่าสุด แล้วจึงดึงจาก Part Master
+  // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
   var found = getPriceForPart(job.partName, job.customer);
   var priceInput     = document.getElementById('invLinePrice');
   var weightInput    = document.getElementById('invLineWeight');
@@ -1464,22 +1459,17 @@ function onInvLineJobSelect() {
 
   if (found) {
     var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
-    infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+
-      (found.weight ? ' · น้ำหนัก/หน่วย '+found.weight.toFixed(3)+' กก.' : '') +
-      ' ('+esc(found.source)+')';
+    infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+' ('+esc(found.source)+')';
     priceInput.value = found.price;
     if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
-    if (found.weight) { weightInput.value = found.weight; if (badgeEl) badgeEl.textContent = '✓ จากทะเบียนราคา'; }
   }
 
-  // ถ้ายังไม่มีน้ำหนัก/หน่วย → ดึงจาก Part Master (weightPerPc หน่วยกรัม → แปลงเป็น กก.)
-  if (!weightInput.value) {
-    var pmPart = pmLookup(job.partName);
-    var pmKg = (pmPart && pmPart.weightPerPc) ? (Number(pmPart.weightPerPc)/1000) : 0;
-    if (pmKg > 0) {
-      weightInput.value = pmKg.toFixed(4);
-      if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
-    }
+  // น้ำหนัก/หน่วย ดึงจาก Part Master เท่านั้นเสมอ (weightPerPc หน่วยกรัม → แปลงเป็น กก.)
+  var pmPart = pmLookup(job.partName);
+  var pmKg = (pmPart && pmPart.weightPerPc) ? (Number(pmPart.weightPerPc)/1000) : 0;
+  if (pmKg > 0) {
+    weightInput.value = pmKg.toFixed(4);
+    if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
   }
 
   infoEl.innerHTML = infoText;
@@ -1548,40 +1538,16 @@ function getPriceForPart(partName, customer) {
     return String(p.partName||'').trim().toLowerCase()===k &&
            String(p.customer||'').trim().toLowerCase()===custTrim && custTrim;
   });
-  if (exact) return { price:Number(exact.price)||0, priceUnit:exact.priceUnit||'pcs', weight:Number(exact.weight)||0, source:'ทะเบียนราคา: '+exact.customer };
+  if (exact) return { price:Number(exact.price)||0, priceUnit:exact.priceUnit||'pcs', source:'ทะเบียนราคา: '+exact.customer };
 
   // 2) P/No เดียวกัน ลูกค้าอื่น (ใช้รายการแรกที่เจอเป็นตัวอย่าง)
   var anyCust = priceList.find(function(p){
     return String(p.partName||'').trim().toLowerCase()===k;
   });
-  if (anyCust) return { price:Number(anyCust.price)||0, priceUnit:anyCust.priceUnit||'pcs', weight:Number(anyCust.weight)||0, source:'ทะเบียนราคา (ลูกค้า '+anyCust.customer+')' };
+  if (anyCust) return { price:Number(anyCust.price)||0, priceUnit:anyCust.priceUnit||'pcs', source:'ทะเบียนราคา (ลูกค้า '+anyCust.customer+')' };
 
-  // 3) fallback: ประวัติ INV ล่าสุด
-  var last = getLastPriceForPart(partName, customer);
-  if (last) return { price:last.price, weight:last.weight, source:'INV '+last.invNo+' วันที่ '+last.date };
-
+  // ราคาต้องมาจาก "ทะเบียนราคา" เท่านั้น — ไม่ดึงจากประวัติ INV เก่าอีกต่อไป (กันข้อมูลเพี้ยนสะสม)
   return null;
-}
-
-// ค้นหาราคา/น้ำหนักล่าสุดที่เคยขาย P/No นี้ จากประวัติ INV (เรียงตามวันที่ล่าสุดก่อน)
-// ให้ความสำคัญกับ INV ของลูกค้าเดียวกันก่อน ถ้าไม่เจอจะใช้ของลูกค้าใดก็ได้
-function getLastPriceForPart(partName, customer) {
-  var k = String(partName||'').trim().toLowerCase();
-  var sorted = invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
-  var fallback = null;
-  for (var i=0;i<sorted.length;i++) {
-    var inv = sorted[i];
-    if (!inv.items) continue;
-    for (var j=0;j<inv.items.length;j++) {
-      var it = inv.items[j];
-      if (String(it.partName||'').trim().toLowerCase()!==k) continue;
-      var entry = { price: Number(it.price)||0, weight: Number(it.weight)||0, priceUnit: it.priceUnit||'pcs', invNo: inv.invNo, date: inv.date };
-      var itCust = (it.customer||'').trim();
-      if (customer && itCust && itCust===customer) return entry; // ตรงลูกค้า — ใช้เลย
-      if (!fallback) fallback = entry; // เก็บไว้เผื่อไม่เจอที่ตรงลูกค้า
-    }
-  }
-  return fallback;
 }
 
 // ══════════════════════════════════════
@@ -1606,7 +1572,6 @@ function resetPriceForm() {
   document.getElementById('plCustomer').value = '';
   document.getElementById('plPrice').value = '';
   document.getElementById('plPriceUnit').value = 'pcs';
-  document.getElementById('plWeight').value = '';
   document.getElementById('plNote').value = '';
 }
 
@@ -1616,7 +1581,6 @@ function savePriceEntry() {
   var customer  = document.getElementById('plCustomer').value.trim();
   var price     = parseFloat(document.getElementById('plPrice').value);
   var priceUnit = document.getElementById('plPriceUnit').value || 'pcs';
-  var weight    = parseFloat(document.getElementById('plWeight').value)||0;
   var note      = document.getElementById('plNote').value.trim();
 
   if (!partName) { showToast('pl','กรุณากรอก P/No','err'); return; }
@@ -1630,13 +1594,13 @@ function savePriceEntry() {
   });
   if (dup) {
     if (!confirm('มีราคาของ '+partName+' / '+customer+' อยู่แล้ว ('+Number(dup.price).toFixed(2)+' บาท) — ต้องการอัปเดตทับหรือไม่?')) return;
-    dup.price = price; dup.priceUnit = priceUnit; dup.weight = weight; dup.note = note;
+    dup.price = price; dup.priceUnit = priceUnit; dup.note = note;
     if (id) priceList = priceList.filter(function(p){ return p.id!==id; }); // ลบรายการเดิมที่แก้ไขอยู่ (ถ้าต่างจาก dup)
   } else if (id) {
     var entry = priceList.find(function(p){ return p.id===id; });
-    if (entry) { entry.partName=partName; entry.customer=customer; entry.price=price; entry.priceUnit=priceUnit; entry.weight=weight; entry.note=note; }
+    if (entry) { entry.partName=partName; entry.customer=customer; entry.price=price; entry.priceUnit=priceUnit; entry.note=note; }
   } else {
-    priceList.unshift({ id:'PL'+Date.now(), partName:partName, customer:customer, price:price, priceUnit:priceUnit, weight:weight, note:note });
+    priceList.unshift({ id:'PL'+Date.now(), partName:partName, customer:customer, price:price, priceUnit:priceUnit, note:note });
   }
 
   saveLocal(); fbSave();
@@ -1654,7 +1618,6 @@ function editPriceEntry(id) {
   document.getElementById('plCustomer').value  = p.customer;
   document.getElementById('plPrice').value     = p.price;
   document.getElementById('plPriceUnit').value = p.priceUnit || 'pcs';
-  document.getElementById('plWeight').value    = p.weight||'';
   document.getElementById('plNote').value      = p.note||'';
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -1682,7 +1645,7 @@ function renderPriceList() {
   });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">'+
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">'+
       (q?'ไม่พบรายการที่ค้นหา':'ยังไม่มีข้อมูล — เพิ่มราคาจากด้านบน')+'</td></tr>';
     return;
   }
@@ -1693,7 +1656,6 @@ function renderPriceList() {
       '<td class="td-l">'+esc(p.customer)+'</td>'+
       '<td style="font-weight:700;color:var(--blue);text-align:right;">'+Number(p.price).toFixed(2)+
         '<span style="font-weight:400;color:var(--text-muted);">/'+((p.priceUnit||'pcs')==='kg'?'กก.':'ชิ้น')+'</span></td>'+
-      '<td style="text-align:right;">'+(p.weight?Number(p.weight).toFixed(2):'–')+'</td>'+
       '<td class="td-l" style="white-space:nowrap;">'+
         '<button class="icon-btn" title="แก้ไข" onclick="editPriceEntry(\''+p.id+'\')">✏️</button>'+
         '<button class="icon-btn" title="ลบ" onclick="deletePriceEntry(\''+p.id+'\')">🗑️</button>'+
@@ -3421,10 +3383,20 @@ function reloadPartMaster() {
 
 function pmLookup(partName) {
   var k = (partName||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
-  return pmParts.find(function(p){
+  if (!k) return null;
+  // 1) ตรงเป๊ะ (เร็วและแม่นสุด)
+  var exact = pmParts.find(function(p){
     return (p.partNo||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'') === k ||
            (p.name||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'') === k;
-  }) || null;
+  });
+  if (exact) return exact;
+  // 2) fallback: เทียบแบบ contains (เผื่อ P/No ที่บันทึกไว้ตอนรับงาน สะกด/รูปแบบเพี้ยนเล็กน้อยจาก Part Master)
+  var loose = pmParts.find(function(p){
+    var no = (p.partNo||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
+    if (!no) return false;
+    return no.indexOf(k)>=0 || k.indexOf(no)>=0;
+  });
+  return loose || null;
 }
 
 var LINE_FB_PATHS = {
