@@ -3420,10 +3420,10 @@ function reloadPartMaster() {
 }
 
 function pmLookup(partName) {
-  var k = (partName||'').toUpperCase().replace(/[\s\-]/g,'');
+  var k = (partName||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
   return pmParts.find(function(p){
-    return (p.partNo||'').toUpperCase().replace(/[\s\-]/g,'') === k ||
-           (p.name||'').toUpperCase().replace(/[\s\-]/g,'') === k;
+    return (p.partNo||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'') === k ||
+           (p.name||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'') === k;
   }) || null;
 }
 
@@ -3437,7 +3437,7 @@ var LINE_FB_PATHS = {
 var processedRoundIds = {};
 
 function normalizePartKey(s) {
-  return (s||'').toUpperCase().replace(/[\s\-]/g,'');
+  return (s||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
 }
 
 async function pullFromLines() {
