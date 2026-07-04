@@ -248,8 +248,18 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
 
     <!-- IMPORT -->
     <div class="page" id="page-import">
+      <div class="card" style="border:2px solid #3b82f6;">
+        <div class="card-title">🟢 สถานะการ Sync สด จากเครื่อง ZKTeco (zk_sync.py)</div>
+        <div id="zkSyncStatus"></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
+          <label style="font-weight:600;font-size:0.9em;">ตรวจสอบวันที่:</label>
+          <input type="date" id="zkCheckDate" onchange="renderZKDiagnostic()" style="padding:9px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;">
+          <button class="btn btn-secondary" onclick="renderZKImportStatus()">🔄 รีเฟรช</button>
+        </div>
+        <div class="tbl-wrap" id="zkDiagTable" style="margin-top:12px;"></div>
+      </div>
       <div class="card" style="border:2px solid #00c9a7;">
-        <div class="card-title">📥 นำเข้าข้อมูลจากเครื่อง ZKTeco Bio30</div>
+        <div class="card-title">📥 นำเข้าไฟล์ CSV ด้วยตนเอง (สำรอง กรณี zk_sync.py ไม่ทำงาน)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px;">
           <div style="background:#f0fdf4;padding:18px;border-radius:10px;border:2px solid #10b981;">
             <h3 style="color:#065f46;margin-bottom:12px;font-size:0.95em;">📂 อัพโหลดไฟล์ CSV</h3>
@@ -428,6 +438,20 @@ global.CentralAuth={fetchUsers:fetchUsers,saveUsers:saveUsers,login:login,isAuth
 })(window);
 </script>
 <script>
+// ========== FIREBASE REST HELPERS ==========
+// ใช้ฐานข้อมูลเดียวกับ CentralAuth และ zk_sync.py (platingapp-92e21-c1346)
+const FB_URL='https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+async function fbGet(path){
+  try{const r=await fetch(FB_URL+path+'.json',{cache:'no-store'});if(!r.ok)return null;return await r.json();}catch(e){return null;}
+}
+async function fbPut(path,data){
+  try{const r=await fetch(FB_URL+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});return r.ok;}catch(e){return false;}
+}
+async function fbPatch(path,data){
+  try{const r=await fetch(FB_URL+path+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});return r.ok;}catch(e){return false;}
+}
+</script>
+<script>
 // ========== EMPLOYEES (34 คน จาก ZKTeco) ==========
 const EMPLOYEES = [
   // รายชื่อพนักงานจาก ByteHR (Employees_2.xlsx) — อัปเดต 24/06/2569
@@ -476,6 +500,74 @@ let attendance=JSON.parse(localStorage.getItem('apk_att')||'[]');
 let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
+
+// ========== ZKTECO LIVE SYNC ADAPTER ==========
+// zk_sync.py (บนเครื่อง HR) เขียนข้อมูลดิบไปที่ /hr/attendance/{YYYYMMDD}/emp_{empId}
+// รูปแบบ: {empId, date:"dd/mm/yyyy", checkIn:"HH:MM:SS"|null, checkOut:"HH:MM:SS"|null, source:"ZKTeco", syncAt}
+// ฟังก์ชันนี้แปลงให้เป็นรูปแบบเดียวกับ record ที่แอพสร้างเอง (checkIn/checkOut แบบ ISO + คำนวณ ชม./เงิน)
+function timeToISO(dateKey,timeStr){
+  if(!timeStr)return null;
+  const y=dateKey.slice(0,4),m=dateKey.slice(4,6),d=dateKey.slice(6,8);
+  return `${y}-${m}-${d}T${timeStr}`;
+}
+function shiftFromHour(h){return (h>=5&&h<13)?1:(h>=13&&h<21)?2:3;}
+function normalizeZKRecord(dateKey,empKey,raw){
+  const empId=raw.empId?String(raw.empId):empKey.replace(/^emp_/,'');
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  if(!emp)return null; // ไม่พบรหัสนี้ในทะเบียนพนักงาน — ไปโชว์ที่หน้า "นำเข้า ZKTeco" แทน
+  let ciISO=timeToISO(dateKey,raw.checkIn);
+  if(!ciISO)return null; // ยังไม่มีเวลาเข้างาน ข้ามไปก่อน
+  let coISO=timeToISO(dateKey,raw.checkOut);
+  if(coISO){
+    // กะดึก (21:00-05:00): ถ้าเวลาออก "น้อยกว่า" เวลาเข้า แปลว่าออกงานข้ามวันถัดไป
+    const ciH=parseInt(raw.checkIn.slice(0,2),10),coH=parseInt(raw.checkOut.slice(0,2),10);
+    if(coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
+  }
+  const ciDate=new Date(ciISO);
+  const shift=shiftFromHour(ciDate.getHours());
+  const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true};
+  if(coISO){
+    const wh=(new Date(coISO)-ciDate)/3600000,rh=Math.min(wh,8),ot=Math.max(0,wh-8);
+    rec.workedH=wh.toFixed(2);rec.regH=rh.toFixed(2);rec.otH=ot.toFixed(2);
+    rec.regPay=(rh*emp.hourlyRate).toFixed(2);rec.otPay=(ot*emp.otRate).toFixed(2);rec.totalPay=(rh*emp.hourlyRate+ot*emp.otRate).toFixed(2);
+  }
+  return rec;
+}
+
+// โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
+async function loadFromFirebase(){
+  const [fbAttAll,fbSched]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule')]);
+  const merged=[],zkUnmatched=[];
+  if(fbAttAll){
+    Object.keys(fbAttAll).forEach(dateKey=>{
+      const dayObj=fbAttAll[dateKey]||{};
+      Object.keys(dayObj).forEach(key=>{
+        const raw=dayObj[key];
+        if(!raw||typeof raw!=='object')return;
+        if(key.startsWith('emp_')){
+          const norm=normalizeZKRecord(dateKey,key,raw);
+          if(norm)merged.push(norm);
+          else zkUnmatched.push({dateKey,key,raw});
+        } else {
+          merged.push(raw); // record ที่แอพเขียนเอง (manual_...)
+        }
+      });
+    });
+  }
+  window._zkUnmatched=zkUnmatched;
+  const local=JSON.parse(localStorage.getItem('apk_att')||'[]');
+  const localPending=local.filter(l=>!l.synced&&!merged.find(m=>m.id===l.id));
+  attendance=[...merged,...localPending];
+  localStorage.setItem('apk_att',JSON.stringify(attendance));
+  if(fbSched)schedule=fbSched;
+  renderTodayTable();renderDashboard();
+  const activePage=document.querySelector('.page.active');
+  if(activePage&&activePage.id==='page-attendance')renderAttendance();
+  if(activePage&&activePage.id==='page-salary')renderSalary();
+  if(activePage&&activePage.id==='page-import')renderZKImportStatus();
+}
+loadFromFirebase();
+setInterval(loadFromFirebase,60000); // รีเฟรชข้อมูลจาก ZKTeco อัตโนมัติทุก 1 นาที
 
 // ========== CENTRAL AUTH ==========
 const SYSTEM_KEY = 'apk_hr';
@@ -541,6 +633,7 @@ function gotoPage(id,el){
   if(id==='schedule')renderCal();
   if(id==='attendance'){setHistToday();renderAttendance();}
   if(id==='salary')renderSalary();
+  if(id==='import'){const zd=document.getElementById('zkCheckDate');if(zd&&!zd.value)zd.valueAsDate=new Date();renderZKImportStatus();}
   if(id==='settings')renderSettings();
 }
 
@@ -578,7 +671,23 @@ function showMsg(id,msg,type){
   el.innerHTML=`<div class="alert alert-${type==='ok'?'success':type==='warn'?'warn':'err'}">${msg}</div>`;
   setTimeout(()=>el.innerHTML='',4000);
 }
-function saveAtt(){localStorage.setItem('apk_att',JSON.stringify(attendance));}
+async function saveAtt(){
+  localStorage.setItem('apk_att',JSON.stringify(attendance));
+  // sync record ที่ยังไม่เคย sync ขึ้น Firebase แบบ PATCH (merge) — กันไม่ให้ทับข้อมูลจาก zk_sync.py (key ขึ้นต้นด้วย emp_)
+  const pending=attendance.filter(a=>!a.synced&&a.source!=='ZKTeco');
+  if(!pending.length)return;
+  const byDate={};
+  pending.forEach(a=>{
+    const dk=new Date(a.checkIn).toISOString().slice(0,10).replace(/-/g,'');
+    if(!byDate[dk])byDate[dk]={};
+    byDate[dk]['manual_'+a.empId+'_'+a.id]=a;
+  });
+  for(const dk in byDate){
+    const ok=await fbPatch('/hr/attendance/'+dk,byDate[dk]);
+    if(ok)Object.values(byDate[dk]).forEach(a=>{a.synced=true;});
+  }
+  localStorage.setItem('apk_att',JSON.stringify(attendance));
+}
 function getTodayRec(){const s=new Date();s.setHours(0,0,0,0);const e=new Date(s.getTime()+86400000);return attendance.filter(r=>new Date(r.checkIn)>=s&&new Date(r.checkIn)<e);}
 
 function buildAttTable(recs){
@@ -691,6 +800,41 @@ function showPayslip(empId,month){
   d.recs.forEach((r,i)=>{const s=SHIFTS[r.shift]||SHIFTS[1];rows+=`<tr><td>${i+1}</td><td>${new Date(r.checkIn).toLocaleDateString('th-TH')}</td><td>${s.emoji} ${s.name}</td><td style="text-align:right;">${r.regH}</td><td style="text-align:right;">${r.otH}</td><td style="text-align:right;">฿${r.regPay}</td><td style="text-align:right;">฿${r.otPay}</td><td style="text-align:right;">฿${r.totalPay}</td></tr>`;});
   document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div><div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตราค่าแรง OT</td><td style="text-align:right;">฿${d.emp.otRate}/ชม.</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
   document.getElementById('payslipModal').classList.add('show');
+}
+
+// ========== ZKTECO LIVE STATUS & DIAGNOSTIC ==========
+async function renderZKImportStatus(){
+  const statusEl=document.getElementById('zkSyncStatus');
+  const status=await fbGet('/hr/zk_sync_status');
+  if(status&&status.lastSync){
+    const t=new Date(status.lastSync),ageMin=(Date.now()-t.getTime())/60000;
+    const cls=ageMin<5?'alert-success':'alert-warn';
+    const dot=ageMin<5?'🟢':'🟡';
+    statusEl.innerHTML=`<div class="alert ${cls}">${dot} Sync ล่าสุด: ${t.toLocaleString('th-TH')} (${ageMin.toFixed(0)} นาทีที่แล้ว) — ${status.records} records</div>`;
+  } else {
+    statusEl.innerHTML=`<div class="alert alert-err">🔴 ยังไม่พบสถานะการ sync จากเครื่อง HR — ตรวจสอบว่า zk_sync.py กำลังรันอยู่หรือไม่</div>`;
+  }
+  renderZKDiagnostic();
+}
+function renderZKDiagnostic(){
+  const dv=document.getElementById('zkCheckDate').value;if(!dv)return;
+  const ds=new Date(dv+'T00:00:00'),de=new Date(ds.getTime()+86400000);
+  const dayZK=attendance.filter(a=>a.source==='ZKTeco'&&new Date(a.checkIn)>=ds&&new Date(a.checkIn)<de);
+  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>เข้างาน</th><th>ออกงาน</th><th>สถานะ</th></tr></thead><tbody>`;
+  EMPLOYEES.forEach(emp=>{
+    const rec=dayZK.find(a=>a.empId===emp.id);
+    const ci=rec?new Date(rec.checkIn).toLocaleTimeString('th-TH'):'-';
+    const co=rec&&rec.checkOut?new Date(rec.checkOut).toLocaleTimeString('th-TH'):(rec?'<span class="badge badge-working">กำลังทำงาน</span>':'-');
+    const st=rec?`<span class="badge badge-ok">✅ พบข้อมูล</span>`:`<span class="badge badge-off">❌ ไม่พบ</span>`;
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td>${ci}</td><td>${co}</td><td>${st}</td></tr>`;
+  });
+  document.getElementById('zkDiagTable').innerHTML=h+'</tbody></table>';
+  // เตือนถ้าเจอรหัสในเครื่องสแกนที่ไม่มีในทะเบียนพนักงาน (สาเหตุที่พบบ่อยของ "พนักงานไม่ขึ้น")
+  const dk=dv.replace(/-/g,'');
+  const unmatched=(window._zkUnmatched||[]).filter(u=>u.dateKey===dk);
+  if(unmatched.length){
+    document.getElementById('zkDiagTable').innerHTML+=`<div class="alert alert-warn">⚠️ พบรหัส ${unmatched.map(u=>u.raw.empId||u.key.replace('emp_','')).join(', ')} จากเครื่องสแกน แต่ไม่มีในทะเบียนพนักงาน (ตรวจสอบว่ารหัสในเครื่อง ZKTeco ตรงกับรหัสพนักงานในระบบหรือไม่)</div>`;
+  }
 }
 
 // ========== ZKTECO CSV ==========
