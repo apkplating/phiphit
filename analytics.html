@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>APK Plating — Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy:#0f2044; --navy-2:#16305e;
+  --blue:#3b82f6; --blue-pale:#dbeafe;
+  --green:#16a34a; --green-pale:#dcfce7;
+  --red:#dc2626; --red-pale:#fee2e2;
+  --amber:#d97706; --amber-pale:#fef3c7;
+  --purple:#7c3aed; --purple-pale:#ede9fe;
+  --b1:#3b82f6; --b2:#8b5cf6; --r1:#f97316;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* ── Login ── */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy),var(--navy-2));}
+.login-box{background:#fff;border-radius:16px;padding:32px;width:300px;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.25);}
+.login-box h2{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+.login-box p{font-size:12px;color:var(--text-muted);margin-bottom:20px;}
+#pinInput{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:20px;text-align:center;letter-spacing:8px;font-family:'IBM Plex Mono',monospace;margin-bottom:10px;outline:none;}
+#pinInput:focus{border-color:var(--blue);}
+.btn-login{width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+#loginError{font-size:11px;color:var(--red);margin-top:8px;display:none;}
+
+/* ── App ── */
+#appContent{display:none;}
+header{background:linear-gradient(135deg,var(--navy),var(--navy-2));color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:100;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand h1{font-size:16px;font-weight:700;}
+.brand p{font-size:10px;color:#93c5fd;}
+.hdr-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.btn-sm{padding:5px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:none;}
+.btn-logout{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);}
+
+/* ── Filter bar ── */
+.filter-bar{background:#fff;border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:99;}
+.filter-bar label{font-size:11px;font-weight:700;color:var(--text-mid);}
+.filter-bar input,.filter-bar select{font-size:12px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;outline:none;}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--blue);}
+.btn-load{padding:7px 18px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-export{padding:7px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+/* ── Main ── */
+main{max-width:1400px;margin:0 auto;padding:20px 20px 60px;}
+.section-title{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+@media(max-width:900px){.grid2,.grid3,.grid4{grid-template-columns:1fr 1fr;}}
+@media(max-width:600px){.grid2,.grid3,.grid4{grid-template-columns:1fr;}}
+
+/* ── Cards ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.kpi-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.kpi-value{font-size:24px;font-weight:800;color:var(--navy);}
+.kpi-value.b1{color:var(--b1);}
+.kpi-value.b2{color:var(--b2);}
+.kpi-value.r1{color:var(--r1);}
+.kpi-sub{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.kpi-badge{display:inline-block;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;margin-top:4px;}
+.badge-up{background:var(--green-pale);color:var(--green);}
+.badge-dn{background:var(--red-pale);color:var(--red);}
+
+/* ── Chart wrapper ── */
+.chart-wrap{position:relative;height:220px;}
+.chart-wrap-lg{position:relative;height:280px;}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;margin-top:10px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;font-weight:600;white-space:nowrap;}
+td{padding:7px 10px;border-bottom:1px solid var(--border);}
+tr:hover td{background:#f8fafc;}
+.line-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
+.dot-b1{background:var(--b1);} .dot-b2{background:var(--b2);} .dot-r1{background:var(--r1);}
+
+/* ── Loading ── */
+.loading{text-align:center;color:var(--text-muted);padding:40px;font-size:13px;}
+.section-sep{margin:28px 0 20px;border-top:2px solid var(--border);}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:28px;margin-bottom:8px;">📊</div>
+    <h2>Analytics Dashboard</h2>
+    <p>APK Plating — วิเคราะห์การผลิต</p>
+    <input type="password" id="pinInput" placeholder="PIN" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appContent">
+  <header>
+    <div class="brand">
+      <div>
+        <h1>📊 Analytics Dashboard</h1>
+        <p>วิเคราะห์การผลิต · APK Plating Service Co.,Ltd.</p>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <span id="userName" style="font-size:11px;color:#93c5fd;"></span>
+      <button class="btn-sm btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <label>ช่วงเวลา:</label>
+    <input type="date" id="dateFrom">
+    <span style="font-size:11px;color:var(--text-muted);">ถึง</span>
+    <input type="date" id="dateTo">
+    <label>สาย:</label>
+    <select id="lineFilter">
+      <option value="ALL">ทุกสาย</option>
+      <option value="B1">B-1 Barrel</option>
+      <option value="B2">B-2 Barrel</option>
+      <option value="R1">R-1 Rack</option>
+    </select>
+    <button class="btn-load" onclick="loadAndRender()">🔄 โหลดข้อมูล</button>
+    <button class="btn-export" onclick="exportExcel()">📥 Export Excel</button>
+    <span id="loadStatus" style="font-size:11px;color:var(--text-muted);"></span>
+  </div>
+
+  <main>
+
+    <!-- ── Section 1: KPI Summary ── -->
+    <div class="section-title">📦 สรุปภาพรวมการผลิต</div>
+    <div class="grid4" id="kpiGrid">
+      <div class="kpi-card"><div class="kpi-label">น้ำหนักรวม (kg)</div><div class="kpi-value" id="kpiTotalKg">—</div><div class="kpi-sub" id="kpiTotalKgSub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">จำนวนรอบรวม</div><div class="kpi-value" id="kpiBarrels">—</div><div class="kpi-sub" id="kpiBarrelsSub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">งานซ่อม (Rework %)</div><div class="kpi-value" id="kpiRework">—</div><div class="kpi-sub" id="kpiReworkSub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">AH รวม</div><div class="kpi-value" id="kpiAH">—</div><div class="kpi-sub" id="kpiAHSub"></div></div>
+    </div>
+
+    <!-- ── Section 2: ปริมาณงาน ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">📦 ปริมาณงาน (Production Volume)</div>
+    <div class="grid2">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">น้ำหนักรายวัน (kg) แยกสาย</div>
+        <div class="chart-wrap-lg"><canvas id="chartVolDaily"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
+        <div class="chart-wrap"><canvas id="chartColor"></canvas></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">Top 10 ชิ้นงาน (kg)</div>
+        <div class="tbl-wrap"><table id="tblTopParts">
+          <thead><tr><th>#</th><th>ชิ้นงาน</th><th>ลูกค้า</th><th>สาย</th><th>kg</th><th>รอบ</th></tr></thead>
+          <tbody><tr><td colspan="6" class="loading">กำลังโหลด...</td></tr></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ปริมาณงานต่อลูกค้า (kg)</div>
+        <div class="chart-wrap"><canvas id="chartCustomer"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── Section 3: ของเสีย ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">⚠️ ของเสีย / งานซ่อม (Rework Analysis)</div>
+    <div class="grid2">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">อัตรางานซ่อม % รายวัน</div>
+        <div class="chart-wrap-lg"><canvas id="chartReworkDaily"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">Top งานซ่อมตาม partName (kg)</div>
+        <div class="tbl-wrap"><table id="tblRework">
+          <thead><tr><th>#</th><th>ชิ้นงาน</th><th>สาย</th><th>Rework kg</th><th>%</th></tr></thead>
+          <tbody><tr><td colspan="5" class="loading">กำลังโหลด...</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ── Section 4: กระแสไฟ ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">⚡ กระแสไฟ (Ampere-Hour Analysis)</div>
+    <div class="grid3">
+      <div class="kpi-card"><div class="kpi-label">AH/kg เฉลี่ย (B1)</div><div class="kpi-value b1" id="kpiAhKgB1">—</div><div class="kpi-sub">ประสิทธิภาพกระบวนการ</div></div>
+      <div class="kpi-card"><div class="kpi-label">AH/kg เฉลี่ย (B2)</div><div class="kpi-value b2" id="kpiAhKgB2">—</div><div class="kpi-sub">ประสิทธิภาพกระบวนการ</div></div>
+      <div class="kpi-card"><div class="kpi-label">AH/kg เฉลี่ย (R1)</div><div class="kpi-value r1" id="kpiAhKgR1">—</div><div class="kpi-sub">ประสิทธิภาพกระบวนการ</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">AH รายวัน แยกสาย</div>
+        <div class="chart-wrap-lg"><canvas id="chartAhDaily"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">AH/kg Efficiency รายวัน</div>
+        <div class="chart-wrap-lg"><canvas id="chartAhEff"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── Section 5: เวลาทำงาน ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">⏱ เวลาทำงาน (Work Time Analysis)</div>
+    <div class="grid3">
+      <div class="kpi-card"><div class="kpi-label">Cycle Time เฉลี่ย (B1)</div><div class="kpi-value b1" id="kpiCycleB1">—</div><div class="kpi-sub">นาที/รอบ</div></div>
+      <div class="kpi-card"><div class="kpi-label">Cycle Time เฉลี่ย (B2)</div><div class="kpi-value b2" id="kpiCycleB2">—</div><div class="kpi-sub">นาที/รอบ</div></div>
+      <div class="kpi-card"><div class="kpi-label">Cycle Time เฉลี่ย (R1)</div><div class="kpi-value r1" id="kpiCycleR1">—</div><div class="kpi-sub">นาที/รอบ</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">รอบต่อชั่วโมง (Heatmap รายชั่วโมง)</div>
+        <div class="chart-wrap-lg"><canvas id="chartHourly"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">จำนวนรอบต่อวัน แยกสาย</div>
+        <div class="chart-wrap-lg"><canvas id="chartBarrelsDaily"></canvas></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════
+var FB = {
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
+};
+var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
+
+// ══════════════════════════════════════════════
+//  AUTH (Central Auth)
+// ══════════════════════════════════════════════
+function doLogin() {
+  var input = (document.getElementById('pinInput').value||'').trim();
+  if (!input) return;
+  var btn = document.querySelector('.btn-login');
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+  fetch(FB.B1 + '/auth-central.json', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+      var users = (data && data.users) ? data.users : {};
+      var user = users[input];
+      if (!user) { showErr('PIN ไม่ถูกต้อง'); return; }
+      document.getElementById('userName').textContent = (user.name||'') + ' · ' + (Object.values(user.permissions||{})[0]||'');
+      showApp();
+    }).catch(function(){ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; showErr('เชื่อมต่อไม่ได้'); });
+}
+function showErr(m){ var e=document.getElementById('loginError'); e.textContent=m; e.style.display='block'; document.getElementById('pinInput').value=''; }
+function showApp(){ document.getElementById('loginScreen').style.display='none'; document.getElementById('appContent').style.display='block'; initDates(); loadAndRender(); }
+function doLogout(){ if(confirm('ออกจากระบบ?')) location.reload(); }
+document.getElementById('pinInput').focus();
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmt(n,d){ return Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:d||1}); }
+function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+function initDates(){
+  var now = new Date();
+  var from = new Date(now.getFullYear(), now.getMonth(), 1);
+  document.getElementById('dateFrom').value = isoDate(from);
+  document.getElementById('dateTo').value = isoDate(now);
+}
+
+// ══════════════════════════════════════════════
+//  FETCH DATA
+// ══════════════════════════════════════════════
+var _cache = {};
+
+async function fetchLineData(line) {
+  if (_cache[line]) return _cache[line];
+  try {
+    var r = await fetch(FB[line] + DAY_PATHS[line]);
+    if (!r.ok) return { dayRecords:[] };
+    var d = await r.json();
+    _cache[line] = d || { dayRecords:[] };
+    return _cache[line];
+  } catch(e) { return { dayRecords:[] }; }
+}
+
+async function getAllRecords(dateFrom, dateTo, lineFilter) {
+  var lines = lineFilter === 'ALL' ? ['B1','B2','R1'] : [lineFilter];
+  var records = []; // [{line, date, totalKg, newKg, reworkKg, kgB, kgC, kgK, barrels, ah, rows:[]}]
+
+  for (var i=0; i<lines.length; i++) {
+    var line = lines[i];
+    var data = await fetchLineData(line);
+    var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+    dayRecords.forEach(function(day) {
+      if (!day || !day.date) return;
+      if (day.date < dateFrom || day.date > dateTo) return;
+      records.push({
+        line: line,
+        date: day.date,
+        totalKg:  Number(day.totalKg||0),
+        newKg:    Number(day.newKg||0),
+        reworkKg: Number(day.reworkKg||0),
+        kgB:      Number(day.kgB||0),
+        kgC:      Number(day.kgC||0),
+        kgK:      Number(day.kgK||0),
+        barrels:  Number(day.barrels||0),
+        ah:       Number(day.ah||0),
+        ratio:    Number(day.ratio||0),
+        rows:     Array.isArray(day.rows) ? day.rows : [],
+      });
+    });
+  }
+  return records;
+}
+
+// ══════════════════════════════════════════════
+//  MAIN RENDER
+// ══════════════════════════════════════════════
+var _charts = {};
+
+function destroyChart(id) { if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; } }
+
+async function loadAndRender() {
+  var dateFrom = document.getElementById('dateFrom').value;
+  var dateTo   = document.getElementById('dateTo').value;
+  var lineFilter = document.getElementById('lineFilter').value;
+  if (!dateFrom || !dateTo) return;
+
+  document.getElementById('loadStatus').textContent = 'กำลังโหลด...';
+  _cache = {}; // clear cache on reload
+
+  var records = await getAllRecords(dateFrom, dateTo, lineFilter);
+  document.getElementById('loadStatus').textContent = 'โหลด '+records.length+' กะ · อัปเดต '+new Date().toLocaleTimeString('th-TH');
+
+  renderKPI(records);
+  renderVolume(records, dateFrom, dateTo);
+  renderRework(records, dateFrom, dateTo);
+  renderAH(records, dateFrom, dateTo);
+  renderTime(records, dateFrom, dateTo);
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 1: KPI
+// ══════════════════════════════════════════════
+function renderKPI(records) {
+  var totalKg=0, totalBarrels=0, totalRework=0, totalAH=0;
+  records.forEach(function(r){ totalKg+=r.totalKg; totalBarrels+=r.barrels; totalRework+=r.reworkKg; totalAH+=r.ah; });
+  var reworkPct = totalKg > 0 ? (totalRework/totalKg*100) : 0;
+  var days = [...new Set(records.map(function(r){return r.date;}))].length;
+
+  document.getElementById('kpiTotalKg').textContent = fmt(totalKg);
+  document.getElementById('kpiTotalKgSub').textContent = 'เฉลี่ย '+fmt(days>0?totalKg/days:0)+' kg/วัน · '+days+' วัน';
+  document.getElementById('kpiBarrels').textContent = fmt(totalBarrels,0);
+  document.getElementById('kpiBarrelsSub').textContent = 'เฉลี่ย '+fmt(days>0?totalBarrels/days:0,0)+' รอบ/วัน';
+  document.getElementById('kpiRework').textContent = fmt(reworkPct)+'%';
+  document.getElementById('kpiReworkSub').textContent = fmt(totalRework)+' kg งานซ่อม';
+  document.getElementById('kpiAH').textContent = fmt(totalAH);
+  document.getElementById('kpiAHSub').textContent = fmt(totalKg>0?totalAH/totalKg:0,2)+' AH/kg เฉลี่ย';
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 2: ปริมาณงาน
+// ══════════════════════════════════════════════
+function renderVolume(records, dateFrom, dateTo) {
+  var dates = getDates(dateFrom, dateTo);
+  var byDateLine = {}; // {date: {B1:kg, B2:kg, R1:kg}}
+  var colorTot = {B:0, C:0, K:0};
+  var partMap = {}; // {partName: {kg, barrels, line, customer}}
+  var custMap = {}; // {customer: kg}
+
+  records.forEach(function(r) {
+    if (!byDateLine[r.date]) byDateLine[r.date] = {B1:0,B2:0,R1:0};
+    byDateLine[r.date][r.line] += r.totalKg;
+    colorTot.B += r.kgB; colorTot.C += r.kgC; colorTot.K += r.kgK;
+
+    r.rows.forEach(function(row) {
+      var pno = (row.partName||'').trim();
+      if (!pno) return;
+      if (!partMap[pno]) partMap[pno] = {kg:0, barrels:0, line:r.line, customer:row.customer||''};
+      partMap[pno].kg += Number(row.kg||0);
+      partMap[pno].barrels++;
+      var cust = row.customer||'—';
+      custMap[cust] = (custMap[cust]||0) + Number(row.kg||0);
+    });
+  });
+
+  // Chart: Volume daily
+  destroyChart('chartVolDaily');
+  _charts['chartVolDaily'] = new Chart(document.getElementById('chartVolDaily'), {
+    type:'bar',
+    data:{
+      labels: dates,
+      datasets:[
+        {label:'B-1',data:dates.map(function(d){return (byDateLine[d]||{}).B1||0;}),backgroundColor:'rgba(59,130,246,.7)'},
+        {label:'B-2',data:dates.map(function(d){return (byDateLine[d]||{}).B2||0;}),backgroundColor:'rgba(139,92,246,.7)'},
+        {label:'R-1',data:dates.map(function(d){return (byDateLine[d]||{}).R1||0;}),backgroundColor:'rgba(249,115,22,.7)'},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:9},maxRotation:45}},y:{stacked:true,ticks:{font:{size:10}}}}}
+  });
+
+  // Chart: Color
+  destroyChart('chartColor');
+  _charts['chartColor'] = new Chart(document.getElementById('chartColor'), {
+    type:'doughnut',
+    data:{labels:['B (ฟ้า)','C (รุ้ง)','K (ดำ)'],datasets:[{data:[colorTot.B,colorTot.C,colorTot.K],backgroundColor:['#3b82f6','#8b5cf6','#1e293b']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+  });
+
+  // Table: Top parts
+  var topParts = Object.entries(partMap).sort(function(a,b){return b[1].kg-a[1].kg;}).slice(0,10);
+  var tbody = document.querySelector('#tblTopParts tbody');
+  if (topParts.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="loading">ไม่มีข้อมูล</td></tr>'; }
+  else {
+    tbody.innerHTML = topParts.map(function(e,i){
+      var dotCls = 'dot-'+e[1].line.toLowerCase();
+      return '<tr><td>'+(i+1)+'</td><td style="font-family:monospace;font-size:11px;">'+esc(e[0])+'</td><td>'+esc(e[1].customer)+'</td>' +
+        '<td><span class="line-dot '+dotCls+'"></span>'+e[1].line+'</td><td>'+fmt(e[1].kg)+'</td><td>'+e[1].barrels+'</td></tr>';
+    }).join('');
+  }
+
+  // Chart: Customer
+  var topCust = Object.entries(custMap).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+  destroyChart('chartCustomer');
+  _charts['chartCustomer'] = new Chart(document.getElementById('chartCustomer'), {
+    type:'bar', indexAxis:'y',
+    data:{labels:topCust.map(function(e){return e[0];}),datasets:[{label:'kg',data:topCust.map(function(e){return e[1];}),backgroundColor:'rgba(59,130,246,.7)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+  });
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 3: ของเสีย
+// ══════════════════════════════════════════════
+function renderRework(records, dateFrom, dateTo) {
+  var dates = getDates(dateFrom, dateTo);
+  var byDate = {}; // {date: {totalKg, reworkKg}}
+  var reworkParts = {}; // {partName: {reworkKg, totalKg, line}}
+
+  records.forEach(function(r) {
+    if (!byDate[r.date]) byDate[r.date] = {totalKg:0, reworkKg:0};
+    byDate[r.date].totalKg  += r.totalKg;
+    byDate[r.date].reworkKg += r.reworkKg;
+
+    r.rows.forEach(function(row) {
+      if (row.type !== 'R') return;
+      var pno = (row.partName||'').trim();
+      if (!pno) return;
+      if (!reworkParts[pno]) reworkParts[pno] = {reworkKg:0, totalKg:0, line:r.line};
+      reworkParts[pno].reworkKg += Number(row.kg||0);
+    });
+    r.rows.forEach(function(row) {
+      var pno = (row.partName||'').trim();
+      if (!pno || !reworkParts[pno]) return;
+      reworkParts[pno].totalKg += Number(row.kg||0);
+    });
+  });
+
+  // Chart: Rework % daily
+  destroyChart('chartReworkDaily');
+  _charts['chartReworkDaily'] = new Chart(document.getElementById('chartReworkDaily'), {
+    type:'line',
+    data:{
+      labels:dates,
+      datasets:[{
+        label:'Rework %',
+        data:dates.map(function(d){ var b=byDate[d]||{totalKg:0,reworkKg:0}; return b.totalKg>0?+(b.reworkKg/b.totalKg*100).toFixed(2):0; }),
+        borderColor:'#dc2626',backgroundColor:'rgba(220,38,38,.1)',fill:true,tension:.3,pointRadius:3
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9},maxRotation:45}},y:{ticks:{font:{size:10}},title:{display:true,text:'%',font:{size:10}}}}}
+  });
+
+  // Table: Rework parts
+  var topRework = Object.entries(reworkParts).sort(function(a,b){return b[1].reworkKg-a[1].reworkKg;}).slice(0,10);
+  var tbody = document.querySelector('#tblRework tbody');
+  if (topRework.length===0) { tbody.innerHTML='<tr><td colspan="5" class="loading">ไม่มีข้อมูลงานซ่อม</td></tr>'; }
+  else {
+    tbody.innerHTML = topRework.map(function(e,i){
+      var pct = e[1].totalKg>0?(e[1].reworkKg/e[1].totalKg*100).toFixed(1):'—';
+      var dotCls = 'dot-'+e[1].line.toLowerCase();
+      return '<tr><td>'+(i+1)+'</td><td style="font-family:monospace;font-size:11px;">'+esc(e[0])+'</td>' +
+        '<td><span class="line-dot '+dotCls+'"></span>'+e[1].line+'</td>' +
+        '<td style="color:var(--red);font-weight:700;">'+fmt(e[1].reworkKg)+'</td><td>'+pct+'%</td></tr>';
+    }).join('');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 4: AH
+// ══════════════════════════════════════════════
+function renderAH(records, dateFrom, dateTo) {
+  var dates = getDates(dateFrom, dateTo);
+  var byDateLine = {}; // {date: {B1:{ah,kg}, B2:..., R1:...}}
+  var ahKgByLine = {B1:{ah:0,kg:0}, B2:{ah:0,kg:0}, R1:{ah:0,kg:0}};
+
+  records.forEach(function(r) {
+    if (!byDateLine[r.date]) byDateLine[r.date] = {B1:{ah:0,kg:0},B2:{ah:0,kg:0},R1:{ah:0,kg:0}};
+    byDateLine[r.date][r.line].ah += r.ah;
+    byDateLine[r.date][r.line].kg += r.totalKg;
+    ahKgByLine[r.line].ah += r.ah;
+    ahKgByLine[r.line].kg += r.totalKg;
+  });
+
+  ['B1','B2','R1'].forEach(function(ln){
+    var v = ahKgByLine[ln];
+    var eff = v.kg>0?(v.ah/v.kg).toFixed(2):'—';
+    document.getElementById('kpiAhKg'+ln).textContent = eff === '—' ? '—' : eff+' AH/kg';
+  });
+
+  destroyChart('chartAhDaily');
+  _charts['chartAhDaily'] = new Chart(document.getElementById('chartAhDaily'), {
+    type:'bar',
+    data:{
+      labels:dates,
+      datasets:[
+        {label:'B-1 AH',data:dates.map(function(d){return (byDateLine[d]||{B1:{ah:0}}).B1.ah;}),backgroundColor:'rgba(59,130,246,.7)'},
+        {label:'B-2 AH',data:dates.map(function(d){return (byDateLine[d]||{B2:{ah:0}}).B2.ah;}),backgroundColor:'rgba(139,92,246,.7)'},
+        {label:'R-1 AH',data:dates.map(function(d){return (byDateLine[d]||{R1:{ah:0}}).R1.ah;}),backgroundColor:'rgba(249,115,22,.7)'},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:9},maxRotation:45}},y:{stacked:true,ticks:{font:{size:10}}}}}
+  });
+
+  destroyChart('chartAhEff');
+  _charts['chartAhEff'] = new Chart(document.getElementById('chartAhEff'), {
+    type:'line',
+    data:{
+      labels:dates,
+      datasets:[
+        {label:'B-1',data:dates.map(function(d){var v=(byDateLine[d]||{B1:{ah:0,kg:0}}).B1;return v.kg>0?+(v.ah/v.kg).toFixed(2):null;}),borderColor:'#3b82f6',tension:.3,pointRadius:2,spanGaps:true},
+        {label:'B-2',data:dates.map(function(d){var v=(byDateLine[d]||{B2:{ah:0,kg:0}}).B2;return v.kg>0?+(v.ah/v.kg).toFixed(2):null;}),borderColor:'#8b5cf6',tension:.3,pointRadius:2,spanGaps:true},
+        {label:'R-1',data:dates.map(function(d){var v=(byDateLine[d]||{R1:{ah:0,kg:0}}).R1;return v.kg>0?+(v.ah/v.kg).toFixed(2):null;}),borderColor:'#f97316',tension:.3,pointRadius:2,spanGaps:true},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{ticks:{font:{size:9},maxRotation:45}},y:{ticks:{font:{size:10}},title:{display:true,text:'AH/kg',font:{size:10}}}}}
+  });
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 5: เวลาทำงาน
+// ══════════════════════════════════════════════
+function renderTime(records, dateFrom, dateTo) {
+  var dates = getDates(dateFrom, dateTo);
+  var cycleByLine = {B1:[],B2:[],R1:[]};
+  var hourBuckets = Array(24).fill(0); // count barrels per hour
+  var barrelsDateLine = {};
+
+  records.forEach(function(r) {
+    if (!barrelsDateLine[r.date]) barrelsDateLine[r.date] = {B1:0,B2:0,R1:0};
+    barrelsDateLine[r.date][r.line] += r.barrels;
+
+    // cycle time
+    var rows = r.rows.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+    for (var i=1; i<rows.length; i++) {
+      var t1 = timeToMin(rows[i-1].time);
+      var t2 = timeToMin(rows[i].time);
+      var diff = t2 - t1;
+      if (diff > 0 && diff < 120) cycleByLine[r.line].push(diff);
+    }
+
+    // hourly heatmap
+    rows.forEach(function(row) {
+      var h = parseInt((row.time||'00:00').split(':')[0]);
+      if (h>=0 && h<24) hourBuckets[h]++;
+    });
+  });
+
+  ['B1','B2','R1'].forEach(function(ln){
+    var arr = cycleByLine[ln];
+    var avg = arr.length>0?(arr.reduce(function(a,b){return a+b;},0)/arr.length).toFixed(1):'—';
+    document.getElementById('kpiCycle'+ln).textContent = avg==='—'?'—':avg+' นาที';
+  });
+
+  // Chart: Hourly heatmap (bar)
+  destroyChart('chartHourly');
+  _charts['chartHourly'] = new Chart(document.getElementById('chartHourly'), {
+    type:'bar',
+    data:{
+      labels:Array.from({length:24},function(_,i){return String(i).padStart(2,'0')+':00';}),
+      datasets:[{label:'จำนวนรอบ',data:hourBuckets,backgroundColor:hourBuckets.map(function(v){var mx=Math.max.apply(null,hourBuckets)||1;var a=0.2+0.75*(v/mx);return 'rgba(59,130,246,'+a+')';})}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}
+  });
+
+  // Chart: Barrels daily
+  destroyChart('chartBarrelsDaily');
+  _charts['chartBarrelsDaily'] = new Chart(document.getElementById('chartBarrelsDaily'), {
+    type:'bar',
+    data:{
+      labels:dates,
+      datasets:[
+        {label:'B-1',data:dates.map(function(d){return (barrelsDateLine[d]||{B1:0}).B1;}),backgroundColor:'rgba(59,130,246,.7)'},
+        {label:'B-2',data:dates.map(function(d){return (barrelsDateLine[d]||{B2:0}).B2;}),backgroundColor:'rgba(139,92,246,.7)'},
+        {label:'R-1',data:dates.map(function(d){return (barrelsDateLine[d]||{R1:0}).R1;}),backgroundColor:'rgba(249,115,22,.7)'},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:9},maxRotation:45}},y:{stacked:true,ticks:{font:{size:10}}}}}
+  });
+}
+
+// ══════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════
+function getDates(from, to) {
+  var dates=[], cur=new Date(from);
+  var end=new Date(to);
+  while(cur<=end){ dates.push(isoDate(cur)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+function timeToMin(t){ if(!t)return 0; var p=(t||'').split(':'); return parseInt(p[0])*60+parseInt(p[1]||0); }
+
+// ══════════════════════════════════════════════
+//  EXPORT EXCEL
+// ══════════════════════════════════════════════
+function exportExcel() {
+  var dateFrom = document.getElementById('dateFrom').value;
+  var dateTo   = document.getElementById('dateTo').value;
+  var lineFilter = document.getElementById('lineFilter').value;
+
+  getAllRecords(dateFrom, dateTo, lineFilter).then(function(records) {
+    var rows = [['วันที่','สาย','น้ำหนักรวม (kg)','งานใหม่ (kg)','งานซ่อม (kg)','%ซ่อม','รอบ','AH','AH/kg']];
+    records.sort(function(a,b){ return a.date.localeCompare(b.date)||a.line.localeCompare(b.line); });
+    records.forEach(function(r) {
+      var ahKg = r.totalKg>0?(r.ah/r.totalKg).toFixed(2):'—';
+      rows.push([r.date, r.line, r.totalKg.toFixed(1), r.newKg.toFixed(1), r.reworkKg.toFixed(1), r.ratio.toFixed(2)+'%', r.barrels, r.ah.toFixed(1), ahKg]);
+    });
+    var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+    var bom = '\uFEFF';
+    var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'APK_Analytics_'+dateFrom+'_'+dateTo+'.csv';
+    a.click();
+  });
+}
+</script>
+</body>
+</html>
