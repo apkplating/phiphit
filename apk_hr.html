@@ -841,23 +841,39 @@ function renderZKDiagnostic(){
 function handleCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>parseZKCSV(ev.target.result);r.readAsText(f,'UTF-8');}
 function parseZKCSV(text){
   const fmt=document.querySelector('input[name="csvFmt"]:checked').value;
-  const lines=text.split('\n').filter(l=>l.trim());
-  const start=lines[0].toLowerCase().match(/id|name|date/)?1:0;
+  const lines=text.replace(/^\uFEFF/,'').split('\n').map(l=>l.replace(/\r$/,'')).filter(l=>l.trim());
   const pairs=[],errs=[],byEmp={};
+  // รูปแบบ export จริงจาก ZKTime.Net: ID,ชื่อ,DD/MM/YYYY(พ.ศ.)HH:MM:SS(ติดกัน),,สถานะ,อุปกรณ์ — ไม่มีหัวตาราง
+  const zkNativeRe=/^(\d{2}\/\d{2}\/\d{4})(\d{2}:\d{2}:\d{2})$/;
+  const firstCols=lines[0]?lines[0].split(','):[];
+  const isZKNative=firstCols.length>=5&&zkNativeRe.test(firstCols[2]);
+  const start=isZKNative?0:(lines[0].toLowerCase().match(/id|name|date/)?1:0);
   for(let i=start;i<lines.length;i++){
-    const c=lines[i].split(/[,\t|;]/).map(s=>s.trim().replace(/"/g,''));
-    let eid,ds,ts,stat;
-    if(fmt==='std'){eid=c[0]?.toUpperCase();if(c.length>=5){ds=c[2];ts=c[3];stat=c[4];}else{const p=c[1]?.split(' ')||[];ds=p[0];ts=p[1]||c[2];stat=c[c.length-1];}}
-    else{eid=c[0]?.toUpperCase();ds=c[1];ts=c[2];stat=c[3]||'auto';}
+    const c=isZKNative?lines[i].split(','):lines[i].split(/[,\t|;]/);
+    const cc=c.map(s=>s.trim().replace(/"/g,''));
+    let eid,ds,ts,stat,beDate=false;
+    if(isZKNative){
+      eid=cc[0];
+      const m=zkNativeRe.exec(cc[2]);
+      if(!m){errs.push(`บรรทัด ${i+1}: รูปแบบวันที่เวลาไม่ถูกต้อง`);continue;}
+      ds=m[1];ts=m[2];stat=(cc[4]||'0');beDate=true;
+    } else if(fmt==='std'){eid=cc[0]?.toUpperCase();if(cc.length>=5){ds=cc[2];ts=cc[3];stat=cc[4];}else{const p=cc[1]?.split(' ')||[];ds=p[0];ts=p[1]||cc[2];stat=cc[cc.length-1];}}
+    else{eid=cc[0]?.toUpperCase();ds=cc[1];ts=cc[2];stat=cc[3]||'auto';}
     if(!eid||!ds||!ts)continue;
     const nid=String(parseInt(eid));
     const emp=EMPLOYEES.find(e=>e.id===nid||e.id===eid);
     if(!emp){errs.push(`บรรทัด ${i+1}: ไม่พบรหัส "${eid}"`);continue;}
     let nd=ds.trim();
-    if(/^\d{2}\/\d{2}\/\d{4}$/.test(nd)){const[d,m,y]=nd.split('/');nd=`${y}-${m}-${d}`;}
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(nd)){
+      let parts=nd.split('/');
+      let d,m,y;
+      if(beDate){[m,d,y]=parts;y=String(parseInt(y,10)-543);} // ZKTime.Net export: MM/DD/YYYY(พ.ศ.) → แปลง พ.ศ.→ค.ศ.
+      else[d,m,y]=parts;
+      nd=`${y}-${m}-${d}`;
+    }
     const dt=new Date(`${nd}T${ts.trim()}`);
     if(isNaN(dt)){errs.push(`บรรทัด ${i+1}: วันที่ไม่ถูกต้อง`);continue;}
-    const s=stat.toLowerCase();
+    const s=String(stat).toLowerCase().trim();
     const isIn=s.includes('in')||s==='0'||s==='เข้า'?true:s.includes('out')||s==='1'||s==='ออก'?false:null;
     if(!byEmp[emp.id])byEmp[emp.id]=[];
     byEmp[emp.id].push({emp,dt,isIn});
