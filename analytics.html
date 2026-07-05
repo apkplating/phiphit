@@ -62,7 +62,6 @@ main{max-width:1400px;margin:0 auto;padding:20px 20px 60px;}
 
 /* ── Cards ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;}
-.mini-pie-wrap{position:absolute;top:14px;right:14px;width:92px;height:92px;}
 .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .kpi-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
 .kpi-value{font-size:24px;font-weight:800;color:var(--navy);}
@@ -168,15 +167,23 @@ tr:hover td{background:#f8fafc;}
         <div id="volAvgBadge" style="margin-top:8px;font-size:11px;color:var(--text-mid);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
       </div>
       <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
-        <div class="mini-pie-wrap"><canvas id="chartColorMonthMini"></canvas></div>
-        <div id="colorMonthLabel" style="font-size:9.5px;color:var(--text-muted);text-align:right;margin-top:-6px;margin-bottom:6px;"></div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);padding-top:6px;">สัดส่วนสีชุบ (B/C/K)</div>
+          <div style="text-align:center;flex-shrink:0;">
+            <div style="width:64px;height:64px;"><canvas id="chartColorMonthMini"></canvas></div>
+            <div id="colorMonthLabel" style="font-size:9px;color:var(--text-muted);margin-top:2px;white-space:nowrap;"></div>
+          </div>
+        </div>
         <div class="chart-wrap"><canvas id="chartColor"></canvas></div>
       </div>
       <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนของเสีย (งานดี/งานซ่อม)</div>
-        <div class="mini-pie-wrap"><canvas id="chartWasteMonthMini"></canvas></div>
-        <div id="wasteMonthLabel" style="font-size:9.5px;color:var(--text-muted);text-align:right;margin-top:-6px;margin-bottom:6px;"></div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);padding-top:6px;">สัดส่วนของเสีย (งานดี/งานซ่อม)</div>
+          <div style="text-align:center;flex-shrink:0;">
+            <div style="width:64px;height:64px;"><canvas id="chartWasteMonthMini"></canvas></div>
+            <div id="wasteMonthLabel" style="font-size:9px;color:var(--text-muted);margin-top:2px;white-space:nowrap;"></div>
+          </div>
+        </div>
         <div class="chart-wrap"><canvas id="chartWasteRatio"></canvas></div>
       </div>
     </div>
