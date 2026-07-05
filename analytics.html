@@ -151,26 +151,38 @@ tr:hover td{background:#f8fafc;}
     <!-- ── Section 2: ปริมาณงาน ── -->
     <div class="section-sep"></div>
     <div class="section-title">📦 ปริมาณงาน (Production Volume)</div>
-    <div class="grid2">
+    <div class="grid3">
       <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">น้ำหนักรายเดือน (kg) แยกสาย · 12 เดือนล่าสุด</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">น้ำหนักรายเดือน (kg) แยกสาย · 12 เดือนล่าสุด</div>
+          <select id="volLineFilter" onchange="renderVolumeSection(this.value)" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;">
+            <option value="ALL">ทุกสาย</option>
+            <option value="B1">B1</option>
+            <option value="B2">B2</option>
+            <option value="R1">R1</option>
+          </select>
+        </div>
         <div class="chart-wrap-lg"><canvas id="chartVolDaily"></canvas></div>
       </div>
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
         <div class="chart-wrap"><canvas id="chartColor"></canvas></div>
       </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนของเสีย (งานดี/งานซ่อม)</div>
+        <div class="chart-wrap"><canvas id="chartWasteRatio"></canvas></div>
+      </div>
     </div>
     <div class="grid2">
       <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">Top 10 ชิ้นงาน (kg)</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">Top 10 ชิ้นงาน (kg) · 12 เดือนล่าสุด</div>
         <div class="tbl-wrap"><table id="tblTopParts">
           <thead><tr><th>#</th><th>ชิ้นงาน</th><th>ลูกค้า</th><th>สาย</th><th>kg</th><th>รอบ</th></tr></thead>
           <tbody><tr><td colspan="6" class="loading">กำลังโหลด...</td></tr></tbody>
         </table></div>
       </div>
       <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ปริมาณงานต่อลูกค้า (kg)</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ปริมาณงานต่อลูกค้า (kg) · 12 เดือนล่าสุด</div>
         <div class="chart-wrap"><canvas id="chartCustomer"></canvas></div>
       </div>
     </div>
@@ -348,8 +360,7 @@ async function loadAndRender() {
   document.getElementById('loadStatus').textContent = 'โหลด '+records.length+' กะ · อัปเดต '+new Date().toLocaleTimeString('th-TH');
 
   renderKPI(records);
-  renderVolumeMonthly(lineFilter); // รายเดือน 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
-  renderVolume(records, dateFrom, dateTo);
+  renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
@@ -375,7 +386,7 @@ function renderKPI(records) {
 }
 
 // ══════════════════════════════════════════════
-//  SECTION 2: ปริมาณงาน — น้ำหนักรายเดือน (12 เดือนล่าสุด, ไม่ผูกกับ dateFrom/dateTo)
+//  SECTION 2: ปริมาณงาน — 12 เดือนล่าสุด + dropdown เลือกสายในตัว (ไม่ผูกกับ dateFrom/dateTo ด้านบน)
 // ══════════════════════════════════════════════
 var TH_MONTHS_SHORT=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 function lastNMonths(n){
@@ -390,69 +401,63 @@ function monthLabelTH(ym){
   var p=ym.split('-'), y=parseInt(p[0],10), m=parseInt(p[1],10);
   return TH_MONTHS_SHORT[m-1]+' '+String(y+543).slice(2);
 }
+var LINE_COLORS = {B1:'rgba(59,130,246,.7)', B2:'rgba(139,92,246,.7)', R1:'rgba(249,115,22,.7)'};
 
-async function renderVolumeMonthly(lineFilter){
+async function renderVolumeSection(lineSel){
+  lineSel = lineSel || (document.getElementById('volLineFilter')||{}).value || 'ALL';
   var months = lastNMonths(12);
-  var lines = lineFilter === 'ALL' ? ['B1','B2','R1'] : [lineFilter];
-  var byMonthLine = {};
-  months.forEach(function(m){ byMonthLine[m] = {B1:0,B2:0,R1:0}; });
+  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
+  var lines = lineSel === 'ALL' ? ['B1','B2','R1'] : [lineSel];
 
-  for (var i=0; i<lines.length; i++) {
+  var byMonthLine = {}; months.forEach(function(m){ byMonthLine[m] = {B1:0,B2:0,R1:0}; });
+  var colorTot = {B:0, C:0, K:0};
+  var wasteTot = {good:0, rework:0};
+  var partMap = {};  // {partName: {kg, barrels, line, customer}}
+  var custMap = {};  // {customer: kg}
+
+  for (var i=0; i<lines.length; i++){
     var line = lines[i];
     var data = await fetchLineData(line); // ใช้ cache เดิม ไม่ fetch ซ้ำ
     var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
     dayRecords.forEach(function(day){
       if (!day || !day.date) return;
       var ym = day.date.slice(0,7);
-      if (!byMonthLine[ym]) return; // อยู่นอกช่วง 12 เดือนล่าสุด ข้ามไป
-      byMonthLine[ym][line] += Number(day.totalKg||0);
+      if (!monthSet[ym]) return; // อยู่นอกช่วง 12 เดือนล่าสุด ข้ามไป
+
+      var totalKg  = Number(day.totalKg||0);
+      var reworkKg = Number(day.reworkKg||0);
+      var newKg    = Number(day.newKg|| (totalKg-reworkKg));
+
+      byMonthLine[ym][line] += totalKg;
+      colorTot.B += Number(day.kgB||0); colorTot.C += Number(day.kgC||0); colorTot.K += Number(day.kgK||0);
+      wasteTot.good += newKg; wasteTot.rework += reworkKg;
+
+      (Array.isArray(day.rows) ? day.rows : []).forEach(function(row){
+        var pno = (row.partName||'').trim();
+        if (!pno) return;
+        if (!partMap[pno]) partMap[pno] = {kg:0, barrels:0, line:line, customer:row.customer||''};
+        partMap[pno].kg += Number(row.kg||0);
+        partMap[pno].barrels++;
+        var cust = row.customer||'—';
+        custMap[cust] = (custMap[cust]||0) + Number(row.kg||0);
+      });
     });
   }
 
+  // Chart: Volume by month (เฉพาะสายที่เลือก)
   destroyChart('chartVolDaily');
   _charts['chartVolDaily'] = new Chart(document.getElementById('chartVolDaily'), {
     type:'bar',
     data:{
       labels: months.map(monthLabelTH),
-      datasets:[
-        {label:'B-1',data:months.map(function(m){return byMonthLine[m].B1;}),backgroundColor:'rgba(59,130,246,.7)'},
-        {label:'B-2',data:months.map(function(m){return byMonthLine[m].B2;}),backgroundColor:'rgba(139,92,246,.7)'},
-        {label:'R-1',data:months.map(function(m){return byMonthLine[m].R1;}),backgroundColor:'rgba(249,115,22,.7)'},
-      ]
+      datasets: lines.map(function(line){
+        return {label:line.replace('B','B-').replace('R','R-'), data:months.map(function(m){return byMonthLine[m][line];}), backgroundColor:LINE_COLORS[line]};
+      })
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}}}}}
   });
-}
 
-// ══════════════════════════════════════════════
-//  SECTION 2b: ปริมาณงาน (ต่อ) — สัดส่วนสี / Top parts / ลูกค้า ยังใช้ช่วงวันที่ตามตัวกรองเดิม
-// ══════════════════════════════════════════════
-function renderVolume(records, dateFrom, dateTo) {
-  var dates = getDates(dateFrom, dateTo);
-  var byDateLine = {}; // {date: {B1:kg, B2:kg, R1:kg}}
-  var colorTot = {B:0, C:0, K:0};
-  var partMap = {}; // {partName: {kg, barrels, line, customer}}
-  var custMap = {}; // {customer: kg}
-
-  records.forEach(function(r) {
-    if (!byDateLine[r.date]) byDateLine[r.date] = {B1:0,B2:0,R1:0};
-    byDateLine[r.date][r.line] += r.totalKg;
-    colorTot.B += r.kgB; colorTot.C += r.kgC; colorTot.K += r.kgK;
-
-    r.rows.forEach(function(row) {
-      var pno = (row.partName||'').trim();
-      if (!pno) return;
-      if (!partMap[pno]) partMap[pno] = {kg:0, barrels:0, line:r.line, customer:row.customer||''};
-      partMap[pno].kg += Number(row.kg||0);
-      partMap[pno].barrels++;
-      var cust = row.customer||'—';
-      custMap[cust] = (custMap[cust]||0) + Number(row.kg||0);
-    });
-  });
-
-  // Chart: Volume daily → ย้ายไปที่ renderVolumeMonthly() แล้ว (12 เดือนล่าสุด ไม่ผูกกับ dateFrom/dateTo)
-
-  // Chart: Color
+  // Chart: Color ratio
   destroyChart('chartColor');
   _charts['chartColor'] = new Chart(document.getElementById('chartColor'), {
     type:'doughnut',
@@ -460,7 +465,15 @@ function renderVolume(records, dateFrom, dateTo) {
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
   });
 
-  // Table: Top parts
+  // Chart: Waste ratio (งานดี vs งานซ่อม)
+  destroyChart('chartWasteRatio');
+  _charts['chartWasteRatio'] = new Chart(document.getElementById('chartWasteRatio'), {
+    type:'doughnut',
+    data:{labels:['งานดี (New)','งานซ่อม (Rework)'],datasets:[{data:[wasteTot.good, wasteTot.rework],backgroundColor:['#10b981','#ef4444']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+  });
+
+  // Table: Top 10 parts
   var topParts = Object.entries(partMap).sort(function(a,b){return b[1].kg-a[1].kg;}).slice(0,10);
   var tbody = document.querySelector('#tblTopParts tbody');
   if (topParts.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="loading">ไม่มีข้อมูล</td></tr>'; }
