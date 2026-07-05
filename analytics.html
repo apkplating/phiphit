@@ -61,7 +61,8 @@ main{max-width:1400px;margin:0 auto;padding:20px 20px 60px;}
 @media(max-width:600px){.grid2,.grid3,.grid4{grid-template-columns:1fr;}}
 
 /* ── Cards ── */
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;}
+.mini-pie-wrap{position:absolute;top:14px;right:14px;width:92px;height:92px;}
 .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
 .kpi-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
 .kpi-value{font-size:24px;font-weight:800;color:var(--navy);}
@@ -164,13 +165,18 @@ tr:hover td{background:#f8fafc;}
           </select>
         </div>
         <div class="chart-wrap-lg"><canvas id="chartVolDaily"></canvas></div>
+        <div id="volAvgBadge" style="margin-top:8px;font-size:11px;color:var(--text-mid);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
       </div>
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
+        <div class="mini-pie-wrap"><canvas id="chartColorMonthMini"></canvas></div>
+        <div id="colorMonthLabel" style="font-size:9.5px;color:var(--text-muted);text-align:right;margin-top:-6px;margin-bottom:6px;"></div>
         <div class="chart-wrap"><canvas id="chartColor"></canvas></div>
       </div>
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนของเสีย (งานดี/งานซ่อม)</div>
+        <div class="mini-pie-wrap"><canvas id="chartWasteMonthMini"></canvas></div>
+        <div id="wasteMonthLabel" style="font-size:9.5px;color:var(--text-muted);text-align:right;margin-top:-6px;margin-bottom:6px;"></div>
         <div class="chart-wrap"><canvas id="chartWasteRatio"></canvas></div>
       </div>
     </div>
@@ -451,6 +457,7 @@ async function renderVolumeSection(lineSel){
   var wasteByMonth  = {}; months.forEach(function(m){ wasteByMonth[m]  = {good:0,rework:0}; });
   var partMap = {};  // {partName: {kg, barrels, line, customer}}
   var custMap = {};  // {customer: kg}
+  var workingDaysSet = {}; // {date: true} — วันที่มีข้อมูลจริงจากสาย/ช่วงที่เลือก
 
   for (var i=0; i<lines.length; i++){
     var line = lines[i];
@@ -466,6 +473,7 @@ async function renderVolumeSection(lineSel){
       var newKg    = Number(day.newKg|| (totalKg-reworkKg));
       var rows     = Array.isArray(day.rows) ? day.rows : [];
 
+      if (totalKg > 0) workingDaysSet[day.date] = true;
       byMonthLine[ym][line] += totalKg;
       colorByMonth[ym].B += Number(day.kgB||0); colorByMonth[ym].C += Number(day.kgC||0); colorByMonth[ym].K += Number(day.kgK||0);
       wasteByMonth[ym].good += newKg; wasteByMonth[ym].rework += reworkKg;
@@ -514,6 +522,36 @@ async function renderVolumeSection(lineSel){
         y1:{position:'right',ticks:{font:{size:10}},grid:{drawOnChartArea:false},title:{display:true,text:'ชั่วโมง',font:{size:10}}}
       }
     }
+  });
+
+  // Badge: เฉลี่ย kg/วัน และจำนวนวันทำงาน (นับจากวันที่มีข้อมูลจริงในช่วง 12 เดือน + สายที่เลือก)
+  var totalKgSel = 0; months.forEach(function(m){ lines.forEach(function(ln){ totalKgSel += byMonthLine[m][ln]; }); });
+  var workingDaysCount = Object.keys(workingDaysSet).length;
+  var avgBadge = document.getElementById('volAvgBadge');
+  if (avgBadge) {
+    avgBadge.innerHTML = '📊 เฉลี่ย <b>' + fmt(workingDaysCount>0?totalKgSel/workingDaysCount:0) + ' kg/วัน</b>'
+      + ' · ทำงานจริง <b>' + workingDaysCount + ' วัน</b> จาก 12 เดือนล่าสุด (รวม ' + fmt(totalKgSel) + ' kg)';
+  }
+
+  // Mini pie: สัดส่วนสี/ของเสีย เฉพาะเดือนปัจจุบัน (เดือนล่าสุดใน months = เดือนนี้)
+  var curYM = months[months.length-1];
+  var curColor = colorByMonth[curYM] || {B:0,C:0,K:0};
+  var curWaste = wasteByMonth[curYM] || {good:0,rework:0};
+  document.getElementById('colorMonthLabel').textContent = 'เดือนนี้ (' + monthLabelTH(curYM) + ')';
+  document.getElementById('wasteMonthLabel').textContent = 'เดือนนี้ (' + monthLabelTH(curYM) + ')';
+
+  destroyChart('chartColorMonthMini');
+  _charts['chartColorMonthMini'] = new Chart(document.getElementById('chartColorMonthMini'), {
+    type:'doughnut',
+    data:{labels:['B','C','K'],datasets:[{data:[curColor.B,curColor.C,curColor.K],backgroundColor:['#3b82f6','#8b5cf6','#1e293b'],borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:false},tooltip:{enabled:true}},cutout:'55%'}
+  });
+
+  destroyChart('chartWasteMonthMini');
+  _charts['chartWasteMonthMini'] = new Chart(document.getElementById('chartWasteMonthMini'), {
+    type:'doughnut',
+    data:{labels:['ดี','ซ่อม'],datasets:[{data:[curWaste.good,curWaste.rework],backgroundColor:['#10b981','#ef4444'],borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:false},tooltip:{enabled:true}},cutout:'55%'}
   });
 
   // Chart: Color ratio → แท่งรายเดือน (แสดงตัวเลขบนแท่ง)
