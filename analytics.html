@@ -164,7 +164,6 @@ tr:hover td{background:#f8fafc;}
           </select>
         </div>
         <div class="chart-wrap-lg"><canvas id="chartVolDaily"></canvas></div>
-        <div id="znCostBadge" style="margin-top:8px;font-size:11px;color:var(--text-mid);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
       </div>
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
@@ -186,6 +185,30 @@ tr:hover td{background:#f8fafc;}
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ปริมาณงานต่อลูกค้า (kg) · 12 เดือนล่าสุด</div>
         <div class="chart-wrap"><canvas id="chartCustomer"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── Section 2c: ต้นทุนการผลิต ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">💰 ต้นทุนการผลิต (Production Cost) · ประมาณการ</div>
+    <div class="grid2">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">ต้นทุนซิงค์ (Zn) รายเดือน (บาท) · 12 เดือนล่าสุด</div>
+          <select id="costLineFilter" onchange="renderCostSection(this.value)" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;">
+            <option value="ALL">ทุกสาย</option>
+            <option value="B1">B1</option>
+            <option value="B2">B2</option>
+            <option value="R1">R1</option>
+          </select>
+        </div>
+        <div class="chart-wrap-lg"><canvas id="chartCostZn"></canvas></div>
+        <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
+          สมมติฐาน: ความหนาสังกะสีมาตรฐาน 10 micron · ราคาซิงค์ 150 บาท/กก · พื้นที่ 1kg งาน ≈ 20 dm² (ตัวเลขประมาณการ ยังไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ — จะเพิ่มทีละรายการต่อไป)
+        </div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;">
+        รายการต้นทุนถัดไป (ค่าเคมีสี, ค่าแรง, ค่าไฟ ฯลฯ) — รอข้อมูล/สูตรเพิ่มเติม
       </div>
     </div>
 
@@ -365,6 +388,7 @@ async function loadAndRender() {
 
   renderKPI(records);
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
+  renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
@@ -492,16 +516,6 @@ async function renderVolumeSection(lineSel){
     }
   });
 
-  // ── ประมาณการต้นทุนซิงค์ (จาก kg รวมของสาย/ช่วงที่เลือก) ──
-  var totalKgSel = 0;
-  months.forEach(function(m){ lines.forEach(function(ln){ totalKgSel += byMonthLine[m][ln]; }); });
-  var znCostTotal = totalKgSel * ZN_BAHT_PER_KG_PRODUCT;
-  var znBadge = document.getElementById('znCostBadge');
-  if (znBadge) {
-    znBadge.innerHTML = '🧪 ประมาณการต้นทุนซิงค์ (Zn): <b>฿' + fmt(znCostTotal) + '</b>'
-      + ' <span style="color:var(--text-muted);">จาก ' + fmt(totalKgSel) + ' kg · สมมติหนา ' + ZN_THICKNESS_UM + 'µm, ราคา ' + ZN_PRICE_PER_KG + ' บาท/กก, 1kg=' + ZN_DM2_PER_KG + 'dm² (ตัวเลขประมาณการ ไม่ใช่ต้นทุนจริงตามหน้างาน)</span>';
-  }
-
   // Chart: Color ratio → แท่งรายเดือน (แสดงตัวเลขบนแท่ง)
   destroyChart('chartColor');
   _charts['chartColor'] = new Chart(document.getElementById('chartColor'), {
@@ -558,6 +572,49 @@ async function renderVolumeSection(lineSel){
     type:'bar', indexAxis:'y',
     data:{labels:topCust.map(function(e){return e[0];}),datasets:[{label:'kg',data:topCust.map(function(e){return e[1];}),backgroundColor:'rgba(59,130,246,.7)'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+  });
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 2c: ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn) เพิ่มรายการอื่นทีละตัวในอนาคต
+//  โครงสร้างเป็น stacked bar ต่อเดือน พร้อม datalabels — เพิ่ม dataset ใหม่ (เคมีสี/ค่าแรง/ค่าไฟ) ได้ทันทีทีหลัง
+// ══════════════════════════════════════════════
+async function renderCostSection(lineSel){
+  lineSel = lineSel || (document.getElementById('costLineFilter')||{}).value || 'ALL';
+  var months = lastNMonths(12);
+  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
+  var lines = lineSel === 'ALL' ? ['B1','B2','R1'] : [lineSel];
+
+  var znCostByMonth = {}; months.forEach(function(m){ znCostByMonth[m] = 0; });
+
+  for (var i=0; i<lines.length; i++){
+    var line = lines[i];
+    var data = await fetchLineData(line); // cache เดียวกับ section ปริมาณงาน ไม่ fetch ซ้ำ
+    var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+    dayRecords.forEach(function(day){
+      if (!day || !day.date) return;
+      var ym = day.date.slice(0,7);
+      if (!monthSet[ym]) return;
+      var totalKg = Number(day.totalKg||0);
+      znCostByMonth[ym] += totalKg * ZN_BAHT_PER_KG_PRODUCT;
+    });
+  }
+
+  destroyChart('chartCostZn');
+  _charts['chartCostZn'] = new Chart(document.getElementById('chartCostZn'), {
+    type:'bar',
+    data:{
+      labels: months.map(monthLabelTH),
+      datasets:[
+        {label:'ต้นทุนซิงค์ (Zn)', data:months.map(function(m){return Math.round(znCostByMonth[m]);}), backgroundColor:'#0ea5e9'}
+        // TODO: เพิ่ม dataset ค่าเคมีสี / ค่าแรง / ค่าไฟ ที่นี่ในอนาคต (stacked ต่อจากนี้)
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:11}}},
+        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},anchor:'end',align:'top',rotation:270,font:{size:8},color:'#374151',formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
+      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท',font:{size:10}}}}
+    }
   });
 }
 
