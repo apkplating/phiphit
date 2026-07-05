@@ -318,7 +318,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <div id="settingsMsg"></div>
       </div>
       <div class="card">
-        <div class="card-title">👥 รายชื่อพนักงาน (34 คน)</div>
+        <div class="card-title">👥 รายชื่อพนักงาน (<span id="empCountLabel">34</span> คน)<button class="btn btn-primary" style="margin-left:auto;padding:6px 14px;font-size:0.82em;" onclick="openEmpAdd()">➕ เพิ่มพนักงานใหม่</button></div>
         <div class="tbl-wrap"><table class="data"><thead><tr><th>รหัส</th><th>รหัสระบบ</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>วันเริ่มงาน</th><th>เบอร์โทร</th><th>ประเภทค่าจ้าง</th><th>แก้ไข</th></tr></thead><tbody id="empTable"></tbody></table></div>
       </div>
     </div>
@@ -929,6 +929,8 @@ async function sendReport(){
 
 // ========== SETTINGS ==========
 function renderSettings(){
+  const cl=document.getElementById('empCountLabel');
+  if(cl) cl.textContent=EMPLOYEES.length;
   document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
     const sd=e.startDate?new Date(e.startDate).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}):'—';
     const payBadge=e.payType==='รายเดือน'?'<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายเดือน</span>':'<span style="background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายวัน</span>';
@@ -948,9 +950,11 @@ function renderSettings(){
 }
 
 
-// ========== EDIT EMPLOYEE ==========
-// เก็บการแก้ไขใน localStorage เพื่อ override ข้อมูล default
+// ========== EDIT/ADD EMPLOYEE ==========
+// การแก้ไข/เพิ่มพนักงาน เก็บลง Firebase (/hr/employeeOverrides, /hr/customEmployees) เพื่อให้เห็นตรงกันทุกเครื่อง
+// (เดิมเก็บแค่ localStorage เครื่องเดียว — ยังเก็บ localStorage ไว้ด้วยเป็น cache สำรอง)
 let empOverrides = JSON.parse(localStorage.getItem('apk_emp_overrides')||'{}');
+let empIsNew = false;
 
 function applyOverrides(){
   Object.keys(empOverrides).forEach(id=>{
@@ -960,9 +964,58 @@ function applyOverrides(){
 }
 applyOverrides();
 
+async function loadEmployeeCloudData(){
+  const [overridesFB, customFB] = await Promise.all([fbGet('/hr/employeeOverrides'), fbGet('/hr/customEmployees')]);
+  if(overridesFB){
+    empOverrides = Object.assign({}, empOverrides, overridesFB);
+    localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+  }
+  if(customFB){
+    Object.keys(customFB).forEach(id=>{
+      if(!EMPLOYEES.find(e=>e.id===id)) EMPLOYEES.push(customFB[id]);
+    });
+  }
+  applyOverrides();
+  const settingsPage=document.getElementById('page-settings');
+  if(settingsPage && settingsPage.classList.contains('active')) renderSettings();
+}
+loadEmployeeCloudData();
+
+const EMP_COLORS=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899','#a855f7','#14b8a6','#6366f1','#0ea5e9'];
+
+function openEmpAdd(){
+  empIsNew=true;
+  const idInput=document.getElementById('eId');
+  idInput.removeAttribute('readonly');
+  idInput.style.background='';
+  idInput.style.cursor='';
+  idInput.value='';
+  document.getElementById('ePrefix').value='นาย';
+  document.getElementById('eName').value='';
+  document.getElementById('eNameEN').value='';
+  document.getElementById('ePhone').value='';
+  document.getElementById('ePosition').value='พนักงาน';
+  document.getElementById('eDept').value='';
+  document.getElementById('ePayType').value='รายวัน';
+  document.getElementById('eSalary').value=0;
+  document.getElementById('eHourly').value=100;
+  document.getElementById('eOT').value=150;
+  document.getElementById('eStart').value=new Date().toISOString().slice(0,10);
+  const h3=document.querySelector('#editEmpModal h3');
+  if(h3) h3.textContent='➕ เพิ่มพนักงานใหม่';
+  document.getElementById('editEmpModal').classList.add('show');
+}
+
 function openEmpEdit(id){
+  empIsNew=false;
   const e=EMPLOYEES.find(x=>x.id===id);
   if(!e)return;
+  const idInput=document.getElementById('eId');
+  idInput.setAttribute('readonly','readonly');
+  idInput.style.background='#f3f4f6';
+  idInput.style.cursor='not-allowed';
+  const h3=document.querySelector('#editEmpModal h3');
+  if(h3) h3.textContent='✏️ แก้ไขข้อมูลพนักงาน';
   document.getElementById('eId').value=e.id;
   document.getElementById('ePrefix').value=e.prefix||'นาย';
   document.getElementById('eName').value=e.name||'';
@@ -979,13 +1032,14 @@ function openEmpEdit(id){
 }
 
 function saveEmpEdit(){
-  const id=document.getElementById('eId').value;
-  const idx=EMPLOYEES.findIndex(e=>e.id===id);
-  if(idx<0)return;
+  const id=document.getElementById('eId').value.trim();
+  if(!id){alert('กรุณากรอกรหัสพนักงาน');return;}
+  const name=document.getElementById('eName').value.trim();
+  if(!name){alert('กรุณากรอกชื่อพนักงาน');return;}
   const updates={
     prefix: document.getElementById('ePrefix').value,
-    name: document.getElementById('eName').value,
-    nameTH: document.getElementById('eName').value,
+    name: name,
+    nameTH: name,
     nameEN: document.getElementById('eNameEN').value,
     phone: document.getElementById('ePhone').value,
     position: document.getElementById('ePosition').value,
@@ -996,12 +1050,29 @@ function saveEmpEdit(){
     otRate: parseFloat(document.getElementById('eOT').value)||150,
     startDate: document.getElementById('eStart').value,
   };
-  Object.assign(EMPLOYEES[idx], updates);
-  empOverrides[id]=updates;
-  localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+
+  if(empIsNew){
+    if(EMPLOYEES.find(e=>e.id===id)){alert('มีรหัสพนักงาน '+id+' อยู่ในระบบแล้ว กรุณาใช้รหัสอื่น');return;}
+    const newEmp=Object.assign({
+      id: id,
+      sysCode: String(id).padStart(4,'0'),
+      contractType:'ฟูลไทม์',
+      color: EMP_COLORS[EMPLOYEES.length % EMP_COLORS.length],
+    }, updates);
+    EMPLOYEES.push(newEmp);
+    fbPut('/hr/customEmployees/'+id, newEmp);
+    showToast('✅ เพิ่มพนักงาน '+newEmp.name+' แล้ว');
+  }else{
+    const idx=EMPLOYEES.findIndex(e=>e.id===id);
+    if(idx<0)return;
+    Object.assign(EMPLOYEES[idx], updates);
+    empOverrides[id]=updates;
+    localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+    fbPut('/hr/employeeOverrides/'+id, updates);
+    showToast('✅ บันทึกข้อมูลพนักงาน '+EMPLOYEES[idx].name+' แล้ว');
+  }
   document.getElementById('editEmpModal').classList.remove('show');
   renderSettings();
-  showToast('✅ บันทึกข้อมูลพนักงาน '+EMPLOYEES[idx].name+' แล้ว');
 }
 
 // ========== INIT ==========
