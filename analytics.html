@@ -164,6 +164,7 @@ tr:hover td{background:#f8fafc;}
           </select>
         </div>
         <div class="chart-wrap-lg"><canvas id="chartVolDaily"></canvas></div>
+        <div id="znCostBadge" style="margin-top:8px;font-size:11px;color:var(--text-mid);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
       </div>
       <div class="card">
         <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">สัดส่วนสีชุบ (B/C/K)</div>
@@ -406,6 +407,14 @@ function monthLabelTH(ym){
 }
 var LINE_COLORS = {B1:'rgba(59,130,246,.7)', B2:'rgba(139,92,246,.7)', R1:'rgba(249,115,22,.7)'};
 
+// ── ประมาณการต้นทุนซิงค์ (OPS-QA-002): น้ำหนัก Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713 ──
+// สมมติฐาน: 1 kg งาน = 20 dm² (ประมาณการเฉลี่ย), ความหนามาตรฐาน 10 micron, ราคาซิงค์ 150 บาท/กก
+var ZN_THICKNESS_UM = 10;
+var ZN_PRICE_PER_KG  = 150;
+var ZN_DM2_PER_KG    = 20;
+var ZN_G_PER_KG_PRODUCT = ZN_DM2_PER_KG * ZN_THICKNESS_UM * 0.0713; // ≈14.26 g ซิงค์ต่อ 1kg งาน
+var ZN_BAHT_PER_KG_PRODUCT = (ZN_G_PER_KG_PRODUCT/1000) * ZN_PRICE_PER_KG; // ≈2.14 บาท/กก งาน
+
 async function renderVolumeSection(lineSel){
   lineSel = lineSel || (document.getElementById('volLineFilter')||{}).value || 'ALL';
   var months = lastNMonths(12);
@@ -482,6 +491,16 @@ async function renderVolumeSection(lineSel){
       }
     }
   });
+
+  // ── ประมาณการต้นทุนซิงค์ (จาก kg รวมของสาย/ช่วงที่เลือก) ──
+  var totalKgSel = 0;
+  months.forEach(function(m){ lines.forEach(function(ln){ totalKgSel += byMonthLine[m][ln]; }); });
+  var znCostTotal = totalKgSel * ZN_BAHT_PER_KG_PRODUCT;
+  var znBadge = document.getElementById('znCostBadge');
+  if (znBadge) {
+    znBadge.innerHTML = '🧪 ประมาณการต้นทุนซิงค์ (Zn): <b>฿' + fmt(znCostTotal) + '</b>'
+      + ' <span style="color:var(--text-muted);">จาก ' + fmt(totalKgSel) + ' kg · สมมติหนา ' + ZN_THICKNESS_UM + 'µm, ราคา ' + ZN_PRICE_PER_KG + ' บาท/กก, 1kg=' + ZN_DM2_PER_KG + 'dm² (ตัวเลขประมาณการ ไม่ใช่ต้นทุนจริงตามหน้างาน)</span>';
+  }
 
   // Chart: Color ratio → แท่งรายเดือน (แสดงตัวเลขบนแท่ง)
   destroyChart('chartColor');
