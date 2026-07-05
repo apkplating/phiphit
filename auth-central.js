@@ -117,6 +117,12 @@
       ]
     },
     {
+      key: 'analytics', label: 'Analytics', group: 'คุณภาพ & ISO',
+      tabs: [
+        { id: 'dashboard', label: 'แดชบอร์ด' }
+      ]
+    },
+    {
       key: 'production_order', label: 'ใบสั่งผลิต', group: 'สายการผลิต',
       tabs: [
         { id: 'orders', label: 'รายการใบสั่งผลิต' },
