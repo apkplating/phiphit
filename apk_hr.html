@@ -221,6 +221,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:0.82em;">
           <span>🌅 <b>กะ 1</b> 05:00-13:00</span><span>☀️ <b>กะ 2</b> 13:00-21:00</span><span>🌙 <b>กะ 3</b> 21:00-05:00</span><span>🔬 <b>กะ QC</b> 08:00-17:00 (พัก 12-13)</span><span>🏖️ <b>หยุด</b></span>
         </div>
+        <div id="companyHolidayWrap" style="margin-bottom:14px;padding:12px 14px;background:#fef2f2;border-radius:10px;"></div>
         <div id="weeklyOffWrap" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#f9fafb;border-radius:10px;"></div>
         <div class="tbl-wrap"><table class="cal"><thead id="calHead"></thead><tbody id="calBody"></tbody></table></div>
       </div>
@@ -600,6 +601,7 @@ let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
 let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
 let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750};
 let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15};
+let companyHolidays=JSON.parse(localStorage.getItem('apk_companyholidays')||'{}'); // key: "2569_7" -> [5,6,...]
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
 
@@ -686,7 +688,7 @@ function normalizeZKRecord(dateKey,empKey,raw){
 
 // โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays')]);
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -713,6 +715,7 @@ async function loadFromFirebase(){
   if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
   if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
   if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
+  if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   renderTodayTable();renderDashboard();
   const activePage=document.querySelector('.page.active');
   if(activePage&&activePage.id==='page-attendance')renderAttendance();
@@ -908,7 +911,45 @@ function renderCal(){
     bh+='</tr>';
   });
   document.getElementById('calBody').innerHTML=bh;
+  renderCompanyHolidayUI();
   renderWeeklyOffUI();
+}
+
+// ========== วันหยุดบริษัทประจำเดือน (ใช้กับพนักงานทุกคนอัตโนมัติ) ==========
+function holidayKey(y,m){return `${y}_${m+1}`;}
+function renderCompanyHolidayUI(){
+  const wrap=document.getElementById('companyHolidayWrap');
+  if(!wrap)return;
+  const days=new Date(calYear,calMonth+1,0).getDate();
+  const key=holidayKey(calYear,calMonth);
+  const current=companyHolidays[key]||[];
+  let h=`<div style="font-size:0.85em;font-weight:700;color:#991b1b;margin-bottom:8px;">🎌 วันหยุดบริษัทประจำเดือนนี้ (ติ๊กแล้วตั้งเป็น "หยุด" ให้พนักงานทุกคนทันที)</div><div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+  for(let d=1;d<=days;d++){
+    const dow=new Date(calYear,calMonth,d).getDay();
+    h+=`<label style="font-size:0.8em;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;background:${current.includes(d)?'#fecaca':'#fff'};padding:5px 7px;border-radius:6px;border:1.5px solid ${current.includes(d)?'#ef4444':'#e5e7eb'};min-width:34px;">
+      <span style="color:${dow===0||dow===6?'#ef4444':'#6b7280'};">${TH_DAYS[dow]}</span>
+      <b>${d}</b>
+      <input type="checkbox" ${current.includes(d)?'checked':''} onchange="toggleCompanyHoliday(${d},this.checked)" style="margin:0;">
+    </label>`;
+  }
+  wrap.innerHTML=h+'</div>';
+}
+function toggleCompanyHoliday(day,checked){
+  const key=holidayKey(calYear,calMonth);
+  if(!companyHolidays[key])companyHolidays[key]=[];
+  if(checked){
+    if(!companyHolidays[key].includes(day))companyHolidays[key].push(day);
+    // ตั้งเป็น "หยุด" ให้พนักงานทุกคนทันที (ทับกะเดิมของวันนั้น)
+    EMPLOYEES.forEach(emp=>{schedule[schedKey(emp.id,calYear,calMonth,day)]='off';});
+  } else {
+    companyHolidays[key]=companyHolidays[key].filter(x=>x!==day);
+    // หมายเหตุ: การยกเลิกจะไม่คืนกะเดิมให้ (ต้องไปเลือกกะใหม่เองรายคน/รายวัน)
+  }
+  localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));
+  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  fbPut('/hr/companyHolidays',companyHolidays);
+  fbPut('/hr/schedule',schedule);
+  renderCal();
 }
 
 // ========== วันหยุดประจำสัปดาห์ (รายคน) ==========
@@ -952,14 +993,15 @@ function assignShift(sv){
 function applyShiftWholeMonth(empId,sv){
   const days=new Date(calYear,calMonth+1,0).getDate();
   const off=weeklyOff[empId]||[];
+  const holidays=companyHolidays[holidayKey(calYear,calMonth)]||[];
   let n=0;
   for(let d=1;d<=days;d++){
     const dow=new Date(calYear,calMonth,d).getDay();
     const k=schedKey(empId,calYear,calMonth,d);
-    schedule[k]=off.includes(dow)?'off':sv;
+    schedule[k]=(holidays.includes(d)||off.includes(dow))?'off':sv;
     n++;
   }
-  alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน (วันหยุดประจำสัปดาห์ตั้งเป็น "หยุด" ให้อัตโนมัติ)`);
+  alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน (เว้นวันหยุดประจำสัปดาห์และวันหยุดบริษัทให้อัตโนมัติ)`);
 }
 function saveSched(){
   localStorage.setItem('apk_sched',JSON.stringify(schedule));
@@ -1002,13 +1044,22 @@ function renderAttendance(){
 function initSalaryMonths(){const s=document.getElementById('salaryMonth');TH_MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;s.appendChild(o);});s.value=new Date().getMonth();}
 let deductions=JSON.parse(localStorage.getItem('apk_deductions')||'{}');
 function dedKey(empId,year,month){return empId+'_'+year+'_'+(month+1);}
+function calcAutoSSO(emp){
+  // ตามกฎหมายประกันสังคม มาตรา 33: ฐานค่าจ้างขั้นต่ำ = ssoConfig.min เสมอ
+  // แม้พนักงานจะยังไม่ได้กรอก "เงินเดือน/ค่าจ้าง" ในโปรไฟล์ (เช่น พนักงานรายวัน) ก็ยังต้องใช้ฐานขั้นต่ำนี้ ไม่ใช่ 0
+  const baseSalary=parseFloat(emp.salary)||0;
+  const base=Math.min(Math.max(baseSalary,ssoConfig.min),ssoConfig.max);
+  let sso=Math.round(base*(ssoConfig.rate/100));
+  if(sso>ssoConfig.cap)sso=ssoConfig.cap;
+  return sso;
+}
 function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
   const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0),rp=rh*emp.hourlyRate,op=ot*emp.otRate;
   const gross=rp+op;
   const dk=dedKey(empId,yr,month);
-  const ded=deductions[dk]||{rent:0,utility:0,social:0,otherLabel:'',otherAmount:0};
+  const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
   const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0);
   const net=gross-dedTotal;
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),rp:rp.toFixed(2),op:op.toFixed(2),gross:gross.toFixed(2),ded,dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
@@ -1039,7 +1090,11 @@ function openDeductModal(empId,month){
   curDeductKey=dedKey(empId,yr,month);
   curDeductEmpId=empId;
   document.getElementById('deductModalTitle').textContent=`📝 รายการหัก — ${emp.name} (${TH_MONTHS[month]})`;
-  const ded=deductions[curDeductKey]||{rent:0,utility:0,social:0,otherLabel:'',otherAmount:0};
+  let ded=deductions[curDeductKey];
+  if(!ded){
+    // ยังไม่เคยตั้งเดือนนี้ -> คำนวณประกันสังคมอัตโนมัติจากสูตร % ที่ตั้งไว้ในหน้า "การตั้งค่า" ให้ทันที
+    ded={rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
+  }
   document.getElementById('dRent').value=ded.rent||0;
   document.getElementById('dUtility').value=ded.utility||0;
   document.getElementById('dSocial').value=ded.social||0;
@@ -1052,15 +1107,7 @@ function closeDeductModal(){document.getElementById('deductModal').classList.rem
 function autoCalcSSO(){
   if(!curDeductEmpId)return;
   const emp=EMPLOYEES.find(e=>e.id===curDeductEmpId);
-  const baseSalary=parseFloat(emp.salary)||0;
-  if(baseSalary<=0){
-    alert('⚠️ พนักงานคนนี้ยังไม่ได้ตั้ง "เงินเดือน/ค่าจ้าง" พื้นฐาน (ใช้เป็นฐานคำนวณประกันสังคม)\n\nไปที่หน้า "การตั้งค่า" → แก้ไขข้อมูลพนักงานคนนี้ → กรอกช่อง "เงินเดือน/ค่าจ้าง (บาท)" ก่อน หรือกรอกยอดหักเองในช่องด้านซ้าย');
-    return;
-  }
-  const base=Math.min(Math.max(baseSalary,ssoConfig.min),ssoConfig.max);
-  let sso=Math.round(base*(ssoConfig.rate/100));
-  if(sso>ssoConfig.cap)sso=ssoConfig.cap;
-  document.getElementById('dSocial').value=sso;
+  document.getElementById('dSocial').value=calcAutoSSO(emp);
   updateDedPreview();
 }
 function saveSSOConfig(){
