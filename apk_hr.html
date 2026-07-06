@@ -689,6 +689,12 @@ function normalizeZKRecord(dateKey,empKey,raw){
 // โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
 async function loadFromFirebase(){
   const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays')]);
+  // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
+  if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
+  if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
+  if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
+  if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
+  if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -711,11 +717,6 @@ async function loadFromFirebase(){
   const localPending=local.filter(l=>!l.synced&&!merged.find(m=>m.id===l.id));
   attendance=[...merged,...localPending];
   localStorage.setItem('apk_att',JSON.stringify(attendance));
-  if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
-  if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
-  if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
-  if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
-  if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   renderTodayTable();renderDashboard();
   const activePage=document.querySelector('.page.active');
   if(activePage&&activePage.id==='page-attendance')renderAttendance();
