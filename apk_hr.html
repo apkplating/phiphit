@@ -987,9 +987,15 @@ function assignShift(sv){
   } else {
     const k=schedKey(selCell.empId,calYear,calMonth,selCell.day);
     if(sv===null)delete schedule[k];else schedule[k]=sv;
+    persistSchedule();
   }
   closeShiftModal();
   renderCal();
+}
+// บันทึกตารางกะลง localStorage + sync ขึ้น Firebase ทันที (กันข้อมูลหายจากการ auto-refresh ทุก 60 วิ ก่อนกดปุ่มบันทึกมือ)
+function persistSchedule(){
+  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  fbPut('/hr/schedule',schedule);
 }
 function applyShiftWholeMonth(empId,sv){
   const days=new Date(calYear,calMonth+1,0).getDate();
@@ -1002,7 +1008,8 @@ function applyShiftWholeMonth(empId,sv){
     schedule[k]=(holidays.includes(d)||off.includes(dow))?'off':sv;
     n++;
   }
-  alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน (เว้นวันหยุดประจำสัปดาห์และวันหยุดบริษัทให้อัตโนมัติ)`);
+  persistSchedule();
+  alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน และซิงค์ขึ้น Firebase ทันที (เว้นวันหยุดประจำสัปดาห์และวันหยุดบริษัทให้อัตโนมัติ)`);
 }
 function saveSched(){
   localStorage.setItem('apk_sched',JSON.stringify(schedule));
