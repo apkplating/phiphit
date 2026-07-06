@@ -54,6 +54,7 @@ table.data tr:hover td{background:#fafafa;}
 .badge-s1{background:#fef3c7;color:#92400e;border:1.5px solid #f59e0b;}
 .badge-s2{background:#dbeafe;color:#1e40af;border:1.5px solid #3b82f6;}
 .badge-s3{background:#ede9fe;color:#5b21b6;border:1.5px solid #8b5cf6;}
+.badge-s4{background:#dcfce7;color:#166534;border:1.5px solid #22c55e;}
 .badge-off{background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;}
 .badge-ok{background:#d1fae5;color:#065f46;}
 .badge-working{background:#fef3c7;color:#92400e;}
@@ -83,6 +84,7 @@ table.cal tbody td.emp-cell{text-align:left;padding-left:12px;background:#fafafa
 .cs1{background:#fef3c7;color:#92400e;border:1.5px solid #f59e0b;}
 .cs2{background:#dbeafe;color:#1e40af;border:1.5px solid #3b82f6;}
 .cs3{background:#ede9fe;color:#5b21b6;border:1.5px solid #8b5cf6;}
+.cs4{background:#dcfce7;color:#166534;border:1.5px solid #22c55e;}
 .csoff{background:#f3f4f6;color:#9ca3af;border:1.5px dashed #d1d5db;}
 .cal-empty{width:54px;height:28px;border:2px dashed #e5e7eb;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:#d1d5db;font-size:1.1em;transition:all 0.2s;}
 .cal-empty:hover{border-color:#00c9a7;color:#00c9a7;background:#f0fdfb;}
@@ -98,6 +100,7 @@ table.cal tbody td.emp-cell{text-align:left;padding-left:12px;background:#fafafa
 .sopt.s1{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
 .sopt.s2{background:#dbeafe;border-color:#3b82f6;color:#1e40af;}
 .sopt.s3{background:#ede9fe;border-color:#8b5cf6;color:#5b21b6;}
+.sopt.s4{background:#dcfce7;border-color:#22c55e;color:#166534;}
 .sopt.soff{background:#f3f4f6;border-color:#d1d5db;color:#6b7280;}
 .modal-footer{display:flex;gap:10px;margin-top:12px;}
 .payslip{max-width:720px;margin:0 auto;background:white;padding:36px;border:2px solid #333;}
@@ -190,6 +193,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           <div class="shift-opt selected" id="shiftBtn1" onclick="selectShift(1)"><div class="sname">🌅 กะที่ 1 เช้า</div><div class="stime">05:00 – 13:00</div></div>
           <div class="shift-opt" id="shiftBtn2" onclick="selectShift(2)"><div class="sname">☀️ กะที่ 2 บ่าย</div><div class="stime">13:00 – 21:00</div></div>
           <div class="shift-opt" id="shiftBtn3" onclick="selectShift(3)"><div class="sname">🌙 กะที่ 3 ดึก</div><div class="stime">21:00 – 05:00</div></div>
+          <div class="shift-opt" id="shiftBtn4" onclick="selectShift(4)"><div class="sname">🔬 กะ QC</div><div class="stime">08:00 – 17:00 (พัก 12-13)</div></div>
         </div>
         <div class="scan-input">
           <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter">
@@ -215,8 +219,9 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           </div>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:0.82em;">
-          <span>🌅 <b>กะ 1</b> 05:00-13:00</span><span>☀️ <b>กะ 2</b> 13:00-21:00</span><span>🌙 <b>กะ 3</b> 21:00-05:00</span><span>🏖️ <b>หยุด</b></span>
+          <span>🌅 <b>กะ 1</b> 05:00-13:00</span><span>☀️ <b>กะ 2</b> 13:00-21:00</span><span>🌙 <b>กะ 3</b> 21:00-05:00</span><span>🔬 <b>กะ QC</b> 08:00-17:00 (พัก 12-13)</span><span>🏖️ <b>หยุด</b></span>
         </div>
+        <div id="weeklyOffWrap" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#f9fafb;border-radius:10px;"></div>
         <div class="tbl-wrap"><table class="cal"><thead id="calHead"></thead><tbody id="calBody"></tbody></table></div>
       </div>
     </div>
@@ -238,9 +243,13 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
     <!-- SALARY -->
     <div class="page" id="page-salary">
       <div class="card">
-        <div style="display:flex;align-items:center;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <label style="font-weight:600;font-size:0.9em;">เดือน:</label>
           <select id="salaryMonth" onchange="renderSalary()" style="padding:9px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;"></select>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+          <input type="text" id="salaryNote" placeholder="📝 หมายเหตุประจำเดือน (เช่น เดือนนี้เป็นเดือนทดสอบระบบ เวลาเข้า-ออกอาจไม่ตรงกับความเป็นจริง)" style="flex:1;padding:10px 13px;border:2px solid #fbbf24;border-radius:8px;font-size:0.85em;outline:none;background:#fffbeb;">
+          <button class="btn btn-secondary" onclick="saveSalaryNote()">💾 บันทึกหมายเหตุ</button>
         </div>
       </div>
       <div class="card"><div class="card-title">💰 สรุปเงินเดือน</div><div class="tbl-wrap" id="salaryTable"></div></div>
@@ -316,6 +325,48 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         </div>
         <button class="btn btn-success" onclick="sendReport()">📤 ส่งรายงานทดสอบตอนนี้</button>
         <div id="settingsMsg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🛡️ ตั้งค่าสูตรคำนวณประกันสังคม</div>
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ปรับค่าตรงนี้ได้เองเมื่อกฎหมายเปลี่ยนแปลง โดยไม่ต้องแก้ไขไฟล์ระบบ — ใช้เป็นค่าเริ่มต้นตอนกด "คำนวณอัตโนมัติ" ในหน้าเงินเดือน (ยังสามารถแก้ตัวเลขเป็นรายคนได้เสมอ)</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+          <div class="form-group">
+            <label>อัตรา (%)</label>
+            <input type="number" id="ssoRate" value="5" step="0.1">
+          </div>
+          <div class="form-group">
+            <label>ฐานขั้นต่ำ (บาท)</label>
+            <input type="number" id="ssoMin" value="1650">
+          </div>
+          <div class="form-group">
+            <label>ฐานสูงสุด (บาท)</label>
+            <input type="number" id="ssoMax" value="15000">
+          </div>
+          <div class="form-group">
+            <label>เพดานหักสูงสุด (บาท)</label>
+            <input type="number" id="ssoCap" value="750">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSSOConfig()">💾 บันทึกสูตรประกันสังคม</button>
+        <div id="ssoConfigMsg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⏰ ตั้งค่าการมาสาย / เริ่มนับ OT</div>
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ใช้ตารางกะที่ตั้งไว้ในเมนู "ตารางกะ" เทียบกับเวลาสแกนจริง — ถ้าวันไหนยังไม่ได้ตั้งตารางกะ ระบบจะใช้วิธีคำนวณแบบเดิม (รวมชั่วโมงเกิน 8 ชม. = OT)</p>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:14px;max-width:520px;">
+          <div class="form-group">
+            <label>อนุโลมสาย (นาที)</label>
+            <input type="number" id="lateGraceMin" value="0">
+            <span class="helper">เข้างานช้ากว่ากะไม่เกินกี่นาทีถึงยังไม่ถือว่าสาย</span>
+          </div>
+          <div class="form-group">
+            <label>เริ่มนับ OT หลังเลิกงาน (นาที)</label>
+            <input type="number" id="otGraceMin" value="15">
+            <span class="helper">ต้องอยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มคิด OT (นับเต็มตั้งแต่เวลาเลิกกะจริง)</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveOTConfig()">💾 บันทึกการตั้งค่า</button>
+        <div id="otConfigMsg"></div>
       </div>
       <div class="card">
         <div class="card-title">👥 รายชื่อพนักงาน (<span id="empCountLabel">34</span> คน)<button class="btn btn-primary" style="margin-left:auto;padding:6px 14px;font-size:0.82em;" onclick="openEmpAdd()">➕ เพิ่มพนักงานใหม่</button></div>
@@ -396,10 +447,15 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
 <div class="modal-ov" id="shiftModal">
   <div class="modal-box">
     <h3 id="modalTitle">⚙️ กำหนดกะ</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-size:0.85em;margin-bottom:12px;cursor:pointer;background:#eff6ff;padding:10px 12px;border-radius:8px;">
+      <input type="checkbox" id="applyWholeMonth" style="width:16px;height:16px;">
+      ใช้กะนี้ทั้งเดือน (เว้นวันหยุดประจำสัปดาห์ที่ตั้งไว้ด้านบน)
+    </label>
     <div class="shift-opts-modal">
       <div class="sopt s1" onclick="assignShift(1)">🌅 <div><b>กะที่ 1 เช้า</b><br><small>05:00 – 13:00 น.</small></div></div>
       <div class="sopt s2" onclick="assignShift(2)">☀️ <div><b>กะที่ 2 บ่าย</b><br><small>13:00 – 21:00 น.</small></div></div>
       <div class="sopt s3" onclick="assignShift(3)">🌙 <div><b>กะที่ 3 ดึก</b><br><small>21:00 – 05:00 น.</small></div></div>
+      <div class="sopt s4" onclick="assignShift(4)">🔬 <div><b>กะ QC</b><br><small>08:00 – 17:00 น. (พัก 12:00-13:00)</small></div></div>
       <div class="sopt soff" onclick="assignShift('off')">🏖️ <div><b>วันหยุด</b><br><small>ไม่ทำงาน</small></div></div>
     </div>
     <div class="modal-footer">
@@ -409,11 +465,51 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
   </div>
 </div>
 
+<!-- MODAL: รายการหักเงินเดือน -->
+<div class="modal-ov" id="deductModal">
+  <div class="modal-box" style="width:90%;max-width:440px;">
+    <h3 id="deductModalTitle" style="color:#1a2236;margin-bottom:16px;">📝 รายการหัก</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">🏠 ค่าที่พัก (บาท)</label>
+        <input type="number" id="dRent" value="0" oninput="updateDedPreview()" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">💧⚡ ค่าน้ำ-ไฟ (บาท)</label>
+        <input type="number" id="dUtility" value="0" oninput="updateDedPreview()" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">🛡️ ประกันสังคม (บาท)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="dSocial" value="0" oninput="updateDedPreview()" style="flex:1;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+          <button type="button" class="btn btn-secondary" style="white-space:nowrap;font-size:0.78em;padding:0 12px;" onclick="autoCalcSSO()">🔄 คำนวณอัตโนมัติ</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1.4;">
+          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">📌 รายการอื่นๆ (ระบุ)</label>
+          <input type="text" id="dOtherLabel" placeholder="เช่น ค่าปรับ, เงินยืม" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">จำนวน (บาท)</label>
+          <input type="number" id="dOtherAmount" value="0" oninput="updateDedPreview()" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        </div>
+      </div>
+      <div style="background:#fef2f2;padding:12px;border-radius:8px;font-weight:700;color:#991b1b;text-align:right;" id="dedTotalPreview">รวมหักทั้งหมด: ฿0</div>
+    </div>
+    <div class="modal-footer" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveDeduct()" style="flex:1;">💾 บันทึก</button>
+      <button class="btn btn-secondary" onclick="closeDeductModal()" style="flex:1;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: สลิป -->
 <div class="modal-ov" id="payslipModal">
   <div class="modal-box" style="width:90%;max-width:820px;max-height:90vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="color:#1a2236;">💰 สลิปเงินเดือน</h3>
+
       <button class="btn btn-secondary no-print" onclick="document.getElementById('payslipModal').classList.remove('show')">✕ ปิด</button>
     </div>
     <div id="printArea"></div>
@@ -495,12 +591,15 @@ const EMPLOYEES = [
   {id:'79', sysCode:'0079', prefix:'นาย',    name:'79',                    nameTH:'79',                    nameEN:'79',                         position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-07-04', phone:'',           color:'#0ea5e9', hourlyRate:100,   otRate:150},
 ];
 
-const SHIFTS={1:{name:'กะที่ 1 เช้า',short:'05-13',emoji:'🌅',cls:'cs1',badge:'badge-s1'},2:{name:'กะที่ 2 บ่าย',short:'13-21',emoji:'☀️',cls:'cs2',badge:'badge-s2'},3:{name:'กะที่ 3 ดึก',short:'21-05',emoji:'🌙',cls:'cs3',badge:'badge-s3'},off:{name:'หยุด',short:'OFF',emoji:'🏖️',cls:'csoff',badge:'badge-off'}};
+const SHIFTS={1:{name:'กะที่ 1 เช้า',short:'05-13',emoji:'🌅',cls:'cs1',badge:'badge-s1'},2:{name:'กะที่ 2 บ่าย',short:'13-21',emoji:'☀️',cls:'cs2',badge:'badge-s2'},3:{name:'กะที่ 3 ดึก',short:'21-05',emoji:'🌙',cls:'cs3',badge:'badge-s3'},4:{name:'กะ QC (พักเที่ยง)',short:'08-17',emoji:'🔬',cls:'cs4',badge:'badge-s4'},off:{name:'หยุด',short:'OFF',emoji:'🏖️',cls:'csoff',badge:'badge-off'}};
 const TH_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const TH_DAYS=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 
 let attendance=JSON.parse(localStorage.getItem('apk_att')||'[]');
 let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
+let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
+let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750};
+let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15};
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
 
@@ -514,6 +613,52 @@ function timeToISO(dateKey,timeStr){
   return `${y}-${m}-${d}T${timeStr}`;
 }
 function shiftFromHour(h){return (h>=5&&h<13)?1:(h>=13&&h<21)?2:3;}
+const SHIFT_HOURS={1:{startH:5,endH:13},2:{startH:13,endH:21},3:{startH:21,endH:5},4:{startH:8,endH:17,breakStartH:12,breakEndH:13}};
+function getShiftWindow(shiftNum,y,m,d){
+  const st=SHIFT_HOURS[shiftNum];
+  if(!st)return null;
+  const start=new Date(y,m,d,st.startH,0,0);
+  const end=new Date(y,m,d,st.endH,0,0);
+  if(st.endH<=st.startH)end.setDate(end.getDate()+1); // กะดึกข้ามเที่ยงคืน
+  let breakStart=null,breakEnd=null;
+  if(st.breakStartH!=null&&st.breakEndH!=null){
+    breakStart=new Date(y,m,d,st.breakStartH,0,0);
+    breakEnd=new Date(y,m,d,st.breakEndH,0,0);
+  }
+  return {start,end,breakStart,breakEnd};
+}
+// คำนวณสาย/ชม.ปกติ/ชม.OT โดยอิงตารางกะจริง (ถ้ามีกำหนดไว้) ไม่งั้น fallback เป็นวิธีเดิม (รวมชม. เกิน 8 = OT)
+function computeAttendanceCalc(empId,ciDate,coDate){
+  const y=ciDate.getFullYear(),m=ciDate.getMonth(),d=ciDate.getDate();
+  const assigned=schedule[schedKey(empId,y,m,d)];
+  const wh=(coDate-ciDate)/3600000;
+  let shift,isLate=null,lateMin=0,regH,otH,workingOnDayOff=false;
+  if(assigned==='off'){
+    shift=shiftFromHour(ciDate.getHours());
+    workingOnDayOff=true;
+    regH=0;otH=Math.max(0,wh);
+  } else if(assigned===1||assigned===2||assigned===3||assigned===4){
+    shift=assigned;
+    const win=getShiftWindow(shift,y,m,d);
+    lateMin=Math.max(0,Math.round((ciDate-win.start)/60000));
+    isLate=lateMin>(otConfig.lateGraceMin||0);
+    const otGraceMs=(otConfig.otGraceMin||0)*60000;
+    const pastEnd=coDate-win.end;
+    otH=pastEnd>otGraceMs?pastEnd/3600000:0;
+    let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciDate,win.start))/3600000);
+    if(win.breakStart&&win.breakEnd){
+      // หักเวลาพักออกจากชั่วโมงปกติ (ไม่นับเป็นเวลาทำงาน)
+      const breakOverlap=Math.max(0,(Math.min(coDate,win.breakEnd)-Math.max(ciDate,win.breakStart))/3600000);
+      workedInWindow=Math.max(0,workedInWindow-breakOverlap);
+    }
+    regH=workedInWindow;
+  } else {
+    // ไม่มีตารางกะกำหนดไว้สำหรับวันนี้ -> ใช้วิธีเดิม (fallback)
+    shift=shiftFromHour(ciDate.getHours());
+    regH=Math.min(wh,8);otH=Math.max(0,wh-8);
+  }
+  return {shift,isLate,lateMin,regH,otH,workingOnDayOff,hasSchedule:assigned!==undefined};
+}
 function normalizeZKRecord(dateKey,empKey,raw){
   const empId=raw.empId?String(raw.empId):empKey.replace(/^emp_/,'');
   const emp=EMPLOYEES.find(e=>e.id===empId);
@@ -527,19 +672,21 @@ function normalizeZKRecord(dateKey,empKey,raw){
     if(coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
   }
   const ciDate=new Date(ciISO);
-  const shift=shiftFromHour(ciDate.getHours());
-  const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true};
+  const calc=computeAttendanceCalc(empId,ciDate,coISO?new Date(coISO):ciDate);
+  const shift=calc.shift;
+  const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true,isLate:calc.isLate,lateMin:calc.lateMin};
   if(coISO){
-    const wh=(new Date(coISO)-ciDate)/3600000,rh=Math.min(wh,8),ot=Math.max(0,wh-8);
-    rec.workedH=wh.toFixed(2);rec.regH=rh.toFixed(2);rec.otH=ot.toFixed(2);
-    rec.regPay=(rh*emp.hourlyRate).toFixed(2);rec.otPay=(ot*emp.otRate).toFixed(2);rec.totalPay=(rh*emp.hourlyRate+ot*emp.otRate).toFixed(2);
+    const coDate=new Date(coISO);
+    const wh=(coDate-ciDate)/3600000;
+    rec.workedH=wh.toFixed(2);rec.regH=calc.regH.toFixed(2);rec.otH=calc.otH.toFixed(2);rec.workingOnDayOff=calc.workingOnDayOff;
+    rec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);rec.otPay=(calc.otH*emp.otRate).toFixed(2);rec.totalPay=(calc.regH*emp.hourlyRate+calc.otH*emp.otRate).toFixed(2);
   }
   return rec;
 }
 
 // โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig')]);
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -562,7 +709,10 @@ async function loadFromFirebase(){
   const localPending=local.filter(l=>!l.synced&&!merged.find(m=>m.id===l.id));
   attendance=[...merged,...localPending];
   localStorage.setItem('apk_att',JSON.stringify(attendance));
-  if(fbSched)schedule=fbSched;
+  if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
+  if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
+  if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
+  if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
   renderTodayTable();renderDashboard();
   const activePage=document.querySelector('.page.active');
   if(activePage&&activePage.id==='page-attendance')renderAttendance();
@@ -641,7 +791,7 @@ function gotoPage(id,el){
 }
 
 // ========== SCAN ==========
-function selectShift(n){selShift=n;[1,2,3].forEach(i=>document.getElementById('shiftBtn'+i).classList.toggle('selected',i===n));}
+function selectShift(n){selShift=n;[1,2,3,4].forEach(i=>document.getElementById('shiftBtn'+i).classList.toggle('selected',i===n));}
 document.getElementById('cardInput').addEventListener('keypress',e=>{if(e.key==='Enter')scanCard();});
 
 function scanCard(){
@@ -653,17 +803,24 @@ function scanCard(){
   const cutoff=new Date(now.getTime()-24*3600000);
   const active=attendance.find(r=>r.empId===emp.id&&!r.checkOut&&new Date(r.checkIn)>cutoff);
   if(active){
-    const ci=new Date(active.checkIn),co=now,wh=(co-ci)/3600000,rh=Math.min(wh,8),ot=Math.max(0,wh-8);
-    active.checkOut=co.toISOString();active.workedH=wh.toFixed(2);active.regH=rh.toFixed(2);active.otH=ot.toFixed(2);
-    active.regPay=(rh*emp.hourlyRate).toFixed(2);active.otPay=(ot*emp.otRate).toFixed(2);active.totalPay=(rh*emp.hourlyRate+ot*emp.otRate).toFixed(2);
+    const ci=new Date(active.checkIn),co=now;
+    const calc=computeAttendanceCalc(emp.id,ci,co);
+    const wh=(co-ci)/3600000;
+    active.checkOut=co.toISOString();active.workedH=wh.toFixed(2);active.regH=calc.regH.toFixed(2);active.otH=calc.otH.toFixed(2);
+    active.workingOnDayOff=calc.workingOnDayOff;
+    active.regPay=(calc.regH*emp.hourlyRate).toFixed(2);active.otPay=(calc.otH*emp.otRate).toFixed(2);active.totalPay=(calc.regH*emp.hourlyRate+calc.otH*emp.otRate).toFixed(2);
     saveAtt();
     showMsg('scanMsg',`✅ ออกงาน: ${emp.name} | ${wh.toFixed(2)} ชม. | 💰 ฿${active.totalPay}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🏁 **ออกงาน** — ${emp.name}\n⏰ ${co.toLocaleTimeString('th-TH')} | ${wh.toFixed(2)} ชม. | ฿${active.totalPay}`);
   } else {
-    attendance.push({id:Date.now(),empId:emp.id,empName:emp.name,shift:selShift,shiftName:SHIFTS[selShift].name,checkIn:now.toISOString(),checkOut:null});
+    const win=getShiftWindow(selShift,now.getFullYear(),now.getMonth(),now.getDate());
+    const lateMin=win?Math.max(0,Math.round((now-win.start)/60000)):0;
+    const isLate=win?lateMin>(otConfig.lateGraceMin||0):false;
+    attendance.push({id:Date.now(),empId:emp.id,empName:emp.name,shift:selShift,shiftName:SHIFTS[selShift].name,checkIn:now.toISOString(),checkOut:null,isLate,lateMin});
     saveAtt();
-    showMsg('scanMsg',`✅ เข้างาน: ${emp.name} | ${SHIFTS[selShift].name} | ${now.toLocaleTimeString('th-TH')}`,'ok');
-    if(document.getElementById('notifOn').checked)discordSend(`🚀 **เข้างาน** — ${emp.name}\n${SHIFTS[selShift].name} | ⏰ ${now.toLocaleTimeString('th-TH')}`);
+    const lateMsg=isLate?` | 🔴 สาย ${lateMin} นาที`:'';
+    showMsg('scanMsg',`✅ เข้างาน: ${emp.name} | ${SHIFTS[selShift].name} | ${now.toLocaleTimeString('th-TH')}${lateMsg}`,'ok');
+    if(document.getElementById('notifOn').checked)discordSend(`🚀 **เข้างาน** — ${emp.name}\n${SHIFTS[selShift].name} | ⏰ ${now.toLocaleTimeString('th-TH')}${lateMsg}`);
   }
   document.getElementById('cardInput').value='';
   renderTodayTable();renderDashboard();
@@ -699,7 +856,9 @@ function buildAttTable(recs){
     const s=SHIFTS[r.shift]||SHIFTS[1];
     const emp=EMPLOYEES.find(e=>e.id===r.empId);
     const co=r.checkOut?new Date(r.checkOut).toLocaleTimeString('th-TH'):`<span class="badge badge-working">กำลังทำงาน</span>`;
-    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}">${s.emoji} ${s.name}</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}</td><td>${co}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td></tr>`;
+    const lateBadge=r.isLate?`<br><span style="color:#ef4444;font-size:0.74em;font-weight:700;">🔴 สาย ${r.lateMin} นาที</span>`:'';
+    const offBadge=r.workingOnDayOff?`<br><span style="color:#8b5cf6;font-size:0.74em;font-weight:700;">🏖️ วันหยุด (OT เต็ม)</span>`:'';
+    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}">${s.emoji} ${s.name}</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td></tr>`;
   });
   return h+'</tbody></table>';
 }
@@ -724,14 +883,15 @@ function schedKey(empId,y,m,d){return `${empId}_${y}_${m+1}_${d}`;}
 function renderCal(){
   const days=new Date(calYear,calMonth+1,0).getDate(),today=new Date();
   document.getElementById('calMonthLabel').textContent=`${TH_MONTHS[calMonth]} ${calYear+543}`;
-  let c=[0,0,0];
+  let c=[0,0,0,0];
   const flt=document.getElementById('empFilter').value;
   const emps=flt==='all'?EMPLOYEES:EMPLOYEES.filter(e=>e.id===flt);
-  emps.forEach(emp=>{for(let d=1;d<=days;d++){const s=schedule[schedKey(emp.id,calYear,calMonth,d)];if(s===1)c[0]++;else if(s===2)c[1]++;else if(s===3)c[2]++;}});
+  emps.forEach(emp=>{for(let d=1;d<=days;d++){const s=schedule[schedKey(emp.id,calYear,calMonth,d)];if(s===1)c[0]++;else if(s===2)c[1]++;else if(s===3)c[2]++;else if(s===4)c[3]++;}});
   document.getElementById('schedSummary').innerHTML=`
     <div class="sum-card"><div class="sum-icon" style="background:#fef3c7;">🌅</div><div><div class="sum-label">กะ 1 เช้า</div><div class="sum-value">${c[0]}</div></div></div>
     <div class="sum-card"><div class="sum-icon" style="background:#dbeafe;">☀️</div><div><div class="sum-label">กะ 2 บ่าย</div><div class="sum-value">${c[1]}</div></div></div>
     <div class="sum-card"><div class="sum-icon" style="background:#ede9fe;">🌙</div><div><div class="sum-label">กะ 3 ดึก</div><div class="sum-value">${c[2]}</div></div></div>
+    <div class="sum-card"><div class="sum-icon" style="background:#dcfce7;">🔬</div><div><div class="sum-label">กะ QC</div><div class="sum-value">${c[3]}</div></div></div>
     <div class="sum-card"><div class="sum-icon" style="background:#f3f4f6;">👥</div><div><div class="sum-label">พนักงานทั้งหมด</div><div class="sum-value">${EMPLOYEES.length}</div></div></div>`;
   let hh=`<tr><th class="emp-head">พนักงาน</th>`;
   for(let d=1;d<=days;d++){const dow=new Date(calYear,calMonth,d).getDay();const isT=(d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear());const wknd=dow===0||dow===6;hh+=`<th class="${isT?'today-head':''}" style="${wknd?'color:#ef4444':''}">${TH_DAYS[dow]}<br><b>${d}</b></th>`;}
@@ -748,12 +908,70 @@ function renderCal(){
     bh+='</tr>';
   });
   document.getElementById('calBody').innerHTML=bh;
+  renderWeeklyOffUI();
 }
 
-function openShiftModal(empId,day){selCell={empId,day};const emp=EMPLOYEES.find(e=>e.id===empId);document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${day} ${TH_MONTHS[calMonth]}`;document.getElementById('shiftModal').classList.add('show');}
+// ========== วันหยุดประจำสัปดาห์ (รายคน) ==========
+function renderWeeklyOffUI(){
+  const wrap=document.getElementById('weeklyOffWrap');
+  if(!wrap)return;
+  const empId=document.getElementById('empFilter').value;
+  if(empId==='all'){
+    wrap.innerHTML=`<span style="font-size:0.85em;color:#9ca3af;">👉 เลือกพนักงานรายคน (ไม่ใช่ "พนักงานทั้งหมด") เพื่อตั้งวันหยุดประจำสัปดาห์</span>`;
+    return;
+  }
+  const labels=['อา','จ','อ','พ','พฤ','ศ','ส']; // ตรงกับ Date.getDay() 0-6
+  const current=weeklyOff[empId]||[];
+  wrap.innerHTML=`<span style="font-size:0.85em;font-weight:700;color:#1a2236;">🏖️ วันหยุดประจำของคนนี้:</span>`+
+    labels.map((lb,d)=>`<label style="font-size:0.85em;display:flex;align-items:center;gap:4px;cursor:pointer;">
+      <input type="checkbox" ${current.includes(d)?'checked':''} onchange="toggleWeeklyOff('${empId}',${d},this.checked)"> ${lb}
+    </label>`).join('');
+}
+function toggleWeeklyOff(empId,dow,checked){
+  if(!weeklyOff[empId])weeklyOff[empId]=[];
+  if(checked){ if(!weeklyOff[empId].includes(dow))weeklyOff[empId].push(dow); }
+  else { weeklyOff[empId]=weeklyOff[empId].filter(d=>d!==dow); }
+  localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));
+  fbPut('/hr/weeklyOff',weeklyOff);
+}
+
+function openShiftModal(empId,day){selCell={empId,day};const emp=EMPLOYEES.find(e=>e.id===empId);document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${day} ${TH_MONTHS[calMonth]}`;const cb=document.getElementById('applyWholeMonth');if(cb)cb.checked=false;document.getElementById('shiftModal').classList.add('show');}
 function closeShiftModal(){document.getElementById('shiftModal').classList.remove('show');selCell=null;}
-function assignShift(sv){if(!selCell)return;const k=schedKey(selCell.empId,calYear,calMonth,selCell.day);if(sv===null)delete schedule[k];else schedule[k]=sv;closeShiftModal();renderCal();}
-function saveSched(){localStorage.setItem('apk_sched',JSON.stringify(schedule));const e=event.target;const o=e.textContent;e.textContent='✅ บันทึกแล้ว!';e.style.background='#10b981';setTimeout(()=>{e.textContent=o;e.style.background='';},2000);}
+function assignShift(sv){
+  if(!selCell)return;
+  const applyWhole=document.getElementById('applyWholeMonth')?.checked;
+  if(applyWhole && sv!==null){
+    applyShiftWholeMonth(selCell.empId,sv);
+  } else {
+    const k=schedKey(selCell.empId,calYear,calMonth,selCell.day);
+    if(sv===null)delete schedule[k];else schedule[k]=sv;
+  }
+  closeShiftModal();
+  renderCal();
+}
+function applyShiftWholeMonth(empId,sv){
+  const days=new Date(calYear,calMonth+1,0).getDate();
+  const off=weeklyOff[empId]||[];
+  let n=0;
+  for(let d=1;d<=days;d++){
+    const dow=new Date(calYear,calMonth,d).getDay();
+    const k=schedKey(empId,calYear,calMonth,d);
+    schedule[k]=off.includes(dow)?'off':sv;
+    n++;
+  }
+  alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน (วันหยุดประจำสัปดาห์ตั้งเป็น "หยุด" ให้อัตโนมัติ)`);
+}
+function saveSched(){
+  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  const e=event.target,o=e.textContent;
+  e.textContent='⏳ กำลังบันทึก...';e.disabled=true;
+  fbPut('/hr/schedule',schedule).then(ok=>{
+    e.textContent=ok?'✅ บันทึกและซิงค์แล้ว!':'⚠️ บันทึกในเครื่องแล้ว แต่ซิงค์ไม่สำเร็จ (เช็คเน็ต)';
+    e.style.background=ok?'#10b981':'#ef4444';
+    e.disabled=false;
+    setTimeout(()=>{e.textContent=o;e.style.background='';},2500);
+  });
+}
 function copyPrevMonth(){const pm=calMonth===0?11:calMonth-1,py=calMonth===0?calYear-1:calYear,pd=new Date(py,pm+1,0).getDate(),cd=new Date(calYear,calMonth+1,0).getDate();let n=0;EMPLOYEES.forEach(emp=>{for(let d=1;d<=Math.min(pd,cd);d++){const sk=schedKey(emp.id,py,pm,d),dk=schedKey(emp.id,calYear,calMonth,d);if(schedule[sk]&&!schedule[dk]){schedule[dk]=schedule[sk];n++;}}});saveSched();renderCal();alert(n>0?`✅ คัดลอก ${n} รายการ`:'ไม่มีข้อมูลเดือนก่อน');}
 function prevMonth(){if(calMonth===0){calMonth=11;calYear--;}else calMonth--;renderCal();}
 function nextMonth(){if(calMonth===11){calMonth=0;calYear++;}else calMonth++;renderCal();}
@@ -782,26 +1000,123 @@ function renderAttendance(){
 
 // ========== SALARY ==========
 function initSalaryMonths(){const s=document.getElementById('salaryMonth');TH_MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;s.appendChild(o);});s.value=new Date().getMonth();}
+let deductions=JSON.parse(localStorage.getItem('apk_deductions')||'{}');
+function dedKey(empId,year,month){return empId+'_'+year+'_'+(month+1);}
 function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
   const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0),rp=rh*emp.hourlyRate,op=ot*emp.otRate;
-  return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),rp:rp.toFixed(2),op:op.toFixed(2),total:(rp+op).toFixed(2),recs};
+  const gross=rp+op;
+  const dk=dedKey(empId,yr,month);
+  const ded=deductions[dk]||{rent:0,utility:0,social:0,otherLabel:'',otherAmount:0};
+  const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0);
+  const net=gross-dedTotal;
+  return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),rp:rp.toFixed(2),op:op.toFixed(2),gross:gross.toFixed(2),ded,dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
 }
 function renderSalary(){
-  const m=parseInt(document.getElementById('salaryMonth').value);
-  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะทำงาน</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินปกติ</th><th>เงิน OT</th><th>เงินรวม</th><th></th></tr></thead><tbody>`;
+  const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
+  const noteKey='apk_salary_note_'+yr+'_'+(m+1);
+  const noteEl=document.getElementById('salaryNote');
+  if(noteEl)noteEl.value=localStorage.getItem(noteKey)||'';
+  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะทำงาน</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินปกติ</th><th>เงิน OT</th><th>หัก</th><th>สุทธิ</th><th></th></tr></thead><tbody>`;
   EMPLOYEES.forEach(emp=>{
     const d=getMonthlySalary(emp.id,m);
-    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${d.rp}</td><td style="color:#3b82f6;">฿${d.op}</td><td style="color:#10b981;font-weight:700;">฿${d.total}</td><td><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${d.rp}</td><td style="color:#3b82f6;">฿${d.op}</td><td style="color:#ef4444;">฿${d.dedTotal}</td><td style="color:#10b981;font-weight:700;">฿${d.total}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
   });
   document.getElementById('salaryTable').innerHTML=h+'</tbody></table>';
+}
+function saveSalaryNote(){
+  const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
+  const noteKey='apk_salary_note_'+yr+'_'+(m+1);
+  const val=document.getElementById('salaryNote').value.trim();
+  if(val)localStorage.setItem(noteKey,val);else localStorage.removeItem(noteKey);
+  const btn=event.target,o=btn.textContent;btn.textContent='✅ บันทึกแล้ว!';setTimeout(()=>btn.textContent=o,1500);
+}
+let curDeductKey=null;
+let curDeductEmpId=null;
+function openDeductModal(empId,month){
+  const yr=new Date().getFullYear(),emp=EMPLOYEES.find(e=>e.id===empId);
+  curDeductKey=dedKey(empId,yr,month);
+  curDeductEmpId=empId;
+  document.getElementById('deductModalTitle').textContent=`📝 รายการหัก — ${emp.name} (${TH_MONTHS[month]})`;
+  const ded=deductions[curDeductKey]||{rent:0,utility:0,social:0,otherLabel:'',otherAmount:0};
+  document.getElementById('dRent').value=ded.rent||0;
+  document.getElementById('dUtility').value=ded.utility||0;
+  document.getElementById('dSocial').value=ded.social||0;
+  document.getElementById('dOtherLabel').value=ded.otherLabel||'';
+  document.getElementById('dOtherAmount').value=ded.otherAmount||0;
+  updateDedPreview();
+  document.getElementById('deductModal').classList.add('show');
+}
+function closeDeductModal(){document.getElementById('deductModal').classList.remove('show');curDeductKey=null;curDeductEmpId=null;}
+function autoCalcSSO(){
+  if(!curDeductEmpId)return;
+  const emp=EMPLOYEES.find(e=>e.id===curDeductEmpId);
+  const baseSalary=parseFloat(emp.salary)||0;
+  if(baseSalary<=0){
+    alert('⚠️ พนักงานคนนี้ยังไม่ได้ตั้ง "เงินเดือน/ค่าจ้าง" พื้นฐาน (ใช้เป็นฐานคำนวณประกันสังคม)\n\nไปที่หน้า "การตั้งค่า" → แก้ไขข้อมูลพนักงานคนนี้ → กรอกช่อง "เงินเดือน/ค่าจ้าง (บาท)" ก่อน หรือกรอกยอดหักเองในช่องด้านซ้าย');
+    return;
+  }
+  const base=Math.min(Math.max(baseSalary,ssoConfig.min),ssoConfig.max);
+  let sso=Math.round(base*(ssoConfig.rate/100));
+  if(sso>ssoConfig.cap)sso=ssoConfig.cap;
+  document.getElementById('dSocial').value=sso;
+  updateDedPreview();
+}
+function saveSSOConfig(){
+  ssoConfig={
+    rate:parseFloat(document.getElementById('ssoRate').value)||5,
+    min:parseFloat(document.getElementById('ssoMin').value)||1650,
+    max:parseFloat(document.getElementById('ssoMax').value)||15000,
+    cap:parseFloat(document.getElementById('ssoCap').value)||750
+  };
+  localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));
+  fbPut('/hr/ssoConfig',ssoConfig);
+  const el=document.getElementById('ssoConfigMsg');
+  if(el){el.innerHTML='<div class="alert alert-success" style="margin-top:10px;">✅ บันทึกสูตรประกันสังคมแล้ว — ใช้ได้ทันทีโดยไม่ต้องแก้ไฟล์ระบบ</div>';setTimeout(()=>el.innerHTML='',3000);}
+}
+function saveOTConfig(){
+  otConfig={
+    lateGraceMin:parseFloat(document.getElementById('lateGraceMin').value)||0,
+    otGraceMin:parseFloat(document.getElementById('otGraceMin').value)||0
+  };
+  localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));
+  fbPut('/hr/otConfig',otConfig);
+  loadFromFirebase(); // คำนวณ สาย/OT ของข้อมูลที่มีอยู่แล้วใหม่ทันทีตามค่าที่เพิ่งบันทึก
+  const el=document.getElementById('otConfigMsg');
+  if(el){el.innerHTML='<div class="alert alert-success" style="margin-top:10px;">✅ บันทึกการตั้งค่าแล้ว — กำลังคำนวณข้อมูลใหม่</div>';setTimeout(()=>el.innerHTML='',3000);}
+}
+function updateDedPreview(){
+  const t=(parseFloat(document.getElementById('dRent').value)||0)+(parseFloat(document.getElementById('dUtility').value)||0)+(parseFloat(document.getElementById('dSocial').value)||0)+(parseFloat(document.getElementById('dOtherAmount').value)||0);
+  document.getElementById('dedTotalPreview').textContent=`รวมหักทั้งหมด: ฿${t.toFixed(2)}`;
+}
+function saveDeduct(){
+  if(!curDeductKey)return;
+  deductions[curDeductKey]={
+    rent:parseFloat(document.getElementById('dRent').value)||0,
+    utility:parseFloat(document.getElementById('dUtility').value)||0,
+    social:parseFloat(document.getElementById('dSocial').value)||0,
+    otherLabel:document.getElementById('dOtherLabel').value.trim(),
+    otherAmount:parseFloat(document.getElementById('dOtherAmount').value)||0
+  };
+  localStorage.setItem('apk_deductions',JSON.stringify(deductions));
+  fbPut('/hr/deductions/'+curDeductKey, deductions[curDeductKey]);
+  closeDeductModal();
+  renderSalary();
 }
 function showPayslip(empId,month){
   const d=getMonthlySalary(empId,month),yr=new Date().getFullYear();
   let rows='';
   d.recs.forEach((r,i)=>{const s=SHIFTS[r.shift]||SHIFTS[1];rows+=`<tr><td>${i+1}</td><td>${new Date(r.checkIn).toLocaleDateString('th-TH')}</td><td>${s.emoji} ${s.name}</td><td style="text-align:right;">${r.regH}</td><td style="text-align:right;">${r.otH}</td><td style="text-align:right;">฿${r.regPay}</td><td style="text-align:right;">฿${r.otPay}</td><td style="text-align:right;">฿${r.totalPay}</td></tr>`;});
-  document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div><div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตราค่าแรง OT</td><td style="text-align:right;">฿${d.emp.otRate}/ชม.</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
+  const noteKey='apk_salary_note_'+yr+'_'+(month+1),note=localStorage.getItem(noteKey);
+  const noteHtml=note?`<div style="margin:16px 0;padding:12px 14px;background:#fffbeb;border:2px solid #fbbf24;border-radius:8px;font-size:0.85em;color:#92400e;"><b>⚠️ หมายเหตุ:</b> ${note}</div>`:'';
+  const ded=d.ded;
+  let dedRows='';
+  if(parseFloat(ded.rent)>0)dedRows+=`<tr><td>หัก: ค่าที่พัก</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.rent).toFixed(2)}</td></tr>`;
+  if(parseFloat(ded.utility)>0)dedRows+=`<tr><td>หัก: ค่าน้ำ-ไฟ</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.utility).toFixed(2)}</td></tr>`;
+  if(parseFloat(ded.social)>0)dedRows+=`<tr><td>หัก: ประกันสังคม</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.social).toFixed(2)}</td></tr>`;
+  if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>หัก: ${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.otherAmount).toFixed(2)}</td></tr>`;
+  document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div>${noteHtml}<div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตราค่าแรง OT</td><td style="text-align:right;">฿${d.emp.otRate}/ชม.</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr><td><b>รวมก่อนหัก</b></td><td style="text-align:right;"><b>฿${d.gross}</b></td></tr>${dedRows}<tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
   document.getElementById('payslipModal').classList.add('show');
 }
 
@@ -929,6 +1244,10 @@ async function sendReport(){
 
 // ========== SETTINGS ==========
 function renderSettings(){
+  const rEl=document.getElementById('ssoRate'),mnEl=document.getElementById('ssoMin'),mxEl=document.getElementById('ssoMax'),cpEl=document.getElementById('ssoCap');
+  if(rEl){rEl.value=ssoConfig.rate;mnEl.value=ssoConfig.min;mxEl.value=ssoConfig.max;cpEl.value=ssoConfig.cap;}
+  const lgEl=document.getElementById('lateGraceMin'),ogEl=document.getElementById('otGraceMin');
+  if(lgEl){lgEl.value=otConfig.lateGraceMin;ogEl.value=otConfig.otGraceMin;}
   const cl=document.getElementById('empCountLabel');
   if(cl) cl.textContent=EMPLOYEES.length;
   document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
@@ -1079,6 +1398,7 @@ function saveEmpEdit(){
 document.getElementById('shiftModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeShiftModal();});
 document.getElementById('editEmpModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 document.getElementById('payslipModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
+document.getElementById('deductModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 initSalaryMonths();
 setHistToday();
 
