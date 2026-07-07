@@ -319,6 +319,8 @@ async function loadData() {
     poOrders.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
   } catch(e) { poOrders = []; }
 
+  // โหลด Part Master (ใช้น้ำหนัก/ชิ้นสำหรับแปลงหน่วย กก. <-> ชิ้น)
+  await loadPM();
   // โหลดยอดผลิตจริงจากทุกสาย (job records)
   await loadActualOutput();
   renderPOList();
@@ -397,13 +399,33 @@ async function loadActualOutput() {
 }
 
 
+// ── หาน้ำหนัก/ชิ้น (กรัม) ของ P/No จาก Part Master ──
+// รองรับหลายชื่อ field เผื่อ part_master.html ใช้ key ไม่ตรงกัน
+// ถ้าพบว่าไม่ตรงกับที่ระบบใช้จริง ให้แก้รายชื่อใน WEIGHT_FIELD_CANDIDATES
+var WEIGHT_FIELD_CANDIDATES = ['weight', 'weightPerPc', 'weightPerPiece', 'unitWeight', 'pieceWeight', 'gPerPc', 'weightG', 'wtPerPc', 'g'];
+function getPartWeight(partNo) {
+  var pno = (partNo || '').toUpperCase().trim();
+  if (!pno) return 0;
+  var part = pmParts.find(function(p) { return (p.partNo || '').toUpperCase().trim() === pno; });
+  if (!part) return 0;
+  for (var i = 0; i < WEIGHT_FIELD_CANDIDATES.length; i++) {
+    var v = part[WEIGHT_FIELD_CANDIDATES[i]];
+    var num = parseFloat(v);
+    if (v !== undefined && v !== null && v !== '' && !isNaN(num) && num > 0) return num;
+  }
+  return 0;
+}
+
 // นับยอดจริงตั้งแต่ poDate เป็นต้นไป สำหรับสาย/partNo ที่ระบุ
+// คืนค่า { actual, missingWeight } — missingWeight = true เมื่อไลน์รายงานคนละหน่วยกับ PO
+// และหา น้ำหนัก/ชิ้น ใน Part Master ไม่เจอ (แปลงหน่วยไม่ได้)
 function calcActual(line, partNo, poTimestamp, unit, maxQty) {
   // poTimestamp = "YYYY-MM-DD HH:MM"
   // นับ barrel ที่ date+time >= poTimestamp เท่านั้น
   var lineKey = line === 'ALL' ? null : line;
   var pno = (partNo || '').toUpperCase();
   var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
+  var weightG = getPartWeight(pno); // กรัม/ชิ้น (0 = ไม่มีข้อมูล)
 
   // รวม barrel ที่ตรง partNo และ datetime >= poTimestamp
   var relevant = [];
@@ -417,7 +439,9 @@ function calcActual(line, partNo, poTimestamp, unit, maxQty) {
       relevant.push(b);
     });
   });
-  if (!relevant.length) return 0;
+  if (!relevant.length) return { actual: 0, missingWeight: false };
+
+  var missingWeight = false;
 
   // จัดกลุ่มตาม shiftId (แต่ละกดบันทึก = 1 กะ)
   var groupMap = {};
@@ -428,7 +452,25 @@ function calcActual(line, partNo, poTimestamp, unit, maxQty) {
       groupMap[gk] = { firstDatetime: (b.date||'') + ' ' + (b.time||'00:00'), total: 0 };
       groupOrder.push(gk);
     }
-    groupMap[gk].total += unit === 'kg' ? b.kg : b.pcs;
+    var val = 0;
+    if (unit === 'kg') {
+      if (b.kg) {
+        val = b.kg; // ไลน์รายงานเป็น กก. ตรงกับ PO อยู่แล้ว
+      } else if (b.pcs) {
+        // ไลน์รายงานเป็นชิ้น แต่ PO สั่งเป็น กก. → แปลง ชิ้น → กก.
+        if (weightG > 0) val = (b.pcs * weightG) / 1000;
+        else missingWeight = true;
+      }
+    } else { // unit === 'pcs'
+      if (b.pcs) {
+        val = b.pcs; // ไลน์รายงานเป็นชิ้นตรงกับ PO อยู่แล้ว
+      } else if (b.kg) {
+        // ไลน์รายงานเป็น กก. (เช่น B1/B2 ชุบเป็นถัง) แต่ PO สั่งเป็นชิ้น → แปลง กก. → ชิ้น
+        if (weightG > 0) val = (b.kg * 1000) / weightG;
+        else missingWeight = true;
+      }
+    }
+    groupMap[gk].total += val;
   });
 
   // เรียงตามเวลา (เก่า→ใหม่)
@@ -443,7 +485,9 @@ function calcActual(line, partNo, poTimestamp, unit, maxQty) {
     total += groupMap[groupOrder[i]].total;
     if (total >= cap) break;
   }
-  return total;
+  // ปัดเศษ: ชิ้น = จำนวนเต็ม (ปัดลง กันนับเกินจากเศษน้ำหนัก), กก. = 2 ตำแหน่ง
+  total = unit === 'pcs' ? Math.floor(total) : Math.round(total * 100) / 100;
+  return { actual: total, missingWeight: missingWeight };
 }
 
 async function savePOToFB() {
@@ -751,12 +795,13 @@ function renderPOList() {
   poOrders.forEach(function(po) {
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var actual = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit, it.qty);
+      var calcRes = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit, it.qty);
+      var actual = calcRes.actual;
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
       if (filterStatus === 'pending' && status !== 'pending') return;
       if (filterStatus === 'done'    && status !== 'done')    return;
-      rows.push({ po, it, actual, pct, status });
+      rows.push({ po, it, actual, pct, status, missingWeight: calcRes.missingWeight });
     });
   });
 
@@ -772,6 +817,10 @@ function renderPOList() {
       ? '<span class="tag-done">✓ ครบแล้ว</span>'
       : '<span class="tag-pending">⏳ ' + r.pct + '%</span>';
     var canEdit = currentRole === 'admin' || currentRole === 'operator';
+    var fmt = function(n){ return n.toLocaleString(undefined, {maximumFractionDigits:2}); };
+    var weightWarn = r.missingWeight
+      ? '<div style="font-size:9px;color:var(--red);margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master (แปลงหน่วยไม่ได้)</div>'
+      : '';
     return '<tr>' +
       '<td style="white-space:nowrap;font-size:11px;">' + esc(r.po.timestamp || r.po.date) + '</td>' +
       '<td>' + esc(r.it.customer) + '</td>' +
@@ -779,9 +828,9 @@ function renderPOList() {
       '<td>' + esc(r.it.partName) + '</td>' +
       '<td><span class="badge '+lineBadge+'">' + esc(r.it.line) + '</span></td>' +
       '<td style="text-align:center;font-weight:700;">' + (r.it.qty||0).toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">' + (r.it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
-      '<td style="text-align:center;font-weight:700;color:' + barColor + ';">' + r.actual.toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">' + (r.it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
+      '<td style="text-align:center;font-weight:700;color:' + barColor + ';">' + fmt(r.actual) + ' <span style="font-size:10px;color:var(--text-muted);">' + (r.it.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
       '<td><div class="progress-wrap"><div class="progress-bar" style="width:'+r.pct+'%;background:'+barColor+';"></div></div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+r.pct+'%</div></td>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">'+r.pct+'%</div>' + weightWarn + '</td>' +
       '<td style="text-align:center;">' + statusTag + '</td>' +
       '<td style="white-space:nowrap;">' +
         (canEdit ? '<button class="btn btn-outline btn-sm" onclick="editPO('+r.po.id+')" style="margin-right:4px;">✏️</button>' : '') +
