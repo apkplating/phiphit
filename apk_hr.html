@@ -363,7 +363,12 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           <div class="form-group">
             <label>เริ่มนับ OT หลังเลิกงาน (นาที)</label>
             <input type="number" id="otGraceMin" value="15">
-            <span class="helper">ต้องอยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มคิด OT (นับเต็มตั้งแต่เวลาเลิกกะจริง)</span>
+            <span class="helper">ต้องอยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มคิด OT (นับเต็มตั้งแต่เวลาเลิกกะจริง) — ใช้กับพนักงานทั่วไป (ไม่ใช่ QC/QA)</span>
+          </div>
+          <div class="form-group">
+            <label>🔬 พักก่อนเริ่ม OT เฉพาะ QC/QA (นาที)</label>
+            <input type="number" id="qcBreakMin" value="60">
+            <span class="helper">เฉพาะพนักงานแผนกที่มีคำว่า QC หรือ QA — พักจริงหลังเลิกกะกี่นาที (หักออกจากชั่วโมง OT จริง ไม่ใช่แค่เกณฑ์ผ่อนผัน)</span>
           </div>
         </div>
         <button class="btn btn-primary" onclick="saveOTConfig()">💾 บันทึกการตั้งค่า</button>
@@ -416,21 +421,21 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       </div>
       <div>
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ประเภทค่าจ้าง</label>
-        <select id="ePayType" class="form-control">
+        <select id="ePayType" class="form-control" onchange="recalcHourly()">
           <option>รายวัน</option><option>รายเดือน</option>
         </select>
       </div>
       <div>
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เงินเดือน/ค่าจ้าง (บาท)</label>
-        <input id="eSalary" class="form-control" type="number" placeholder="0">
+        <input id="eSalary" class="form-control" type="number" placeholder="0" oninput="recalcHourly()">
       </div>
       <div>
-        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ค่าแรง/ชม. (บาท)</label>
-        <input id="eHourly" class="form-control" type="number" placeholder="100">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ค่าแรง/ชม. (คำนวณอัตโนมัติ)</label>
+        <input id="eHourly" class="form-control" type="number" readonly style="background:#f3f4f6;color:#6b7280;">
       </div>
-      <div>
-        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">OT/ชม. (บาท)</label>
-        <input id="eOT" class="form-control" type="number" placeholder="150">
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">อัตรา OT (คำนวณอัตโนมัติตามวันที่ทำงานจริง — ไม่ต้องกรอก)</label>
+        <div id="eOTInfo" style="font-size:0.82em;padding:9px 13px;background:#eff6ff;border-radius:8px;color:#1e40af;"></div>
       </div>
       <div>
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">วันเริ่มงาน</label>
@@ -600,7 +605,7 @@ let attendance=JSON.parse(localStorage.getItem('apk_att')||'[]');
 let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
 let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
 let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750};
-let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15};
+let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15,qcBreakMin:60};
 let companyHolidays=JSON.parse(localStorage.getItem('apk_companyholidays')||'{}'); // key: "2569_7" -> [5,6,...]
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
@@ -630,10 +635,21 @@ function getShiftWindow(shiftNum,y,m,d){
   return {start,end,breakStart,breakEnd};
 }
 // คำนวณสาย/ชม.ปกติ/ชม.OT โดยอิงตารางกะจริง (ถ้ามีกำหนดไว้) ไม่งั้น fallback เป็นวิธีเดิม (รวมชม. เกิน 8 = OT)
-function computeAttendanceCalc(empId,ciDate,coDate){
+function isQCDept(emp){return /qc|qa/i.test(emp&&emp.dept||'');}
+function isSundayOrHoliday(y,m,d){
+  const dow=new Date(y,m,d).getDay();
+  if(dow===0)return true;
+  const hol=companyHolidays[holidayKey(y,m)]||[];
+  return hol.includes(d);
+}
+function computeAttendanceCalc(emp,ciDate,coDate){
+  const empId=emp.id;
   const y=ciDate.getFullYear(),m=ciDate.getMonth(),d=ciDate.getDate();
   const assigned=schedule[schedKey(empId,y,m,d)];
   const wh=(coDate-ciDate)/3600000;
+  const specialDay=isSundayOrHoliday(y,m,d);
+  // อัตรา OT: วันปกติ 1.5 เท่าเสมอ / วันอาทิตย์-วันหยุดบริษัท: รายวัน 1.5 เท่า, รายเดือน 1.0 เท่า
+  const otMultiplier=(specialDay&&emp.payType==='รายเดือน')?1.0:1.5;
   let shift,isLate=null,lateMin=0,regH,otH,workingOnDayOff=false;
   if(assigned==='off'){
     shift=shiftFromHour(ciDate.getHours());
@@ -644,9 +660,15 @@ function computeAttendanceCalc(empId,ciDate,coDate){
     const win=getShiftWindow(shift,y,m,d);
     lateMin=Math.max(0,Math.round((ciDate-win.start)/60000));
     isLate=lateMin>(otConfig.lateGraceMin||0);
-    const otGraceMs=(otConfig.otGraceMin||0)*60000;
     const pastEnd=coDate-win.end;
-    otH=pastEnd>otGraceMs?pastEnd/3600000:0;
+    if(isQCDept(emp)){
+      // QC/QA: พักจริง 1 ชม. (หรือตามที่ตั้งไว้) หลังเลิกกะก่อนเริ่มนับ OT — หักออกจากชั่วโมงจริง ไม่ใช่แค่เกณฑ์ผ่อนผัน
+      const qcBreakMs=(otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60)*60000;
+      otH=pastEnd>qcBreakMs?(pastEnd-qcBreakMs)/3600000:0;
+    } else {
+      const otGraceMs=(otConfig.otGraceMin||0)*60000;
+      otH=pastEnd>otGraceMs?pastEnd/3600000:0;
+    }
     let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciDate,win.start))/3600000);
     if(win.breakStart&&win.breakEnd){
       // หักเวลาพักออกจากชั่วโมงปกติ (ไม่นับเป็นเวลาทำงาน)
@@ -659,7 +681,7 @@ function computeAttendanceCalc(empId,ciDate,coDate){
     shift=shiftFromHour(ciDate.getHours());
     regH=Math.min(wh,8);otH=Math.max(0,wh-8);
   }
-  return {shift,isLate,lateMin,regH,otH,workingOnDayOff,hasSchedule:assigned!==undefined};
+  return {shift,isLate,lateMin,regH,otH,workingOnDayOff,otMultiplier,hasSchedule:assigned!==undefined};
 }
 function normalizeZKRecord(dateKey,empKey,raw){
   const empId=raw.empId?String(raw.empId):empKey.replace(/^emp_/,'');
@@ -674,14 +696,15 @@ function normalizeZKRecord(dateKey,empKey,raw){
     if(coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
   }
   const ciDate=new Date(ciISO);
-  const calc=computeAttendanceCalc(empId,ciDate,coISO?new Date(coISO):ciDate);
+  const calc=computeAttendanceCalc(emp,ciDate,coISO?new Date(coISO):ciDate);
   const shift=calc.shift;
   const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true,isLate:calc.isLate,lateMin:calc.lateMin};
   if(coISO){
     const coDate=new Date(coISO);
     const wh=(coDate-ciDate)/3600000;
     rec.workedH=wh.toFixed(2);rec.regH=calc.regH.toFixed(2);rec.otH=calc.otH.toFixed(2);rec.workingOnDayOff=calc.workingOnDayOff;
-    rec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);rec.otPay=(calc.otH*emp.otRate).toFixed(2);rec.totalPay=(calc.regH*emp.hourlyRate+calc.otH*emp.otRate).toFixed(2);
+    const otRateEff=emp.hourlyRate*calc.otMultiplier;
+    rec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);rec.otPay=(calc.otH*otRateEff).toFixed(2);rec.totalPay=(calc.regH*emp.hourlyRate+calc.otH*otRateEff).toFixed(2);
   }
   return rec;
 }
@@ -725,6 +748,21 @@ async function loadFromFirebase(){
 }
 loadFromFirebase();
 setInterval(loadFromFirebase,60000); // รีเฟรชข้อมูลจาก ZKTeco อัตโนมัติทุก 1 นาที
+
+// เช็คว่าข้ามวันแล้วหรือยัง (เผื่อเปิดหน้าเว็บทิ้งไว้ข้ามคืนโดยไม่รีเฟรช) — ถ้าข้ามวันแล้วให้รีเซ็ตวันที่ในตัวกรองต่างๆ กลับมาเป็น "วันนี้" อัตโนมัติ
+let lastKnownDateStr=new Date().toDateString();
+function checkDateRollover(){
+  const nowStr=new Date().toDateString();
+  if(nowStr!==lastKnownDateStr){
+    lastKnownDateStr=nowStr;
+    setHistToday();
+    renderTodayTable();renderDashboard();
+    const activePage=document.querySelector('.page.active');
+    if(activePage&&activePage.id==='page-attendance')renderAttendance();
+    if(activePage&&activePage.id==='page-schedule'){calYear=new Date().getFullYear();calMonth=new Date().getMonth();renderCal();}
+  }
+}
+setInterval(checkDateRollover,30000); // เช็คทุก 30 วินาทีว่าข้ามวันหรือยัง
 
 // ========== CENTRAL AUTH ==========
 const SYSTEM_KEY = 'apk_hr';
@@ -808,11 +846,12 @@ function scanCard(){
   const active=attendance.find(r=>r.empId===emp.id&&!r.checkOut&&new Date(r.checkIn)>cutoff);
   if(active){
     const ci=new Date(active.checkIn),co=now;
-    const calc=computeAttendanceCalc(emp.id,ci,co);
+    const calc=computeAttendanceCalc(emp,ci,co);
     const wh=(co-ci)/3600000;
+    const otRateEff=emp.hourlyRate*calc.otMultiplier;
     active.checkOut=co.toISOString();active.workedH=wh.toFixed(2);active.regH=calc.regH.toFixed(2);active.otH=calc.otH.toFixed(2);
     active.workingOnDayOff=calc.workingOnDayOff;
-    active.regPay=(calc.regH*emp.hourlyRate).toFixed(2);active.otPay=(calc.otH*emp.otRate).toFixed(2);active.totalPay=(calc.regH*emp.hourlyRate+calc.otH*emp.otRate).toFixed(2);
+    active.regPay=(calc.regH*emp.hourlyRate).toFixed(2);active.otPay=(calc.otH*otRateEff).toFixed(2);active.totalPay=(calc.regH*emp.hourlyRate+calc.otH*otRateEff).toFixed(2);
     saveAtt();
     showMsg('scanMsg',`✅ ออกงาน: ${emp.name} | ${wh.toFixed(2)} ชม. | 💰 ฿${active.totalPay}`,'ok');
     if(document.getElementById('notifOn').checked)discordSend(`🏁 **ออกงาน** — ${emp.name}\n⏰ ${co.toLocaleTimeString('th-TH')} | ${wh.toFixed(2)} ชม. | ฿${active.totalPay}`);
@@ -1064,7 +1103,9 @@ function calcAutoSSO(emp){
 function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
-  const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0),rp=rh*emp.hourlyRate,op=ot*emp.otRate;
+  const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0);
+  // รวมเงินจาก regPay/otPay ที่คำนวณไว้แล้วต่อ record (แต่ละวันอาจมีอัตรา OT ต่างกันตามวันปกติ/วันอาทิตย์-วันหยุด)
+  const rp=recs.reduce((s,r)=>s+parseFloat(r.regPay||0),0),op=recs.reduce((s,r)=>s+parseFloat(r.otPay||0),0);
   const gross=rp+op;
   const dk=dedKey(empId,yr,month);
   const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
@@ -1133,7 +1174,8 @@ function saveSSOConfig(){
 function saveOTConfig(){
   otConfig={
     lateGraceMin:parseFloat(document.getElementById('lateGraceMin').value)||0,
-    otGraceMin:parseFloat(document.getElementById('otGraceMin').value)||0
+    otGraceMin:parseFloat(document.getElementById('otGraceMin').value)||0,
+    qcBreakMin:parseFloat(document.getElementById('qcBreakMin').value)||0
   };
   localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));
   fbPut('/hr/otConfig',otConfig);
@@ -1171,7 +1213,7 @@ function showPayslip(empId,month){
   if(parseFloat(ded.utility)>0)dedRows+=`<tr><td>หัก: ค่าน้ำ-ไฟ</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.utility).toFixed(2)}</td></tr>`;
   if(parseFloat(ded.social)>0)dedRows+=`<tr><td>หัก: ประกันสังคม</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.social).toFixed(2)}</td></tr>`;
   if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>หัก: ${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.otherAmount).toFixed(2)}</td></tr>`;
-  document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div>${noteHtml}<div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตราค่าแรง OT</td><td style="text-align:right;">฿${d.emp.otRate}/ชม.</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr><td><b>รวมก่อนหัก</b></td><td style="text-align:right;"><b>฿${d.gross}</b></td></tr>${dedRows}<tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
+  document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div>${noteHtml}<div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตรา OT (วันปกติ)</td><td style="text-align:right;">฿${(d.emp.hourlyRate*1.5).toFixed(2)}/ชม. (1.5 เท่า)</td></tr><tr><td>อัตรา OT (วันอาทิตย์/วันหยุดบริษัท)</td><td style="text-align:right;">฿${(d.emp.payType==='รายเดือน'?d.emp.hourlyRate:d.emp.hourlyRate*1.5).toFixed(2)}/ชม. (${d.emp.payType==='รายเดือน'?'1.0':'1.5'} เท่า)</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr><td><b>รวมก่อนหัก</b></td><td style="text-align:right;"><b>฿${d.gross}</b></td></tr>${dedRows}<tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
   document.getElementById('payslipModal').classList.add('show');
 }
 
@@ -1270,9 +1312,15 @@ function confirmImport(){
   pendingCSVData.forEach(p=>{
     const{ci,co}=p;
     if(attendance.find(r=>r.empId===ci.emp.id&&Math.abs(new Date(r.checkIn)-ci.dt)<60000)){sk++;return;}
-    const hr=ci.dt.getHours(),sh=hr>=5&&hr<13?1:hr>=13&&hr<21?2:3;
-    const rec={id:Date.now()+Math.random(),empId:ci.emp.id,empName:ci.emp.name,shift:sh,shiftName:SHIFTS[sh].name,checkIn:ci.dt.toISOString(),checkOut:null,importedFromZK:true};
-    if(co){const wh=(co.dt-ci.dt)/3600000,rh=Math.min(wh,8),ot=Math.max(0,wh-8);rec.checkOut=co.dt.toISOString();rec.workedH=wh.toFixed(2);rec.regH=rh.toFixed(2);rec.otH=ot.toFixed(2);rec.regPay=(rh*ci.emp.hourlyRate).toFixed(2);rec.otPay=(ot*ci.emp.otRate).toFixed(2);rec.totalPay=(rh*ci.emp.hourlyRate+ot*ci.emp.otRate).toFixed(2);}
+    const calc0=computeAttendanceCalc(ci.emp,ci.dt,co?co.dt:ci.dt);
+    const sh=calc0.shift;
+    const rec={id:Date.now()+Math.random(),empId:ci.emp.id,empName:ci.emp.name,shift:sh,shiftName:SHIFTS[sh].name,checkIn:ci.dt.toISOString(),checkOut:null,importedFromZK:true,isLate:calc0.isLate,lateMin:calc0.lateMin};
+    if(co){
+      const wh=(co.dt-ci.dt)/3600000;
+      const otRateEff=ci.emp.hourlyRate*calc0.otMultiplier;
+      rec.checkOut=co.dt.toISOString();rec.workedH=wh.toFixed(2);rec.regH=calc0.regH.toFixed(2);rec.otH=calc0.otH.toFixed(2);rec.workingOnDayOff=calc0.workingOnDayOff;
+      rec.regPay=(calc0.regH*ci.emp.hourlyRate).toFixed(2);rec.otPay=(calc0.otH*otRateEff).toFixed(2);rec.totalPay=(calc0.regH*ci.emp.hourlyRate+calc0.otH*otRateEff).toFixed(2);
+    }
     attendance.push(rec);ok++;
   });
   saveAtt();
@@ -1301,8 +1349,8 @@ async function sendReport(){
 function renderSettings(){
   const rEl=document.getElementById('ssoRate'),mnEl=document.getElementById('ssoMin'),mxEl=document.getElementById('ssoMax'),cpEl=document.getElementById('ssoCap');
   if(rEl){rEl.value=ssoConfig.rate;mnEl.value=ssoConfig.min;mxEl.value=ssoConfig.max;cpEl.value=ssoConfig.cap;}
-  const lgEl=document.getElementById('lateGraceMin'),ogEl=document.getElementById('otGraceMin');
-  if(lgEl){lgEl.value=otConfig.lateGraceMin;ogEl.value=otConfig.otGraceMin;}
+  const lgEl=document.getElementById('lateGraceMin'),ogEl=document.getElementById('otGraceMin'),qcEl=document.getElementById('qcBreakMin');
+  if(lgEl){lgEl.value=otConfig.lateGraceMin;ogEl.value=otConfig.otGraceMin;qcEl.value=otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60;}
   const cl=document.getElementById('empCountLabel');
   if(cl) cl.textContent=EMPLOYEES.length;
   document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
@@ -1357,6 +1405,21 @@ loadEmployeeCloudData();
 
 const EMP_COLORS=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899','#a855f7','#14b8a6','#6366f1','#0ea5e9'];
 
+// คำนวณค่าแรง/ชม. อัตโนมัติจากยอดที่กรอก + ประเภทค่าจ้าง (แสดงคำอธิบายอัตรา OT แบบ dynamic ให้ดูด้วย ไม่ต้องกรอกเอง)
+function recalcHourly(){
+  const payType=document.getElementById('ePayType').value;
+  const salary=parseFloat(document.getElementById('eSalary').value)||0;
+  const hourly=payType==='รายเดือน'?(salary/30/8):(salary/8);
+  document.getElementById('eHourly').value=hourly.toFixed(2);
+  const info=document.getElementById('eOTInfo');
+  if(info){
+    if(payType==='รายเดือน'){
+      info.innerHTML=`วันทำงานปกติ: <b>${(hourly*1.5).toFixed(2)}</b> บาท/ชม. (1.5 เท่า) &nbsp;|&nbsp; วันอาทิตย์/วันหยุดบริษัท: <b>${hourly.toFixed(2)}</b> บาท/ชม. (1.0 เท่า)`;
+    } else {
+      info.innerHTML=`วันทำงานปกติ: <b>${(hourly*1.5).toFixed(2)}</b> บาท/ชม. (1.5 เท่า) &nbsp;|&nbsp; วันอาทิตย์/วันหยุดบริษัท: <b>${(hourly*1.5).toFixed(2)}</b> บาท/ชม. (1.5 เท่า เท่ากัน)`;
+    }
+  }
+}
 function openEmpAdd(){
   empIsNew=true;
   const idInput=document.getElementById('eId');
@@ -1372,9 +1435,8 @@ function openEmpAdd(){
   document.getElementById('eDept').value='';
   document.getElementById('ePayType').value='รายวัน';
   document.getElementById('eSalary').value=0;
-  document.getElementById('eHourly').value=100;
-  document.getElementById('eOT').value=150;
   document.getElementById('eStart').value=new Date().toISOString().slice(0,10);
+  recalcHourly();
   const h3=document.querySelector('#editEmpModal h3');
   if(h3) h3.textContent='➕ เพิ่มพนักงานใหม่';
   document.getElementById('editEmpModal').classList.add('show');
@@ -1399,9 +1461,8 @@ function openEmpEdit(id){
   document.getElementById('eDept').value=e.dept||'';
   document.getElementById('ePayType').value=e.payType||'รายวัน';
   document.getElementById('eSalary').value=e.salary||0;
-  document.getElementById('eHourly').value=e.hourlyRate||100;
-  document.getElementById('eOT').value=e.otRate||150;
   document.getElementById('eStart').value=e.startDate||'';
+  recalcHourly();
   document.getElementById('editEmpModal').classList.add('show');
 }
 
@@ -1420,8 +1481,7 @@ function saveEmpEdit(){
     dept: document.getElementById('eDept').value,
     payType: document.getElementById('ePayType').value,
     salary: parseFloat(document.getElementById('eSalary').value)||0,
-    hourlyRate: parseFloat(document.getElementById('eHourly').value)||100,
-    otRate: parseFloat(document.getElementById('eOT').value)||150,
+    hourlyRate: parseFloat(document.getElementById('eHourly').value)||0,
     startDate: document.getElementById('eStart').value,
   };
 
