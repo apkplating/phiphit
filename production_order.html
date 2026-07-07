@@ -172,6 +172,7 @@ tr:hover td{background:var(--sky-pale);}
       <div class="sec-head">
         <h3>📜 ใบสั่งผลิตทั้งหมด</h3>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="manualRefresh()" id="refreshBtn" class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;">🔄 รีเฟรชผลผลิต</button>
           <select id="filterLine" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
             <option value="">— ทุกสาย —</option>
             <option value="B1">B-1 Barrel</option>
@@ -184,6 +185,9 @@ tr:hover td{background:var(--sky-pale);}
             <option value="done">ครบแล้ว</option>
           </select>
         </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin:-6px 0 8px;">
+        อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ)
       </div>
       <div style="overflow-x:auto;">
         <table>
@@ -324,7 +328,28 @@ async function loadData() {
   // โหลดยอดผลิตจริงจากทุกสาย (job records)
   await loadActualOutput();
   renderPOList();
+  var tEl = document.getElementById('lastRefreshTime');
+  if (tEl) {
+    var now = new Date();
+    tEl.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
 }
+
+// ปุ่มรีเฟรชด้วยมือ — ดึง PO + ยอดผลิตจริงใหม่ทั้งหมด (ไม่ใช่แค่ re-render จากของเดิม)
+async function manualRefresh() {
+  var btn = document.getElementById('refreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังโหลด...'; }
+  await loadData();
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 รีเฟรชผลผลิต'; }
+}
+
+// ── Auto-refresh: ดึงยอดผลิตจริงใหม่ทุก 30 วิ เฉพาะตอนแท็บนี้เปิดใช้งานอยู่ ──
+// (ไม่ดึงใหม่ถ้ายังอยู่หน้า login)
+setInterval(function() {
+  if (document.getElementById('appContent') && document.getElementById('appContent').style.display !== 'none') {
+    loadData();
+  }
+}, 30000);
 
 // ── helper: ดึง partNo จาก partName ("M80-164NA CLAMPER..." → "M80-164NA") ──
 function extractPartNo(partName) {
