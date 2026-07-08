@@ -173,6 +173,10 @@ tr:hover td{background:var(--sky-pale);}
         <h3>📜 ใบสั่งผลิตทั้งหมด</h3>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button onclick="manualRefresh()" id="refreshBtn" class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;">🔄 รีเฟรชผลผลิต</button>
+          <select id="filterDateScope" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="today">วันนี้เท่านั้น</option>
+            <option value="all">ทุกวัน (ทั้งหมด)</option>
+          </select>
           <select id="filterLine" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
             <option value="">— ทุกสาย —</option>
             <option value="B1">B-1 Barrel</option>
@@ -187,7 +191,8 @@ tr:hover td{background:var(--sky-pale);}
         </div>
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin:-6px 0 8px;">
-        อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ)
+        อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ) ·
+        <span style="color:var(--text-muted);">หมายเหตุ: ตัวกรอง "วันนี้เท่านั้น" ซ่อนแค่การแสดงผล — ใบสั่งผลิตเก่ายังคำนวณผลผลิตจริงต่อเนื่องตามปกติ ไม่ได้ถูกปิด/หยุดนับ</span>
       </div>
       <div style="overflow-x:auto;">
         <table>
@@ -261,7 +266,7 @@ function doLogin() {
         Object.values(perms).indexOf('admin') !== -1 ||
         perms.production_order;
       if (!hasAccess) { showLoginError('ไม่มีสิทธิ์เข้าระบบนี้'); return; }
-      currentRole = perms.auth_admin === 'admin' ? 'admin' : 'operator';
+      currentRole = (perms.production_order === 'admin' || perms.auth_admin === 'admin') ? 'admin' : 'operator';
       document.getElementById('userName').textContent =
         (currentRole === 'admin' ? '👑 Admin' : '✏️ Operator') + ' · ' + (user.name||'');
       showApp();
@@ -814,10 +819,13 @@ function renderPOList() {
   var body = document.getElementById('poListBody');
   var filterLine   = (document.getElementById('filterLine')||{}).value||'';
   var filterStatus = (document.getElementById('filterStatus')||{}).value||'';
+  var filterDateScope = (document.getElementById('filterDateScope')||{}).value||'today';
+  var today = isoDate(new Date());
 
   // แตก PO items ออกมาเป็นแถวๆ
   var rows = [];
   poOrders.forEach(function(po) {
+    if (filterDateScope === 'today' && po.date !== today) return;
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
       var calcRes = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit, it.qty);
