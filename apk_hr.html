@@ -385,6 +385,8 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
 </div>
 
 <!-- MODAL: แก้ไขพนักงาน -->
+<div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;"></div>
+
 <div class="modal-ov" id="editEmpModal">
   <div class="modal-box" style="width:92%;max-width:600px;max-height:90vh;overflow-y:auto;">
     <h3 style="margin-bottom:18px;">✏️ แก้ไขข้อมูลพนักงาน</h3>
@@ -873,6 +875,21 @@ function showMsg(id,msg,type){
   const el=document.getElementById(id);
   el.innerHTML=`<div class="alert alert-${type==='ok'?'success':type==='warn'?'warn':'err'}">${msg}</div>`;
   setTimeout(()=>el.innerHTML='',4000);
+}
+// แจ้งเตือนแบบ toast มุมขวาบน — ใช้ได้ทั่วทั้งแอป (บันทึกพนักงาน, ลบพนักงาน, ฯลฯ)
+function showToast(msg,type){
+  const container=document.getElementById('toastContainer');
+  if(!container){alert(msg);return;}
+  const bg=type==='error'?'#ef4444':'#10b981';
+  const el=document.createElement('div');
+  el.textContent=msg;
+  el.style.cssText=`background:${bg};color:#fff;padding:13px 20px;border-radius:10px;font-size:0.9em;font-weight:600;box-shadow:0 8px 20px rgba(0,0,0,0.15);opacity:0;transform:translateX(20px);transition:opacity 0.25s,transform 0.25s;max-width:340px;`;
+  container.appendChild(el);
+  requestAnimationFrame(()=>{el.style.opacity='1';el.style.transform='translateX(0)';});
+  setTimeout(()=>{
+    el.style.opacity='0';el.style.transform='translateX(20px)';
+    setTimeout(()=>el.remove(),300);
+  },3000);
 }
 async function saveAtt(){
   localStorage.setItem('apk_att',JSON.stringify(attendance));
@@ -1366,7 +1383,7 @@ function renderSettings(){
       <td style="white-space:nowrap;">${sd}</td>
       <td>${e.phone||'—'}</td>
       <td>${payBadge}</td>
-      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;" onclick="openEmpEdit('${e.id}')">✏️ แก้ไข</button></td>
+      <td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;margin-right:4px;" onclick="openEmpEdit('${e.id}')">✏️ แก้ไข</button><button class="btn btn-danger" style="padding:4px 10px;font-size:0.8em;" onclick="deleteEmpConfirm('${e.id}')">🗑️ ลบ</button></td>
     </tr>`;
   }).join('');
 }
@@ -1376,6 +1393,7 @@ function renderSettings(){
 // การแก้ไข/เพิ่มพนักงาน เก็บลง Firebase (/hr/employeeOverrides, /hr/customEmployees) เพื่อให้เห็นตรงกันทุกเครื่อง
 // (เดิมเก็บแค่ localStorage เครื่องเดียว — ยังเก็บ localStorage ไว้ด้วยเป็น cache สำรอง)
 let empOverrides = JSON.parse(localStorage.getItem('apk_emp_overrides')||'{}');
+let deletedEmpIds = JSON.parse(localStorage.getItem('apk_deleted_emps')||'[]');
 let empIsNew = false;
 
 function applyOverrides(){
@@ -1384,10 +1402,17 @@ function applyOverrides(){
     if(idx>=0) Object.assign(EMPLOYEES[idx], empOverrides[id]);
   });
 }
+function applyDeleted(){
+  deletedEmpIds.forEach(id=>{
+    const idx=EMPLOYEES.findIndex(e=>e.id===id);
+    if(idx>=0) EMPLOYEES.splice(idx,1);
+  });
+}
 applyOverrides();
+applyDeleted();
 
 async function loadEmployeeCloudData(){
-  const [overridesFB, customFB] = await Promise.all([fbGet('/hr/employeeOverrides'), fbGet('/hr/customEmployees')]);
+  const [overridesFB, customFB, deletedFB] = await Promise.all([fbGet('/hr/employeeOverrides'), fbGet('/hr/customEmployees'), fbGet('/hr/deletedEmployees')]);
   if(overridesFB){
     empOverrides = Object.assign({}, empOverrides, overridesFB);
     localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
@@ -1397,11 +1422,31 @@ async function loadEmployeeCloudData(){
       if(!EMPLOYEES.find(e=>e.id===id)) EMPLOYEES.push(customFB[id]);
     });
   }
+  if(deletedFB && Array.isArray(deletedFB)){
+    deletedEmpIds = Array.from(new Set([...deletedEmpIds, ...deletedFB]));
+    localStorage.setItem('apk_deleted_emps', JSON.stringify(deletedEmpIds));
+  }
   applyOverrides();
+  applyDeleted();
   const settingsPage=document.getElementById('page-settings');
   if(settingsPage && settingsPage.classList.contains('active')) renderSettings();
 }
 loadEmployeeCloudData();
+
+// ลบพนักงานออกจากระบบ (soft delete — ข้อมูลบันทึกเวลา/เงินเดือนเก่ายังอยู่ในประวัติ แค่ไม่แสดงในรายชื่อที่ใช้งานแล้ว)
+function deleteEmpConfirm(id){
+  const emp=EMPLOYEES.find(e=>e.id===id);
+  if(!emp)return;
+  if(!confirm(`ยืนยันลบพนักงาน "${emp.name}" (รหัส ${id}) ออกจากระบบ?\n\nข้อมูลบันทึกเวลา/เงินเดือนเก่าของคนนี้จะยังอยู่ในประวัติเดิม แต่จะไม่แสดงในรายชื่อพนักงาน ตารางกะ หรือหน้าสแกนบัตรอีกต่อไป`))return;
+  if(!confirm('ยืนยันอีกครั้ง: การลบนี้จะซิงค์ไปทุกเครื่องทันที ต้องการลบจริงหรือไม่?'))return;
+  const idx=EMPLOYEES.findIndex(e=>e.id===id);
+  if(idx>=0)EMPLOYEES.splice(idx,1);
+  if(!deletedEmpIds.includes(id))deletedEmpIds.push(id);
+  localStorage.setItem('apk_deleted_emps',JSON.stringify(deletedEmpIds));
+  fbPut('/hr/deletedEmployees',deletedEmpIds);
+  showToast('🗑️ ลบพนักงาน '+emp.name+' ออกจากระบบแล้ว');
+  renderSettings();
+}
 
 const EMP_COLORS=['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899','#a855f7','#14b8a6','#6366f1','#0ea5e9'];
 
