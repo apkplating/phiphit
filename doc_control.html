@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root{
   --navy:#0f2044; --navy-2:#16305e;
@@ -140,6 +141,37 @@ tr:hover td{background:var(--steel-3);}
   pointer-events:none;
 }
 .toast.show{opacity:1;}
+.toast.toast-error{background:var(--red);}
+
+/* ── PDF Viewer ── */
+.pdf-modal-bg{position:fixed; inset:0; background:#0f172a; display:none; flex-direction:column; z-index:70;}
+.pdf-modal-bg.show{display:flex;}
+.pdf-toolbar{
+  background:var(--navy); color:#fff; padding:10px 16px; display:flex; align-items:center;
+  justify-content:space-between; gap:10px; flex-wrap:wrap; flex-shrink:0;
+}
+.pdf-toolbar .pdf-title{font-size:12.5px; font-weight:600; color:#dbe3f3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:40vw;}
+.pdf-toolbar .pdf-actions{display:flex; gap:8px; align-items:center;}
+.pdf-toolbar .btn-icon{
+  background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25);
+  border-radius:8px; padding:7px 14px; font-size:12px; font-family:inherit; cursor:pointer; font-weight:600;
+}
+.pdf-toolbar .btn-icon:hover{background:rgba(255,255,255,.2);}
+.pdf-toolbar .btn-icon:disabled{opacity:.4; cursor:not-allowed;}
+.pdf-scroll{flex:1; overflow:auto; padding:20px 0; display:flex; flex-direction:column; align-items:center; gap:16px;}
+.pdf-page-wrap{background:#fff; box-shadow:0 4px 18px rgba(0,0,0,.35); max-width:92vw;}
+.pdf-page-wrap canvas{display:block; max-width:100%; height:auto;}
+.pdf-loading{color:#dbe3f3; font-size:13px; padding:40px;}
+
+@media print{
+  body > *{visibility:hidden !important;}
+  .pdf-modal-bg{visibility:visible !important; position:absolute !important; inset:0 !important; background:#fff !important;}
+  .pdf-modal-bg *{visibility:visible !important;}
+  .pdf-toolbar{display:none !important;}
+  .pdf-scroll{overflow:visible !important; padding:0 !important; display:block !important;}
+  .pdf-page-wrap{box-shadow:none !important; max-width:100% !important; page-break-after:always; margin:0 !important;}
+  .pdf-page-wrap canvas{width:100% !important;}
+}
 .section-title{font-size:12px; font-weight:700; color:var(--navy); margin:18px 0 8px; text-transform:uppercase; letter-spacing:.4px;}
 .hint{font-size:11px; color:var(--text-muted); margin-top:6px;}
 .admin-subtabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
@@ -457,6 +489,20 @@ tr:hover td{background:var(--steel-3);}
 
 <div class="toast" id="toast"></div>
 
+<!-- ════════ PDF VIEWER (in-page, มีลายน้ำ + log การพิมพ์) ════════ -->
+<div class="pdf-modal-bg" id="pdfModal">
+  <div class="pdf-toolbar">
+    <div class="pdf-title" id="pdfTitle">เอกสาร</div>
+    <div class="pdf-actions">
+      <button class="btn-icon" id="pdfPrintBtn">🖨️ พิมพ์</button>
+      <button class="btn-icon" id="pdfCloseBtn">✕ ปิด</button>
+    </div>
+  </div>
+  <div class="pdf-scroll" id="pdfScroll">
+    <div class="pdf-loading" id="pdfLoading">กำลังโหลดเอกสาร…</div>
+  </div>
+</div>
+
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
 <script>
@@ -472,7 +518,8 @@ var PATHS = {
   catView:  DB_URL + '/doc_control/settings/categoryViewDepts',
   depts:    DB_URL + '/doc_control/settings/depts',
   docTypes: DB_URL + '/doc_control/settings/docTypes',
-  discordWebhooks: DB_URL + '/doc_control/settings/discordWebhooks'
+  discordWebhooks: DB_URL + '/doc_control/settings/discordWebhooks',
+  printLogs: DB_URL + '/doc_control/printLogs'
 };
 
 var DEFAULT_DOC_TYPES = [
@@ -513,9 +560,10 @@ var allMaster = {};
 
 /* ══════════════ ยูทิลิตี้ ══════════════ */
 function $(id){ return document.getElementById(id); }
-function toast(msg){
+function toast(msg, isError){
   var t = $('toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); }, 2600);
+  t.classList.toggle('toast-error', !!isError);
+  setTimeout(function(){ t.classList.remove('show'); }, 3200);
 }
 function fbGet(url){
   return getFbAuthToken().then(function(token){
@@ -560,16 +608,111 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
-function openBase64Pdf(b64, fileName){
-  try{
-    var byteChars = atob(b64);
-    var bytes = new Uint8Array(byteChars.length);
-    for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
-    var blob = new Blob([bytes], {type:'application/pdf'});
-    var url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-  }catch(e){ toast('เปิดไฟล์ไม่สำเร็จ: '+e.message); }
+var pdfViewerState = { canvases: [], docCode: '', fileName: '' };
+
+if (window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
+
+function drawWatermark(ctx, w, h, lines){
+  ctx.save();
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = '#dc2626';
+  ctx.font = '700 20px "IBM Plex Sans Thai", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.translate(w/2, h/2);
+  ctx.rotate(-Math.PI/7);
+  var stepY = 130, stepX = 320;
+  for (var y = -h*1.2; y < h*1.4; y += stepY){
+    for (var x = -w*1.2; x < w*1.4; x += stepX){
+      lines.forEach(function(line, idx){
+        ctx.fillText(line, x, y + idx*23);
+      });
+    }
+  }
+  ctx.restore();
+}
+
+function base64ToBytes(b64){
+  var byteChars = atob(b64);
+  var bytes = new Uint8Array(byteChars.length);
+  for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
+  return bytes;
+}
+
+function renderPdfPage(pdfDoc, pageNum, watermarkLines){
+  return pdfDoc.getPage(pageNum).then(function(page){
+    var viewport = page.getViewport({scale: 1.6});
+    var canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    var ctx = canvas.getContext('2d');
+    return page.render({canvasContext: ctx, viewport: viewport}).promise.then(function(){
+      drawWatermark(ctx, canvas.width, canvas.height, watermarkLines);
+      return canvas;
+    });
+  });
+}
+
+function openBase64Pdf(b64, fileName, docCode, kind){
+  if (!window.pdfjsLib){ toast('ไม่สามารถโหลดตัวแสดงผล PDF ได้'); return; }
+  var modal = $('pdfModal'), scroll = $('pdfScroll'), loading = $('pdfLoading');
+  scroll.innerHTML = ''; scroll.appendChild(loading);
+  loading.textContent = 'กำลังโหลดเอกสาร…';
+  loading.style.display = 'block';
+  $('pdfTitle').textContent = fileName || 'เอกสาร';
+  modal.classList.add('show');
+  pdfViewerState = { canvases: [], docCode: docCode || '', fileName: fileName || '' };
+
+  var who = (session && session.user && session.user.name) || (session && session.pin) || 'ไม่ทราบผู้ใช้';
+  var stamp = fmtDateTime(new Date().toISOString());
+  var watermarkLines = kind === 'draft'
+    ? ['เอกสารฉบับร่าง (DRAFT)', 'ผู้เปิดดู: '+who, stamp]
+    : ['สำเนาไม่ควบคุม (Uncontrolled Copy)', 'ผู้เปิดดู: '+who, stamp];
+
+  try{
+    var bytes = base64ToBytes(b64);
+    pdfjsLib.getDocument({data: bytes}).promise.then(function(pdfDoc){
+      var pageNums = []; for (var i=1;i<=pdfDoc.numPages;i++) pageNums.push(i);
+      return pageNums.reduce(function(chain, pageNum){
+        return chain.then(function(){
+          return renderPdfPage(pdfDoc, pageNum, watermarkLines).then(function(canvas){
+            var wrap = document.createElement('div'); wrap.className = 'pdf-page-wrap';
+            wrap.appendChild(canvas);
+            scroll.appendChild(wrap);
+            pdfViewerState.canvases.push(canvas);
+          });
+        });
+      }, Promise.resolve());
+    }).then(function(){
+      loading.style.display = 'none';
+    }).catch(function(e){
+      loading.textContent = 'เปิดไฟล์ไม่สำเร็จ: '+e.message;
+    });
+  }catch(e){ toast('เปิดไฟล์ไม่สำเร็จ: '+e.message); modal.classList.remove('show'); }
+}
+
+function logPrintEvent(docCode, fileName){
+  var entry = {
+    docCode: docCode || '',
+    fileName: fileName || '',
+    printedBy: {pin: session ? session.pin : '', name: (session && session.user) ? session.user.name : ''},
+    printedAt: new Date().toISOString()
+  };
+  return fbPost(PATHS.printLogs, entry);
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  var closeBtn = $('pdfCloseBtn'), printBtn = $('pdfPrintBtn');
+  if (closeBtn) closeBtn.addEventListener('click', function(){ $('pdfModal').classList.remove('show'); });
+  if (printBtn) printBtn.addEventListener('click', function(){
+    printBtn.disabled = true;
+    logPrintEvent(pdfViewerState.docCode, pdfViewerState.fileName).catch(function(){}).finally(function(){
+      printBtn.disabled = false;
+      window.print();
+    });
+  });
+});
 function notifyDeptsDiscord(depts, content){
   var urls = [];
   (depts || []).forEach(function(d){
@@ -881,8 +1024,9 @@ function renderPendingReq(id, r){
 }
 function viewDraft(reqId){
   fbGet(PATHS.files + '/' + reqId + '_draft').then(function(f){
-    if (!f || !f.data){ toast('ไม่พบไฟล์'); return; }
-    openBase64Pdf(f.data, f.fileName);
+    if (!f || !f.data){ toast('ไม่พบไฟล์', true); return; }
+    var req = allRequests[reqId];
+    openBase64Pdf(f.data, f.fileName, req ? req.docCode : '', 'draft');
   });
 }
 
@@ -1006,8 +1150,8 @@ function renderLibrary(){
       var code = btn.getAttribute('data-open');
       var reqId = allMaster[code].latestReqId;
       fbGet(PATHS.files + '/' + reqId + '_final').then(function(f){
-        if (!f || !f.data){ toast('ไม่พบไฟล์'); return; }
-        openBase64Pdf(f.data, f.fileName);
+        if (!f || !f.data){ toast('ไม่พบไฟล์', true); return; }
+        openBase64Pdf(f.data, f.fileName, code, 'published');
       });
     });
   });
@@ -1189,6 +1333,7 @@ function doImport(){
     $('impCode').value = ''; $('impName').value = ''; $('impRev').value = '00'; $('impDar').value = ''; $('impFile').value = '';
   }).catch(function(e){
     $('importErr').textContent = 'เกิดข้อผิดพลาด: '+e.message;
+    toast('นำเข้าเอกสารไม่สำเร็จ: '+e.message, true);
   }).finally(function(){
     btn.disabled = false; btn.textContent = 'นำเข้าเอกสาร';
   });
