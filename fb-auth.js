@@ -1,0 +1,51 @@
+'use strict';
+/* ══════════════════════════════════════════════════════════════
+   Firebase Anonymous Auth Helper
+   ใช้ร่วมกับ Realtime Database Rules ที่ตั้งเป็น "auth != null"
+   เพื่อกันคนนอกยิง REST ตรงเข้าฐานข้อมูลโดยไม่ผ่านหน้าเว็บนี้เลย
+
+   วิธีตั้งค่า:
+   1) เปิด Anonymous Sign-in: Firebase Console > Authentication
+      > Sign-in method > เปิด "Anonymous"
+   2) หา Web API Key: Firebase Console > Project Settings (รูปเฟือง)
+      > General > Web API Key แล้วใส่แทนค่าด้านล่าง
+   3) include ไฟล์นี้ "ก่อน" ส่วนที่เรียก fbGet/fbPut ในหน้า HTML
+      <script src="fb-auth.js"></script>
+   ══════════════════════════════════════════════════════════════ */
+
+var FB_API_KEY = 'AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE'; // Web API Key ของโปรเจกต์ platingapp-92e21-c1346
+
+var _fbTokenPromise = null;
+
+function getFbAuthToken(){
+  var cached = sessionStorage.getItem('fb_anon_token');
+  var cachedExp = sessionStorage.getItem('fb_anon_exp');
+  if (cached && cachedExp && Date.now() < Number(cachedExp)){
+    return Promise.resolve(cached);
+  }
+  if (_fbTokenPromise) return _fbTokenPromise; // กันยิงขอ token ซ้ำถ้ามีหลาย request พร้อมกัน
+
+  _fbTokenPromise = fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + FB_API_KEY, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ returnSecureToken: true })
+  })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.idToken){
+        console.error('Firebase anonymous auth failed:', data);
+        throw new Error('ไม่สามารถยืนยันตัวตนกับ Firebase ได้ กรุณาตรวจสอบ FB_API_KEY ในไฟล์ fb-auth.js');
+      }
+      var expiresInMs = (Number(data.expiresIn) || 3600) * 1000;
+      var expAt = Date.now() + expiresInMs - 5 * 60 * 1000; // ต่อ token ล่วงหน้าก่อนหมดอายุ 5 นาที
+      sessionStorage.setItem('fb_anon_token', data.idToken);
+      sessionStorage.setItem('fb_anon_exp', String(expAt));
+      _fbTokenPromise = null;
+      return data.idToken;
+    })
+    .catch(function(err){
+      _fbTokenPromise = null;
+      throw err;
+    });
+  return _fbTokenPromise;
+}

@@ -458,6 +458,7 @@ tr:hover td{background:var(--steel-3);}
 <div class="toast" id="toast"></div>
 
 <script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
 <script>
 'use strict';
 
@@ -517,17 +518,24 @@ function toast(msg){
   setTimeout(function(){ t.classList.remove('show'); }, 2600);
 }
 function fbGet(url){
-  return fetch(url + '.json', {cache:'no-store'}).then(function(r){ return r.json(); });
+  return getFbAuthToken().then(function(token){
+    return fetch(url + '.json?auth=' + token, {cache:'no-store'});
+  }).then(function(r){ return r.json(); });
 }
 function fbPut(url, data){
-  return fetch(url + '.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  return getFbAuthToken().then(function(token){
+    return fetch(url + '.json?auth=' + token, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  });
 }
 function fbPatch(url, data){
-  return fetch(url + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  return getFbAuthToken().then(function(token){
+    return fetch(url + '.json?auth=' + token, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  });
 }
 function fbPost(url, data){
-  return fetch(url + '.json', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
-    .then(function(r){ return r.json(); });
+  return getFbAuthToken().then(function(token){
+    return fetch(url + '.json?auth=' + token, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  }).then(function(r){ return r.json(); });
 }
 function escapeHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
