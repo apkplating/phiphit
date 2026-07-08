@@ -222,7 +222,9 @@
   // ── ดึงข้อมูลผู้ใช้ทั้งหมดจาก Firebase ──
   // คืนค่า { ok:true, users:{...} } หรือ { ok:false, error:'...' }
   function fetchUsers() {
-    return fetch(AUTH_PATH, { cache: 'no-store' })
+    return global.getFbAuthToken().then(function (token) {
+      return fetch(AUTH_PATH + '?auth=' + token, { cache: 'no-store' });
+    })
       .then(function (res) {
         if (!res.ok) return { ok: false, error: 'HTTP ' + res.status };
         return res.json().then(function (data) {
@@ -237,10 +239,12 @@
 
   // ── บันทึกข้อมูลผู้ใช้ทั้งหมดกลับไป Firebase ──
   function saveUsers(users) {
-    return fetch(AUTH_PATH, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ users: users, savedAt: new Date().toISOString() })
+    return global.getFbAuthToken().then(function (token) {
+      return fetch(AUTH_PATH + '?auth=' + token, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: users, savedAt: new Date().toISOString() })
+      });
     })
       .then(function (res) {
         if (!res.ok) return { ok: false, error: 'HTTP ' + res.status };

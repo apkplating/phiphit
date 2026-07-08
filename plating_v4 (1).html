@@ -3,9 +3,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="งานชุบ B-2">
+<meta name="apple-mobile-web-app-title" content="งานชุบ B-1">
 <meta name="theme-color" content="#0f2744">
-<title>ใบรายงานการชุบประจำวัน B-2</title>
+<title>ใบรายงานการชุบประจำวัน B-1</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async="" defer=""></script>
@@ -164,6 +164,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 .toast.ok{background:var(--success-bg);color:var(--success);border:1px solid rgba(13,110,86,.2);}
 .toast.err{background:var(--error-bg);color:var(--error);border:1px solid rgba(155,44,44,.2);}
 
+/* ── Thickness tab ── */
+#thickFilterDate { font-family: 'IBM Plex Sans Thai', sans-serif; color: var(--navy); background:#fff; }
+#thickAvgDisplay { letter-spacing: -1px; }
+
 /* ── History table (same as v2) ── */
 .empty-state{text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;}
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;}
@@ -299,7 +303,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 <div id="loginScreen">
   <div class="login-card">
     <div class="login-logo">⚙️</div>
-    <div class="login-title">งานชุบ B-2</div>
+    <div class="login-title">งานชุบ B-1</div>
     <div class="login-sub">ระบบรายงานการชุบประจำวัน<br>กรุณาใส่รหัส PIN เพื่อเข้าใช้งาน</div>
     <div style="margin:20px 0 8px;">
       <input id="pinInput" type="password" placeholder="ใส่ PIN" autocomplete="off"
@@ -360,7 +364,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <div class="hdr-top">
     <div>
       <div class="hdr-badge">ใบรายงานการชุบประจำวัน</div>
-      <div class="hdr-title">BARREL - 2</div>
+      <div class="hdr-title">BARREL - 1</div>
       <div class="hdr-sub" id="hdrDate">วันจันทร์ที่ 18 พฤษภาคม 2569</div>
     </div>
     <div class="hdr-lot">
@@ -377,8 +381,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <button class="tab-btn" onclick="tab('chart')">📊 กราฟ</button>
   <button class="tab-btn" onclick="tab('chem')">🧪 เคมี</button>
   <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
-  <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn" onclick="tab('job')">📋 งาน</button>
+  <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
   <button class="tab-btn" onclick="tab('qc100')">✅ QC 100%</button>
   <button class="tab-btn" onclick="tab('mcheck')">🔧 ตรวจเครื่องจักร</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
@@ -399,7 +403,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
       <div class="field" style="margin:0;">
         <label>Pro Lot No.</label>
-        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–';var bl=document.getElementById('bLotNo');if(bl){bl.value=this.value;if(this.value){bl.style.borderColor='var(--border)';bl.style.background='';}}try{localStorage.setItem('b2_lastLot',this.value);}catch(e){}">
+        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–';var bl=document.getElementById('bLotNo');if(bl&&!bl.value){bl.value=this.value;if(this.value){bl.style.borderColor='var(--border)';bl.style.background='';}}">
       </div>
     </div>
     <div class="grid2">
@@ -408,27 +412,21 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <input type="text" id="recorder" placeholder="ชื่อ...">
       </div>
       <div class="field" style="margin:0;">
-        <label>กระแสไฟ AH <span style="font-size:10px;background:#1e40af;color:#fff;border-radius:4px;padding:1px 6px;">บ่อ 1</span></label>
+        <label>กระแสไฟ AH (สำหรับวันนี้)</label>
         <input type="number" id="dayAH" placeholder="0" min="0" inputmode="numeric" oninput="updateAHDisplay()">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>กระแสไฟ AH <span style="font-size:10px;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 6px;">บ่อ 2</span></label>
-        <input type="number" id="dayAH_b2" placeholder="0" min="0" inputmode="numeric" oninput="updateAHDisplay()">
       </div>
     </div>
   </div>
 
   <!-- AH display -->
-  <div class="ah-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-    <div style="background:rgba(30,64,175,.3);border-radius:10px;padding:10px;text-align:center;">
-      <div class="ah-lbl">AH · บ่อ 1</div>
-      <div class="ah-display" id="ahDisplay" style="font-size:20px;">0</div>
-      <input type="number" id="dayAH2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH(this)" style="width:100%;padding:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;text-align:center;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;outline:none;margin-top:6px;">
+  <div class="ah-row">
+    <div class="ah-left">
+      <div class="ah-lbl">AMPERE · HOUR</div>
+      <div class="ah-display" id="ahDisplay">0</div>
+      <div class="ah-unit">AH วันนี้</div>
     </div>
-    <div style="background:rgba(124,58,237,.3);border-radius:10px;padding:10px;text-align:center;">
-      <div class="ah-lbl">AH · บ่อ 2</div>
-      <div class="ah-display" id="ahDisplay_b2" style="font-size:20px;">0</div>
-      <input type="number" id="dayAH2_b2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH_b2(this)" style="width:100%;padding:8px;font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;text-align:center;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;outline:none;margin-top:6px;">
+    <div class="ah-right">
+      <input type="number" id="dayAH2" placeholder="0" min="0" inputmode="numeric" oninput="syncAH(this)">
     </div>
   </div>
 
@@ -448,19 +446,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <div class="field" style="margin:0;">
         <label>เลขโม่/บาร์</label>
         <input type="number" id="bBarrel" placeholder="0" min="1" inputmode="numeric">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>Batch No. <span style="font-size:10px;color:var(--text-muted);">(บ่อชุบ)</span></label>
-        <div style="display:flex;gap:6px;">
-          <button id="bBatchBtn1" onclick="selBatch(1)"
-            style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--blue);background:var(--blue);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
-            บ่อ 1
-          </button>
-          <button id="bBatchBtn2" onclick="selBatch(2)"
-            style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:#fff;color:var(--text-muted);font-size:13px;font-weight:700;cursor:pointer;">
-            บ่อ 2
-          </button>
-        </div>
       </div>
     </div>
 
@@ -544,7 +529,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="grid2" style="margin-bottom:0;">
       <div class="field" style="margin:0;">
         <label>น้ำหนัก (Kgs)</label>
-        <input type="number" id="bKg" placeholder="0.0" min="0" step="0.1" inputmode="decimal" oninput="calcBPcsFromKg()">
+        <input type="number" id="bKg" placeholder="0.0" min="0" step="0.1" inputmode="decimal"
+          oninput="calcBPcsFromKg()">
         <div id="barrelWeightHint" style="font-size:10px;color:#f59e0b;margin-top:3px;display:none;"></div>
       </div>
       <div class="field" style="margin:0;">
@@ -567,7 +553,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <thead><tr>
           <th style="text-align:left;">เวลา</th>
           <th>โม่</th>
-          <th>บ่อ</th>
           <th style="text-align:left;">ชื่อชิ้นงาน</th>
           <th style="text-align:left;">ลูกค้า</th>
           <th>Lot No</th>
@@ -649,7 +634,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;margin-left:4px;">
         <div style="position:relative;width:36px;height:20px;flex-shrink:0;">
           <input type="checkbox" id="autoDiscordToggle"
-            onchange="localStorage.setItem('b2_autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
+            onchange="localStorage.setItem('b1_autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
             style="opacity:0;width:0;height:0;position:absolute;">
           <span id="autoDiscordKnob" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:20px;transition:.3s;">
             <span style="position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;"></span>
@@ -759,7 +744,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <thead>
           <tr style="background:#1e3a5f;">
             <th style="padding:7px 8px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);">ชื่อเคมี</th>
-            <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ลิตร)</th>
+            <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">ปริมาณ<br>(ลิตร)</th>
             <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">ใช้ไป<br>(ลิตร)</th>
             <th style="padding:7px 6px;text-align:right;font-size:9px;font-weight:600;color:#fbbf24;">คงเหลือ<br>(ลิตร)</th>
           </tr>
@@ -803,7 +788,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <div id="smReworkKg" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--navy);">–</div>
       </div>
       <div style="padding:10px 4px;text-align:center;">
-        <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">AH (บ่อ1 / บ่อ2)</div>
+        <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">AH</div>
         <div id="smAH" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--navy);">–</div>
       </div>
     </div>
@@ -979,23 +964,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
             style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;box-sizing:border-box;">
         </div>
       </div>
-      <!-- Batch No. สำหรับยาพื้น/ยาเงา -->
-      <div style="margin-top:7px;">
-        <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">ใช้กับ Batch No. (บ่อชุบ)</div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;padding:7px 12px;border-radius:8px;border:1.5px solid var(--border);flex:1;justify-content:center;">
-            <input type="checkbox" id="newChemBatch1" value="1" style="margin:0;"> บ่อ 1
-          </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;padding:7px 12px;border-radius:8px;border:1.5px solid var(--border);flex:1;justify-content:center;">
-            <input type="checkbox" id="newChemBatch2" value="2" style="margin:0;"> บ่อ 2
-          </label>
-          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;padding:7px 12px;border-radius:8px;border:1.5px solid var(--border);flex:1;justify-content:center;background:var(--sky-pale);">
-            <input type="checkbox" id="newChemBatchAll" onchange="if(this.checked){document.getElementById('newChemBatch1').checked=false;document.getElementById('newChemBatch2').checked=false;}" style="margin:0;"> ทุกบ่อ
-          </label>
-        </div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">ถ้าเป็น White/Yellow/Black Chromate → เลือก "ทุกบ่อ"</div>
-      </div>
-      <div style="display:flex;gap:6px;margin-top:8px;">
+      <div style="display:flex;gap:6px;">
         <button onclick="confirmAddChemItem()" style="flex:1;padding:9px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✓ บันทึก</button>
         <button onclick="document.getElementById('addChemItemForm').style.display='none'" style="padding:9px 14px;background:#fff;border:1.5px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;">ยกเลิก</button>
       </div>
@@ -1012,7 +981,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div id="chemCardCode" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--blue-light);margin-bottom:2px;"></div>
           <div id="chemCardName" style="font-size:16px;font-weight:700;"></div>
           <div id="chemCardSupplier" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px;"></div>
-          <button onclick="openEditChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไขข้อมูล</button><button onclick="confirmDeleteChemItem()" style="margin-top:8px;padding:5px 12px;background:rgba(248,113,113,.25);border:1px solid rgba(248,113,113,.5);border-radius:8px;color:#fca5a5;font-size:11px;cursor:pointer;">🗑️ ลบรายการนี้</button>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <button onclick="openEditChemItem()" style="padding:5px 12px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;color:#fff;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">✏️ แก้ไขข้อมูล</button>
+            <button onclick="confirmDeleteChemItem()" style="padding:5px 12px;background:rgba(248,113,113,.25);border:1px solid rgba(248,113,113,.5);border-radius:8px;color:#fca5a5;font-size:11px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🗑️ ลบรายการนี้</button>
+          </div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:10px;color:var(--blue-light);margin-bottom:2px;">คงเหลือ</div>
@@ -1023,7 +995,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <!-- สรุป 3 ตัวเลข -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
-          <div style="font-size:9px;color:var(--blue-light);">รับเข้ารวม (ลิตร)</div>
+          <div style="font-size:9px;color:var(--blue-light);">เบิกจาก Master Stock (ลิตร)</div>
           <div id="chemCardTotalIn" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#fff;margin-top:2px;">0</div>
         </div>
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
@@ -1064,36 +1036,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
     </div>
 
-    <!-- ── ฟอร์มรับเข้าจัดซื้อ ── -->
-    <div class="card">
-      <div class="card-label">📥 บันทึกรับเข้า (ฝ่ายจัดซื้อ)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;">
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">ว.ด.ป.</div>
-          <input id="chemInDate" type="date" style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">เลขที่ใบรับงาน</div>
-          <input id="chemInBill" type="text" placeholder="เช่น PO-2026-001"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">จำนวนรับเข้า (ลิตร) <span style="color:#c0392b;">*</span></div>
-          <input id="chemInLiter" type="number" placeholder="0.0" min="0" step="0.01" inputmode="decimal"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:14px;font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;box-sizing:border-box;">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">จำนวนรับเข้า (ถัง)</div>
-          <input id="chemInBucket" type="number" placeholder="0" min="0" step="1" inputmode="numeric"
-            style="width:100%;padding:9px;border-radius:8px;border:1.5px solid var(--border);font-size:14px;font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;box-sizing:border-box;">
-        </div>
-      </div>
-      <button onclick="addChemIn()" style="margin-top:10px;width:100%;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
-        📥 บันทึกรับเข้า
-      </button>
-      <div id="chemInMsg" style="display:none;margin-top:8px;padding:8px;border-radius:8px;font-size:12px;text-align:center;"></div>
-    </div>
-
     <!-- ── ตาราง Stock Card ── -->
     <div class="card" style="padding:0;overflow:hidden;">
       <div style="background:var(--navy);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">
@@ -1104,15 +1046,15 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:660px;">
           <thead>
             <tr style="background:var(--navy);">
-              <th colspan="5" style="padding:6px 8px;text-align:center;color:var(--blue-light);font-size:9px;border-right:2px solid rgba(255,255,255,.2);">จัดซื้อ (รับเข้า)</th>
+              <th colspan="5" style="padding:6px 8px;text-align:center;color:var(--blue-light);font-size:9px;border-right:2px solid rgba(255,255,255,.2);">ประวัติการเบิกจาก Master</th>
               <th colspan="5" style="padding:6px 8px;text-align:center;color:#6ee7b7;font-size:9px;">ผลิต (เบิกใช้)</th>
             </tr>
             <tr style="background:#1e3a5f;">
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">ว.ด.ป.</th>
-              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">เลขที่ใบรับงาน</th>
+              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">วันที่เบิก</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ลิตร)</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">รับเข้า<br>(ถัง)</th>
-              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้บันทึก</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:var(--blue-light);">หมายเหตุ</th>
+              <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้เบิก</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">ว.ด.ป.</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">เลขที่ใบสั่งผลิต</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">เบิก<br>(ลิตร)</th>
@@ -1127,6 +1069,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
     </div>
   </div>
+
 
   <!-- ══ เบิกเคมีจาก Master Stock ══ -->
   <div class="card" style="margin-top:0;">
@@ -1262,10 +1205,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       ข้อมูลจะ <strong>sync อัตโนมัติ</strong> ระหว่าง Tablet และ PC ทันที
     </div>
     <div style="font-size:11px;background:var(--sky-pale);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;">
-      🔗 <strong>Database:</strong> platingapp-b2 (asia-southeast1) — path: /plating-b2
+      🔗 <strong>Database:</strong> platingapp-92e21-c1346 (asia-southeast1)
     </div>
     <!-- hidden input เพื่อให้โค้ดเดิมยังทำงานได้ -->
-    <input type="hidden" id="fbDbUrl" value="https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app">
+    <input type="hidden" id="fbDbUrl" value="https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app">
     <button class="btn btn-outline" onclick="fbManualSync()" style="margin-bottom:8px;">🔄 โหลดข้อมูลจาก Cloud ตอนนี้</button>
     <button class="btn btn-outline" onclick="fbMigrateLocal()" style="margin-bottom:8px;background:#fff3cd;border-color:#f0ad4e;color:#856404;">📤 อัปโหลดข้อมูลในเครื่องขึ้น Cloud</button>
     <div id="toast-firebase" class="toast"></div>
@@ -1506,13 +1449,13 @@ function init() {
   tickTime();
   setInterval(tickTime, 1000);
 
-  try { dayRecords = JSON.parse(localStorage.getItem('b2_dayRecords') || '[]'); } catch(e){ dayRecords=[]; }
-  try { todayBarrels = JSON.parse(localStorage.getItem('b2_todayBarrels') || '[]'); } catch(e){ todayBarrels=[]; }
+  try { dayRecords = JSON.parse(localStorage.getItem('b1_dayRecords') || '[]'); } catch(e){ dayRecords=[]; }
+  try { todayBarrels = JSON.parse(localStorage.getItem('b1_todayBarrels') || '[]'); } catch(e){ todayBarrels=[]; }
   try {
-    discordWH = localStorage.getItem('b2_discordWH') || '';
+    discordWH = localStorage.getItem('b1_discordWH') || '';
     if (discordWH) { document.getElementById('webhookUrl').value = discordWH; setBadge(true); }
-    var lr = localStorage.getItem('b2_lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
-    var ll = localStorage.getItem('b2_lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
+    var lr = localStorage.getItem('b1_lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
+    var ll = localStorage.getItem('b1_lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
   } catch(e){}
 
   renderBarrels();
@@ -1532,11 +1475,12 @@ function init() {
   var intakeDateEl = document.getElementById('intakeDate');
   if (intakeDateEl) intakeDateEl.value = isoDate(new Date());
   fbLoadConfig();       // โหลด Firebase config และเริ่ม poll
-  thickInit();
+  thickInit();          // โหลดข้อมูลความหนาผิวชุบ
   setTimeout(thickFbLoad, 2000);
   setTimeout(qaFbLoadRecords, 2500);
   setTimeout(qaFbLoadProcesses, 2800);
-  setTimeout(masterLoad, 1500);
+  setTimeout(masterLoad, 1500); // sync Firebase
+  setTimeout(jobMasterLoad, 1800); // โหลด Job Master สำหรับ dropdown P/No
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
   loadAutoDiscordSetting();
@@ -1553,7 +1497,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','qa','job','qc100','mcheck','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1564,8 +1508,8 @@ function tab(t) {
   if (t === 'chart') renderCharts();
   if (t === 'chem') { renderChemStockSelect(); renderChemStockCard(); }
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
-  if (t === 'qa')    { qaRenderHistory(); qaRenderChart(); }
   if (t === 'job')   { jobMasterLoad(); }
+  if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
   if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); }
   if (t === 'mcheck') { mcInit(); }
 }
@@ -1575,21 +1519,11 @@ function tab(t) {
 // ═══════════════════════════════════════
 function updateAHDisplay() {
   var v = document.getElementById('dayAH').value || '0';
-  var v2 = document.getElementById('dayAH_b2') ? (document.getElementById('dayAH_b2').value||'0') : '0';
-  var d2 = document.getElementById('ahDisplay_b2');
-  if(d2) d2.textContent = parseInt(v2).toLocaleString();
   document.getElementById('ahDisplay').textContent = parseInt(v).toLocaleString();
   document.getElementById('dayAH2').value = v;
 }
 function syncAH(el) {
   document.getElementById('dayAH').value = el.value;
-  var d = document.getElementById('ahDisplay');
-  if(d) d.textContent = parseInt(el.value||0).toLocaleString();
-}
-function syncAH_b2(el) {
-  document.getElementById('dayAH_b2').value = el.value;
-  var d = document.getElementById('ahDisplay_b2');
-  if(d) d.textContent = parseInt(el.value||0).toLocaleString();
   document.getElementById('ahDisplay').textContent = parseInt(el.value||0).toLocaleString();
 }
 
@@ -1617,25 +1551,6 @@ function selColor(c) {
 //  ADD BARREL
 // ═══════════════════════════════════════
 // Auto-fill bLotNo จาก LOT NO หลักของวัน
-// ── Batch No. selector ────────────────────────────────────────
-var _selBatchNo = 1; // default บ่อ 1
-
-function selBatch(n) {
-  _selBatchNo = n;
-  var btn1 = document.getElementById('bBatchBtn1');
-  var btn2 = document.getElementById('bBatchBtn2');
-  if (btn1) {
-    btn1.style.background = n===1 ? 'var(--blue)' : '#fff';
-    btn1.style.color      = n===1 ? '#fff' : 'var(--text-muted)';
-    btn1.style.borderColor= n===1 ? 'var(--blue)' : 'var(--border)';
-  }
-  if (btn2) {
-    btn2.style.background = n===2 ? 'var(--blue)' : '#fff';
-    btn2.style.color      = n===2 ? '#fff' : 'var(--text-muted)';
-    btn2.style.borderColor= n===2 ? 'var(--blue)' : 'var(--border)';
-  }
-}
-
 function autoFillBLotNo() {
   var mainLot = (document.getElementById('lotNo')||{}).value || '';
   if (!mainLot) { showToast('entry','กรุณากรอก LOT NO หลักของวันก่อน (ช่องด้านบน)','err'); return; }
@@ -1681,19 +1596,18 @@ function addBarrel() {
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
               jobId: document.getElementById('bJobPick').value || '',
-              lotNo: lotNo,
-              batchNo: _selBatchNo };
+              lotNo: lotNo };
   todayBarrels.push(row);
-  try { localStorage.setItem('b2_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
 
   // หมายเหตุ: การตัดสต็อค Job Master จะทำตอนกดบันทึกวัน (ดู autoJobOut)
 
   // save last used for reuse button
   if (row.partName || row.customer) {
-    try { localStorage.setItem('b2_lastBarrelPart', JSON.stringify({partName: row.partName, customer: row.customer})); } catch(e){}
-    acAddHistory('b2_partNames', row.partName);
-    acAddHistory('b2_customerNames', row.customer);
+    try { localStorage.setItem('b1_lastBarrelPart', JSON.stringify({partName: row.partName, customer: row.customer})); } catch(e){}
+    acAddHistory('partNames', row.partName);
+    acAddHistory('customerNames', row.customer);
     renderReuseBar();
   }
 
@@ -1719,13 +1633,14 @@ function addBarrel() {
 }
 
 function delBarrel(id) {
-  var role = (typeof _currentRole !== 'undefined') ? _currentRole : (localStorage.getItem('b2_pinRole')||'');
+  var role = (typeof _currentRole !== 'undefined') ? _currentRole : (localStorage.getItem('b1_pinRole')||'');
   if (role !== 'admin' && role !== 'operator') {
     alert('ไม่มีสิทธิ์ลบรายรอบ'); return;
   }
+  // คืนสต็อค Job Master ก่อนลบ
   var deleted = todayBarrels.find(function(r){ return r.id === id; });
   todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('b2_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
   renderBarrels();
 }
@@ -1741,11 +1656,9 @@ function renderBarrels() {
     return;
   }
   tbody.innerHTML = todayBarrels.map(function(r) {
-    var batchBadge = r.batchNo ? '<span style="background:'+(r.batchNo===1?'#1e40af':'#7c3aed')+';color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">บ่อ'+r.batchNo+'</span>' : '';
     return '<tr>' +
       '<td class="td-l">' + r.time + '</td>' +
       '<td>' + r.barrel + '</td>' +
-      '<td style="text-align:center;">' + batchBadge + '</td>' +
       '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + (r.partName||'–') + '</td>' +
       '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
       '<td style="font-size:10px;color:var(--text-muted);">' + (r.lotNo||'–') + '</td>' +
@@ -1754,7 +1667,7 @@ function renderBarrels() {
       '<td>' + (r.kg||0) + '</td>' +
       '<td>' + (r.pcs||0) + '</td>' +
       (function(){
-        var role=(typeof _currentRole!=='undefined')?_currentRole:(localStorage.getItem('b2_pinRole')||'');
+        var role=(typeof _currentRole!=='undefined')?_currentRole:(localStorage.getItem('b1_pinRole')||'');
         var canDel = role==='admin'||role==='operator';
         return '<td>'+(canDel?'<button class="del-btn-barrel" onclick="delBarrel('+r.id+')">✕</button>':'')+'</td>';
       })() +
@@ -1775,9 +1688,8 @@ function calcSummary() {
     else if (r.color==='K') kgK += r.kg;
   });
   var ratio = totalKg > 0 ? reworkKg / totalKg * 100 : 0;
-  var ah  = parseInt(document.getElementById('dayAH').value) || 0;
-  var ahB2 = parseInt((document.getElementById('dayAH_b2')||{}).value||0) || 0;
-  return { totalKg, newKg, reworkKg, kgB, kgC, kgK, ratio, ah, ahB2, barrels: todayBarrels.length };
+  var ah = parseInt(document.getElementById('dayAH').value) || 0;
+  return { totalKg, newKg, reworkKg, kgB, kgC, kgK, ratio, ah, barrels: todayBarrels.length };
 }
 
 function renderSummary() {
@@ -1788,7 +1700,7 @@ function renderSummary() {
   document.getElementById('sumTotalBarrel').textContent = s.barrels;
   document.getElementById('sumNewKg').textContent       = fmt(s.newKg);
   document.getElementById('sumReworkKg').textContent    = fmt(s.reworkKg);
-  document.getElementById('sumAH').textContent = s.ah.toLocaleString() + ' / ' + (s.ahB2||0).toLocaleString();
+  document.getElementById('sumAH').textContent          = s.ah.toLocaleString();
   document.getElementById('sumKg-B').textContent        = fmt(s.kgB);
   document.getElementById('sumKg-C').textContent        = fmt(s.kgC);
   document.getElementById('sumKg-K').textContent        = fmt(s.kgK);
@@ -1835,7 +1747,6 @@ function buildDayRecord() {
     newKg: s.newKg, reworkKg: s.reworkKg,
     ratio: parseFloat(s.ratio.toFixed(2)),
     ah: s.ah,
-    ahB2: s.ahB2 || 0,
     rows: JSON.parse(JSON.stringify(todayBarrels)),
     ts: new Date().toLocaleString('th-TH')
   };
@@ -1848,18 +1759,18 @@ function validateDay() {
 }
 
 function persist(rec) {
-  try { localStorage.setItem('b2_lastRecorder', rec.recorder); } catch(e){}
-  try { localStorage.setItem('b2_lastLot', rec.lotNo); } catch(e){}
+  try { localStorage.setItem('b1_lastRecorder', rec.recorder); } catch(e){}
+  try { localStorage.setItem('b1_lastLot', rec.lotNo); } catch(e){}
   dayRecords.unshift(rec);
-  try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   todayBarrels = [];
   var _clearedAt = new Date().toISOString();
-  try { localStorage.setItem('b2_todayBarrels', '[]'); } catch(e){}
-  try { localStorage.setItem('b2_todayBarrelsClearedAt', _clearedAt); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels', '[]'); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrelsClearedAt', _clearedAt); } catch(e){}
   renderBarrels();
   renderHistory();
   document.getElementById('histCount').textContent = dayRecords.length;
-  // ── Auto sync ขึ้น Firebase ──
+  // ── Auto sync ขึ้น Firebase (await ก่อนปล่อย poll รอบถัดไปทำงาน) ──
   if (fbIsConfigured()) { fbSave(); livePushNow(); } else gdriveSaveQuiet();
 }
 
@@ -1869,7 +1780,7 @@ async function autoJobOut(rec) {
   if (!jobMasterItems || !jobMasterItems.length) return;
 
   // รวม qty ต่อ jobId จากทุก barrel ในรอบนี้ — เก็บแยกหน่วย { pcs: x, kg: y }
-  var qtyMap = {}; // jobId -> {pcs, kg, unit}
+  var qtyMap = {}; // jobId -> {pcs, kg}
 
   (rec.rows || []).forEach(function(barrel) {
     var bPartKey = partNoFromName(barrel.partName || '');
@@ -1894,6 +1805,7 @@ async function autoJobOut(rec) {
     var targetJobs;
     if (barrel.jobId) {
       var pickedJob = jobMasterItems.find(function(j){ return j.id === barrel.jobId; });
+      // ใช้ได้เฉพาะถ้า job ยังมีอยู่จริงและ P/No ตรงกัน (กันกรณีถูกลบ/แก้ไปแล้ว)
       targetJobs = (pickedJob && partNoFromName(pickedJob.partName||'')===bPartKey) ? [pickedJob] : null;
     }
     // fallback: ไม่ได้เลือกจาก dropdown หรือ job ที่เลือกหายไปแล้ว → จับคู่ตาม P/No ทุกบิล
@@ -1905,16 +1817,17 @@ async function autoJobOut(rec) {
       var unit = job.unit || 'pcs';
       var bal = calcJobBal(job.id);
 
+      // รวมที่กำลังจะตัดในรอบนี้ (จาก barrel อื่นในรอบเดียวกัน)
       var already = qtyMap[job.id] || {pcs:0, kg:0};
 
       if (unit === 'kg') {
-        if (bKg <= 0) return;
+        if (bKg <= 0) return; // job เป็นหน่วย กก. แต่รอบนี้ไม่มี kg ให้ตัด
         var remainKg = bal.remainKg - already.kg;
         if (remainKg <= 0) return;
         var outKg = Math.min(bKg, remainKg);
         qtyMap[job.id] = { pcs: already.pcs, kg: already.kg + outKg, unit: 'kg' };
       } else {
-        if (bPcs <= 0) return;
+        if (bPcs <= 0) return; // job เป็นหน่วย ชิ้น แต่รอบนี้ไม่มี pcs ให้ตัด
         var remainPcs = bal.remain - already.pcs;
         if (remainPcs <= 0) return;
         var outPcs = Math.min(bPcs, remainPcs);
@@ -1955,13 +1868,13 @@ async function autoJobOut(rec) {
     console.warn('autoJobOut error:', e);
   }
 }
+
 function saveDay() {
   if (!validateDay()) return;
   var rec = buildDayRecord();
   persist(rec);
   showToast('entry','บันทึกสรุปวันนี้สำเร็จ! ✓','ok');
   renderSummaryMonthTable();
-  // Auto ตัดยอด Job Master
   if (typeof jobMasterLoad === 'function') {
     jobMasterLoad().then(function(){ autoJobOut(rec); });
   } else {
@@ -1971,7 +1884,7 @@ function saveDay() {
 
 async function saveDayAndDiscord() {
   if (!validateDay()) return;
-  var wh = discordWH || localStorage.getItem('b2_discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
 
   var btn = document.getElementById('btnDiscordEntry');
@@ -2003,7 +1916,7 @@ async function saveDayAndDiscord() {
   if (chunk) barrelFields.push({ name: chunkNum === 0 ? '🔩 รายรอบ (' + rec.barrels + ' รอบ)' : '🔩 รายรอบ (ต่อ)', value: chunk, inline: false });
 
   var payload = {
-    username: 'ใบรายงานชุบ B-2',
+    username: 'ใบรายงานชุบ B-1',
     embeds: [{
       title: '📋 สรุปการชุบประจำวัน — ' + dateStr,
       color: 0x1F4E79,
@@ -2026,7 +1939,7 @@ async function saveDayAndDiscord() {
           '📈 Ratio: **' + rec.ratio + '%**', inline: true },
       ]),
       timestamp: new Date().toISOString(),
-      footer: { text: 'ระบบบันทึกงานชุบ · BARREL-2 · APK-FR-PR-006' }
+      footer: { text: 'ระบบบันทึกงานชุบ · BARREL-1 · APK-FR-PR-006' }
     }]
   };
 
@@ -2096,9 +2009,8 @@ function clearDay() {
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
   todayBarrels = [];
   manualDosings = [];
-  try { localStorage.setItem('b2_todayBarrels','[]'); } catch(e){}
-  livePush(); // push /live ให้เครื่องอื่นรู้ว่าถูก clear
-  try { localStorage.setItem('b2_manualDosings','[]'); } catch(e){}
+  try { localStorage.setItem('b1_todayBarrels','[]'); } catch(e){}
+  try { localStorage.setItem('b1_manualDosings','[]'); } catch(e){}
   renderBarrels();
   renderManualDosingList();
 }
@@ -2138,16 +2050,15 @@ function renderHistory() {
     '</tr>';
 
     var detRows = (r.rows||[]).map(function(b,i) {
-      var batchBadge = b.batchNo ? '<span style="background:'+(b.batchNo===1?'#1e40af':'#7c3aed')+';color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">บ่อ'+b.batchNo+'</span>' : '–';
+      // หาบิลจาก jobMasterItems
       var job = (jobMasterItems||[]).find(function(j){ return j.id === b.jobId; });
-      var billLabel = job ? job.bill : '';
+      var billLabel = job ? job.bill : (b.jobId ? b.jobId.slice(-6) : '');
       var billCell = billLabel
         ? '<span style="font-family:monospace;font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:6px;">'+billLabel+'</span>'
         : '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>';
       return '<tr>' +
         '<td>' + (i+1) + '. ' + b.time + '</td>' +
         '<td>' + b.barrel + '</td>' +
-        '<td style="text-align:center;">' + batchBadge + '</td>' +
         '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">' + (b.partName||'–') + '</td>' +
         '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">' + (b.customer||'–') + '</td>' +
         '<td>' + billCell + '</td>' +
@@ -2162,12 +2073,12 @@ function renderHistory() {
     html += '<tr class="detail-row" id="'+rid+'"><td colspan="13">' +
       '<div class="detail-inner"><div class="tbl-wrap">' +
         '<table class="detail-table"><thead><tr>' +
-          '<th style="text-align:left;">เวลา</th><th>โม่</th><th>บ่อ</th>' +
+          '<th style="text-align:left;">เวลา</th><th>โม่</th>' +
           '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th>' +
           '<th>บิล</th><th>Lot No</th>' +
           '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>' +
         '</tr></thead><tbody>' +
-        (detRows || '<tr><td colspan="11" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
+        (detRows || '<tr><td colspan="10" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
         '</tbody></table></div></div></td></tr>';
   });
   tbody.innerHTML = html;
@@ -2185,7 +2096,7 @@ function toggleDetail(id) {
 function delDay(id) {
   if (!confirm('ลบรายการนี้?')) return;
   dayRecords = dayRecords.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   renderHistory();
   if (fbIsConfigured()) fbSave();
 }
@@ -2250,8 +2161,8 @@ function deleteAllHistory() {
 
   dayRecords = [];
   var clearedAt = new Date().toISOString();
-  try { localStorage.setItem('b2_dayRecords', '[]'); } catch(e){}
-  try { localStorage.setItem('b2_dayRecordsCleared', clearedAt); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', '[]'); } catch(e){}
+  try { localStorage.setItem('b1_dayRecordsCleared', clearedAt); } catch(e){}
 
   // sync ขึ้น Firebase พร้อม clearedAt flag
   if (fbIsConfigured()) {
@@ -2262,9 +2173,9 @@ function deleteAllHistory() {
       chemSettings: chemSettings, chemItems: chemItems, chemRecords: chemRecords,
       discordWH: discordWH || ''
     };
-    try { body.partPresets   = JSON.parse(localStorage.getItem('b2_partPresets')||'[]'); } catch(e){}
-    try { body.partNames     = JSON.parse(localStorage.getItem('b2_partNames')||'[]'); } catch(e){}
-    try { body.customerNames = JSON.parse(localStorage.getItem('b2_customerNames')||'[]'); } catch(e){}
+    try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
+    try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]'); } catch(e){}
+    try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
     fetch(fbDataUrl(), {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body)
@@ -2288,17 +2199,17 @@ function saveWebhook() {
   var wh = document.getElementById('webhookUrl').value.trim();
   if (!wh) { alert('กรุณากรอก Webhook URL'); return; }
   discordWH = wh;
-  try { localStorage.setItem('b2_discordWH', wh); } catch(e){}
+  try { localStorage.setItem('b1_discordWH', wh); } catch(e){}
   setBadge(true);
   showToast('entry','บันทึก Webhook สำเร็จ! ✓','ok');
 }
 
 async function testDiscord() {
-  var wh = discordWH || localStorage.getItem('b2_discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { alert('กรุณาบันทึก Webhook URL ก่อน'); return; }
   try {
     await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({content:'✅ ทดสอบแจ้งเตือน — ระบบบันทึกงานชุบ BARREL-2 เชื่อมต่อสำเร็จ!'})});
+      body: JSON.stringify({content:'✅ ทดสอบแจ้งเตือน — ระบบบันทึกงานชุบ BARREL-1 เชื่อมต่อสำเร็จ!'})});
     alert('ส่งแล้ว! ตรวจสอบใน Discord ได้เลย');
   } catch(e) { alert('ส่งไม่ได้: ' + e.message); }
 }
@@ -2646,7 +2557,7 @@ function acInput(inputId, dropId) {
   var inp = document.getElementById(inputId);
   var drop = document.getElementById(dropId);
   var q = inp.value.toLowerCase();
-  var key = inputId === 'bPartName' ? 'b2_partNames' : 'b2_customerNames';
+  var key = inputId === 'bPartName' ? 'partNames' : 'customerNames';
   var list = acGetHistory(key).filter(function(v){ return !q || v.toLowerCase().indexOf(q) >= 0; });
   if (!list.length) { drop.style.display = 'none'; return; }
   drop.innerHTML = list.slice(0, 8).map(function(v) {
@@ -2673,7 +2584,7 @@ function acBlur(dropId) {
 // ── Reuse last barrel ──
 function renderReuseBar() {
   try {
-    var last = JSON.parse(localStorage.getItem('b2_lastBarrelPart') || 'null');
+    var last = JSON.parse(localStorage.getItem('b1_lastBarrelPart') || 'null');
     var bar = document.getElementById('reuseBar');
     var lbl = document.getElementById('reuseLabel');
     if (last && (last.partName || last.customer)) {
@@ -2686,7 +2597,7 @@ function renderReuseBar() {
 }
 function reuseLastBarrel() {
   try {
-    var last = JSON.parse(localStorage.getItem('b2_lastBarrelPart') || 'null');
+    var last = JSON.parse(localStorage.getItem('b1_lastBarrelPart') || 'null');
     if (!last) return;
     document.getElementById('bPartName').value = last.partName || '';
     document.getElementById('bCustomer').value = last.customer || '';
@@ -2696,10 +2607,10 @@ function reuseLastBarrel() {
 
 // ── Preset ──
 function getPresets() {
-  try { return JSON.parse(localStorage.getItem('b2_partPresets') || '[]'); } catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem('b1_partPresets') || '[]'); } catch(e) { return []; }
 }
 function savePresets(list) {
-  try { localStorage.setItem('b2_partPresets', JSON.stringify(list)); } catch(e){}
+  try { localStorage.setItem('b1_partPresets', JSON.stringify(list)); } catch(e){}
 }
 // บันทึก Preset — เก็บ partNo + jobId ปัจจุบัน
 function saveBarrelPreset() {
@@ -2874,13 +2785,13 @@ function initSmartInput() {
       if (b.customer && cNames.indexOf(b.customer) < 0) cNames.push(b.customer);
     });
   });
-  var existP = acGetHistory('b2_partNames');
-  var existC = acGetHistory('b2_customerNames');
+  var existP = acGetHistory('partNames');
+  var existC = acGetHistory('customerNames');
   pNames.forEach(function(v){ if (existP.indexOf(v) < 0) existP.push(v); });
   cNames.forEach(function(v){ if (existC.indexOf(v) < 0) existC.push(v); });
   try {
-    localStorage.setItem('b2_partNames', JSON.stringify(existP.slice(0,30)));
-    localStorage.setItem('b2_customerNames', JSON.stringify(existC.slice(0,30)));
+    localStorage.setItem('b1_partNames', JSON.stringify(existP.slice(0,30)));
+    localStorage.setItem('b1_customerNames', JSON.stringify(existC.slice(0,30)));
   } catch(e){}
 }
 
@@ -2888,13 +2799,13 @@ function initSmartInput() {
 //  CHEMICAL DOSING
 // ═══════════════════════════════════════
 // ── CHEM SETTINGS (ฝังในไฟล์ — แก้โดย saveChemSettings) ──
-var CHEM_DEFAULTS = [{"name":"ZB 1533 (ยาพื้น)","type":"AH","rateAH":0.225},{"name":"ZB 1534 (ยาเงา)","type":"AH","rateAH":0.1},{"name":"White Chromate","type":"COLOR","color":"B","chemicals":[{"name":"TB-210","rate":50}]},{"name":"Yellow Chromate","type":"COLOR","color":"C","chemicals":[{"name":"TC-125","rate":35}]},{"name":"Black Chromate","type":"COLOR","color":"K","chemicals":[{"name":"ALX-441A","rate":50},{"name":"ALX-441B","rate":35},{"name":"HYPRO200","rate":15}]}]; /* CHEM_DEFAULTS_JSON */
+var CHEM_DEFAULTS = [{"name":"ZB 1533 (ยาพื้น)","type":"AH","rateAH":0.225},{"name":"ZB 1534 (ยาเงา)","type":"AH","rateAH":0.1},{"name":"White Chromate","type":"COLOR","color":"B","chemicals":[{"name":"TB-110","rate":50}]},{"name":"Yellow Chromate","type":"COLOR","color":"C","chemicals":[{"name":"TC-125","rate":35}]},{"name":"Black Chromate","type":"COLOR","color":"K","chemicals":[{"name":"ALX-441A","rate":50},{"name":"ALX-441B","rate":35},{"name":"HYPRO200","rate":15}]}]; /* CHEM_DEFAULTS_JSON */
 var chemSettings = [];
 
 function loadChemSettings() {
   // โหลดจาก localStorage ก่อน ถ้าไม่มีใช้ค่าที่ฝังในไฟล์
   try {
-    var stored = localStorage.getItem('b2_chemSettings');
+    var stored = localStorage.getItem('b1_chemSettings');
     chemSettings = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(CHEM_DEFAULTS));
   } catch(e) { chemSettings = JSON.parse(JSON.stringify(CHEM_DEFAULTS)); }
 }
@@ -2934,7 +2845,7 @@ function loadChemSettingsToUI() {
 function saveChemSettings() {
   chemSettings = readChemFromUI();
   // บันทึกลง localStorage ด้วย
-  try { localStorage.setItem('b2_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
   // บันทึกขึ้น Firebase ด้วย
   if (fbIsConfigured()) fbSave();
 
@@ -2979,7 +2890,7 @@ function importChemSettings(event) {
       var data = JSON.parse(e.target.result);
       if (!data.chemSettings || !Array.isArray(data.chemSettings)) throw new Error('format ไม่ถูกต้อง');
       chemSettings = data.chemSettings;
-      try { localStorage.setItem('b2_chemSettings', JSON.stringify(chemSettings)); } catch(err){}
+      try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(err){}
       // render ใหม่
       var list = document.getElementById('chemList');
       list.innerHTML = '';
@@ -3013,14 +2924,6 @@ function addChemRow(c) {
   var div = document.createElement('div');
   div.className = 'chem-row';
   div.innerHTML =
-    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-      '<span style="font-size:10px;color:var(--text-muted);">ใช้กับบ่อ:</span>' +
-      '<select class="chem-batch-select" style="font-size:11px;padding:2px 6px;border-radius:6px;border:1px solid var(--border);">' +
-        '<option value="both"' + ((!c.batch||c.batch==="both")?' selected':'') + '>ทั้ง 2 บ่อ</option>' +
-        '<option value="1"' + (c.batch==="1"?' selected':'') + '>บ่อ 1 เท่านั้น</option>' +
-        '<option value="2"' + (c.batch==="2"?' selected':'') + '>บ่อ 2 เท่านั้น</option>' +
-      '</select>' +
-    '</div>' +
     '<div class="chem-row-top">' +
       '<input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value="' + (c.name||'') + '">' +
       '<select class="chem-type-select" onchange="toggleChemRates(this)">' +
@@ -3165,18 +3068,17 @@ function renderChemAccum() {
     var bal = calcChemBalance(item.id);
     var fmt2 = function(n){ return Number(n).toFixed(2); };
     var remainColor = bal.remain < 0 ? '#f87171' : bal.remain < 5 ? '#fbbf24' : '#34d399';
-    var batchTag = item.batches && item.batches.length < 2
-      ? '<span style="margin-left:4px;background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 5px;font-size:9px;">บ่อ'+item.batches.join('+')+' เท่านั้น</span>'
-      : '';
     html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
       '<td style="padding:8px 8px;">' +
-        '<div style="font-size:12px;font-weight:600;color:var(--navy);">'+item.name+batchTag+'</div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--navy);">'+item.name+'</div>' +
         '<div style="font-size:10px;color:var(--text-muted);">'+item.code+(item.supplier?' · '+item.supplier:'')+'</div>' +
       '</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:600;color:var(--blue);">'+fmt2(bal.totalIn)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;color:#0d6e56;">'+fmt2(bal.autoOut+bal.manualOut)+'</td>' +
       '<td style="padding:8px 6px;text-align:right;font-family:monospace;font-weight:700;color:'+remainColor+';">'+fmt2(bal.remain)+'</td>' +
-      '<td style="padding:4px;text-align:center;"><button onclick="deleteChemItem(\''+item.id+'\');" style="background:none;border:none;cursor:pointer;color:#f87171;font-size:14px;">🗑️</button></td>' +
+      '<td style="padding:4px 6px;text-align:center;">' +
+        '<button onclick="deleteChemItem(\''+item.id+'\')" title="ลบรายการนี้" style="background:none;border:none;cursor:pointer;font-size:15px;color:#f87171;padding:2px 6px;" >🗑️</button>' +
+      '</td>' +
     '</tr>';
   });
   tbody.innerHTML = html;
@@ -3207,7 +3109,7 @@ function gdriveAutoLoad() {
         var parsed = JSON.parse(text);
         if (parsed.dayRecords && parsed.dayRecords.length > 0) {
           dayRecords = parsed.dayRecords;
-          try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+          try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
           renderHistory(); renderSummary();
           showToast('entry','☁️ โหลดจาก Drive แล้ว ('+dayRecords.length+' วัน)','ok');
         }
@@ -3223,7 +3125,7 @@ function gdriveAutoLoad() {
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
-  databaseURL:       "https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  databaseURL:       "https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId:         "platingapp-92e21-c1346",
   storageBucket:     "platingapp-92e21-c1346.firebasestorage.app",
   messagingSenderId: "595867939924",
@@ -3231,7 +3133,6 @@ var FIREBASE_CONFIG = {
   measurementId:     "G-VWPXND1LV3"
 };
 var FB_DB_URL_DEFAULT = FIREBASE_CONFIG.databaseURL;
-var FB_MASTER_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/chem-master';
 var FB_DB_URL     = FB_DB_URL_DEFAULT;
 var _fbPollTimer  = null;
 var _fbLastSavedAt = '';
@@ -3242,17 +3143,17 @@ function fbIsConfigured() {
 
 // URL สำหรับ REST
 function fbDataUrl() {
-  return FB_DB_URL.replace(/\/$/, '') + '/plating-b2.json';
+  return FB_DB_URL.replace(/\/$/, '') + '/plating-b1.json';
 }
 function fbSettingsUrl() {
-  return FB_DB_URL.replace(/\/$/, '') + '/plating-b2-settings.json';
+  return FB_DB_URL.replace(/\/$/, '') + '/plating-b1-settings.json';
 }
 
 // โหลด config จาก localStorage (ถ้าไม่มีใช้ค่า default)
 function fbLoadConfig() {
   // ใช้ URL ที่ฝังไว้ถาวร ไม่ต้องกรอกเอง
   FB_DB_URL = FB_DB_URL_DEFAULT;
-  try { localStorage.setItem('b2_fbDbUrl', FB_DB_URL); } catch(e){}
+  try { localStorage.setItem('b1_fbDbUrl', FB_DB_URL); } catch(e){}
   var inp = document.getElementById('fbDbUrl');
   if (inp) inp.value = FB_DB_URL;
   fbSetBadge(true);
@@ -3261,12 +3162,12 @@ function fbLoadConfig() {
 
 // บันทึก config และเริ่ม sync
 function saveFbConfig() {
-  var url = document.getElementById('b2_fbDbUrl').value.trim();
+  var url = document.getElementById('fbDbUrl').value.trim();
   if (!url) { showToast('firebase','กรุณากรอก Database URL','err'); return; }
   // ตรวจว่า URL ถูกต้อง
   if (!url.includes('firebaseio.com') && !url.includes('firebasedatabase.app')) { showToast('firebase','URL ไม่ถูกต้อง ต้องมี firebaseio.com หรือ firebasedatabase.app','err'); return; }
   FB_DB_URL = url;
-  try { localStorage.setItem('b2_fbDbUrl', url); } catch(e){}
+  try { localStorage.setItem('b1_fbDbUrl', url); } catch(e){}
   fbSetBadge(true);
   fbStartPoll();
   showToast('firebase','เชื่อมต่อ Firebase สำเร็จ! กำลังโหลดข้อมูล...','ok');
@@ -3290,11 +3191,10 @@ async function fbSave() {
   // ── เพิ่ม chemItems และ chemRecords ──
   try { body.chemItems     = chemItems;    } catch(e){}
   try { body.chemRecords   = chemRecords;  } catch(e){}
-  try { body.partPresets   = JSON.parse(localStorage.getItem('b2_partPresets')||'[]'); } catch(e){}
-  try { body.partNames     = JSON.parse(localStorage.getItem('b2_partNames')||'[]');   } catch(e){}
-  try { body.customerNames = JSON.parse(localStorage.getItem('b2_customerNames')||'[]'); } catch(e){}
+  try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
+  try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]');   } catch(e){}
+  try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
   try { body.discordWH     = discordWH || ''; } catch(e){}
-  try { body.lastLot = (document.getElementById('lotNo')||{}).value || ''; } catch(e){}
   try {
     var res = await fetch(fbDataUrl(), {
       method: 'PUT',
@@ -3333,12 +3233,12 @@ async function fbLoad(silent) {
     // ── ตรวจ clearedAt flag — ถ้า cloud สั่งล้าง ให้ล้างทันที ──
     var cloudClearedAt = data.clearedAt || '';
     var localClearedAt = '';
-    try { localClearedAt = localStorage.getItem('b2_dayRecordsCleared') || ''; } catch(e){}
+    try { localClearedAt = localStorage.getItem('b1_dayRecordsCleared') || ''; } catch(e){}
     if (cloudClearedAt && cloudClearedAt > localClearedAt) {
       // cloud สั่งลบ → ล้าง local
       dayRecords = [];
-      try { localStorage.setItem('b2_dayRecords', '[]'); } catch(e){}
-      try { localStorage.setItem('b2_dayRecordsCleared', cloudClearedAt); } catch(e){}
+      try { localStorage.setItem('b1_dayRecords', '[]'); } catch(e){}
+      try { localStorage.setItem('b1_dayRecordsCleared', cloudClearedAt); } catch(e){}
       renderHistory();
       renderSummary();
       renderSummaryMonthTable();
@@ -3347,7 +3247,7 @@ async function fbLoad(silent) {
       // โหลด settings ต่อ แต่ไม่ merge dayRecords
       if (data.chemSettings && Array.isArray(data.chemSettings) && data.chemSettings.length) {
         chemSettings = data.chemSettings;
-        try { localStorage.setItem('b2_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+        try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
         loadChemSettingsToUI();
       }
       return;
@@ -3368,55 +3268,51 @@ async function fbLoad(silent) {
       // ── ป้องกัน: ถ้าเพิ่งล้าง todayBarrels ในเครื่องนี้ (หลังบันทึกวัน) ──
       // และ cloud ยังไม่ sync ทัน (ข้อมูล cloud เก่ากว่าที่เรา clear) ห้ามดึงกลับมาทับ
       var localClearedTB = '';
-      try { localClearedTB = localStorage.getItem('b2_todayBarrelsClearedAt') || ''; } catch(e){}
+      try { localClearedTB = localStorage.getItem('b1_todayBarrelsClearedAt') || ''; } catch(e){}
       var cloudIsStale = localClearedTB && (!cloudSavedAt || cloudSavedAt <= localClearedTB);
       if (!(todayBarrels.length === 0 && cloudIsStale)) {
         todayBarrels = cloudTodayBarrels;
-        try { localStorage.setItem('b2_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+        try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
         renderBarrels();
       }
     }
-    try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+    try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
 
-    // ── โหลด chemItems (master รายการเคมี) ──
+    // ── โหลด chemItems — Firebase เป็น source of truth เสมอ ──
     if (data.chemItems && Array.isArray(data.chemItems) && data.chemItems.length) {
-      // merge: เอาของ cloud ที่ local ยังไม่มี
-      var localChemIds = {};
-      chemItems.forEach(function(c){ localChemIds[c.id] = true; });
-      var newItems = data.chemItems.filter(function(c){ return !localChemIds[c.id]; });
-      if (newItems.length) {
-        chemItems = chemItems.concat(newItems);
-        try { localStorage.setItem('b2_chemItems', JSON.stringify(chemItems)); } catch(e){}
-        renderChemStockSelect();
-        renderChemAccum();
-        updateChemStockCount();
-      }
-      // ถ้าของ cloud มีทั้งหมดและ local ว่าง → ใช้ cloud
-      if (!chemItems.length && data.chemItems.length) {
-        chemItems = data.chemItems;
-        try { localStorage.setItem('b2_chemItems', JSON.stringify(chemItems)); } catch(e){}
-        renderChemStockSelect();
-        renderChemAccum();
-        updateChemStockCount();
-      }
+      // ทับ local ทันที (ไม่ merge เพื่อป้องกันซ้ำ)
+      chemItems = data.chemItems;
+      // dedup ป้องกันกรณีข้อมูลซ้ำใน Firebase เอง
+      var seen = {};
+      chemItems = chemItems.filter(function(c){
+        if (seen[c.id]) return false;
+        seen[c.id] = true;
+        return true;
+      });
+      try { localStorage.setItem('b1_chemItems', JSON.stringify(chemItems)); } catch(e){}
+      renderChemStockSelect();
+      renderChemAccum();
+      updateChemStockCount();
     }
 
-    // ── โหลด chemRecords (ประวัติรับเข้า/เบิก) ──
+    // ── โหลด chemRecords — Firebase เป็น source of truth เสมอ ──
     if (data.chemRecords && Array.isArray(data.chemRecords) && data.chemRecords.length) {
-      var localRecIds = {};
-      chemRecords.forEach(function(r){ localRecIds[r.id] = true; });
-      var newRecs = data.chemRecords.filter(function(r){ return !localRecIds[r.id]; });
-      if (newRecs.length) {
-        chemRecords = chemRecords.concat(newRecs);
-        chemRecords.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
-        try { localStorage.setItem('b2_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
-        renderChemStockCard();
-        renderChemAccum();
-      }
-      // ถ้า local ว่างและ cloud มีข้อมูล
+      // ทับ local ทันที
+      chemRecords = data.chemRecords;
+      // dedup
+      var seenR = {};
+      chemRecords = chemRecords.filter(function(r){
+        if (seenR[r.id]) return false;
+        seenR[r.id] = true;
+        return true;
+      });
+      try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+      renderChemStockCard();
+      renderChemAccum();
+      // ถ้า local ว่างและ cloud มีข้อมูล (compat)
       if (!chemRecords.length && data.chemRecords.length) {
         chemRecords = data.chemRecords;
-        try { localStorage.setItem('b2_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+        try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
         renderChemStockCard();
         renderChemAccum();
       }
@@ -3425,26 +3321,15 @@ async function fbLoad(silent) {
     // โหลด settings
     if (data.chemSettings && Array.isArray(data.chemSettings) && data.chemSettings.length) {
       chemSettings = data.chemSettings;
-      try { localStorage.setItem('b2_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+      try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
       loadChemSettingsToUI();
     }
-    if (data.partPresets)    { try { localStorage.setItem('b2_partPresets',    JSON.stringify(data.partPresets));    } catch(e){} }
-    if (data.partNames)      { try { localStorage.setItem('b2_partNames',      JSON.stringify(data.partNames));      } catch(e){} }
-    if (data.customerNames)  { try { localStorage.setItem('b2_customerNames',  JSON.stringify(data.customerNames));  } catch(e){} }
-    if (data.lastLot) {
-      var lotEl = document.getElementById('lotNo');
-      var hdrEl = document.getElementById('hdrLot');
-      var blEl  = document.getElementById('bLotNo');
-      if (lotEl) {
-        lotEl.value = data.lastLot;
-        if (hdrEl) hdrEl.textContent = data.lastLot;
-        if (blEl && !blEl.value) { blEl.value = data.lastLot; blEl.style.borderColor='var(--border)'; blEl.style.background=''; }
-        try { localStorage.setItem('b2_lastLot', data.lastLot); } catch(e){}
-      }
-    }
+    if (data.partPresets)    { try { localStorage.setItem('b1_partPresets',    JSON.stringify(data.partPresets));    } catch(e){} }
+    if (data.partNames)      { try { localStorage.setItem('b1_partNames',      JSON.stringify(data.partNames));      } catch(e){} }
+    if (data.customerNames)  { try { localStorage.setItem('b1_customerNames',  JSON.stringify(data.customerNames));  } catch(e){} }
     if (data.discordWH) {
       discordWH = data.discordWH;
-      try { localStorage.setItem('b2_discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
+      try { localStorage.setItem('b1_discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
     }
 
     renderHistory();
@@ -3456,7 +3341,6 @@ async function fbLoad(silent) {
 // sync ด้วยตัวเอง (กดปุ่ม)
 function fbManualSync() {
   if (!fbIsConfigured()) { showToast('firebase','กรุณาบันทึก Database URL ก่อน','err'); return; }
-  _fbLastSavedAt = ''; // reset เพื่อบังคับโหลดใหม่
   showToast('firebase','กำลังโหลดจาก Firebase...','ok');
   fbLoad(false);
 }
@@ -3482,10 +3366,13 @@ function fbStartPoll() {
       fbLoad(true);
       thickFbLoad(); // sync ความหนาทุก 30 วิ
       qaFbLoadRecords(); // sync QA ทุก 30 วิ
+      masterLoad();   // sync chem master
+      jobMasterLoad(); // sync job master
     } else {
       fbLivePoll();
     }
   }, 5000);
+
   // Fast poll 3 วิ เฉพาะตอนอยู่ใน tab กรอกรายรอบ
   setInterval(function(){
     var activeEl = document.querySelector('.view.active');
@@ -3516,7 +3403,7 @@ async function fbLivePoll() {
     // ── ป้องกัน: ถ้าเพิ่งล้าง todayBarrels ในเครื่องนี้ (หลังบันทึกวัน)
     // และ cloud /live.json ยังเป็นข้อมูลเก่ากว่าที่เรา clear ห้ามดึงกลับมาทับ ──
     var localClearedTB = '';
-    try { localClearedTB = localStorage.getItem('b2_todayBarrelsClearedAt') || ''; } catch(e){}
+    try { localClearedTB = localStorage.getItem('b1_todayBarrelsClearedAt') || ''; } catch(e){}
     if (todayBarrels.length === 0 && localClearedTB && data.updatedAt <= localClearedTB) return;
 
     if (!isNewer && !isDiff) return;
@@ -3527,7 +3414,7 @@ async function fbLivePoll() {
       if (isDiff) {
         var prevCount = todayBarrels.length;
         todayBarrels = data.rows;
-        try { localStorage.setItem('b2_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+        try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
         renderBarrels();
         // แจ้งเตือนถ้ามีรอบใหม่จากเครื่องอื่น
         if (todayBarrels.length > prevCount) {
@@ -3604,7 +3491,7 @@ async function livePushNow() {
     lotNo: lotNo,
     totalKg: s.totalKg, newKg: s.newKg, reworkKg: s.reworkKg,
     kgB: s.kgB, kgC: s.kgC, kgK: s.kgK,
-    ratio: s.ratio, ah: s.ah, ahB2: s.ahB2||0,
+    ratio: s.ratio, ah: s.ah,
     barrels: todayBarrels.length,
     rows: JSON.parse(JSON.stringify(todayBarrels)),
     status: 'live'
@@ -3630,9 +3517,9 @@ async function livePushNow() {
   }
 
   // ── Auto Discord (ถ้าเปิด toggle) ──
-  var autoDisc = localStorage.getItem('b2_autoDiscordOnAdd') === '1';
+  var autoDisc = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   if (autoDisc) {
-    var wh = discordWH || localStorage.getItem('b2_discordWH') || '';
+    var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
     if (!wh) {
       showToast('entry','⚠️ Auto Discord: กรุณาตั้งค่า Webhook URL ก่อน','err');
     } else if (todayBarrels.length) {
@@ -3652,7 +3539,7 @@ async function livePushNow() {
 function updateLiveIndicator(ok) {
   var el = document.getElementById('liveIndicator');
   if (!el) return;
-  var autoOn = localStorage.getItem('b2_autoDiscordOnAdd') === '1';
+  var autoOn = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   if (ok) {
     el.textContent = autoOn ? '🟢 Live + Auto Discord' : '🟢 Live';
     el.style.color = '#0d6e56';
@@ -3673,7 +3560,7 @@ function updateAutoDiscordUI() {
 }
 
 function loadAutoDiscordSetting() {
-  var on = localStorage.getItem('b2_autoDiscordOnAdd') === '1';
+  var on = localStorage.getItem('b1_autoDiscordOnAdd') === '1';
   var chk = document.getElementById('autoDiscordToggle');
   if (chk) { chk.checked = on; updateAutoDiscordUI(); }
 }
@@ -3691,7 +3578,7 @@ async function sendLiveDiscordSilent(wh, s, liveData) {
     name: '🔩 รายรอบ ('+todayBarrels.length+' รอบ)',
     value: allRowLines.join('\n').slice(0,1024)||'–', inline:false
   };
-  var payload = { username:'ใบรายงานชุบ B-2 (Auto Live)', embeds:[{
+  var payload = { username:'ใบรายงานชุบ B-1 (Auto Live)', embeds:[{
     title: '🔴 Live Update — ' + dateStr,
     description: '> อัปเดตอัตโนมัติ **'+timeStr+' น.** เมื่อเพิ่มรอบชุบ',
     color: 0xe67e22,
@@ -3715,7 +3602,7 @@ async function sendLiveDiscordSilent(wh, s, liveData) {
 
 // ── ส่ง Live Report → Discord ────────────────────────────────
 async function sendLiveDiscord() {
-  var wh = discordWH || localStorage.getItem('b2_discordWH') || '';
+  var wh = discordWH || localStorage.getItem('b1_discordWH') || '';
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
   if (!todayBarrels.length) { showToast('entry','ยังไม่มีรายรอบวันนี้','err'); return; }
 
@@ -3739,7 +3626,7 @@ async function sendLiveDiscord() {
   });
   if (chunk) barrelFields.push({name:chunkNum===0?'🔩 รายรอบ ('+todayBarrels.length+' รอบ)':'🔩 (ต่อ)',value:chunk,inline:false});
 
-  var payload = { username:'ใบรายงานชุบ B-2 (Live)', embeds:[{
+  var payload = { username:'ใบรายงานชุบ B-1 (Live)', embeds:[{
     title: '🔴 Live — สถานะการชุบ '+dateStr,
     description: '> อัปเดตล่าสุด **'+timeStr+' น.** · ยังไม่ได้บันทึกสรุปวัน',
     color: 0xe67e22,
@@ -3772,21 +3659,21 @@ async function sendLiveDiscord() {
 var _alertCheckTimer = null;
 
 function saveIntakeWH() {
-  var wh = (document.getElementById('b2_intakeWH').value || '').trim();
+  var wh = (document.getElementById('intakeWH').value || '').trim();
   if (!wh) { showAlertMsg('❌ กรุณากรอก Webhook URL', false); return; }
-  try { localStorage.setItem('b2_intakeWH', wh); } catch(e){}
+  try { localStorage.setItem('b1_intakeWH', wh); } catch(e){}
   updateIntakeWHBadge();
   showAlertMsg('✅ บันทึก Webhook สำเร็จ', true);
 }
 
 function updateIntakeWHBadge() {
-  var wh = ''; try { wh = localStorage.getItem('b2_intakeWH') || ''; } catch(e){}
+  var wh = ''; try { wh = localStorage.getItem('b1_intakeWH') || ''; } catch(e){}
   var badge = document.getElementById('intakeWHBadge');
   if (!badge) return;
   if (wh) {
     badge.textContent = '✓ ตั้งค่าแล้ว';
     badge.style.color = 'var(--success)';
-    document.getElementById('b2_intakeWH').value = wh;
+    document.getElementById('intakeWH').value = wh;
   } else {
     badge.textContent = 'ยังไม่ได้ตั้งค่า';
     badge.style.color = 'var(--text-muted)';
@@ -3795,12 +3682,12 @@ function updateIntakeWHBadge() {
 
 function saveAlertConfig() {
   var auto = document.getElementById('alertAutoToggle').checked;
-  var days = parseInt(document.getElementById('b2_alertDays').value) || 5;
-  var time = document.getElementById('b2_alertTime').value || '08:00';
+  var days = parseInt(document.getElementById('alertDays').value) || 5;
+  var time = document.getElementById('alertTime').value || '08:00';
   try {
-    localStorage.setItem('b2_alertAuto', auto ? '1' : '0');
-    localStorage.setItem('b2_alertDays', days);
-    localStorage.setItem('b2_alertTime', time);
+    localStorage.setItem('b1_alertAuto', auto ? '1' : '0');
+    localStorage.setItem('b1_alertDays', days);
+    localStorage.setItem('b1_alertTime', time);
   } catch(e){}
   // อัปเดต toggle style
   var knob = document.getElementById('alertToggleKnob');
@@ -3813,11 +3700,11 @@ function saveAlertConfig() {
 
 function loadAlertConfig() {
   try {
-    var days = localStorage.getItem('b2_alertDays') || '5';
-    var time = localStorage.getItem('b2_alertTime') || '08:00';
-    var auto = localStorage.getItem('b2_alertAuto') === '1';
-    var el = document.getElementById('b2_alertDays'); if(el) el.value = days;
-    var el2 = document.getElementById('b2_alertTime'); if(el2) el2.value = time;
+    var days = localStorage.getItem('b1_alertDays') || '5';
+    var time = localStorage.getItem('b1_alertTime') || '08:00';
+    var auto = localStorage.getItem('b1_alertAuto') === '1';
+    var el = document.getElementById('alertDays'); if(el) el.value = days;
+    var el2 = document.getElementById('alertTime'); if(el2) el2.value = time;
     var chk = document.getElementById('alertAutoToggle'); if(chk) chk.checked = auto;
     var knob = document.getElementById('alertToggleKnob');
     if (knob) {
@@ -3835,8 +3722,8 @@ function scheduleAutoAlert() {
   if (_alertCheckTimer) clearInterval(_alertCheckTimer);
   _alertCheckTimer = setInterval(function() {
     try {
-      if (localStorage.getItem('b2_alertAuto') !== '1') return;
-      var alertTime = localStorage.getItem('b2_alertTime') || '08:00';
+      if (localStorage.getItem('b1_alertAuto') !== '1') return;
+      var alertTime = localStorage.getItem('b1_alertTime') || '08:00';
       var now = new Date();
       var hh = String(now.getHours()).padStart(2,'0');
       var mm = String(now.getMinutes()).padStart(2,'0');
@@ -3856,8 +3743,8 @@ function scheduleAutoAlert() {
 
 // สร้าง message สำหรับส่ง Discord
 function buildStockAlertMsg() {
-  var days = parseInt((document.getElementById('b2_alertDays')||{}).value) ||
-             parseInt(localStorage.getItem('b2_alertDays') || '5') || 5;
+  var days = parseInt((document.getElementById('alertDays')||{}).value) ||
+             parseInt(localStorage.getItem('b1_alertDays') || '5') || 5;
   var now = new Date();
   var todayStr = now.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' });
 
@@ -3931,7 +3818,7 @@ function sendStockAlert(doSend, silent) {
   if (!doSend) return; // แค่ preview
 
   // ส่งจริง
-  var wh = ''; try { wh = localStorage.getItem('b2_intakeWH') || discordWH || ''; } catch(e){}
+  var wh = ''; try { wh = localStorage.getItem('b1_intakeWH') || discordWH || ''; } catch(e){}
   if (!wh) {
     showAlertMsg('❌ กรุณาตั้งค่า Webhook URL ก่อน', false);
     return;
@@ -3979,18 +3866,18 @@ var intakeColorVal = 'B';
 var intakeFilterVal = 'all';
 
 function loadIntakeJobs() {
-  try { intakeJobs = JSON.parse(localStorage.getItem('b2_intakeJobs') || '[]'); } catch(e){ intakeJobs=[]; }
+  try { intakeJobs = JSON.parse(localStorage.getItem('b1_intakeJobs') || '[]'); } catch(e){ intakeJobs=[]; }
 }
 
 function saveIntakeJobs() {
-  try { localStorage.setItem('b2_intakeJobs', JSON.stringify(intakeJobs)); } catch(e){}
+  try { localStorage.setItem('b1_intakeJobs', JSON.stringify(intakeJobs)); } catch(e){}
   var url = getStoredFbUrl();
   if (!url) return;
   fetch(url + '/intake.json', { method:'PUT', body:JSON.stringify(intakeJobs) }).catch(function(){});
 }
 
 function getStoredFbUrl() {
-  try { return localStorage.getItem('b2_fbDbUrl') || FB_DB_URL || ''; } catch(e){ return FB_DB_URL || ''; }
+  try { return localStorage.getItem('b1_fbDbUrl') || ''; } catch(e){ return ''; }
 }
 
 function fbLoadIntake() {
@@ -4009,11 +3896,11 @@ function fbLoadIntake() {
 var manualDosings = []; // รายการเติมเคมีวันนี้ (ยังไม่บันทึก)
 
 function loadManualDosings() {
-  try { manualDosings = JSON.parse(localStorage.getItem('b2_manualDosings') || '[]'); } catch(e){ manualDosings=[]; }
+  try { manualDosings = JSON.parse(localStorage.getItem('b1_manualDosings') || '[]'); } catch(e){ manualDosings=[]; }
 }
 
 function saveManualDosings() {
-  try { localStorage.setItem('b2_manualDosings', JSON.stringify(manualDosings)); } catch(e){}
+  try { localStorage.setItem('b1_manualDosings', JSON.stringify(manualDosings)); } catch(e){}
 }
 
 function toggleManualDosing() {
@@ -4139,18 +4026,30 @@ function renderManualDosingList() {
 //  CHEMICAL STOCK CARD
 // ═══════════════════════════════════════
 
-var chemItems   = [];   // รายการเคมีทั้งหมด (master)
+var chemItems = [
+  { id:'C-001', code:'C-001', name:'ZB 1533 (ยาพื้น)',          supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-002', code:'C-002', name:'ZB 1534 (ยาเงา)',           supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-003', code:'C-003', name:'ALX-441A',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-004', code:'C-004', name:'ALX-441B',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-005', code:'C-005', name:'HYPRO200',                   supplier:'',       unit:'L', minStock:5 },
+  { id:'C-006', code:'C-006', name:'White Chromate',             supplier:'Extra',  unit:'L', minStock:5 },
+  { id:'C-007', code:'C-007', name:'Yellow Chromate',            supplier:'Extra',  unit:'L', minStock:5 },
+  { id:'C-008', code:'C-008', name:'ZB-1526 (ปรับสภาพน้ำ)',     supplier:'Kelly',  unit:'L', minStock:5 },
+  { id:'C-009', code:'C-009', name:'Britec ZN 930 A (ยาพื้น)',  supplier:'Britech', unit:'L', minStock:5 },
+  { id:'C-010', code:'C-010', name:'Britec ZN 930 B (ยาเงา)',   supplier:'Britech', unit:'L', minStock:5 },
+  { id:'C-011', code:'C-011', name:'Britec ZN 930 C (ปรับสภาพน้ำ)', supplier:'Britech', unit:'L', minStock:5 },
+]; // รายการเคมีทั้งหมด — Firebase เป็น source of truth
 var chemRecords = [];   // รายการเคลื่อนไหวทั้งหมด
 var _selChemId  = null;
 
 function loadChemItems() {
-  try { chemItems   = JSON.parse(localStorage.getItem('b2_chemItems')   || '[]'); } catch(e){ chemItems=[]; }
-  try { chemRecords = JSON.parse(localStorage.getItem('b2_chemRecords') || '[]'); } catch(e){ chemRecords=[]; }
+  try { chemItems   = JSON.parse(localStorage.getItem('b1_chemItems')   || '[]'); } catch(e){ chemItems=[]; }
+  try { chemRecords = JSON.parse(localStorage.getItem('b1_chemRecords') || '[]'); } catch(e){ chemRecords=[]; }
 }
 
 function saveChemData() {
-  try { localStorage.setItem('b2_chemItems',   JSON.stringify(chemItems));   } catch(e){}
-  try { localStorage.setItem('b2_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  try { localStorage.setItem('b1_chemItems',   JSON.stringify(chemItems));   } catch(e){}
+  try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
   // sync ขึ้น Firebase (รวมกับข้อมูลทั้งหมดให้ tablet ดึงได้)
   if (fbIsConfigured()) {
     fbSave();
@@ -4177,22 +4076,11 @@ function confirmAddChemItem() {
   var address  = (document.getElementById('newChemAddress').value||'').trim();
   if (!code || !name) { alert('กรุณากรอกรหัสและชื่อเคมี'); return; }
   if (chemItems.some(function(c){ return c.code===code; })) { alert('รหัสเคมีซ้ำ'); return; }
-
-  // batch assignment
-  var b1 = document.getElementById('newChemBatch1') && document.getElementById('newChemBatch1').checked;
-  var b2 = document.getElementById('newChemBatch2') && document.getElementById('newChemBatch2').checked;
-  var ba = document.getElementById('newChemBatchAll') && document.getElementById('newChemBatchAll').checked;
-  var batches = ba ? [1,2] : (b1&&b2 ? [1,2] : b1 ? [1] : b2 ? [2] : []); // [] = ทุกบ่อ (default)
-  if (!batches.length) batches = [1,2]; // default = ทุกบ่อ
-
-  chemItems.push({ id:'CH'+Date.now(), code:code, name:name, supplier:supplier, address:address, batches:batches });
+  chemItems.push({ id:'CH'+Date.now(), code:code, name:name, supplier:supplier, address:address });
   saveChemData();
   ['newChemCode','newChemName','newChemSupplier','newChemAddress'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
-  var b1el = document.getElementById('newChemBatch1'); if(b1el) b1el.checked=false;
-  var b2el = document.getElementById('newChemBatch2'); if(b2el) b2el.checked=false;
-  var bael = document.getElementById('newChemBatchAll'); if(bael) bael.checked=false;
   document.getElementById('addChemItemForm').style.display='none';
   renderChemStockSelect();
   updateChemStockCount();
@@ -4245,7 +4133,7 @@ function confirmEditChemItem() {
     }
   });
   saveChemData();
-  try { localStorage.setItem('b2_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+  try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
   if (fbIsConfigured()) fbSave();
   document.getElementById('editChemItemForm').style.display='none';
   renderChemStockCard();
@@ -4257,18 +4145,21 @@ function confirmDeleteChemItem() {
   if (!_selChemId) { showToast('entry','กรุณาเลือกรายการเคมีก่อน','err'); return; }
   deleteChemItem(_selChemId);
 }
+
 function deleteChemItem(itemId) {
-  var item = chemItems.find(function(cc){ return cc.id===itemId; });
+  var item = chemItems.find(function(c){ return c.id === itemId; });
   if (!item) return;
-  if (!confirm('ลบ "'+item.name+'" ออก?\n⚠️ ประวัติการรับเข้า/ใช้จะถูกลบด้วย')) return;
-  chemItems = chemItems.filter(function(cc){ return cc.id!==itemId; });
-  chemRecords = chemRecords.filter(function(r){ return r.chemId!==itemId; });
-  try { localStorage.setItem('b2_chemItems', JSON.stringify(chemItems)); } catch(e){}
-  try { localStorage.setItem('b2_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
-  if (typeof fbSave==='function' && fbIsConfigured()) fbSave();
-  renderChemStockSelect(); renderChemStockCard();
-  showToast('entry','🗑️ ลบรายการเคมี: '+item.name+' แล้ว','ok');
+  if (!confirm('ลบ "' + item.name + '" ออกจาก Stock Card?\n\n⚠️ ประวัติการรับเข้า/ใช้ไปของเคมีนี้จะถูกลบด้วย')) return;
+  chemItems = chemItems.filter(function(c){ return c.id !== itemId; });
+  chemRecords = chemRecords.filter(function(r){ return r.chemId !== itemId; });
+  try { localStorage.setItem('b1_chemItems', JSON.stringify(chemItems)); } catch(e){}
+  try { localStorage.setItem('b1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
+  if (fbIsConfigured()) fbSave();
+  renderChemStockSelect();
+  renderChemStockCard();
+  showToast('entry', '🗑️ ลบรายการเคมี: ' + item.name + ' แล้ว', 'ok');
 }
+
 function updateChemStockCount() {
   var el = document.getElementById('chemStockCount');
   if (el) el.textContent = chemItems.length;
@@ -4295,27 +4186,34 @@ function onChemSelect() {
 
 // ── คำนวณยอดคงเหลือ ─────────────────────────────────────────
 function calcChemBalance(chemId) {
-  var totalIn   = 0;  // รับเข้าจากจัดซื้อ (ลิตร)
+  var totalIn   = 0;
   var totalBucketIn = 0;
-  var autoOut   = 0;  // เบิกอัตโนมัติจากระบบ (ลิตร) คำนวณจาก dayRecords
-  var manualOut = 0;  // เบิกด้วยตนเอง (กรณีมีในอนาคต)
+  var masterIn  = 0;
+  var autoOut   = 0;
+  var manualOut = 0;
 
-  // รับเข้า
+  // รับเข้า (จัดซื้อโดยตรง)
   chemRecords.filter(function(r){ return r.chemId===chemId && r.type==='in'; })
     .forEach(function(r){ totalIn += Number(r.liter||0); totalBucketIn += Number(r.bucket||0); });
 
-  // เบิกอัตโนมัติจาก dayRecords — หา rate ของเคมีนี้จาก chemSettings
+  // รับเข้าจาก Master Stock
   var item = chemItems.find(function(c){ return c.id===chemId; });
-  if (item) {
-    autoOut = calcAutoChemUsed(item.name);
+  if (item && typeof masterItems !== 'undefined' && masterItems.length) {
+    var mItem = masterItems.find(function(m){ return m.code === item.code; });
+    if (mItem && typeof masterRecords !== 'undefined') {
+      masterRecords.filter(function(r){ return r.chemId===mItem.id && r.type==='out-b1'; })
+        .forEach(function(r){ masterIn += Number(r.liter||0); });
+    }
   }
+  totalIn += masterIn;
 
-  // เบิกอื่นๆ จาก chemRecords
+  if (item) { autoOut = calcAutoChemUsed(item.name); }
+
   chemRecords.filter(function(r){ return r.chemId===chemId && r.type==='out'; })
     .forEach(function(r){ manualOut += Number(r.liter||0); });
 
   var remain = totalIn - autoOut - manualOut;
-  return { totalIn:totalIn, totalBucketIn:totalBucketIn, autoOut:autoOut, manualOut:manualOut, remain:remain };
+  return { totalIn:totalIn, totalBucketIn:totalBucketIn, autoOut:autoOut, manualOut:manualOut, masterIn:masterIn, remain:remain };
 }
 
 // คำนวณปริมาณเคมีที่ใช้จริงจาก dayRecords (สะสมทั้งหมด) โดยใช้ AH × rate
@@ -4323,15 +4221,12 @@ function calcAutoChemUsed(chemName) {
   var nameLC = chemName.trim().toLowerCase();
   var total = 0;
 
-  // หา chemItem เพื่อดู batches ที่กำหนดไว้
-  var chemItem = chemItems.find(function(ci){
-    return ci.name && ci.name.trim().toLowerCase() === nameLC;
-  });
-  var itemBatches = chemItem && chemItem.batches ? chemItem.batches : [1,2]; // default = ทุกบ่อ
-
-  // หา group จาก chemSettings
+  // หา group จาก chemSettings ที่ตรงกับชื่อ:
+  // 1) ตรงกับ group name โดยตรง
+  // 2) ตรงกับ sub-chemical name (chemicals[].name)
   var matchedGroup = null;
   var matchedSubName = null;
+
   chemSettings.forEach(function(c) {
     if (c.name && c.name.trim().toLowerCase() === nameLC) {
       matchedGroup = c;
@@ -4344,33 +4239,29 @@ function calcAutoChemUsed(chemName) {
       });
     }
   });
+
   if (!matchedGroup) return 0;
 
-  // กรองเฉพาะ rows ของ batch ที่เกี่ยวข้อง
-  function filterRows(rows) {
-    if (!itemBatches || itemBatches.length >= 2) return rows; // ทุกบ่อ
-    return rows.filter(function(r) {
-      var bn = r.batchNo || 1; // ถ้าไม่มี batchNo ถือเป็นบ่อ 1
-      return itemBatches.indexOf(bn) >= 0;
-    });
-  }
+  // คำนวณจาก dayRecords
+  function calcForDay(day) {
+    var rows2 = day.rows || [];
+    var bB = rows2.filter(function(r){ return r.color==='B'; }).length;
+    var bC = rows2.filter(function(r){ return r.color==='C'; }).length;
+    var bK = rows2.filter(function(r){ return r.color==='K'; }).length;
 
-  function calcForRows(rows, ah) {
     if (matchedGroup.type === 'AH') {
-      // AH คำนวณจากทั้งวัน ไม่แยก batch (เพราะ AH รวม)
-      return parseFloat(matchedGroup.rateAH||0) * Number(ah||0);
+      return parseFloat(matchedGroup.rateAH||0) * Number(day.ah||0);
     } else if (matchedGroup.type === 'COLOR') {
-      var filtered = filterRows(rows);
-      var bB = filtered.filter(function(r){ return r.color==='B'; }).length;
-      var bC = filtered.filter(function(r){ return r.color==='C'; }).length;
-      var bK = filtered.filter(function(r){ return r.color==='K'; }).length;
       var ml = 0;
       (matchedGroup.chemicals||[]).forEach(function(ch) {
+        // ถ้า match เฉพาะ sub-chemical เดียว
         if (matchedSubName && ch.name.trim().toLowerCase() !== matchedSubName) return;
         var rate = parseFloat(ch.rate||0);
         var color = (ch.color||'').toUpperCase();
-        if (color==='B') ml+=rate*bB; else if(color==='C') ml+=rate*bC;
-        else if(color==='K') ml+=rate*bK; else ml+=rate*(bB+bC+bK);
+        if (color === 'B') ml += rate * bB;
+        else if (color === 'C') ml += rate * bC;
+        else if (color === 'K') ml += rate * bK;
+        else ml += rate * (bB + bC + bK); // ไม่ระบุสี
       });
       return ml;
     }
@@ -4379,13 +4270,18 @@ function calcAutoChemUsed(chemName) {
 
   // สะสมจาก dayRecords
   dayRecords.forEach(function(day) {
-    total += calcForRows(day.rows||[], day.ah||0);
+    total += calcForDay(day);
   });
 
   // รวมวันนี้ถ้ายังไม่บันทึก
   if (todayBarrels.length) {
+    var todayRows = todayBarrels;
+    var bB2 = todayRows.filter(function(r){ return r.color==='B'; }).length;
+    var bC2 = todayRows.filter(function(r){ return r.color==='C'; }).length;
+    var bK2 = todayRows.filter(function(r){ return r.color==='K'; }).length;
     var ah2 = parseInt((document.getElementById('dayAH')||{}).value||0)||0;
-    total += calcForRows(todayBarrels, ah2);
+    var fakeDay = { rows: todayRows, ah: ah2 };
+    total += calcForDay(fakeDay);
   }
 
   return total / 1000; // ml → ลิตร
@@ -4437,15 +4333,12 @@ function renderChemStockCard() {
   var setTxt = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
   setTxt('chemCardCode', item.code);
   setTxt('chemCardName', item.name);
-  var batchLabel = item.batches && item.batches.length < 2
-    ? ' | ใช้กับบ่อ ' + item.batches.join(', ')
-    : ' | ทุกบ่อ';
-  setTxt('chemCardSupplier', item.supplier+(item.address?' | '+item.address:'')+batchLabel);
+  setTxt('chemCardSupplier', item.supplier+(item.address?' | '+item.address:''));
 
   var bal = calcChemBalance(_selChemId);
   var fmt2 = function(n){ return Number(n).toFixed(2); };
   setTxt('chemCardRemain',  fmt2(bal.remain));
-  setTxt('chemCardTotalIn', fmt2(bal.totalIn));
+  setTxt('chemCardTotalIn', fmt2(bal.masterIn||0));
   setTxt('chemCardTotalOut', fmt2(bal.autoOut+bal.manualOut));
   setTxt('chemCardAutoOut', fmt2(bal.autoOut));
 
@@ -4460,20 +4353,13 @@ function renderChemStockCard() {
   // helper: คำนวณ ml ที่ใช้ต่อวัน จาก AH × rate หรือ โม่ × rate
   function calcDayChemUsedLiter(day) {
     var nameLC = item.name.trim().toLowerCase();
-    // หา batches ของ chemItem นี้
-    var itemBatches = item.batches && item.batches.length ? item.batches : [1,2];
     var ml = 0;
     chemSettings.forEach(function(c) {
       var isGroupMatch = c.name && c.name.trim().toLowerCase() === nameLC;
       if (c.type === 'AH' && isGroupMatch) {
         ml += parseFloat(c.rateAH||0) * Number(day.ah||0);
       } else if (c.type === 'COLOR') {
-        // กรองเฉพาะ rows ของ batch ที่เกี่ยวข้อง
-        var dr = (day.rows||[]).filter(function(r){
-          if (itemBatches.length >= 2) return true; // ทุกบ่อ
-          var bn = r.batchNo || 1;
-          return itemBatches.indexOf(bn) >= 0;
-        });
+        var dr = day.rows || [];
         var bB = dr.filter(function(r){ return r.color==='B'; }).length;
         var bC = dr.filter(function(r){ return r.color==='C'; }).length;
         var bK = dr.filter(function(r){ return r.color==='K'; }).length;
@@ -4492,52 +4378,70 @@ function renderChemStockCard() {
     return ml / 1000;
   }
 
-  // รับเข้า
-  chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='in'; })
-    .sort(function(a,b){ return a.date.localeCompare(b.date); })
-    .forEach(function(r){
-      rows.push({ date:r.date, bill:r.bill||'–', inLiter:r.liter, inBucket:r.bucket||0,
-                  recorder:r.recorder||'–', outLiter:0, outRecorder:'', isIn:true });
-    });
+  // ─── แยก 2 array อิสระ ───
+  var masterRows = [];
+  var outRows    = [];
 
-  // auto-out จาก dayRecords — อ้างอิง Pro Lot No (day.lotNo) เป็น bill
+  // Master records เรียงตาม date
+  if (typeof masterItems !== 'undefined' && masterItems.length && typeof masterRecords !== 'undefined') {
+    var mItem2 = masterItems.find(function(m){ return m.code === item.code; });
+    if (mItem2) {
+      masterRecords.filter(function(r){ return r.chemId===mItem2.id && r.type==='out-b1'; })
+        .sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); })
+        .forEach(function(r){
+          masterRows.push({ date:r.date, liter:Number(r.liter||0), note:r.note||'–' });
+        });
+    }
+  }
+
+  // out rows เรียงตาม date
   dayRecords.forEach(function(day){
     var used = calcDayChemUsedLiter(day);
     if (used > 0) {
-      rows.push({ date:day.date, bill:day.lotNo||'–', inLiter:0, inBucket:0, recorder:'',
-                  outLiter:used, outRecorder:day.recorder||'ระบบ', isIn:false });
+      outRows.push({ date:day.date, liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ' });
     }
   });
+  outRows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
-  // sort by date
-  rows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
-
-  // คำนวณ running balance
-  var running = 0;
-  var html = '';
-  rows.forEach(function(r){
-    var inLiter  = Number(r.inLiter||0);
-    var outLiter = Number(r.outLiter||0);
-    if (r.isIn) running += inLiter; else running -= outLiter;
-    var dateStr = r.date ? r.date.split('-').reverse().join('/') : '–';
-    var rowBg = r.isIn ? '' : 'background:#f0fff4;';
-    html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
-      // จัดซื้อ
-      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?dateStr:'')+'</td>' +
-      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?r.bill:'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:var(--blue);">'+(r.isIn&&inLiter>0?inLiter.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;color:var(--text-muted);">'+(r.isIn&&r.inBucket?r.inBucket:'')+'</td>' +
-      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);border-right:2px solid #f0f0f0;">'+(r.isIn?r.recorder:'')+'</td>' +
-      // ผลิต
-      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?'':dateStr)+'</td>' +
-      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?'':r.bill)+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(r.isIn?'':outLiter.toFixed(2))+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(running<0?'#c0392b':'var(--navy)')+';">'+(running.toFixed(2))+'</td>' +
-      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(r.isIn?'':r.outRecorder)+'</td>' +
-    '</tr>';
+  // running balance คำนวณจาก outRows เทียบกับ masterRows
+  var runBal = 0;
+  masterRows.forEach(function(r){ runBal += r.liter; });
+  // pre-calc running per outRow
+  var outRunning = [];
+  var tmpBal = 0;
+  masterRows.forEach(function(r){ tmpBal += r.liter; });
+  var tmpBal2 = tmpBal;
+  outRows.forEach(function(r){
+    tmpBal2 -= r.liter;
+    outRunning.push(tmpBal2);
   });
 
-  var tbody = document.getElementById('chemStockTbody');
+  var maxRows = Math.max(masterRows.length, outRows.length);
+  var running2 = tmpBal; // final remain after all out
+  var html = '';
+  for (var i = 0; i < maxRows; i++) {
+    var mr = masterRows[i];
+    var or2 = outRows[i];
+    // running คือ balance หลัง out[i]
+    var bal2 = or2 ? outRunning[i] : null;
+    var mDateStr = mr ? (mr.date ? mr.date.split('-').reverse().join('/') : '–') : '';
+    var oDateStr = or2 ? (or2.date ? or2.date.split('-').reverse().join('/') : '–') : '';
+    var rowBg = mr ? 'background:#eff6ff;' : '';
+    html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
+      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(mr?mDateStr:'')+'</td>' +
+      '<td style="padding:7px 6px;font-size:10px;color:#1e40af;">'+(mr?mDateStr:'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:#1e40af;">'+(mr?mr.liter.toFixed(2):'')+'</td>' +
+      '<td style="padding:7px 4px;font-size:10px;color:var(--text-muted);">'+(mr?(mr.note||'–'):'')+'</td>' +
+      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);border-right:2px solid #f0f0f0;">'+(mr?'Master':'')+'</td>' +
+      '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(or2?oDateStr:'')+'</td>' +
+      '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(or2?or2.bill:'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(or2?or2.liter.toFixed(2):'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(bal2!==null&&bal2<0?'#c0392b':'var(--navy)')+';">'+(bal2!==null?bal2.toFixed(2):'')+'</td>' +
+      '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(or2?or2.recorder:'')+'</td>' +
+    '</tr>';
+  }
+
+    var tbody = document.getElementById('chemStockTbody');
   if (tbody) tbody.innerHTML = html || '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
 }
 
@@ -4593,9 +4497,9 @@ function exportChemCSV() {
 
 var partList = [];
 var _plColor = 'B';
-var PM_URL_B2 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
+var PM_URL_V4 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
 
-function pmToPartList_b2(pm) {
+function pmToPartList(pm) {
   return (pm.parts || []).map(function(p) {
     return {
       id: p.id || ('P'+p.partNo),
@@ -4611,17 +4515,19 @@ function pmToPartList_b2(pm) {
 }
 
 function loadPartList() {
-  try { partList = JSON.parse(localStorage.getItem('b2_partList') || '[]'); } catch(e){ partList=[]; }
-  fetch(PM_URL_B2)
+  // โหลด cache ก่อน (ใช้ได้ทันที)
+  try { partList = JSON.parse(localStorage.getItem('b1_partList') || '[]'); } catch(e){ partList=[]; }
+  // fetch Part Master จริง
+  fetch(PM_URL_V4)
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data) {
       if (data && Array.isArray(data.parts) && data.parts.length > 0) {
-        partList = pmToPartList_b2(data);
-        try { localStorage.setItem('b2_partList', JSON.stringify(partList)); } catch(e){}
+        partList = pmToPartList(data);
+        try { localStorage.setItem('b1_partList', JSON.stringify(partList)); } catch(e){}
         if (typeof renderPartList === 'function') renderPartList();
         if (typeof renderPartPickerList === 'function') renderPartPickerList();
         if (typeof renderPresetChips === 'function') renderPresetChips();
-        console.log('[Part Master] b2 loaded', partList.length, 'parts');
+        console.log('[Part Master] loaded', partList.length, 'parts');
       }
     })
     .catch(function(e){ console.warn('[Part Master] offline, using cache'); });
@@ -4849,8 +4755,9 @@ function calcBPcsFromKg() {
   var pcsEl = document.getElementById('bPcs');
   var label = document.getElementById('bPcsAutoLabel');
   if (_barrelPartWeightG > 0 && kg > 0) {
-    pcsEl.value = Math.round(kg * 1000 / _barrelPartWeightG);
-    pcsEl.style.background = '#f0fdf4';
+    var pcs = Math.round(kg * 1000 / _barrelPartWeightG);
+    pcsEl.value = pcs;
+    pcsEl.style.background = '#f0fdf4';  // เขียวอ่อน = คำนวณอัตโนมัติ
     if (label) label.style.display = 'inline';
   } else {
     pcsEl.style.background = '';
@@ -4998,10 +4905,10 @@ function partNoFromName(fullName) {
   return n;
 }
 function getIntakePresets() {
-  try { return JSON.parse(localStorage.getItem('b2_intakePresets') || '[]'); } catch(e){ return []; }
+  try { return JSON.parse(localStorage.getItem('b1_intakePresets') || '[]'); } catch(e){ return []; }
 }
 function saveIntakePresets(list) {
-  try { localStorage.setItem('b2_intakePresets', JSON.stringify(list)); } catch(e){}
+  try { localStorage.setItem('b1_intakePresets', JSON.stringify(list)); } catch(e){}
 }
 
 function intakeSavePreset() {
@@ -5216,7 +5123,7 @@ function acIntake(inputId, dropId) {
   } else if (inputId === 'intakeCustomer') {
     intakeJobs.forEach(function(j){ if(j.customer && history.indexOf(j.customer)<0) history.push(j.customer); });
     // เพิ่มจาก barrel history ด้วย
-    try { var cn = JSON.parse(localStorage.getItem('b2_customerNames')||'[]'); cn.forEach(function(c){ if(history.indexOf(c)<0) history.push(c); }); } catch(e){}
+    try { var cn = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); cn.forEach(function(c){ if(history.indexOf(c)<0) history.push(c); }); } catch(e){}
   }
   var matches = val ? history.filter(function(h){ return h.toLowerCase().includes(val); }) : history.slice(0,8);
   if (!matches.length) { drop.style.display='none'; return; }
@@ -5683,7 +5590,7 @@ function addIntakeJob() {
 
   // บันทึก autocomplete history
   if (name) acAddHistory('intakePartNames', name);
-  if (customer) { acAddHistory('b2_customerNames', customer); acAddHistory('intakeCustNames', customer); }
+  if (customer) { acAddHistory('customerNames', customer); acAddHistory('intakeCustNames', customer); }
 
   saveIntakeJobs();
   renderIntakeTable();
@@ -5787,8 +5694,8 @@ function exportIntakeCSV() {
 //  PIN LOGIN — 3 ระดับ
 // ═══════════════════════════════════════
 
-var SYSTEM_KEY = 'plating_v5_b2';
-var TAB_IDS = ['entry','summary','history','chart','chem','thick','qa','job','qc100','mcheck','settings'];
+var SYSTEM_KEY = 'plating_v4';
+var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
 
 var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
@@ -5813,9 +5720,9 @@ function checkPin() {
     }
     currentRole = result.role;
     currentTabs = result.tabs;
-    try { sessionStorage.setItem('plating_v5_b2_pin', input); } catch(e){}
+    try { sessionStorage.setItem('plating_v4_pin', input); } catch(e){}
     showApp(currentRole);
-    showPOPopup('B2');
+    showPOPopup('B1');
   });
 }
 
@@ -5854,6 +5761,7 @@ function applyRoleUI(role) {
     btn.style.display = visible ? '' : 'none';
   });
 
+  // หาแท็บแรกที่มองเห็นได้ — ใช้เป็น default ของ role นี้
   function firstVisibleTab() {
     for (var i = 0; i < tabs.length; i++) {
       if (tabs[i].style.display !== 'none') return TAB_IDS[i];
@@ -5907,7 +5815,7 @@ function doLogout() {
   if (!confirm('ออกจากระบบ?')) return;
   currentRole = null;
   currentTabs = null;
-  try { sessionStorage.removeItem('plating_v5_b2_pin'); } catch(e){}
+  try { sessionStorage.removeItem('plating_v4_pin'); } catch(e){}
   document.getElementById('userBar').style.display = 'none';
   document.getElementById('appContent').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -5917,7 +5825,7 @@ function doLogout() {
 
 function checkAutoLogin() {
   var savedPin = null;
-  try { savedPin = sessionStorage.getItem('plating_v5_b2_pin'); } catch(e){}
+  try { savedPin = sessionStorage.getItem('plating_v4_pin'); } catch(e){}
   if (savedPin) {
     document.getElementById('pinInput').value = savedPin;
     checkPin();
@@ -5928,6 +5836,7 @@ function checkAutoLogin() {
 
 window.addEventListener('load', function(){ checkAutoLogin(); });
 
+
 // ══════════════════════════════════════
 //  THICKNESS CHECK — ความหนาผิวชุบ
 // ══════════════════════════════════════
@@ -5936,7 +5845,7 @@ var thickRecords = [];
 
 function thickInit() {
   // โหลดจาก localStorage
-  try { thickRecords = JSON.parse(localStorage.getItem('b2_thickRecords') || '[]'); } catch(e){ thickRecords=[]; }
+  try { thickRecords = JSON.parse(localStorage.getItem('b1_thickRecords') || '[]'); } catch(e){ thickRecords=[]; }
   // ตั้งวันที่และเวลา auto
   var now = new Date();
   var d = document.getElementById('thickDate');
@@ -6005,7 +5914,7 @@ function addThickRecord() {
     min: mn, max: mx };
 
   thickRecords.unshift(rec);
-  try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+  try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
 
   // Sync Firebase
   thickFbSave();
@@ -6027,7 +5936,7 @@ function addThickRecord() {
 
 function delThickRecord(id) {
   thickRecords = thickRecords.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+  try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
   thickFbSave();
   renderThickHistory();
   renderThickChart();
@@ -6216,7 +6125,7 @@ function renderThickChart() {
 async function thickFbSave() {
   if (!fbIsConfigured()) return;
   try {
-    await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b2-thick.json', {
+    await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b1-thick.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: thickRecords, savedAt: new Date().toISOString() })
@@ -6227,12 +6136,12 @@ async function thickFbSave() {
 async function thickFbLoad() {
   if (!fbIsConfigured()) return;
   try {
-    var res = await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b2-thick.json');
+    var res = await fetch(FB_DB_URL.replace(/\/$/, '') + '/plating-b1-thick.json');
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.records) && data.records.length > thickRecords.length) {
       thickRecords = data.records;
-      try { localStorage.setItem('b2_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
+      try { localStorage.setItem('b1_thickRecords', JSON.stringify(thickRecords)); } catch(e){}
       renderThickHistory();
       renderThickChart();
       populateThickFilter();
@@ -6240,10 +6149,25 @@ async function thickFbLoad() {
   } catch(e) { console.warn('thickFbLoad:', e.message); }
 }
 
+function exportThickCSV() {
+  if (!thickRecords.length) { alert('ยังไม่มีข้อมูล'); return; }
+  var rows = [['วันที่','เวลา','ชิ้น1','ชิ้น2','ชิ้น3','เฉลี่ย','สถานะ','หมายเหตุ']];
+  thickRecords.forEach(function(r){
+    rows.push([r.date, r.time, r.v1, r.v2, r.v3, r.avg, r.status, r.note||'']);
+  });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'thickness_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+
 // ══════════════════════════════════════
 //  CHEM MASTER — ดึง/เบิกจาก Stock กลาง
 // ══════════════════════════════════════
-// FB_MASTER_PATH declared above (points to Chem Master shared DB)
+var FB_MASTER_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
 var masterItems   = [];
 var masterRecords = [];
 
@@ -6263,9 +6187,9 @@ async function masterLoad() {
 async function execMasterOut(chemId, liter, note, date) {
   if (!chemId || !liter) return;
   var rec = {
-    id: Date.now(), chemId: chemId, type: 'out-b2',
+    id: Date.now(), chemId: chemId, type: 'out-b1',
     date: date || isoDate(new Date()),
-    liter: liter, bucket: 0, note: note || 'B2 เบิก'
+    liter: liter, bucket: 0, note: note || 'B1 เบิก'
   };
   masterRecords.unshift(rec);
   try {
@@ -6322,6 +6246,9 @@ function renderMasterStock() {
       '<div style="font-size:15px;font-weight:800;font-family:\'IBM Plex Mono\',monospace;color:'+color+';">' + b.remain.toFixed(2) + ' L</div>' +
     '</div>';
   }).join('');
+  if (typeof renderChemStockCard === 'function' && typeof _selChemId !== 'undefined' && _selChemId) {
+    renderChemStockCard();
+  }
 }
 
 function doMasterOut() {
@@ -6338,10 +6265,11 @@ function doMasterOut() {
   // คงวันที่ไว้ ไม่ clear เผื่อเบิกหลายรายการในวันเดียวกัน
 }
 
+
 // ══════════════════════════════════════
 //  JOB MASTER — ดึง/เบิกงานจาก Job Master
 // ══════════════════════════════════════
-var FB_JOB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/job-master'; // job-master อยู่ใน DB หลัก B1
+var FB_JOB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master';
 var jobMasterItems   = [];
 var jobMasterRecords = [];
 
@@ -6851,11 +6779,11 @@ async function confirmJobOut() {
     showToast('job','❌ บันทึกไม่สำเร็จ','err');
   }
 }
-
 // ═══════════════════════════════════════
 //  START — จัดการโดย checkAutoLogin()
 // ═══════════════════════════════════════
 </script>
+
 
 
 <!-- ══════════════════════════════════════ -->
@@ -7523,8 +7451,8 @@ async function confirmJobOut() {
 //  QA CONTROL CHART — v2 with Titration & Coefficient
 // ═══════════════════════════════════════════════
 
-var QA_PROCESSES_KEY = 'qa_processes_b2';
-var QA_RECORDS_KEY   = 'qa_records_b2';
+var QA_PROCESSES_KEY = 'qa_processes_b1';
+var QA_RECORDS_KEY   = 'qa_records_b1';
 var qaChartInst = null;
 
 function qaLoadProcesses() {
@@ -7540,7 +7468,7 @@ function qaSaveRecords(arr) { localStorage.setItem(QA_RECORDS_KEY, JSON.stringif
 async function qaFbSaveRecords() {
   if (!fbIsConfigured()) return;
   try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa.json', {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qa.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: qaLoadRecords(), savedAt: new Date().toISOString() })
@@ -7550,7 +7478,7 @@ async function qaFbSaveRecords() {
 async function qaFbLoadRecords() {
   if (!fbIsConfigured()) return;
   try {
-    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa.json');
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qa.json');
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.records) && data.records.length > 0) {
@@ -7570,7 +7498,7 @@ async function qaFbLoadRecords() {
 async function qaFbSaveProcesses() {
   if (!fbIsConfigured()) return;
   try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa-processes.json', {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qa-processes.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ processes: qaLoadProcesses(), savedAt: new Date().toISOString() })
@@ -7580,7 +7508,7 @@ async function qaFbSaveProcesses() {
 async function qaFbLoadProcesses() {
   if (!fbIsConfigured()) return;
   try {
-    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa-processes.json');
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qa-processes.json');
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.processes) && data.processes.length > 0) {
@@ -8037,8 +7965,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════
 //  QC 100%  (APK-FR-QA-004)
 // ═══════════════════════════════════════════════
-var QC_RECORDS_KEY  = 'qc100_records_b2';
-var QC_DEFECTS_KEY  = 'qc100_defects_b2';
+var QC_RECORDS_KEY  = 'qc100_records_b1';
+var QC_DEFECTS_KEY  = 'qc100_defects_b1';
 var QC_DEFAULT_DEFECTS = ['ชุบไม่ติด','คราบน้ำ','ชิ้นงานเสียรูป','ชิ้นงานใหม่'];
 var qcSelectedDefects = [];
 
@@ -8062,7 +7990,7 @@ function qcSaveDefects(arr) { localStorage.setItem(QC_DEFECTS_KEY, JSON.stringif
 async function qcFbSaveRecords() {
   if (!fbIsConfigured()) return;
   try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qc100.json', {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qc100.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: qcLoadRecords(), defects: qcLoadDefects(), savedAt: new Date().toISOString() })
@@ -8072,7 +8000,7 @@ async function qcFbSaveRecords() {
 async function qcFbLoadRecords() {
   if (!fbIsConfigured()) return;
   try {
-    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qc100.json');
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qc100.json');
     if (!res.ok) return;
     var data = await res.json();
     if (data) {
@@ -8128,6 +8056,7 @@ function onQcJobPick() {
   var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
   if (!job) return;
 
+  // หา Part No จริงจาก Part Master ถ้ามี (job.partName มักเป็น "P/No คำอธิบาย")
   var key = partNoFromName(job.partName || '');
   var mp = partList.find(function(p){ return normalizePartKey(p.partNo) === key; });
   if (mp) {
@@ -8324,7 +8253,7 @@ function qcExportCSV() {
   var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement('a'); a.href=url; a.download='qc100_b2.csv'; a.click();
+  var a = document.createElement('a'); a.href=url; a.download='qc100_b1.csv'; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -8383,7 +8312,7 @@ function openAddBillModal(dayId, rowIdx) {
         : '<div style="color:#d97706;font-size:12px;margin-bottom:12px;">⚠️ ไม่มีบิลที่มีคงเหลือสำหรับชิ้นงานนี้</div>') +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
-        '<button onclick="document.getElementById(&quot;addBillModal&quot;).remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+        '<button onclick="document.getElementById(\'addBillModal\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
@@ -8415,26 +8344,26 @@ function saveBillToRow(dayId, rowIdx) {
 // ═══════════════════════════════════════════════
 //  MACHINE CHECK — ใบตรวจสอบเครื่องจักร/อุปกรณ์ประจำวัน
 // ═══════════════════════════════════════════════
-var MC_ITEMS_KEY   = 'mcheck_items_b2';
-var MC_RECORDS_KEY = 'mcheck_records_b2';
+var MC_ITEMS_KEY   = 'mcheck_items_b1';
+var MC_RECORDS_KEY = 'mcheck_records_b1';
 var MC_DEFAULT_ITEMS = [
-  {id:'b2-01',no:1,machine:'ตู้ควบคุม PLC',machineMy:'PLC ထိန်းချုပ်ရေးဗူး',itemNo:1,itemName:'สภาพทั่วไป',itemNameMy:'ယေဘုယျအခြေအနေ',standard:'ไม่มีความชื้นภายในตู้ควบคุม',standardMy:'ထိန်းချုပ်ရေးဗူးအတွင်း စိုထိုင်းမှုမရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-02',no:2,machine:'บ่อ PP',machineMy:'PP ရေကန်',itemNo:1,itemName:'สภาพทั่วไปของบ่อ',itemNameMy:'ရေကန်၏ ယေဘုယျအခြေအနေ',standard:'บ่อไม่มีน้ำรั่วลงพื้น',standardMy:'ရေကန်မှ ကြမ်းပြင်ပေါ်သို့ ရေယိုစိမ့်မှု မရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-03',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-04',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
-  {id:'b2-05',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-06',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-07',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
-  {id:'b2-08',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-09',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-10',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
-  {id:'b2-11',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-12',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:1,itemName:'ตู้ควบคุม',itemNameMy:'ထိန်းချုပ်ရေးဗူး',standard:'เปิดมีไฟสีเขียมติด',standardMy:'ဖွင့်လျှင် အစိမ်းရောင်မီးလင်းရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
-  {id:'b2-13',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:2,itemName:'การจ่ายกระแสไฟ',itemNameMy:'လျှပ်စစ်ဓာတ်အား ပေးချက်',standard:'วัดค่าเทียบกับจอ Monitor',standardMy:'Monitor ဖန်သားပြင်ပေါ်ရှိတန်ဖိုးနှင့် နှိုင်းယှဉ်တိုင်းတာပါ',method:'',methodMy:''},
-  {id:'b2-14',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:1,itemName:'Dosing Pump (1533)',itemNameMy:'Dosing Pump (1533)',standard:'10±5 ml / ครั้ง / 100 amp',standardMy:'10±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
-  {id:'b2-15',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:2,itemName:'Dosing Pump (1534)',itemNameMy:'Dosing Pump (1534)',standard:'38±5 ml / ครั้ง / 100 amp',standardMy:'38±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
-  {id:'b2-16',no:8,machine:'ชิลเลอร์',machineMy:'အေးဆေးစက် (Chiller)',itemNo:1,itemName:'Temp. Control',itemNameMy:'Temp. Control (အပူချိန်ထိန်း)',standard:'หมายเลขที่โชว์ตรงตามค่าที่วัดได้',standardMy:'ပြသနေသောနံပါတ်သည် တိုင်းတာရရှိသော တန်ဖိုးနှင့် ကိုက်ညီရမည်',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'},
-  {id:'b2-17',no:9,machine:'เครื่องอบแห้งด้วยความร้อน',machineMy:'အပူဖြင့် အခြောက်လှောင်စက်',itemNo:1,itemName:'สายแก๊ส',itemNameMy:'ဓာတ်ငွေ့ပိုက်',standard:'ไม่รั่ว ',standardMy:'မယိုစိမ့်ရ',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'}
+  {id:'b1-01',no:1,machine:'ตู้ควบคุม PLC',machineMy:'PLC ထိန်းချုပ်ရေးဗူး',itemNo:1,itemName:'สภาพทั่วไป',itemNameMy:'ယေဘုယျအခြေအနေ',standard:'ไม่มีความชื้นภายในตู้ควบคุม',standardMy:'ထိန်းချုပ်ရေးဗူးအတွင်း စိုထိုင်းမှုမရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-02',no:2,machine:'บ่อ PP',machineMy:'PP ရေကန်',itemNo:1,itemName:'สภาพทั่วไปของบ่อ',itemNameMy:'ရေကန်၏ ယေဘုယျအခြေအနေ',standard:'บ่อไม่มีน้ำรั่วลงพื้น',standardMy:'ရေကန်မှ ကြမ်းပြင်ပေါ်သို့ ရေယိုစိမ့်မှု မရှိရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-03',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-04',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-05',no:3,machine:'เครนยกโม่เตรียมผิว ( 1 )',machineMy:'မျက်နှာပြင်ပြင်ဆင်ခြင်း တန်ဆာဆွဲကြိုး ( ၁ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-06',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-07',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-08',no:4,machine:'เครนยกโม่ชุบ ( 2 )',machineMy:'ဓာတုလှော်ခြင်း တန်ဆာဆွဲကြိုး ( ၂ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-09',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:1,itemName:'สภาพทั่วไปของเครน',itemNameMy:'တန်ဆာဆွဲကြိုး၏ ယေဘုယျအခြေအနေ',standard:'เครนมีสภาพไม่ชำรุด',standardMy:'တန်ဆာဆွဲကြိုး မပျက်စီးရ',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-10',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:2,itemName:'สวิทซ์ควบคุมเครน',itemNameMy:'တန်ဆာဆွဲကြိုး ထိန်းချုပ်ခလုတ်',standard:'สามารถควบคุมเครนได้ตามทิศทางที่กำหนด',standardMy:'သတ်မှတ်ထားသော ဦးတည်ရာအတိုင်း တန်ဆာဆွဲကြိုးကို ထိန်းချုပ်နိုင်ရမည်',method:'มือโยกสวิทซ์',methodMy:'လက်ဖြင့်ခလုတ်ဖွင့်ပိတ်ခြင်း'},
+  {id:'b1-11',no:5,machine:'เครนยกโม่ทำสี ( 3 )',machineMy:'ဆေးသုတ်ခြင်း တန်ဆာဆွဲကြိုး ( ၃ )',itemNo:3,itemName:'สายพาน',itemNameMy:'ခါးပတ်',standard:'มีจารบีที่รางสายพาน',standardMy:'ခါးပတ်လမ်းကြောင်းတွင် ဂရိစ်ရှိရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-12',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:1,itemName:'ตู้ควบคุม',itemNameMy:'ထိန်းချုပ်ရေးဗူး',standard:'เปิดมีไฟสีเขียมติด',standardMy:'ဖွင့်လျှင် အစိမ်းရောင်မီးလင်းရမည်',method:'สายตา',methodMy:'မျက်စိဖြင့်ကြည့်ခြင်း'},
+  {id:'b1-13',no:6,machine:'ตู้ไฟชุบ',machineMy:'ဓာတုလှော်ခြင်း လျှပ်စစ်ဗူး',itemNo:2,itemName:'การจ่ายกระแสไฟ',itemNameMy:'လျှပ်စစ်ဓာတ်အား ပေးချက်',standard:'วัดค่าเทียบกับจอ Monitor',standardMy:'Monitor ဖန်သားပြင်ပေါ်ရှိတန်ဖိုးနှင့် နှိုင်းယှဉ်တိုင်းတာပါ',method:'',methodMy:''},
+  {id:'b1-14',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:1,itemName:'Dosing Pump (1533)',itemNameMy:'Dosing Pump (1533)',standard:'10±5 ml / ครั้ง / 100 amp',standardMy:'10±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
+  {id:'b1-15',no:7,machine:'Dosing pump บ่อชุบ',machineMy:'ဓာတုလှော်ရေကန် Dosing Pump',itemNo:2,itemName:'Dosing Pump (1534)',itemNameMy:'Dosing Pump (1534)',standard:'38±5 ml / ครั้ง / 100 amp',standardMy:'38±5 ml / အကြိမ် / 100 amp',method:'ตวงทดสอบ',methodMy:'ခြင်တွယ်စစ်ဆေးခြင်း'},
+  {id:'b1-16',no:8,machine:'ชิลเลอร์',machineMy:'အေးဆေးစက် (Chiller)',itemNo:1,itemName:'Temp. Control',itemNameMy:'Temp. Control (အပူချိန်ထိန်း)',standard:'หมายเลขที่โชว์ตรงตามค่าที่วัดได้',standardMy:'ပြသနေသောနံပါတ်သည် တိုင်းတာရရှိသော တန်ဖိုးနှင့် ကိုက်ညီရမည်',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'},
+  {id:'b1-17',no:9,machine:'เครื่องอบแห้งด้วยความร้อน',machineMy:'အပူဖြင့် အခြောက်လှောင်စက်',itemNo:1,itemName:'สายแก๊ส',itemNameMy:'ဓာတ်ငွေ့ပိုက်',standard:'ไม่รั่ว ',standardMy:'မယိုစိမ့်ရ',method:'เครื่องวัดอุณหภูมิ',methodMy:'အပူချိန်တိုင်းကိရိယာ'}
 ];
 
 var mcItems        = [];   // หัวข้อตรวจสอบ (แก้ไขได้)
@@ -8462,7 +8391,7 @@ function mcSaveRecords(arr) { try { localStorage.setItem(MC_RECORDS_KEY, JSON.st
 async function mcFbSave() {
   if (!fbIsConfigured()) return;
   try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-mcheck.json', {
+    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-mcheck.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: mcItems, records: mcLoadRecords(), savedAt: new Date().toISOString() })
@@ -8472,7 +8401,7 @@ async function mcFbSave() {
 async function mcFbLoad() {
   if (!fbIsConfigured()) return;
   try {
-    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-mcheck.json');
+    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-mcheck.json');
     if (!res.ok) return;
     var data = await res.json();
     if (!data) return;
@@ -8579,7 +8508,6 @@ function mcRenderChecklist() {
     '</div>';
   }).join('');
 }
-
 
 function mcSetResult(itemId, val) {
   var dateEl = document.getElementById('mcDate');
@@ -8829,7 +8757,7 @@ function mcBuildPrintHtml(rec) {
   }).join('');
 
   return '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">' +
-    '<title>ใบตรวจสอบเครื่องจักร B-2 ' + mcEsc(rec?rec.date:'') + '</title>' +
+    '<title>ใบตรวจสอบเครื่องจักร B-1 ' + mcEsc(rec?rec.date:'') + '</title>' +
     '<style>' +
     'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:12px;color:#0f172a;padding:18px;}' +
     'table{width:100%;border-collapse:collapse;margin-top:8px;}' +
@@ -8840,7 +8768,7 @@ function mcBuildPrintHtml(rec) {
     '.formfooter{display:flex;justify-content:space-between;align-items:center;border-top:2px solid #0f172a;margin-top:40px;padding-top:6px;font-size:10px;color:#0f172a;}' +
     '@media print{ body{padding:0;} }' +
     '</style></head><body>' +
-    '<div class="title">ใบรายงานผลการตรวจเช็คเครื่องจักร/อุปกรณ์ประจำวัน (BARRAL B-2)</div>' +
+    '<div class="title">ใบรายงานผลการตรวจเช็คเครื่องจักร/อุปกรณ์ประจำวัน (BARRAL B-1)</div>' +
     '<div class="meta"><div><b>วันที่ตรวจสอบ:</b> ' + mcEsc(rec?rec.date:'') + '</div><div><b>ผู้ตรวจสอบ:</b> ' + mcEsc(rec?rec.inspector:'') + '</div></div>' +
     '<table><thead><tr><th>ลำดับ</th><th>ชื่อเครื่องจักร/อุปกรณ์</th><th>หัวข้อ</th><th>หัวข้อการตรวจสอบ</th><th>มาตรฐาน</th><th>วิธีการ/เครื่องมือ</th><th>ผล</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
     '<div class="legend">สัญลักษณ์: ✓ = เครื่องจักรปกติ &nbsp; ✗ = เครื่องจักรชำรุดหยุดไลน์รออะไหล่ซ่อม &nbsp; ⚠ = เครื่องจักรชำรุดและมีการแก้ไขปรับปรุงด้วยตัวเองได้</div>' +
@@ -8886,7 +8814,7 @@ function mcExportCSV() {
   var csv = '\uFEFF' + h + '\n' + rows.join('\n');
   var a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download = 'ตรวจเครื่องจักร_B2_' + isoDate(new Date()) + '.csv';
+  a.download = 'ตรวจเครื่องจักร_B1_' + isoDate(new Date()) + '.csv';
   a.click();
 }
 
@@ -8894,9 +8822,9 @@ function mcExportCSV() {
 //  PRODUCTION ORDER POPUP — แสดงใบสั่งผลิตหลัง login
 // ══════════════════════════════════════════════
 var PO_FB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/production-orders.json';
-var PO_LINE_FILTER = 'B2'; // กำหนดสายที่กรองใน v4
+var PO_LINE_FILTER = 'B1'; // กำหนดสายที่กรองใน v4
 var _poStatusTimer = null;
-var _poJobPath = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app/job-master.json';
+var _poJobPath = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/job-master.json';
 
 // ── ดึง PO orders + actual pcs แล้ว return items พร้อม progress ──
 // ── cache สั้นๆ ลด fetch ซ้ำ ──
@@ -8957,7 +8885,7 @@ async function fetchActual() {
 
   try {
     // ── 1. live.json: real-time ระหว่างกะ ──
-    var rLive = await fetch('https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app/live.json');
+    var rLive = await fetch('https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/live.json');
     if (rLive.ok) {
       var live = await rLive.json();
       if (live) {
@@ -8978,7 +8906,7 @@ async function fetchActual() {
 
   try {
     // ── 2. dayRecords: กะที่กดบันทึกแล้ว (วันนี้และย้อนหลัง) ──
-    var rDay = await fetch('https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app/plating-b2.json');
+    var rDay = await fetch('https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/plating-b1.json');
     if (rDay.ok) {
       var data = await rDay.json();
       if (data) {
@@ -9111,10 +9039,12 @@ async function showPOPopup(lineFilter) {
 function closePOPopup() {
   var old = document.getElementById('poPopupOverlay');
   if (old) old.remove();
+  // บันทึกว่ารับทราบแล้ว (ใช้ sessionStorage เก็บ timestamp ล่าสุดที่รับทราบ)
   try {
     var lastUpdated = localStorage.getItem('po_updated') || Date.now().toString();
     sessionStorage.setItem('po_ack_' + PO_LINE_FILTER, lastUpdated);
   } catch(e) {}
+  // โชว์ bar หลังรับทราบ
   startPOStatusBar(PO_LINE_FILTER);
 }
 
@@ -9123,10 +9053,11 @@ function startPOStatusBar(lineFilter) {
   updatePOStatusBar(lineFilter);
   if (_poStatusTimer) clearInterval(_poStatusTimer);
   _poStatusTimer = setInterval(function(){ updatePOStatusBar(lineFilter); }, 60000);
-  // รับ broadcast จาก production_order.html — โชว์ popup ขอรับทราบก่อนถ้ายังไม่ได้รับทราบ
+  // รับ broadcast จาก production_order.html เมื่อมีการบันทึกใหม่
   window.addEventListener('storage', function(e) {
     if (e.key !== 'po_updated') return;
     var lastAck = sessionStorage.getItem('po_ack_' + lineFilter) || '0';
+    // ถ้ายังไม่เคยรับทราบรายการนี้ → โชว์ popup ให้รับทราบก่อน
     if (e.newValue && e.newValue !== lastAck) {
       showPOPopup(lineFilter);
     } else {
@@ -9142,9 +9073,11 @@ function repositionPOBar(visible) {
   var liveBanner = document.getElementById('liveSyncBanner');
   var liveH = (liveBanner && liveBanner.style.display !== 'none') ? liveBanner.offsetHeight : 0;
   bar.style.top = liveH + 'px';
+  // ชดเชย padding-top ให้ appContent เพื่อไม่ให้ถูกบัง
   var app = document.getElementById('appContent');
   if (app) {
     var barH = visible ? bar.offsetHeight : 0;
+    // เก็บ base padding เดิมไว้ครั้งแรก
     if (!app._baseTopPad) {
       var cs = window.getComputedStyle(app);
       app._baseTopPad = parseInt(cs.paddingTop)||0;
@@ -9163,13 +9096,16 @@ async function updatePOStatusBar(lineFilter) {
   var pending = items.filter(function(it){ return !it.complete; });
 
   if (!pending.length) {
-    // ทุกรายการครบแล้ว ซ่อน bar
     bar.style.display = 'none';
+    repositionPOBar(false);
     if (_poStatusTimer) { clearInterval(_poStatusTimer); _poStatusTimer = null; }
     return;
   }
 
   bar.style.display = 'block';
+  // คำนวณ top ตาม live banner ที่แสดงอยู่จริง
+  repositionPOBar(true);
+
   var now = new Date();
   var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
   if (updEl) updEl.textContent = 'อัปเดต ' + timeStr;
