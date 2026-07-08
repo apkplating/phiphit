@@ -49,3 +49,30 @@ function getFbAuthToken(){
     });
   return _fbTokenPromise;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Auto-patch fetch(): แนบ ?auth=token ให้อัตโนมัติกับทุก request
+   ที่ยิงไปหา Realtime Database ของโปรเจกต์นี้ (platingapp-92e21-c1346)
+   โดยไม่ต้องแก้ fetch() เดิมที่กระจายอยู่ทั่วไฟล์ทีละจุด —
+   ปลอดภัยกว่าสำหรับไฟล์ใหญ่ๆ ที่มี fetch() หลายสิบจุด (เช่น plating_v4.html)
+
+   หมายเหตุ: ถ้า URL มี "auth=" อยู่แล้ว (เช่นจุดที่แก้ manual ไว้ก่อนหน้า)
+   จะข้ามไป ไม่แนบซ้ำ — ใช้ร่วมกับโค้ดเดิมที่แก้ไว้แล้วได้โดยไม่ชนกัน
+   ══════════════════════════════════════════════════════════════ */
+(function(){
+  var FB_HOST_MARKER = 'platingapp-92e21-c1346-default-rtdb';
+  var _origFetch = window.fetch.bind(window);
+
+  window.fetch = function(input, init){
+    var url = (typeof input === 'string') ? input : (input && input.url);
+
+    if (url && url.indexOf(FB_HOST_MARKER) !== -1 && url.indexOf('auth=') === -1){
+      return getFbAuthToken().then(function(token){
+        var sep = url.indexOf('?') === -1 ? '?' : '&';
+        var newUrl = url + sep + 'auth=' + token;
+        return _origFetch(newUrl, init);
+      });
+    }
+    return _origFetch(input, init);
+  };
+})();
