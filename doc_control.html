@@ -608,7 +608,7 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
-var pdfViewerState = { canvases: [], docCode: '', fileName: '' };
+var pdfViewerState = { canvases: [], docCode: '', fileName: '', kind: '' };
 
 if (window.pdfjsLib){
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -641,17 +641,23 @@ function base64ToBytes(b64){
   return bytes;
 }
 
-function renderPdfPage(pdfDoc, pageNum, watermarkLines){
+// เรนเดอร์หน้า PDF แบบ "สะอาด" ไม่มีลายน้ำ ไว้แสดงผลบนจอตามปกติ
+function renderPdfPage(pdfDoc, pageNum){
   return pdfDoc.getPage(pageNum).then(function(page){
     var viewport = page.getViewport({scale: 1.6});
     var canvas = document.createElement('canvas');
     canvas.width = viewport.width; canvas.height = viewport.height;
     var ctx = canvas.getContext('2d');
     return page.render({canvasContext: ctx, viewport: viewport}).promise.then(function(){
-      drawWatermark(ctx, canvas.width, canvas.height, watermarkLines);
       return canvas;
     });
   });
+}
+
+function buildWatermarkLines(kind, who, stamp){
+  return kind === 'draft'
+    ? ['เอกสารฉบับร่าง (DRAFT) — ห้ามใช้แทนต้นฉบับ', 'ผู้พิมพ์: '+who, stamp]
+    : ['สำเนาไม่ควบคุม (Uncontrolled Copy)', 'ผู้พิมพ์: '+who, stamp];
 }
 
 function openBase64Pdf(b64, fileName, docCode, kind){
@@ -662,13 +668,7 @@ function openBase64Pdf(b64, fileName, docCode, kind){
   loading.style.display = 'block';
   $('pdfTitle').textContent = fileName || 'เอกสาร';
   modal.classList.add('show');
-  pdfViewerState = { canvases: [], docCode: docCode || '', fileName: fileName || '' };
-
-  var who = (session && session.user && session.user.name) || (session && session.pin) || 'ไม่ทราบผู้ใช้';
-  var stamp = fmtDateTime(new Date().toISOString());
-  var watermarkLines = kind === 'draft'
-    ? ['เอกสารฉบับร่าง (DRAFT)', 'ผู้เปิดดู: '+who, stamp]
-    : ['สำเนาไม่ควบคุม (Uncontrolled Copy)', 'ผู้เปิดดู: '+who, stamp];
+  pdfViewerState = { canvases: [], docCode: docCode || '', fileName: fileName || '', kind: kind || 'published' };
 
   try{
     var bytes = base64ToBytes(b64);
@@ -676,7 +676,7 @@ function openBase64Pdf(b64, fileName, docCode, kind){
       var pageNums = []; for (var i=1;i<=pdfDoc.numPages;i++) pageNums.push(i);
       return pageNums.reduce(function(chain, pageNum){
         return chain.then(function(){
-          return renderPdfPage(pdfDoc, pageNum, watermarkLines).then(function(canvas){
+          return renderPdfPage(pdfDoc, pageNum).then(function(canvas){
             var wrap = document.createElement('div'); wrap.className = 'pdf-page-wrap';
             wrap.appendChild(canvas);
             scroll.appendChild(wrap);
@@ -702,16 +702,47 @@ function logPrintEvent(docCode, fileName){
   return fbPost(PATHS.printLogs, entry);
 }
 
+// เก็บสำเนา "สะอาด" ของแต่ละหน้าไว้ก่อนวาดลายน้ำทับ เพื่อลบลายน้ำคืนได้หลังพิมพ์เสร็จ
+var _printBackup = [];
+function applyPrintWatermark(){
+  if (!pdfViewerState.canvases.length) return;
+  var who = (session && session.user && session.user.name) || (session && session.pin) || 'ไม่ทราบผู้ใช้';
+  var stamp = fmtDateTime(new Date().toISOString());
+  var lines = buildWatermarkLines(pdfViewerState.kind, who, stamp);
+  _printBackup = pdfViewerState.canvases.map(function(canvas){
+    return canvas.toDataURL('image/png'); // เก็บภาพต้นฉบับไว้ก่อนวาดทับ
+  });
+  pdfViewerState.canvases.forEach(function(canvas){
+    var ctx = canvas.getContext('2d');
+    drawWatermark(ctx, canvas.width, canvas.height, lines);
+  });
+}
+function removePrintWatermark(){
+  if (!_printBackup.length) return;
+  pdfViewerState.canvases.forEach(function(canvas, idx){
+    var ctx = canvas.getContext('2d');
+    var img = new Image();
+    img.onload = function(){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
+    img.src = _printBackup[idx];
+  });
+  _printBackup = [];
+}
+
+// ดักทุกช่องทางการพิมพ์ (ปุ่มในตัว, Ctrl+P, เมนูเบราว์เซอร์) ด้วย beforeprint/afterprint
+// ลายน้ำจะถูกวาดทับเฉพาะตอนนี้เท่านั้น ไม่ขึ้นตอนดูปกติบนจอ
+window.addEventListener('beforeprint', function(){
+  if (!$('pdfModal').classList.contains('show')) return;
+  applyPrintWatermark();
+  logPrintEvent(pdfViewerState.docCode, pdfViewerState.fileName).catch(function(){});
+});
+window.addEventListener('afterprint', function(){
+  removePrintWatermark();
+});
+
 document.addEventListener('DOMContentLoaded', function(){
   var closeBtn = $('pdfCloseBtn'), printBtn = $('pdfPrintBtn');
   if (closeBtn) closeBtn.addEventListener('click', function(){ $('pdfModal').classList.remove('show'); });
-  if (printBtn) printBtn.addEventListener('click', function(){
-    printBtn.disabled = true;
-    logPrintEvent(pdfViewerState.docCode, pdfViewerState.fileName).catch(function(){}).finally(function(){
-      printBtn.disabled = false;
-      window.print();
-    });
-  });
+  if (printBtn) printBtn.addEventListener('click', function(){ window.print(); });
 });
 function notifyDeptsDiscord(depts, content){
   var urls = [];
