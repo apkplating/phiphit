@@ -59,7 +59,7 @@ main{max-width:1300px; margin:0 auto; padding:20px 16px 60px;}
 .sigbox th{background:var(--steel-3); font-weight:700;}
 .sigbox input{width:100%; border:none; text-align:center; font-family:inherit; font-size:10.5px; padding:2px;}
 
-.metabar{display:grid; grid-template-columns:80px 90px 1fr 130px 1fr; gap:10px; margin-bottom:14px; font-size:11px;}
+.metabar{display:grid; grid-template-columns:80px 90px 1fr 1fr; gap:10px; margin-bottom:14px; font-size:11px;}
 .metabar .mb{border:1px solid var(--border); border-radius:6px; overflow:hidden;}
 .metabar .mb .lbl{background:var(--navy); color:#fff; font-weight:700; padding:5px 8px; font-size:9.5px;}
 .metabar .mb .val{padding:6px 8px;}
@@ -77,9 +77,14 @@ table.gantt th{background:var(--navy); color:#fff; padding:5px 4px; text-align:c
 table.gantt td{border:1px solid var(--border); padding:3px 4px; text-align:center;}
 table.gantt td.tasklabel{text-align:left; font-size:10.5px; min-width:220px;}
 table.gantt td.tasklabel textarea{width:100%; border:none; font-family:inherit; font-size:10.5px; resize:none; background:transparent;}
-table.gantt .mchk{width:16px; height:16px; cursor:pointer;}
-table.gantt .achbtn{cursor:pointer; font-size:14px; user-select:none;}
 table.gantt .rowno{width:22px; color:var(--text-muted);}
+table.gantt select.sf-select{width:100%; border:1px solid var(--border); border-radius:5px; font-family:inherit; font-size:10px; padding:2px;}
+.ganttbar-track{position:relative; height:18px; border-radius:3px; background-image:repeating-linear-gradient(to right, var(--border), var(--border) 1px, transparent 1px, transparent calc(100%/12));}
+.ganttbar-fill{position:absolute; top:2px; bottom:2px; background:var(--navy); border-radius:3px;}
+.ach-cell{display:flex; align-items:center; justify-content:center; gap:5px;}
+.ach-cell input{width:42px; border:1px solid var(--border); border-radius:5px; font-family:inherit; font-size:10.5px; text-align:right; padding:2px 3px;}
+.ach-circle{width:16px; height:16px; border-radius:50%; flex-shrink:0; border:1px solid var(--steel-2);}
+table.gantt .delbtn{cursor:pointer; font-size:13px;}
 .gantt-actions{padding:6px 8px; display:flex; justify-content:flex-end; gap:6px; background:var(--steel-3);}
 
 .chart-card{border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:14px;}
@@ -175,12 +180,21 @@ var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.
 var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 var DEFAULT_HIST = {2018:15.32, 2019:10.00, 2020:6.15, 2021:4.31, 2022:4.76, 2023:4.41, 2024:4.31};
 var DEFAULT_TASKS = [
-  {label:'กำหนดความถี่ของสุ่มตรวจสอบเรื่องความหนาทุกๆ 1 ชม.', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'full'},
-  {label:'กำหนดความถี่ของการวิเคราะห์ความเข้มข้นของเคมีทุกๆ 4 ชม.', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'full'},
-  {label:'สร้างจิตสำนึกของพนักงานผลิตเรื่อง ไม่รับ-ไม่ทำ-ไม่ส่งของเสียไปยังกระบวนการถัดไป', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'partial'}
+  {label:'กำหนดความถี่ของสุ่มตรวจสอบเรื่องความหนาทุกๆ 1 ชม.', start:1, finish:1, ach:100},
+  {label:'กำหนดความถี่ของการวิเคราะห์ความเข้มข้นของเคมีทุกๆ 4 ชม.', start:1, finish:1, ach:100},
+  {label:'สร้างจิตสำนึกของพนักงานผลิตเรื่อง ไม่รับ-ไม่ทำ-ไม่ส่งของเสียไปยังกระบวนการถัดไป', start:1, finish:12, ach:50}
 ];
-var ACH_CYCLE = {none:'partial', partial:'full', full:'none'};
-var ACH_ICON  = {none:'○', partial:'⊕', full:'●'};
+/* รองรับข้อมูลเก่าที่เคยบันทึกเป็นแบบ checkbox รายเดือน (months[]) ให้แปลงเป็น start/finish/ach% อัตโนมัติ */
+function normalizeTask(t){
+  if (t && t.months && Array.isArray(t.months)){
+    var idxs = t.months.map(function(v,i){ return v?i+1:null; }).filter(function(v){ return v!=null; });
+    var start = idxs.length ? idxs[0] : 1;
+    var finish = idxs.length ? idxs[idxs.length-1] : 12;
+    var ach = t.ach==='full' ? 100 : (t.ach==='partial' ? 50 : 0);
+    return {label:t.label||'', start:start, finish:finish, ach:ach};
+  }
+  return {label:t.label||'', start:t.start||1, finish:t.finish||12, ach:Number(t.ach)||0};
+}
 
 var session = null;
 var metricId = null;
@@ -262,7 +276,8 @@ function loadReportAndRender(){
   Promise.all([ fbGet(PATHS.report + '/' + metricId), fbGet(PATHS.entries) ]).then(function(res){
     report = res[0] || {};
     entries = res[1] || {};
-    if (!report.tasks) report.tasks = DEFAULT_TASKS.map(function(t){ return Object.assign({}, t); });
+    if (!report.tasks || !report.tasks.length) report.tasks = DEFAULT_TASKS.map(function(t){ return Object.assign({}, t); });
+    else report.tasks = report.tasks.map(normalizeTask);
     if (!report.historicalYears) report.historicalYears = Object.assign({}, DEFAULT_HIST);
     if (!report.policyText) report.policyText = 'ควบคุมคุณภาพชิ้นงานจากกระบวนการชุบ';
     if (!report.planText) report.planText = 'ทบทวนความถี่ของการสุ่มตรวจสอบคุณภาพ';
@@ -314,8 +329,7 @@ function renderSheet(){
   html += '<div class="mb"><div class="lbl">แผนก</div><div class="val">'+escapeHtml(metric.dept||'-')+'</div></div>';
   html += '<div class="mb"><div class="lbl">Policy Item</div><div class="val"><input id="fItemNo" value="'+escapeHtml(report.policyItemNo)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
   html += '<div class="mb"><div class="lbl">Preview Result</div><div class="val">'+(selectedYear-1)+' '+escapeHtml(metric.name)+' '+(prevYearRatio==null?'—':round2(prevYearRatio)+'%')+'</div></div>';
-  html += '<div class="mb"><div class="lbl">Target Mark</div><div class="val" style="font-size:9.5px;"></div></div>';
-  html += '<div class="mb"><div class="lbl">&nbsp;</div><div class="val"><input id="fTargetMark" value="'+escapeHtml(targetMarkText)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
+  html += '<div class="mb"><div class="lbl">Target Mark</div><div class="val"><input id="fTargetMark" value="'+escapeHtml(targetMarkText)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
   html += '</div>';
 
   // policy / plan
@@ -346,20 +360,30 @@ function renderSheet(){
 }
 
 /* ══════════════ Gantt ══════════════ */
+function monthOptions(selected){
+  var out = '';
+  for (var mi=1; mi<=12; mi++) out += '<option value="'+mi+'"'+(mi===selected?' selected':'')+'>'+MONTH_NAMES[mi-1]+'</option>';
+  return out;
+}
 function ganttHtml(){
   var rows = report.tasks.map(function(t,i){
-    var cells = t.months.map(function(v,mi){
-      return '<td><input type="checkbox" class="mchk" data-task="'+i+'" data-m="'+mi+'" '+(v?'checked':'')+' '+(canEdit()?'':'disabled')+'></td>';
-    }).join('');
+    var start = t.start||1, finish = t.finish||12;
+    var leftPct = ((start-1)/12)*100;
+    var widthPct = ((finish-start+1)/12)*100;
+    var ach = Number(t.ach)||0;
     return '<tr>' +
       '<td class="rowno">'+(i+1)+'</td>' +
       '<td class="tasklabel"><textarea rows="1" data-task-label="'+i+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(t.label)+'</textarea></td>' +
-      cells +
-      '<td class="achbtn" data-task-ach="'+i+'" title="สถานะความสำเร็จ — คลิกเพื่อเปลี่ยน">'+ACH_ICON[t.ach||'none']+'</td>' +
-      (canEdit()?'<td><span class="achbtn" data-task-del="'+i+'" title="ลบแถวนี้">🗑️</span></td>':'') +
+      '<td><select class="sf-select" data-task-start="'+i+'" '+(canEdit()?'':'disabled')+'>'+monthOptions(start)+'</select></td>' +
+      '<td><select class="sf-select" data-task-finish="'+i+'" '+(canEdit()?'':'disabled')+'>'+monthOptions(finish)+'</select></td>' +
+      '<td colspan="12" style="padding:3px 4px;"><div class="ganttbar-track"><div class="ganttbar-fill" style="left:'+leftPct+'%; width:'+widthPct+'%;"></div></div></td>' +
+      '<td><div class="ach-cell"><input type="number" min="0" max="100" step="5" data-task-ach="'+i+'" value="'+ach+'" '+(canEdit()?'':'disabled')+'>%' +
+        '<div class="ach-circle" data-ach-circle="'+i+'" style="background:conic-gradient(var(--navy) '+ach+'%, #e2e8f0 0);"></div></div></td>' +
+      (canEdit()?'<td><span class="delbtn" data-task-del="'+i+'" title="ลบแถวนี้">🗑️</span></td>':'') +
     '</tr>';
   }).join('');
-  var head = '<tr><th class="rowno">No.</th><th>What to do each month</th>' + MONTH_NAMES.map(function(mn){ return '<th>'+mn+'</th>'; }).join('') + '<th>Ach</th>' + (canEdit()?'<th></th>':'') + '</tr>';
+  var head = '<tr><th class="rowno">No.</th><th>What to do each month</th><th>เริ่ม</th><th>เสร็จ</th><th colspan="12">Year : '+selectedYear+'</th><th>Ach</th>' + (canEdit()?'<th></th>':'') + '</tr>' +
+    '<tr><th></th><th></th><th></th><th></th>' + MONTH_NAMES.map(function(mn){ return '<th style="font-size:8.5px;">'+mn+'</th>'; }).join('') + '<th></th>' + (canEdit()?'<th></th>':'') + '</tr>';
   var addRow = canEdit() ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="addTaskBtn">+ เพิ่มแถว</button><button class="btn btn-light btn-sm" id="saveGanttBtn">บันทึกตาราง</button></div>' : '';
   return '<div class="ganttwrap"><table class="gantt"><thead>'+head+'</thead><tbody id="ganttBody">'+rows+'</tbody></table>'+addRow+'</div>';
 }
@@ -481,19 +505,29 @@ function wireSheetEvents(){
     var el = $(id); if (el && !el.disabled) el.addEventListener('change', saveMetaFields);
   });
 
-  document.querySelectorAll('.mchk').forEach(function(cb){
-    cb.addEventListener('change', function(){
-      var ti = parseInt(cb.getAttribute('data-task'),10), mi = parseInt(cb.getAttribute('data-m'),10);
-      report.tasks[ti].months[mi] = cb.checked ? 1 : 0;
+  document.querySelectorAll('[data-task-start]').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var ti = parseInt(sel.getAttribute('data-task-start'),10);
+      report.tasks[ti].start = parseInt(sel.value,10);
+      if (report.tasks[ti].start > report.tasks[ti].finish) report.tasks[ti].finish = report.tasks[ti].start;
+      renderSheet();
     });
   });
-  document.querySelectorAll('[data-task-ach]').forEach(function(el){
-    el.addEventListener('click', function(){
-      if (!canEdit()) return;
-      var ti = parseInt(el.getAttribute('data-task-ach'),10);
-      var cur = report.tasks[ti].ach || 'none';
-      report.tasks[ti].ach = ACH_CYCLE[cur];
-      el.textContent = ACH_ICON[report.tasks[ti].ach];
+  document.querySelectorAll('[data-task-finish]').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var ti = parseInt(sel.getAttribute('data-task-finish'),10);
+      report.tasks[ti].finish = parseInt(sel.value,10);
+      if (report.tasks[ti].finish < report.tasks[ti].start) report.tasks[ti].start = report.tasks[ti].finish;
+      renderSheet();
+    });
+  });
+  document.querySelectorAll('[data-task-ach]').forEach(function(inp){
+    inp.addEventListener('input', function(){
+      var ti = parseInt(inp.getAttribute('data-task-ach'),10);
+      var v = Math.max(0, Math.min(100, Number(inp.value)||0));
+      report.tasks[ti].ach = v;
+      var circle = document.querySelector('[data-ach-circle="'+ti+'"]');
+      if (circle) circle.style.background = 'conic-gradient(var(--navy) '+v+'%, #e2e8f0 0)';
     });
   });
   document.querySelectorAll('[data-task-del]').forEach(function(el){
@@ -511,7 +545,7 @@ function wireSheetEvents(){
     });
   });
   if ($('addTaskBtn')) $('addTaskBtn').addEventListener('click', function(){
-    report.tasks.push({label:'', months:[0,0,0,0,0,0,0,0,0,0,0,0], ach:'none'});
+    report.tasks.push({label:'', start:1, finish:1, ach:0});
     renderSheet();
   });
   if ($('saveGanttBtn')) $('saveGanttBtn').addEventListener('click', function(){
