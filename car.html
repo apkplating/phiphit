@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAR/PAR — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e; --blue2:#3b82f6;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --green:#16a34a; --red:#dc2626; --amber:#d97706;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+header{background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); color:#fff; padding:16px 22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+.brand h1{font-size:16px; font-weight:700;}
+.brand p{font-size:11px; color:#b9c4de; margin-top:2px;}
+.brand .docref{font-size:10px; color:#8fa3cc; margin-top:1px; font-family:'IBM Plex Mono',monospace;}
+.back-link{font-size:11px; color:#b9c4de; text-decoration:none;}
+.who{display:flex; align-items:center; gap:12px; font-size:12px; color:#dbe3f3;}
+.who b{color:#fff;}
+.btn-logout{background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:6px 12px; font-size:11.5px; cursor:pointer; font-family:inherit;}
+
+.tabbar{display:flex; gap:4px; background:#fff; border-bottom:1px solid var(--border); padding:0 18px; overflow-x:auto;}
+.tabbtn{border:none; background:none; font-family:inherit; font-size:13px; font-weight:600; color:var(--text-mid); padding:13px 14px; cursor:pointer; white-space:nowrap; border-bottom:3px solid transparent;}
+.tabbtn.active{color:var(--navy); border-bottom-color:var(--blue2);}
+
+main{max-width:1080px; margin:0 auto; padding:22px 18px 60px;}
+.panel{display:none;}
+.panel.active{display:block;}
+
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px;}
+.card h2{font-size:15px; font-weight:700; color:var(--navy); margin-bottom:4px;}
+.card .sub{font-size:11.5px; color:var(--text-mid); margin-bottom:16px;}
+
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:11.5px; font-weight:600; color:var(--text-mid); margin-bottom:5px;}
+.field input[type=text], .field input[type=number], .field input[type=date], .field select, .field textarea{
+  width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px; background:#fff; color:var(--text);
+}
+.field textarea{resize:vertical; min-height:60px;}
+.row{display:flex; gap:12px; flex-wrap:wrap;}
+.row > .field{flex:1; min-width:160px;}
+
+.btn{border:none; border-radius:9px; padding:10px 18px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;}
+.btn-primary{background:var(--navy); color:#fff;}
+.btn-primary:hover{background:var(--navy-2);}
+.btn-ghost{background:#fff; color:var(--navy); border:1px solid var(--steel-1);}
+.btn-ghost:hover{background:var(--steel-3);}
+.btn-danger{background:#fff; color:var(--red); border:1px solid #fecaca;}
+.btn-sm{padding:6px 12px; font-size:12px; border-radius:7px;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+#loginScreen{position:fixed; inset:0; background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;}
+.login-box{background:#fff; border-radius:16px; padding:32px 28px; width:100%; max-width:340px; text-align:center;}
+.login-box h1{font-size:16px; font-weight:700; color:var(--navy); margin-bottom:2px;}
+.login-box p{font-size:11.5px; color:var(--text-mid); margin-bottom:20px;}
+.login-box input{width:100%; text-align:center; letter-spacing:6px; font-size:20px; font-family:'IBM Plex Mono',monospace; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px;}
+.login-box .btn-primary{width:100%; padding:11px;}
+.login-err{color:var(--red); font-size:11.5px; margin-top:10px; min-height:14px;}
+
+.empty{text-align:center; padding:40px 20px; color:var(--text-muted); font-size:12.5px;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); padding:8px 10px; border-bottom:2px solid var(--border);}
+td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top;}
+tr:hover td{background:var(--steel-3);}
+.badge{display:inline-block; padding:2px 9px; border-radius:99px; font-size:10.5px; font-weight:700;}
+.badge-car{background:#dbeafe; color:#1e40af;}
+.badge-par{background:#fde68a; color:#92400e;}
+.badge-open{background:#fee2e2; color:#991b1b;}
+.badge-closed{background:#dcfce7; color:#166534;}
+
+.suggest-card{border:1px solid #fecaca; background:#fff7f7; border-radius:12px; padding:16px; margin-bottom:12px;}
+.suggest-card.par{border-color:#fde68a; background:#fffbeb;}
+.suggest-card h3{font-size:13.5px; color:var(--navy); margin-bottom:4px;}
+.suggest-card .meta{font-size:11.5px; color:var(--text-mid); margin-bottom:10px;}
+
+.chk-row{display:flex; align-items:center; gap:7px; margin-bottom:8px; font-size:13px;}
+.chk-row input[type=checkbox]{width:16px; height:16px;}
+
+.subblock{border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;}
+.subblock-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+.subblock-head h4{font-size:12px; color:var(--navy);}
+
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; padding:11px 20px; border-radius:9px; font-size:12.5px; z-index:80; opacity:0; transition:opacity .2s; pointer-events:none;}
+.toast.show{opacity:1;}
+
+/* ── แบบฟอร์มพิมพ์ (จำลอง APK-FR-MR-006) ── */
+.printsheet{background:#fff; border:1px solid var(--border); padding:20px; font-size:12px;}
+.printsheet .phead{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid var(--navy); padding-bottom:10px; margin-bottom:10px;}
+.printsheet .phead h2{font-size:20px; font-weight:800; color:var(--navy);}
+.psection{border:1px solid var(--border); margin-bottom:8px;}
+.psection .ptitle{background:var(--steel-3); font-weight:700; padding:5px 8px; font-size:11.5px; border-bottom:1px solid var(--border);}
+.psection .pbody{padding:8px;}
+.pchk{font-size:14px; margin-right:4px;}
+.ptable{width:100%; border-collapse:collapse; font-size:11px;}
+.ptable th{background:var(--steel-3); border:1px solid var(--border); padding:5px; font-size:10px;}
+.ptable td{border:1px solid var(--border); padding:5px;}
+
+@media print{
+  body{background:#fff;}
+  header, .tabbar, .noprint{display:none !important;}
+  main{max-width:none; padding:0;}
+  .printsheet{border:none;}
+  @page{ size: A4; margin:10mm; }
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>📋 CAR/PAR</h1>
+    <p>APK Plating — ใบร้องขอให้แก้ไขและป้องกัน — ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="brand">
+      <h1>📋 CAR/PAR</h1>
+      <p>APK Plating · ใบร้องขอให้แก้ไขและป้องกัน</p>
+      <p class="docref">อ้างอิงแบบฟอร์ม APK-FR-MR-006 · Rev.00</p>
+    </div>
+    <div class="who">
+      <a href="index.html" class="back-link">← หน้าแรก</a>
+      <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+      <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <div class="tabbar" id="tabbar">
+    <button class="tabbtn" data-tab="list">รายการ CAR/PAR</button>
+    <button class="tabbtn" data-tab="detect">ตรวจพบจาก KPI</button>
+    <button class="tabbtn" data-tab="new">+ สร้างใหม่ (มือ)</button>
+    <button class="tabbtn" data-tab="detail" id="detailTabBtn" style="display:none;">รายละเอียด</button>
+  </div>
+
+  <main>
+    <div class="panel" id="panel-list">
+      <div class="card">
+        <h2>รายการ CAR/PAR ทั้งหมด</h2>
+        <div class="sub">คลิกแถวเพื่อดู/แก้ไขรายละเอียด หรือพิมพ์เอกสาร</div>
+        <div id="listWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-detect">
+      <div class="card">
+        <h2>ตรวจพบ KPI เกินเป้าหมายอัตโนมัติ</h2>
+        <div class="sub">ตรวจสอบตัวชี้วัด "ปริมาณของเสียในกระบวนการผลิต" (PR) — เกิน 1 เดือน ระบบแนะนำออก CAR / เกินติดต่อกัน 3 เดือน แนะนำออก PAR</div>
+        <div id="detectWrap"><div class="empty">กำลังตรวจสอบ…</div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-new">
+      <div class="card">
+        <h2>สร้าง CAR/PAR ใหม่ (กรอกเอง)</h2>
+        <div class="sub">ใช้สำหรับกรณีอื่นที่ไม่ได้มาจากระบบ KPI เช่น วัตถุดิบไม่ผ่านเกณฑ์ ลูกค้าคืนของ ฯลฯ</div>
+        <div id="newFormWrap"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-detail">
+      <div id="detailWrap"></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+'use strict';
+
+var SYSTEM_KEY = 'car';
+var DB_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PATHS = {
+  records: DB_URL + '/car/records',
+  counters: DB_URL + '/car/counters',
+  metrics: DB_URL + '/kpi/metrics',
+  entries: DB_URL + '/kpi/entries'
+};
+
+var session = null;
+var allRecords = {};
+var currentDetailId = null;
+
+var SOURCE_LABELS = {
+  rawMaterial: 'วัตถุดิบ/ชิ้นงานรับเข้าไม่ผ่านเกณฑ์',
+  wasteProduction: 'ของเสียระหว่างผลิต',
+  customerReturn: 'ลูกค้าคืนของ',
+  qualityExceedTarget: 'ปัญหาคุณภาพเกินเป้า'
+};
+var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+function $(id){ return document.getElementById(id); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2600); }
+function fbGet(url){ return fetch(url+'.json',{cache:'no-store'}).then(function(r){return r.json();}); }
+function fbPut(url,data){ return fetch(url+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function fbPatch(url,data){ return fetch(url+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function fbPost(url,data){ return fetch(url+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){return r.json();}); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function pad3(n){ return String(n).padStart(3,'0'); }
+function todayBE(){ var d=new Date(); return {d:d.getDate(), m:d.getMonth()+1, y:d.getFullYear()+543}; }
+function round2(n){ return Math.round(n*100)/100; }
+
+/* ══════════════ session / login ══════════════ */
+function loadSession(){ try{ var r=sessionStorage.getItem('car_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ sessionStorage.setItem('car_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('car_session'); }
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok){
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg; return;
+    }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function canEdit(){ return session && (session.role==='admin' || session.role==='operator'); }
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = session.user.name || session.pin;
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  document.querySelectorAll('.tabbtn[data-tab="new"]').forEach(function(b){ b.style.display = canEdit() ? '' : 'none'; });
+  switchTab('list');
+}
+function switchTab(tab){
+  document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+tab); });
+  if (tab==='list') refreshList();
+  if (tab==='detect') refreshDetect();
+  if (tab==='new') renderNewForm();
+}
+
+/* ══════════════ เลขที่เอกสาร (รันใหม่ทุกปี) ══════════════ */
+function nextDocNumber(type, issueMonth, issueYearBE){
+  var path = PATHS.counters + '/' + issueYearBE;
+  return fbGet(path).then(function(c){
+    c = c || {car:0, par:0};
+    var key = type === 'PAR' ? 'par' : 'car';
+    var n = (c[key]||0) + 1;
+    var patch = {}; patch[key] = n;
+    return fbPatch(path, patch).then(function(){
+      return pad3(n) + '-' + pad2(issueMonth) + '-' + String(issueYearBE).slice(-2);
+    });
+  });
+}
+
+/* ══════════════ รายการ CAR/PAR ══════════════ */
+function refreshList(){
+  fbGet(PATHS.records).then(function(recs){
+    allRecords = recs || {};
+    renderList();
+  });
+}
+function renderList(){
+  var ids = Object.keys(allRecords).sort(function(a,b){ return (allRecords[b].createdAt||'').localeCompare(allRecords[a].createdAt||''); });
+  if (!ids.length){ $('listWrap').innerHTML = '<div class="empty">ยังไม่มี CAR/PAR ในระบบ</div>'; return; }
+  var rows = ids.map(function(id){
+    var r = allRecords[id];
+    var typeBadge = '<span class="badge '+(r.type==='PAR'?'badge-par':'badge-car')+'">'+r.type+'</span>';
+    var statusBadge = '<span class="badge '+(r.status==='closed'?'badge-closed':'badge-open')+'">'+(r.status==='closed'?'ปิดแล้ว':'เปิดอยู่')+'</span>';
+    var srcList = Object.keys(SOURCE_LABELS).filter(function(k){ return r.source && r.source[k]; }).map(function(k){ return SOURCE_LABELS[k]; });
+    if (r.source && r.source.other && r.source.otherText) srcList.push(r.source.otherText);
+    return '<tr data-open="'+id+'" style="cursor:pointer;">' +
+      '<td class="mono">'+escapeHtml(r.docNo||'—')+'</td>' +
+      '<td>'+typeBadge+'</td>' +
+      '<td>'+escapeHtml((srcList[0]||'—') + (srcList.length>1 ? ' +'+(srcList.length-1) : ''))+'</td>' +
+      '<td>'+escapeHtml(r.reportedDate||'—')+'</td>' +
+      '<td>'+statusBadge+'</td>' +
+    '</tr>';
+  }).join('');
+  $('listWrap').innerHTML = '<table><thead><tr><th>เลขที่</th><th>ประเภท</th><th>แหล่งที่มา</th><th>วันที่แจ้ง</th><th>สถานะ</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  $('listWrap').querySelectorAll('[data-open]').forEach(function(tr){
+    tr.addEventListener('click', function(){ openDetail(tr.getAttribute('data-open')); });
+  });
+}
+
+/* ══════════════ ตรวจพบอัตโนมัติจาก KPI ══════════════ */
+function computeValue(metric, entry){
+  if (!entry) return null;
+  if (metric.type === 'ratio'){
+    if (entry.denominator==null || entry.denominator===''|| Number(entry.denominator)===0) return null;
+    if (entry.numerator==null || entry.numerator==='') return null;
+    return (Number(entry.numerator)/Number(entry.denominator))*100;
+  }
+  if (entry.value==null || entry.value==='') return null;
+  return Number(entry.value);
+}
+function isExceeded(metric, v){
+  if (v==null) return null;
+  return metric.direction==='lower' ? (v > metric.target) : (v < metric.target);
+}
+function lastNMonthKeys(n){
+  var arr=[], d=new Date(); d.setDate(1);
+  for (var i=0;i<n;i++){ arr.unshift(d.getFullYear()+'-'+pad2(d.getMonth()+1)); d.setMonth(d.getMonth()-1); }
+  return arr;
+}
+function refreshDetect(){
+  $('detectWrap').innerHTML = '<div class="empty">กำลังตรวจสอบ…</div>';
+  Promise.all([fbGet(PATHS.metrics), fbGet(PATHS.entries), fbGet(PATHS.records)]).then(function(res){
+    var metrics = res[0] || {}; var entries = res[1] || {}; var records = res[2] || {};
+    var target = Object.keys(metrics).filter(function(id){
+      var m = metrics[id];
+      return m.dept==='PR' && m.type==='ratio' && (m.name||'').indexOf('ของเสีย') !== -1;
+    })[0];
+    if (!target){ $('detectWrap').innerHTML = '<div class="empty">ไม่พบตัวชี้วัด "ปริมาณของเสีย…" ในระบบ KPI</div>'; return; }
+    var metric = metrics[target];
+    var months = lastNMonthKeys(12);
+    var results = months.map(function(mk){
+      var e = (entries[mk]||{})[target];
+      var v = computeValue(metric, e);
+      return { mk:mk, v:v, exceeded: isExceeded(metric, v) };
+    });
+    var withData = results.filter(function(r){ return r.v!=null; });
+    if (!withData.length){ $('detectWrap').innerHTML = '<div class="empty">ยังไม่มีข้อมูล KPI ให้ตรวจสอบ</div>'; return; }
+    var latest = withData[withData.length-1];
+    if (!latest.exceeded){
+      $('detectWrap').innerHTML = '<div class="empty">✅ เดือนล่าสุด ('+monthLabel(latest.mk)+') อยู่ในเป้าหมาย ไม่มีข้อเสนอ CAR/PAR</div>';
+      return;
+    }
+    var idx = results.indexOf(latest);
+    var streak = 0;
+    for (var i=idx; i>=0; i--){ if (results[i].exceeded){ streak++; } else break; }
+    var suggestType = streak >= 3 ? 'PAR' : 'CAR';
+    var already = Object.keys(records).filter(function(id){
+      var r = records[id];
+      return r.kpiMetricId===target && r.kpiMonth===latest.mk;
+    });
+    var html = '<div class="suggest-card'+(suggestType==='PAR'?' par':'')+'">' +
+      '<h3>'+escapeHtml(metric.name)+' — เดือน '+monthLabel(latest.mk)+'</h3>' +
+      '<div class="meta">ค่าจริง '+round2(latest.v)+'% (เป้าหมาย '+(metric.direction==='lower'?'≤':'≥')+' '+metric.target+'%) · เกินเป้าติดต่อกัน '+streak+' เดือน</div>' +
+      (already.length
+        ? '<div class="meta" style="color:var(--green); font-weight:700;">✓ ออกเอกสารแล้ว: '+escapeHtml(records[already[0]].docNo||'')+'</div>'
+        : '<button class="btn btn-primary btn-sm" id="issueSuggestBtn">📄 ออก '+suggestType+' สำหรับเดือนนี้</button>') +
+    '</div>';
+    $('detectWrap').innerHTML = html;
+    if (!already.length && $('issueSuggestBtn')){
+      $('issueSuggestBtn').addEventListener('click', function(){
+        createFromKpi(suggestType, metric, target, latest, streak);
+      });
+    }
+  });
+}
+function monthLabel(mk){ var p=mk.split('-'); return MONTH_NAMES[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543); }
+
+function createFromKpi(type, metric, metricId, latest, streak){
+  var bt = todayBE();
+  var draft = blankRecord(type);
+  draft.source.other = true;
+  draft.source.otherText = 'KPI เกินเป้าหมาย';
+  draft.kpiTriggered = true;
+  draft.kpiMetricId = metricId;
+  draft.kpiMonth = latest.mk;
+  draft.abnormalCondition = 'ผลติดตามตัวชี้วัด KPI "'+metric.name+'" (แผนก '+metric.dept+') เดือน'+monthLabel(latest.mk)+' พบค่าจริง '+round2(latest.v)+'% สูงกว่าเป้าหมาย ('+(metric.direction==='lower'?'≤':'≥')+' '+metric.target+'%) '+(streak>=3 ? 'ติดต่อกัน '+streak+' เดือน จึงออกเป็น PAR ตามเงื่อนไขบริษัท' : '');
+  draft.reportedBy = 'ระบบติดตาม KPI อัตโนมัติ / แผนก '+metric.dept;
+  draft.reportedDate = bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2);
+  openDetail(null, draft);
+  switchTab('detail');
+}
+
+/* ══════════════ โครงสร้างข้อมูลเปล่า ══════════════ */
+function blankRecord(type){
+  var bt = todayBE();
+  return {
+    type: type || 'CAR',
+    docNo: '',
+    source: {rawMaterial:false, wasteProduction:false, customerReturn:false, qualityExceedTarget:false, other:false, otherText:''},
+    kpiTriggered: false, kpiMetricId:null, kpiMonth:null,
+    abnormalCondition: '',
+    initialAction: {approach:'', method:'', responsible:'', startDate:''},
+    team: ['','','','','',''],
+    rootCause: [{cause:'', solution:'', responsible:'', dueDate:''}],
+    docChange: {needed:false, items:['','']},
+    applyOther: {needed:false, items:['','']},
+    result: {actual:'', closed:null, followUpBy:'', followDate:'', newCarNo:'', newParNo:''},
+    status: 'open',
+    reportedBy: '', reportedDate: bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2),
+    createdAt: new Date().toISOString(), createdBy: session ? session.user.name : ''
+  };
+}
+
+/* ══════════════ สร้างใหม่ (มือ) ══════════════ */
+function renderNewForm(){
+  if (!canEdit()){ $('newFormWrap').innerHTML = '<div class="empty">คุณไม่มีสิทธิ์สร้างเอกสาร</div>'; return; }
+  $('newFormWrap').innerHTML = '<button class="btn btn-primary" id="startNewBtn">+ เริ่มกรอกเอกสารใหม่</button>';
+  $('startNewBtn').addEventListener('click', function(){
+    openDetail(null, blankRecord('CAR'));
+    switchTab('detail');
+  });
+}
+
+/* ══════════════ เปิดหน้ารายละเอียด / ฟอร์มกรอก ══════════════ */
+function openDetail(id, draftIfNew){
+  currentDetailId = id;
+  $('detailTabBtn').style.display = '';
+  var rec = id ? allRecords[id] : draftIfNew;
+  renderDetail(rec, id);
+}
+function renderDetail(rec, id){
+  var isNew = !id;
+  var editable = canEdit();
+  var srcChecks = Object.keys(SOURCE_LABELS).map(function(k){
+    return '<label class="chk-row"><input type="checkbox" data-src="'+k+'" '+(rec.source[k]?'checked':'')+' '+(editable?'':'disabled')+'> '+SOURCE_LABELS[k]+'</label>';
+  }).join('');
+  var otherRow = '<label class="chk-row"><input type="checkbox" id="srcOther" '+(rec.source.other?'checked':'')+' '+(editable?'':'disabled')+'> อื่น (ระบุ):</label>' +
+    '<input type="text" id="srcOtherText" value="'+escapeHtml(rec.source.otherText||'')+'" '+(editable?'':'disabled')+' style="margin-bottom:10px;">';
+
+  var teamInputs = rec.team.map(function(v,i){
+    return '<div class="field" style="min-width:150px;"><label>'+(i===0?'หัวหน้าทีม':'สมาชิก '+(i+1))+'</label><input type="text" data-team="'+i+'" value="'+escapeHtml(v)+'" '+(editable?'':'disabled')+'></div>';
+  }).join('');
+
+  var rcRows = rec.rootCause.map(function(rc,i){
+    return '<div class="subblock" data-rc="'+i+'">' +
+      '<div class="subblock-head"><h4>สาเหตุ #'+(i+1)+'</h4>'+(editable?'<span class="btn btn-danger btn-sm" data-rc-del="'+i+'">ลบ</span>':'')+'</div>' +
+      '<div class="row">' +
+        '<div class="field"><label>สาเหตุของปัญหา</label><textarea data-rc-field="cause" data-rc-i="'+i+'" '+(editable?'':'disabled')+'>'+escapeHtml(rc.cause)+'</textarea></div>' +
+        '<div class="field"><label>วิธีการแก้ปัญหา</label><textarea data-rc-field="solution" data-rc-i="'+i+'" '+(editable?'':'disabled')+'>'+escapeHtml(rc.solution)+'</textarea></div>' +
+      '</div>' +
+      '<div class="row">' +
+        '<div class="field"><label>ผู้รับผิดชอบ</label><input type="text" data-rc-field="responsible" data-rc-i="'+i+'" value="'+escapeHtml(rc.responsible)+'" '+(editable?'':'disabled')+'></div>' +
+        '<div class="field"><label>กำหนดเสร็จ</label><input type="text" placeholder="วว/ดด/ปป" data-rc-field="dueDate" data-rc-i="'+i+'" value="'+escapeHtml(rc.dueDate)+'" '+(editable?'':'disabled')+'></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  function itemsBlock(prefix, arr){
+    return arr.map(function(v,i){
+      return '<div class="row"><div class="field" style="flex:3;"><input type="text" data-'+prefix+'-item="'+i+'" value="'+escapeHtml(v)+'" '+(editable?'':'disabled')+' placeholder="รายการที่ '+(i+1)+'"></div></div>';
+    }).join('');
+  }
+
+  var html = '';
+  html += '<div class="card noprint">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+      '<h2>'+(isNew ? 'สร้างเอกสารใหม่' : escapeHtml(rec.docNo||'') + ' — ' + rec.type)+'</h2>' +
+      '<div style="display:flex; gap:8px;">' +
+        (editable ? '<button class="btn btn-ghost btn-sm" id="saveRecBtn">💾 บันทึก</button>' : '') +
+        (!isNew ? '<button class="btn btn-ghost btn-sm" id="printRecBtn">🖨️ พิมพ์</button>' : '') +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  html += '<div class="card noprint">' +
+    '<div class="row">' +
+      '<div class="field" style="max-width:160px;"><label>ประเภท</label><select id="fType" '+(editable?'':'disabled')+'><option value="CAR"'+(rec.type==='CAR'?' selected':'')+'>CAR</option><option value="PAR"'+(rec.type==='PAR'?' selected':'')+'>PAR</option></select></div>' +
+      '<div class="field" style="max-width:160px;"><label>เลขที่เอกสาร</label><input type="text" id="fDocNo" value="'+escapeHtml(rec.docNo||'(ออกเมื่อบันทึกครั้งแรก)')+'" disabled></div>' +
+      '<div class="field" style="max-width:200px;"><label>สถานะ</label><select id="fStatus" '+(editable?'':'disabled')+'><option value="open"'+(rec.status==='open'?' selected':'')+'>เปิดอยู่</option><option value="closed"'+(rec.status==='closed'?' selected':'')+'>ปิดแล้ว</option></select></div>' +
+    '</div>' +
+    '<div class="field"><label>แหล่งที่มาของปัญหา</label>'+srcChecks+otherRow+'</div>' +
+    '<div class="field"><label>สภาพความผิดปกติ</label><textarea id="fAbnormal" '+(editable?'':'disabled')+'>'+escapeHtml(rec.abnormalCondition)+'</textarea></div>' +
+    '<div class="row">' +
+      '<div class="field"><label>ผู้แจ้งปัญหา/แผนก</label><input type="text" id="fReportedBy" value="'+escapeHtml(rec.reportedBy)+'" '+(editable?'':'disabled')+'></div>' +
+      '<div class="field" style="max-width:160px;"><label>วันที่แจ้ง (วว/ดด/ปป)</label><input type="text" id="fReportedDate" value="'+escapeHtml(rec.reportedDate)+'" '+(editable?'':'disabled')+'></div>' +
+    '</div>' +
+  '</div>';
+
+  html += '<div class="card noprint"><h2>มาตรการดำเนินการเบื้องต้น</h2>' +
+    '<div class="row">' +
+      '<div class="field"><label>แนวทาง</label><input type="text" id="fIaApproach" value="'+escapeHtml(rec.initialAction.approach)+'" '+(editable?'':'disabled')+'></div>' +
+      '<div class="field"><label>วิธีการแก้ปัญหา</label><input type="text" id="fIaMethod" value="'+escapeHtml(rec.initialAction.method)+'" '+(editable?'':'disabled')+'></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field"><label>ผู้รับผิดชอบ</label><input type="text" id="fIaResp" value="'+escapeHtml(rec.initialAction.responsible)+'" '+(editable?'':'disabled')+'></div>' +
+      '<div class="field" style="max-width:160px;"><label>วันที่เริ่มดำเนินการ</label><input type="text" id="fIaStart" value="'+escapeHtml(rec.initialAction.startDate)+'" '+(editable?'':'disabled')+'></div>' +
+    '</div>' +
+  '</div>';
+
+  html += '<div class="card noprint"><h2>ทีมงานในการวิเคราะห์ปัญหา</h2><div class="row">'+teamInputs+'</div></div>';
+
+  html += '<div class="card noprint"><h2>สาเหตุของปัญหา / วิธีการแก้ปัญหา</h2>' + rcRows +
+    (editable ? '<button class="btn btn-ghost btn-sm" id="addRcBtn">+ เพิ่มสาเหตุ</button>' : '') +
+  '</div>';
+
+  html += '<div class="card noprint"><h2>การปรับเปลี่ยนเอกสารที่เกี่ยวข้อง</h2>' +
+    '<label class="chk-row"><input type="radio" name="docChangeNeeded" id="dcNo" '+(!rec.docChange.needed?'checked':'')+' '+(editable?'':'disabled')+'> ไม่ต้องปรับเปลี่ยนเอกสาร</label>' +
+    '<label class="chk-row"><input type="radio" name="docChangeNeeded" id="dcYes" '+(rec.docChange.needed?'checked':'')+' '+(editable?'':'disabled')+'> ต้องปรับเปลี่ยนเอกสาร</label>' +
+    itemsBlock('dc', rec.docChange.items) +
+  '</div>';
+
+  html += '<div class="card noprint"><h2>การประยุกต์ใช้กับกระบวนการ/ผลิตภัณฑ์อื่นที่คล้ายคลึงกัน</h2>' +
+    '<label class="chk-row"><input type="radio" name="applyOtherNeeded" id="aoNo" '+(!rec.applyOther.needed?'checked':'')+' '+(editable?'':'disabled')+'> ไม่จำเป็นต้องนำไปประยุกต์ใช้</label>' +
+    '<label class="chk-row"><input type="radio" name="applyOtherNeeded" id="aoYes" '+(rec.applyOther.needed?'checked':'')+' '+(editable?'':'disabled')+'> จำเป็นต้องนำไปประยุกต์ใช้</label>' +
+    itemsBlock('ao', rec.applyOther.items) +
+  '</div>';
+
+  html += '<div class="card noprint"><h2>การบันทึกผลของการปฏิบัติการแก้ไข/ป้องกัน</h2>' +
+    '<div class="field"><label>บันทึกผลจากการปฏิบัติจริง</label><textarea id="fResultActual" '+(editable?'':'disabled')+'>'+escapeHtml(rec.result.actual)+'</textarea></div>' +
+    '<label class="chk-row"><input type="radio" name="resultClosed" id="rcClose" '+(rec.result.closed===true?'checked':'')+' '+(editable?'':'disabled')+'> สามารถปิดปัญหาได้</label>' +
+    '<label class="chk-row"><input type="radio" name="resultClosed" id="rcNotClose" '+(rec.result.closed===false?'checked':'')+' '+(editable?'':'disabled')+'> ไม่สามารถปิดปัญหาได้</label>' +
+    '<div class="row">' +
+      '<div class="field"><label>ผู้ติดตามผล</label><input type="text" id="fFollowBy" value="'+escapeHtml(rec.result.followUpBy)+'" '+(editable?'':'disabled')+'></div>' +
+      '<div class="field" style="max-width:160px;"><label>วันที่ติดตาม</label><input type="text" id="fFollowDate" value="'+escapeHtml(rec.result.followDate)+'" '+(editable?'':'disabled')+'></div>' +
+    '</div>' +
+    '<div class="row">' +
+      '<div class="field"><label>New CAR No.</label><input type="text" id="fNewCar" value="'+escapeHtml(rec.result.newCarNo)+'" '+(editable?'':'disabled')+'></div>' +
+      '<div class="field"><label>New PAR No.</label><input type="text" id="fNewPar" value="'+escapeHtml(rec.result.newParNo)+'" '+(editable?'':'disabled')+'></div>' +
+    '</div>' +
+  '</div>';
+
+  html += printSheetHtml(rec);
+
+  $('detailWrap').innerHTML = html;
+  wireDetailEvents(rec, id);
+}
+
+function printSheetHtml(rec){
+  function chk(b){ return b ? '☑' : '☐'; }
+  var srcLine = Object.keys(SOURCE_LABELS).map(function(k){ return chk(rec.source[k])+' '+SOURCE_LABELS[k]; }).join('　　');
+  var teamLine = rec.team.map(function(v,i){ return (i+1)+'. '+escapeHtml(v||'…………………')+(i===0?' (หัวหน้าทีม)':''); }).join('　');
+  var rcRowsHtml = rec.rootCause.map(function(rc){
+    return '<tr><td>'+escapeHtml(rc.cause||'')+'</td><td>'+escapeHtml(rc.solution||'')+'</td><td>'+escapeHtml(rc.responsible||'')+' / '+escapeHtml(rc.dueDate||'')+'</td></tr>';
+  }).join('');
+  var dcItems = rec.docChange.items.filter(Boolean).map(function(v,i){ return (i+1)+') '+escapeHtml(v); }).join('<br>');
+  var aoItems = rec.applyOther.items.filter(Boolean).map(function(v,i){ return (i+1)+') '+escapeHtml(v); }).join('<br>');
+  return '<div class="printsheet">' +
+    '<div class="phead"><div><h2>ใบรายงานการแก้ไขและป้องกัน</h2><div class="mono" style="font-size:11px;">APK-FR-MR-006 · Rev.00</div></div>' +
+      '<div class="mono" style="text-align:right;"><b>'+rec.type+' No.</b> '+escapeHtml(rec.docNo||'—')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">แหล่งที่มาของปัญหา</div><div class="pbody">'+srcLine+(rec.source.other?('　'+chk(true)+' อื่น: '+escapeHtml(rec.source.otherText||'')):'')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">สภาพความผิดปกติ</div><div class="pbody">'+escapeHtml(rec.abnormalCondition||'—').replace(/\n/g,'<br>')+'<br><br>ผู้แจ้ง: '+escapeHtml(rec.reportedBy||'—')+' &nbsp; วันที่แจ้ง: '+escapeHtml(rec.reportedDate||'—')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">มาตรการดำเนินการเบื้องต้น</div><div class="pbody">แนวทาง: '+escapeHtml(rec.initialAction.approach||'—')+'<br>วิธีการแก้ปัญหา: '+escapeHtml(rec.initialAction.method||'—')+'<br>ผู้รับผิดชอบ: '+escapeHtml(rec.initialAction.responsible||'—')+' &nbsp; วันที่เริ่ม: '+escapeHtml(rec.initialAction.startDate||'—')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">ทีมงานในการวิเคราะห์ปัญหา</div><div class="pbody">'+teamLine+'</div></div>' +
+    '<div class="psection"><div class="ptitle">สาเหตุของปัญหา / วิธีการแก้ปัญหา</div><div class="pbody">' +
+      (rcRowsHtml ? '<table class="ptable"><thead><tr><th>สาเหตุ</th><th>วิธีการแก้ปัญหา</th><th>ผู้รับผิดชอบ/กำหนดเสร็จ</th></tr></thead><tbody>'+rcRowsHtml+'</tbody></table>' : '—') +
+    '</div></div>' +
+    '<div class="psection"><div class="ptitle">การปรับเปลี่ยนเอกสารที่เกี่ยวข้อง</div><div class="pbody">'+chk(!rec.docChange.needed)+' ไม่ต้องปรับเปลี่ยนเอกสาร　'+chk(rec.docChange.needed)+' ต้องปรับเปลี่ยนเอกสาร<br>'+(dcItems||'')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">การประยุกต์ใช้กับกระบวนการ/ผลิตภัณฑ์อื่นที่คล้ายคลึงกัน</div><div class="pbody">'+chk(!rec.applyOther.needed)+' ไม่จำเป็นต้องนำไปประยุกต์ใช้　'+chk(rec.applyOther.needed)+' จำเป็นต้องนำไปประยุกต์ใช้<br>'+(aoItems||'')+'</div></div>' +
+    '<div class="psection"><div class="ptitle">การบันทึกผลของการปฏิบัติการแก้ไข/ป้องกัน</div><div class="pbody">' +
+      escapeHtml(rec.result.actual||'—') + '<br><br>' +
+      chk(rec.result.closed===true)+' สามารถปิดปัญหาได้　'+chk(rec.result.closed===false)+' ไม่สามารถปิดปัญหาได้<br>' +
+      'ผู้ติดตามผล: '+escapeHtml(rec.result.followUpBy||'—')+' &nbsp; วันที่ติดตาม: '+escapeHtml(rec.result.followDate||'—')+'<br>' +
+      'New CAR No.: '+escapeHtml(rec.result.newCarNo||'—')+' &nbsp; New PAR No.: '+escapeHtml(rec.result.newParNo||'—') +
+    '</div></div>' +
+    '<div style="font-size:9.5px; color:var(--text-muted); margin-top:6px; display:flex; justify-content:space-between;"><span>APK-FR-MR-006</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>' +
+  '</div>';
+}
+
+function wireDetailEvents(rec, id){
+  if ($('printRecBtn')) $('printRecBtn').addEventListener('click', function(){ window.print(); });
+  if (!canEdit()) return;
+
+  document.querySelectorAll('[data-src]').forEach(function(cb){
+    cb.addEventListener('change', function(){ rec.source[cb.getAttribute('data-src')] = cb.checked; });
+  });
+  if ($('srcOther')) $('srcOther').addEventListener('change', function(){ rec.source.other = this.checked; });
+  if ($('srcOtherText')) $('srcOtherText').addEventListener('input', function(){ rec.source.otherText = this.value; });
+
+  document.querySelectorAll('[data-team]').forEach(function(inp){
+    inp.addEventListener('input', function(){ rec.team[parseInt(inp.getAttribute('data-team'),10)] = inp.value; });
+  });
+
+  document.querySelectorAll('[data-rc-field]').forEach(function(el){
+    el.addEventListener('input', function(){
+      var i = parseInt(el.getAttribute('data-rc-i'),10), f = el.getAttribute('data-rc-field');
+      rec.rootCause[i][f] = el.value;
+    });
+  });
+  document.querySelectorAll('[data-rc-del]').forEach(function(el){
+    el.addEventListener('click', function(){
+      rec.rootCause.splice(parseInt(el.getAttribute('data-rc-del'),10),1);
+      renderDetail(rec, id);
+    });
+  });
+  if ($('addRcBtn')) $('addRcBtn').addEventListener('click', function(){
+    rec.rootCause.push({cause:'',solution:'',responsible:'',dueDate:''});
+    renderDetail(rec, id);
+  });
+
+  if ($('dcYes')) $('dcYes').addEventListener('change', function(){ rec.docChange.needed = true; });
+  if ($('dcNo')) $('dcNo').addEventListener('change', function(){ rec.docChange.needed = false; });
+  document.querySelectorAll('[data-dc-item]').forEach(function(el){
+    el.addEventListener('input', function(){ rec.docChange.items[parseInt(el.getAttribute('data-dc-item'),10)] = el.value; });
+  });
+  if ($('aoYes')) $('aoYes').addEventListener('change', function(){ rec.applyOther.needed = true; });
+  if ($('aoNo')) $('aoNo').addEventListener('change', function(){ rec.applyOther.needed = false; });
+  document.querySelectorAll('[data-ao-item]').forEach(function(el){
+    el.addEventListener('input', function(){ rec.applyOther.items[parseInt(el.getAttribute('data-ao-item'),10)] = el.value; });
+  });
+
+  ['fAbnormal','fReportedBy','fReportedDate','fIaApproach','fIaMethod','fIaResp','fIaStart','fFollowBy','fFollowDate','fNewCar','fNewPar','fResultActual'].forEach(function(fid){
+    var el = $(fid); if (!el) return;
+    var map = {fAbnormal:'abnormalCondition', fReportedBy:'reportedBy', fReportedDate:'reportedDate'};
+    el.addEventListener('input', function(){
+      if (map[fid]) rec[map[fid]] = el.value;
+      else if (fid==='fIaApproach') rec.initialAction.approach = el.value;
+      else if (fid==='fIaMethod') rec.initialAction.method = el.value;
+      else if (fid==='fIaResp') rec.initialAction.responsible = el.value;
+      else if (fid==='fIaStart') rec.initialAction.startDate = el.value;
+      else if (fid==='fFollowBy') rec.result.followUpBy = el.value;
+      else if (fid==='fFollowDate') rec.result.followDate = el.value;
+      else if (fid==='fNewCar') rec.result.newCarNo = el.value;
+      else if (fid==='fNewPar') rec.result.newParNo = el.value;
+      else if (fid==='fResultActual') rec.result.actual = el.value;
+    });
+  });
+  if ($('rcClose')) $('rcClose').addEventListener('change', function(){ rec.result.closed = true; });
+  if ($('rcNotClose')) $('rcNotClose').addEventListener('change', function(){ rec.result.closed = false; });
+  if ($('fType')) $('fType').addEventListener('change', function(){ rec.type = this.value; });
+  if ($('fStatus')) $('fStatus').addEventListener('change', function(){ rec.status = this.value; });
+
+  if ($('saveRecBtn')) $('saveRecBtn').addEventListener('click', function(){ saveRecord(rec, id); });
+}
+
+function saveRecord(rec, id){
+  var btn = $('saveRecBtn'); btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+  var finish = function(newId){
+    toast('บันทึกแล้ว');
+    currentDetailId = newId;
+    refreshList();
+    renderDetail(rec, newId);
+    btn.disabled = false; btn.textContent = '💾 บันทึก';
+  };
+  if (!id && !rec.docNo){
+    var bt = todayBE();
+    nextDocNumber(rec.type, bt.m, bt.y).then(function(docNo){
+      rec.docNo = docNo;
+      return fbPost(PATHS.records, rec);
+    }).then(function(res){
+      finish(res.name);
+    });
+  } else {
+    fbPut(PATHS.records + '/' + id, rec).then(function(){ finish(id); });
+  }
+}
+
+/* ══════════════ wiring หลัก ══════════════ */
+document.addEventListener('DOMContentLoaded', function(){
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+  document.querySelectorAll('.tabbtn').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+  session = loadSession();
+  if (session){ enterApp(); }
+});
+</script>
+</body>
+</html>
