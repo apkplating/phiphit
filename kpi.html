@@ -455,12 +455,18 @@ function renderDashboard(){
       '<div class="mvalue">'+(curVal==null?'—':(Math.round(curVal*100)/100))+' <span class="munit">'+escapeHtml(m.unit||'')+'</span></div>' +
       rawLine +
       '<div class="bars">'+bars+'</div>' +
-      '<div class="mfoot"><span class="hint" style="margin:0;">6 เดือนล่าสุด</span><button class="btn btn-ghost btn-sm" data-trend="'+id+'">ดูย้อนหลัง</button></div>' +
+      '<div class="mfoot"><span class="hint" style="margin:0;">6 เดือนล่าสุด</span><div style="display:flex; gap:6px;">' +
+        (isPolicyReportMetric(m) ? '<a class="btn btn-ghost btn-sm" href="policy_report.html?metric='+id+'" style="text-decoration:none;">📋 ฟอร์ม</a>' : '') +
+        '<button class="btn btn-ghost btn-sm" data-trend="'+id+'">ดูย้อนหลัง</button>' +
+      '</div></div>' +
     '</div>';
   }).join('') + '</div>';
   wrap.querySelectorAll('[data-trend]').forEach(function(btn){
     btn.addEventListener('click', function(){ openTrendModal(btn.getAttribute('data-trend')); });
   });
+}
+function isPolicyReportMetric(m){
+  return m.dept === 'PR' && m.type === 'ratio' && (m.name||'').indexOf('ของเสีย') !== -1;
 }
 function openTrendModal(metricId){
   var m = allMetrics[metricId];

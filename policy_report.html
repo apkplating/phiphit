@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Policy Action Plan — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#0f2044; --navy-2:#16305e; --blue2:#3b82f6;
+  --steel-1:#cbd5e1; --steel-2:#94a3b8; --steel-3:#f8fafc;
+  --bg:#eef2f7; --card:#fff; --border:#e2e8f0;
+  --text:#0f172a; --text-mid:#475569; --text-muted:#94a3b8;
+  --green:#16a34a; --red:#dc2626; --amber:#d97706;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif; background:var(--bg); color:var(--text); min-height:100vh;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+header{background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+header h1{font-size:15px; font-weight:700;}
+header p{font-size:10.5px; color:#b9c4de;}
+.back-link{font-size:11px; color:#b9c4de; text-decoration:none;}
+.hdr-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+
+#loginScreen{position:fixed; inset:0; background:linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;}
+.login-box{background:#fff; border-radius:16px; padding:32px 28px; width:100%; max-width:340px; text-align:center;}
+.login-box h1{font-size:16px; font-weight:700; color:var(--navy); margin-bottom:2px;}
+.login-box p{font-size:11.5px; color:var(--text-mid); margin-bottom:20px;}
+.login-box input{width:100%; text-align:center; letter-spacing:6px; font-size:20px; font-family:'IBM Plex Mono',monospace; border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px;}
+.login-err{color:var(--red); font-size:11.5px; margin-top:10px; min-height:14px;}
+
+.btn{border:none; border-radius:9px; padding:9px 16px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
+.btn-primary{background:var(--navy); color:#fff;}
+.btn-primary:hover{background:var(--navy-2);}
+.btn-ghost{background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.3);}
+.btn-ghost:hover{background:rgba(255,255,255,.2);}
+.btn-light{background:#fff; color:var(--navy); border:1px solid var(--steel-1);}
+.btn-light:hover{background:var(--steel-3);}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+select.yearsel{padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.12); color:#fff; font-family:inherit; font-size:12.5px;}
+select.yearsel option{color:#000;}
+
+main{max-width:1300px; margin:0 auto; padding:20px 16px 60px;}
+.loading{text-align:center; color:var(--text-muted); padding:60px 20px; font-size:13px;}
+
+.sheet{background:#fff; border:1px solid var(--border); border-radius:4px; padding:22px; font-size:11.5px;}
+.sheet-head{display:grid; grid-template-columns:120px 1fr 200px; gap:14px; align-items:center; border-bottom:2px solid var(--navy); padding-bottom:14px; margin-bottom:14px;}
+.sheet-head img{width:100%; max-width:100px;}
+.sheet-head .titleblock{text-align:center;}
+.sheet-head .titleblock h2{font-size:22px; font-weight:800; letter-spacing:2px; color:var(--navy);}
+.sheet-head .titleblock .yearline{font-size:12px; color:var(--text-mid); margin-top:4px; display:flex; align-items:center; justify-content:center; gap:6px;}
+.sigbox{border:1px solid var(--border); font-size:9.5px;}
+.sigbox table{width:100%; border-collapse:collapse;}
+.sigbox th, .sigbox td{border:1px solid var(--border); padding:4px 6px; text-align:center;}
+.sigbox th{background:var(--steel-3); font-weight:700;}
+.sigbox input{width:100%; border:none; text-align:center; font-family:inherit; font-size:10.5px; padding:2px;}
+
+.metabar{display:grid; grid-template-columns:80px 90px 1fr 130px 1fr; gap:10px; margin-bottom:14px; font-size:11px;}
+.metabar .mb{border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+.metabar .mb .lbl{background:var(--navy); color:#fff; font-weight:700; padding:5px 8px; font-size:9.5px;}
+.metabar .mb .val{padding:6px 8px;}
+.metabar .mb .val input{width:100%; border:none; font-family:inherit; font-size:11px; background:transparent;}
+
+.polgrid{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--border); margin-bottom:14px;}
+.polgrid .cell{padding:8px 10px; border-right:1px solid var(--border);}
+.polgrid .cell:last-child{border-right:none;}
+.polgrid .cell h4{font-size:10px; text-align:center; font-weight:700; color:var(--navy); background:var(--steel-3); margin:-8px -10px 8px; padding:6px; border-bottom:1px solid var(--border);}
+.polgrid textarea{width:100%; border:none; font-family:inherit; font-size:11px; resize:vertical; min-height:44px; background:transparent;}
+
+.ganttwrap{border:1px solid var(--border); margin-bottom:14px; overflow-x:auto;}
+table.gantt{width:100%; border-collapse:collapse; font-size:10.5px; min-width:760px;}
+table.gantt th{background:var(--navy); color:#fff; padding:5px 4px; text-align:center; font-weight:700; font-size:9.5px;}
+table.gantt td{border:1px solid var(--border); padding:3px 4px; text-align:center;}
+table.gantt td.tasklabel{text-align:left; font-size:10.5px; min-width:220px;}
+table.gantt td.tasklabel textarea{width:100%; border:none; font-family:inherit; font-size:10.5px; resize:none; background:transparent;}
+table.gantt .mchk{width:16px; height:16px; cursor:pointer;}
+table.gantt .achbtn{cursor:pointer; font-size:14px; user-select:none;}
+table.gantt .rowno{width:22px; color:var(--text-muted);}
+.gantt-actions{padding:6px 8px; display:flex; justify-content:flex-end; gap:6px; background:var(--steel-3);}
+
+.chart-card{border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:14px;}
+.chart-card .chartwrap{position:relative; height:290px;}
+.legend-note{font-size:9.5px; color:var(--text-muted); text-align:center; margin-top:4px;}
+
+.datawrap{overflow-x:auto; margin-bottom:14px;}
+table.datatbl{width:100%; border-collapse:collapse; font-size:10.5px; min-width:900px;}
+table.datatbl th{background:var(--navy); color:#fff; padding:5px 4px; text-align:center; font-weight:700; font-size:9.5px;}
+table.datatbl td{border:1px solid var(--border); padding:5px 4px; text-align:center;}
+table.datatbl td.rowlabel{text-align:left; font-weight:700; background:var(--steel-3); min-width:150px;}
+table.datatbl td.totalcol{font-weight:700; background:#fef9c3;}
+table.datatbl .synced{color:var(--blue2); font-weight:700;}
+table.datatbl .manual{color:var(--text-mid);}
+table.datatbl .empty-cell{color:var(--steel-2);}
+
+.notewrap{overflow-x:auto;}
+table.notetbl{width:100%; border-collapse:collapse; font-size:10.5px; min-width:700px;}
+table.notetbl th{background:var(--navy); color:#fff; padding:5px 4px; font-size:9.5px;}
+table.notetbl td{border:1px solid var(--border); padding:4px 6px; vertical-align:top;}
+table.notetbl textarea{width:100%; border:none; font-family:inherit; font-size:10.5px; resize:vertical; min-height:30px; background:transparent;}
+table.notetbl .monthcell{font-weight:700; white-space:nowrap; background:var(--steel-3);}
+
+.sheet-foot{display:flex; justify-content:space-between; font-size:9.5px; color:var(--text-muted); margin-top:10px; border-top:1px solid var(--border); padding-top:8px;}
+
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--navy); color:#fff; padding:11px 20px; border-radius:9px; font-size:12.5px; z-index:80; opacity:0; transition:opacity .2s; pointer-events:none;}
+.toast.show{opacity:1;}
+
+.synclog{font-size:9.5px; color:var(--text-muted); margin-top:6px;}
+
+@media print{
+  body{background:#fff;}
+  header, .noprint{display:none !important;}
+  main{max-width:none; padding:0;}
+  .sheet{border:none; padding:0;}
+  @page{ size: A4 landscape; margin:10mm; }
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>📋 Policy Action Plan</h1>
+    <p>APK Plating — ใส่ PIN เพื่อเข้าใช้งาน (สิทธิ์เดียวกับระบบ KPI)</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="noprint">
+    <div>
+      <h1>📋 Policy Action Plan</h1>
+      <p id="hdrMetricName">กำลังโหลด…</p>
+    </div>
+    <div class="hdr-actions">
+      <a href="kpi.html" class="back-link">← กลับ KPI</a>
+      <select class="yearsel" id="yearSelect"></select>
+      <button class="btn btn-ghost btn-sm" id="syncBtn">🔄 ดึงข้อมูลจาก B1/B2/R1</button>
+      <button class="btn btn-ghost btn-sm" id="printBtn">🖨️ พิมพ์ / PDF</button>
+      <button class="btn-logout btn btn-ghost" id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="sheetArea"><div class="loading">กำลังโหลดข้อมูล…</div></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+'use strict';
+
+var SYSTEM_KEY = 'kpi';
+var DB_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var PATHS = {
+  metrics: DB_URL + '/kpi/metrics',
+  entries: DB_URL + '/kpi/entries',
+  report:  DB_URL + '/kpi/policyReport'
+};
+var FB = {
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app'
+};
+var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
+
+var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+var DEFAULT_HIST = {2018:15.32, 2019:10.00, 2020:6.15, 2021:4.31, 2022:4.76, 2023:4.41, 2024:4.31};
+var DEFAULT_TASKS = [
+  {label:'กำหนดความถี่ของสุ่มตรวจสอบเรื่องความหนาทุกๆ 1 ชม.', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'full'},
+  {label:'กำหนดความถี่ของการวิเคราะห์ความเข้มข้นของเคมีทุกๆ 4 ชม.', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'full'},
+  {label:'สร้างจิตสำนึกของพนักงานผลิตเรื่อง ไม่รับ-ไม่ทำ-ไม่ส่งของเสียไปยังกระบวนการถัดไป', months:[1,1,1,1,1,1,1,1,1,1,1,1], ach:'partial'}
+];
+var ACH_CYCLE = {none:'partial', partial:'full', full:'none'};
+var ACH_ICON  = {none:'○', partial:'⊕', full:'●'};
+
+var session = null;
+var metricId = null;
+var metric = null;
+var report = {};
+var entries = {};
+var selectedYear = new Date().getFullYear();
+var chartRef = null;
+
+function $(id){ return document.getElementById(id); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2600); }
+function fbGet(url){ return fetch(url+'.json',{cache:'no-store'}).then(function(r){return r.json();}); }
+function fbPut(url,data){ return fetch(url+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function fbPatch(url,data){ return fetch(url+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function round2(n){ return Math.round(n*100)/100; }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function qs(name){ var m = new RegExp('[?&]'+name+'=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
+
+/* ══════════════ session / login ══════════════ */
+function loadSession(){ try{ var r=sessionStorage.getItem('kpi_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ sessionStorage.setItem('kpi_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('kpi_session'); }
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok){
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg; return;
+    }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function isAdmin(){ return session && session.role === 'admin'; }
+function canEdit(){ return session && (session.role === 'admin' || session.role === 'operator'); }
+
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('syncBtn').style.display = isAdmin() ? '' : 'none';
+  init();
+}
+
+/* ══════════════ init: หา metric ══════════════ */
+function init(){
+  metricId = qs('metric');
+  fbGet(PATHS.metrics).then(function(all){
+    all = all || {};
+    if (metricId && all[metricId]) {
+      metric = all[metricId];
+    } else {
+      // fallback: หาแบบ PR + ratio + ชื่อมีคำว่า "ของเสีย"
+      var found = Object.keys(all).filter(function(id){
+        var m = all[id];
+        return m.dept === 'PR' && m.type === 'ratio' && (m.name||'').indexOf('ของเสีย') !== -1;
+      })[0];
+      if (found) { metricId = found; metric = all[found]; }
+    }
+    if (!metric) {
+      $('sheetArea').innerHTML = '<div class="loading">ไม่พบตัวชี้วัดสำหรับรายงานนี้ — กรุณาเปิดผ่านปุ่ม "📋 ฟอร์ม Policy Action Plan" จากหน้าแดชบอร์ด KPI (แผนก PR)</div>';
+      return;
+    }
+    $('hdrMetricName').textContent = metric.name + ' · แผนก ' + (metric.dept||'-');
+    buildYearSelect();
+    loadReportAndRender();
+  });
+}
+function buildYearSelect(){
+  var now = new Date().getFullYear();
+  var opts = [];
+  for (var y = now+1; y >= now-8; y--) opts.push('<option value="'+y+'"'+(y===selectedYear?' selected':'')+'>'+y+'</option>');
+  $('yearSelect').innerHTML = opts.join('');
+  $('yearSelect').addEventListener('change', function(){ selectedYear = parseInt(this.value,10); loadReportAndRender(); });
+}
+
+/* ══════════════ โหลดรายงาน + entries ══════════════ */
+function loadReportAndRender(){
+  $('sheetArea').innerHTML = '<div class="loading">กำลังโหลดข้อมูล…</div>';
+  Promise.all([ fbGet(PATHS.report + '/' + metricId), fbGet(PATHS.entries) ]).then(function(res){
+    report = res[0] || {};
+    entries = res[1] || {};
+    if (!report.tasks) report.tasks = DEFAULT_TASKS.map(function(t){ return Object.assign({}, t); });
+    if (!report.historicalYears) report.historicalYears = Object.assign({}, DEFAULT_HIST);
+    if (!report.policyText) report.policyText = 'ควบคุมคุณภาพชิ้นงานจากกระบวนการชุบ';
+    if (!report.planText) report.planText = 'ทบทวนความถี่ของการสุ่มตรวจสอบคุณภาพ';
+    if (!report.policyItemNo) report.policyItemNo = '1';
+    if (!report.signatures) report.signatures = {approve:'พิพิธ', review:'พิพิธ', prepare:'พิพิธ'};
+    if (!report.notes) report.notes = {};
+    renderSheet();
+  });
+}
+
+/* ══════════════ คำนวณข้อมูลรายเดือนจาก entries ══════════════ */
+function monthKey(y,m){ return y+'-'+pad2(m); }
+function monthEntry(y,m){ return (entries[monthKey(y,m)] || {})[metricId]; }
+function monthCalc(y,m){
+  var e = monthEntry(y,m);
+  if (!e || e.numerator == null || e.denominator == null || Number(e.denominator) === 0) return null;
+  var ngT = Number(e.numerator), prodT = Number(e.denominator);
+  return { prodT: prodT, ngT: ngT, ratio: (ngT/prodT)*100 };
+}
+function yearAvgRatio(y){
+  var sumN=0, sumD=0, any=false;
+  for (var m=1;m<=12;m++){ var c = monthCalc(y,m); if (c){ sumN+=c.ngT; sumD+=c.prodT; any=true; } }
+  return any && sumD>0 ? (sumN/sumD)*100 : null;
+}
+
+/* ══════════════ Render ทั้งชีต ══════════════ */
+function renderSheet(){
+  var target = metric.target;
+  var prevYearRatio = yearAvgRatio(selectedYear-1);
+  var targetMarkText = report.targetMarkText || (metric.name + ' <' + target + '% / เดือน');
+
+  var html = '';
+  html += '<div class="sheet">';
+
+  // head
+  html += '<div class="sheet-head">';
+  html += '<img src="logo.png" alt="logo">';
+  html += '<div class="titleblock"><h2>POLICY ACTION PLAN</h2>';
+  html += '<div class="yearline">Year : <input id="fYear" class="mono" style="width:60px; text-align:center; border:1px solid var(--border); border-radius:4px;" value="'+selectedYear+'" '+(canEdit()?'':'disabled')+'></div></div>';
+  html += '<div class="sigbox"><table><thead><tr><th>อนุมัติ</th><th>ตรวจสอบ</th><th>จัดทำ</th></tr></thead><tbody><tr>' +
+    '<td><input id="sigApprove" value="'+escapeHtml(report.signatures.approve)+'" '+(isAdmin()?'':'disabled')+'></td>' +
+    '<td><input id="sigReview" value="'+escapeHtml(report.signatures.review)+'" '+(isAdmin()?'':'disabled')+'></td>' +
+    '<td><input id="sigPrepare" value="'+escapeHtml(report.signatures.prepare)+'" '+(isAdmin()?'':'disabled')+'></td>' +
+    '</tr></tbody></table></div>';
+  html += '</div>';
+
+  // metabar
+  html += '<div class="metabar">';
+  html += '<div class="mb"><div class="lbl">แผนก</div><div class="val">'+escapeHtml(metric.dept||'-')+'</div></div>';
+  html += '<div class="mb"><div class="lbl">Policy Item</div><div class="val"><input id="fItemNo" value="'+escapeHtml(report.policyItemNo)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
+  html += '<div class="mb"><div class="lbl">Preview Result</div><div class="val">'+(selectedYear-1)+' '+escapeHtml(metric.name)+' '+(prevYearRatio==null?'—':round2(prevYearRatio)+'%')+'</div></div>';
+  html += '<div class="mb"><div class="lbl">Target Mark</div><div class="val" style="font-size:9.5px;"></div></div>';
+  html += '<div class="mb"><div class="lbl">&nbsp;</div><div class="val"><input id="fTargetMark" value="'+escapeHtml(targetMarkText)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
+  html += '</div>';
+
+  // policy / plan
+  html += '<div class="polgrid">';
+  html += '<div class="cell"><h4>Policy</h4><textarea id="fPolicy" '+(isAdmin()?'':'disabled')+'>'+escapeHtml(report.policyText)+'</textarea></div>';
+  html += '<div class="cell"><h4>Plan (Implementation)</h4><textarea id="fPlan" '+(isAdmin()?'':'disabled')+'>'+escapeHtml(report.planText)+'</textarea></div>';
+  html += '</div>';
+
+  // gantt
+  html += ganttHtml();
+
+  // chart
+  html += '<div class="chart-card"><div class="chartwrap"><canvas id="mainChart"></canvas></div>' +
+    '<div class="legend-note">แท่ง = ปริมาณการชุบ / ปริมาณงาน NG (ตัน) · เส้น = Target % / NG Ratio % ผลจริง — ข้อมูลปี '+selectedYear+' ที่มีเครื่องหมาย 🔗 ดึงจากระบบสายผลิตอัตโนมัติ</div></div>';
+
+  // data table
+  html += dataTableHtml();
+
+  // notes table (right side of original form, here shown below for width)
+  html += noteTableHtml();
+
+  html += '<div class="sheet-foot"><span>APK-FR-MR-001</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>';
+  html += '</div>';
+
+  $('sheetArea').innerHTML = html;
+  wireSheetEvents();
+  drawChart(prevYearRatio);
+}
+
+/* ══════════════ Gantt ══════════════ */
+function ganttHtml(){
+  var rows = report.tasks.map(function(t,i){
+    var cells = t.months.map(function(v,mi){
+      return '<td><input type="checkbox" class="mchk" data-task="'+i+'" data-m="'+mi+'" '+(v?'checked':'')+' '+(canEdit()?'':'disabled')+'></td>';
+    }).join('');
+    return '<tr>' +
+      '<td class="rowno">'+(i+1)+'</td>' +
+      '<td class="tasklabel"><textarea rows="1" data-task-label="'+i+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(t.label)+'</textarea></td>' +
+      cells +
+      '<td class="achbtn" data-task-ach="'+i+'" title="สถานะความสำเร็จ — คลิกเพื่อเปลี่ยน">'+ACH_ICON[t.ach||'none']+'</td>' +
+      (canEdit()?'<td><span class="achbtn" data-task-del="'+i+'" title="ลบแถวนี้">🗑️</span></td>':'') +
+    '</tr>';
+  }).join('');
+  var head = '<tr><th class="rowno">No.</th><th>What to do each month</th>' + MONTH_NAMES.map(function(mn){ return '<th>'+mn+'</th>'; }).join('') + '<th>Ach</th>' + (canEdit()?'<th></th>':'') + '</tr>';
+  var addRow = canEdit() ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="addTaskBtn">+ เพิ่มแถว</button><button class="btn btn-light btn-sm" id="saveGanttBtn">บันทึกตาราง</button></div>' : '';
+  return '<div class="ganttwrap"><table class="gantt"><thead>'+head+'</thead><tbody id="ganttBody">'+rows+'</tbody></table>'+addRow+'</div>';
+}
+
+/* ══════════════ ตารางข้อมูลรายเดือน ══════════════ */
+function dataTableHtml(){
+  var target = metric.target;
+  var rowsData = [];
+  var totalProd=0, totalNg=0, anyData=false;
+  for (var m=1;m<=12;m++){
+    var c = monthCalc(selectedYear, m);
+    var e = monthEntry(selectedYear, m);
+    var synced = e && e.source === 'auto-sync';
+    if (c){ totalProd+=c.prodT; totalNg+=c.ngT; anyData=true; }
+    rowsData.push({c:c, synced:synced});
+  }
+  var totalRatio = anyData && totalProd>0 ? (totalNg/totalProd)*100 : null;
+
+  function rowCells(getter){
+    return rowsData.map(function(r){ return '<td>'+getter(r)+'</td>'; }).join('') + '<td class="totalcol">'+getter({c: anyData?{prodT:totalProd, ngT:totalNg, ratio:totalRatio}:null, synced:false})+'</td>';
+  }
+  var targetRow = rowCells(function(){ return target+'%'; });
+  var prodRow = rowCells(function(r){ return r.c ? '<span class="'+(r.synced?'synced':'manual')+'">'+round2(r.c.prodT)+(r.synced?' 🔗':'')+'</span>' : '<span class="empty-cell">—</span>'; });
+  var ngRow = rowCells(function(r){ return r.c ? '<span class="'+(r.synced?'synced':'manual')+'">'+round2(r.c.ngT)+'</span>' : '<span class="empty-cell">—</span>'; });
+  var ratioRow = rowCells(function(r){
+    if (!r.c) return '<span class="empty-cell">—</span>';
+    var ok = r.c.ratio <= target;
+    return '<span style="color:'+(ok?'var(--green)':'var(--red)')+'; font-weight:700;">'+round2(r.c.ratio)+'%</span>';
+  });
+  var selfRow = rowCells(function(r){
+    if (!r.c) return '<span class="empty-cell">—</span>';
+    return r.c.ratio <= target ? '😊' : '☹️';
+  });
+
+  var headCells = MONTH_NAMES.map(function(mn){ return '<th>'+mn+'</th>'; }).join('') + '<th>Total</th>';
+
+  return '<div class="datawrap"><table class="datatbl">' +
+    '<thead><tr><th style="text-align:left;">รายการ</th>'+headCells+'</tr></thead>' +
+    '<tbody>' +
+      '<tr><td class="rowlabel">Target %</td>'+targetRow+'</tr>' +
+      '<tr><td class="rowlabel">'+escapeHtml(metric.denomLabel||'ปริมาณการชุบ (Tons)')+'</td>'+prodRow+'</tr>' +
+      '<tr><td class="rowlabel">'+escapeHtml(metric.numLabel||'ปริมาณงาน NG (Tons)')+'</td>'+ngRow+'</tr>' +
+      '<tr><td class="rowlabel">NG Ratio (%)</td>'+ratioRow+'</tr>' +
+      '<tr><td class="rowlabel">Self Evaluation</td>'+selfRow+'</tr>' +
+    '</tbody></table></div>';
+}
+
+/* ══════════════ ตาราง ปัญหา/หมายเหตุรายเดือน ══════════════ */
+function noteTableHtml(){
+  var rows = [];
+  for (var m=1;m<=12;m++){
+    var mk = monthKey(selectedYear,m);
+    var n = report.notes[mk] || {};
+    rows.push('<tr>' +
+      '<td class="monthcell">'+MONTH_NAMES[m-1]+' '+selectedYear+'</td>' +
+      '<td><textarea data-note-field="summary" data-note-month="'+mk+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(n.summary||'')+'</textarea></td>' +
+      '<td><textarea data-note-field="problem" data-note-month="'+mk+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(n.problem||'')+'</textarea></td>' +
+      '<td><input type="text" data-note-field="checkedBy" data-note-month="'+mk+'" value="'+escapeHtml(n.checkedBy||'')+'" '+(canEdit()?'':'disabled')+'></td>' +
+    '</tr>');
+  }
+  var save = canEdit() ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="saveNotesBtn">บันทึกตารางปัญหา/หมายเหตุ</button></div>' : '';
+  return '<div class="notewrap"><table class="notetbl">' +
+    '<thead><tr><th style="width:110px;">Month</th><th>Summary Of Problem</th><th>Problem &amp; Activity to be Solved Following Month</th><th style="width:100px;">Checked By (QMR)</th></tr></thead>' +
+    '<tbody>'+rows.join('')+'</tbody></table>'+save+'</div>';
+}
+
+/* ══════════════ กราฟ ══════════════ */
+function drawChart(prevYearRatio){
+  var histYears = Object.keys(report.historicalYears).sort();
+  var labels = histYears.concat(MONTH_NAMES);
+  var target = metric.target;
+
+  var prodBars = histYears.map(function(){ return null; });
+  var ngBars = histYears.map(function(){ return null; });
+  var ratioLine = histYears.map(function(y){ return report.historicalYears[y]; });
+  var targetLine = histYears.map(function(){ return target; });
+
+  for (var m=1;m<=12;m++){
+    var c = monthCalc(selectedYear, m);
+    prodBars.push(c ? round2(c.prodT) : null);
+    ngBars.push(c ? round2(c.ngT) : null);
+    ratioLine.push(c ? round2(c.ratio) : null);
+    targetLine.push(target);
+  }
+
+  if (chartRef) chartRef.destroy();
+  var ctx = document.getElementById('mainChart').getContext('2d');
+  chartRef = new Chart(ctx, {
+    data:{
+      labels: labels,
+      datasets:[
+        {type:'bar', label: metric.denomLabel||'ปริมาณการชุบ (Ton)', data:prodBars, backgroundColor:'#16a34a', yAxisID:'y', order:3},
+        {type:'bar', label: metric.numLabel||'ปริมาณงาน NG (Ton)', data:ngBars, backgroundColor:'#dc2626', yAxisID:'y', order:2},
+        {type:'line', label:'Target %', data:targetLine, borderColor:'#dc2626', borderDash:[4,3], pointRadius:0, yAxisID:'y1', order:0, tension:0},
+        {type:'line', label:'Result NG Ratio (%)', data:ratioLine, borderColor:'#1d4ed8', backgroundColor:'#1d4ed8', pointRadius:3, yAxisID:'y1', order:1, tension:.25}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y:{ position:'left', title:{display:true,text:'Ton'}, beginAtZero:true },
+        y1:{ position:'right', title:{display:true,text:'%'}, beginAtZero:true, max:20, grid:{drawOnChartArea:false} }
+      },
+      plugins:{ legend:{position:'bottom', labels:{boxWidth:12, font:{size:10}}} }
+    }
+  });
+}
+
+/* ══════════════ ผูก events ══════════════ */
+function wireSheetEvents(){
+  if (!isAdmin()) { document.querySelectorAll('#sigApprove,#sigReview,#sigPrepare').forEach(function(el){ el.disabled = true; }); }
+
+  document.querySelectorAll('#fYear,#fItemNo,#fTargetMark,#fPolicy,#fPlan').forEach(function(el){
+    if (el.disabled) return;
+    el.addEventListener('change', saveMetaFields);
+  });
+  ['sigApprove','sigReview','sigPrepare'].forEach(function(id){
+    var el = $(id); if (el && !el.disabled) el.addEventListener('change', saveMetaFields);
+  });
+
+  document.querySelectorAll('.mchk').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      var ti = parseInt(cb.getAttribute('data-task'),10), mi = parseInt(cb.getAttribute('data-m'),10);
+      report.tasks[ti].months[mi] = cb.checked ? 1 : 0;
+    });
+  });
+  document.querySelectorAll('[data-task-ach]').forEach(function(el){
+    el.addEventListener('click', function(){
+      if (!canEdit()) return;
+      var ti = parseInt(el.getAttribute('data-task-ach'),10);
+      var cur = report.tasks[ti].ach || 'none';
+      report.tasks[ti].ach = ACH_CYCLE[cur];
+      el.textContent = ACH_ICON[report.tasks[ti].ach];
+    });
+  });
+  document.querySelectorAll('[data-task-del]').forEach(function(el){
+    el.addEventListener('click', function(){
+      var ti = parseInt(el.getAttribute('data-task-del'),10);
+      if (!confirm('ลบแถวนี้?')) return;
+      report.tasks.splice(ti,1);
+      renderSheet();
+    });
+  });
+  document.querySelectorAll('[data-task-label]').forEach(function(el){
+    el.addEventListener('change', function(){
+      var ti = parseInt(el.getAttribute('data-task-label'),10);
+      report.tasks[ti].label = el.value;
+    });
+  });
+  if ($('addTaskBtn')) $('addTaskBtn').addEventListener('click', function(){
+    report.tasks.push({label:'', months:[0,0,0,0,0,0,0,0,0,0,0,0], ach:'none'});
+    renderSheet();
+  });
+  if ($('saveGanttBtn')) $('saveGanttBtn').addEventListener('click', function(){
+    fbPut(PATHS.report + '/' + metricId + '/tasks', report.tasks).then(function(){ toast('บันทึกตารางกิจกรรมแล้ว'); });
+  });
+
+  document.querySelectorAll('[data-note-field]').forEach(function(el){
+    el.addEventListener('change', function(){
+      var mk = el.getAttribute('data-note-month'), f = el.getAttribute('data-note-field');
+      report.notes[mk] = report.notes[mk] || {};
+      report.notes[mk][f] = el.value;
+    });
+  });
+  if ($('saveNotesBtn')) $('saveNotesBtn').addEventListener('click', function(){
+    fbPut(PATHS.report + '/' + metricId + '/notes', report.notes).then(function(){ toast('บันทึกตารางปัญหา/หมายเหตุแล้ว'); });
+  });
+}
+function saveMetaFields(){
+  report.policyItemNo = $('fItemNo') ? $('fItemNo').value : report.policyItemNo;
+  report.targetMarkText = $('fTargetMark') ? $('fTargetMark').value : report.targetMarkText;
+  report.policyText = $('fPolicy') ? $('fPolicy').value : report.policyText;
+  report.planText = $('fPlan') ? $('fPlan').value : report.planText;
+  report.signatures = {
+    approve: $('sigApprove') ? $('sigApprove').value : report.signatures.approve,
+    review:  $('sigReview')  ? $('sigReview').value  : report.signatures.review,
+    prepare: $('sigPrepare') ? $('sigPrepare').value : report.signatures.prepare
+  };
+  fbPut(PATHS.report + '/' + metricId, {
+    policyItemNo: report.policyItemNo, targetMarkText: report.targetMarkText,
+    policyText: report.policyText, planText: report.planText,
+    signatures: report.signatures, tasks: report.tasks,
+    historicalYears: report.historicalYears, notes: report.notes
+  }).then(function(){ toast('บันทึกแล้ว'); });
+}
+
+/* ══════════════ ดึงข้อมูลอัตโนมัติจากสายผลิต B1/B2/R1 ══════════════ */
+function fetchLineData(line){
+  return fetch(FB[line] + DAY_PATHS[line]).then(function(r){ return r.ok ? r.json() : {dayRecords:[]}; }).catch(function(){ return {dayRecords:[]}; });
+}
+function syncFromProduction(){
+  var btn = $('syncBtn'); btn.disabled = true; btn.textContent = '⏳ กำลังดึงข้อมูล…';
+  Promise.all(['B1','B2','R1'].map(fetchLineData)).then(function(results){
+    var byMonth = {}; // 'MM' -> {prodKg, ngKg}
+    for (var mi=1; mi<=12; mi++) byMonth[pad2(mi)] = {prodKg:0, ngKg:0};
+    results.forEach(function(data){
+      var recs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+      recs.forEach(function(day){
+        if (!day || !day.date) return;
+        if (day.date.slice(0,4) !== String(selectedYear)) return;
+        var mm = day.date.slice(5,7);
+        if (!byMonth[mm]) return;
+        var totalKg = Number(day.totalKg||0);
+        var reworkKg = Number(day.reworkKg||0);
+        byMonth[mm].prodKg += totalKg;
+        byMonth[mm].ngKg += reworkKg;
+      });
+    });
+    var patchByMonth = {};
+    var monthsWithData = 0;
+    Object.keys(byMonth).forEach(function(mm){
+      var b = byMonth[mm];
+      if (b.prodKg <= 0) return;
+      monthsWithData++;
+      var mk = selectedYear + '-' + mm;
+      patchByMonth[mk] = {};
+      patchByMonth[mk][metricId] = {
+        numerator: round2(b.ngKg/1000), denominator: round2(b.prodKg/1000),
+        note: (entries[mk] && entries[mk][metricId] && entries[mk][metricId].note) || '',
+        source: 'auto-sync',
+        enteredBy: {pin: session.pin, name: session.user.name},
+        enteredAt: new Date().toISOString()
+      };
+    });
+    if (!monthsWithData){
+      toast('ไม่พบข้อมูลการผลิตของปี ' + selectedYear + ' ในระบบ B1/B2/R1');
+      btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก B1/B2/R1';
+      return;
+    }
+    var chain = Promise.resolve();
+    Object.keys(patchByMonth).forEach(function(mk){
+      chain = chain.then(function(){ return fbPatch(PATHS.entries + '/' + mk, patchByMonth[mk]); });
+    });
+    chain.then(function(){
+      toast('ดึงและบันทึกข้อมูล ' + monthsWithData + ' เดือนจากสายผลิตสำเร็จ');
+      loadReportAndRender();
+    }).finally(function(){ btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก B1/B2/R1'; });
+  });
+}
+
+/* ══════════════ wiring หลัก ══════════════ */
+document.addEventListener('DOMContentLoaded', function(){
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+  $('printBtn').addEventListener('click', function(){ window.print(); });
+  $('syncBtn').addEventListener('click', syncFromProduction);
+
+  session = loadSession();
+  if (session){ enterApp(); }
+});
+</script>
+</body>
+</html>
