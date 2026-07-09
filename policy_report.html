@@ -107,6 +107,7 @@ table.datatbl .empty-cell{color:var(--steel-2);}
 .histrow .histyear{font-weight:700; color:var(--navy); min-width:36px;}
 .histrow .histval{width:64px; border:1px solid var(--border); border-radius:5px; padding:3px 5px; font-family:inherit; font-size:11px;}
 .histrow #newHistYear{border:1px solid var(--border); border-radius:5px; padding:5px 8px; font-family:inherit; font-size:11px;}
+input.histcell{width:100%; border:none; text-align:center; font-family:inherit; font-size:10.5px; background:transparent;}
 table.notetbl{width:100%; border-collapse:collapse; font-size:10.5px; min-width:700px;}
 table.notetbl th{background:var(--navy); color:#fff; padding:5px 4px; font-size:9.5px;}
 table.notetbl td{border:1px solid var(--border); padding:4px 6px; vertical-align:top;}
@@ -183,7 +184,25 @@ var FB = {
 var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
 
 var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-var DEFAULT_HIST = {2018:15.32, 2019:10.00, 2020:6.15, 2021:4.31, 2022:4.76, 2023:4.41, 2024:4.31};
+var DEFAULT_HIST = {
+  2018:{target:10, prod:360.00, ng:55.15},
+  2019:{target:10, prod:450.00, ng:45.00},
+  2020:{target:8,  prod:520.00, ng:32.00},
+  2021:{target:6,  prod:580.00, ng:25.00},
+  2022:{target:6,  prod:735.00, ng:35.00},
+  2023:{target:5,  prod:680.00, ng:30.00},
+  2024:{target:5,  prod:743.00, ng:32.00}
+};
+/* รองรับข้อมูลเก่าที่เคยบันทึกเป็นตัวเลข % เดี่ยว ให้แปลงเป็นโครงสร้างใหม่ {target,prod,ng} */
+function normalizeHistYear(v){
+  if (v != null && typeof v === 'object') return {target: v.target==null?null:Number(v.target), prod: v.prod==null?null:Number(v.prod), ng: v.ng==null?null:Number(v.ng)};
+  return {target: null, prod: null, ng: null, ratioOverride: v==null?null:Number(v)};
+}
+function histRatio(h){
+  if (h.prod != null && h.prod > 0 && h.ng != null) return (h.ng/h.prod)*100;
+  if (h.ratioOverride != null) return h.ratioOverride;
+  return null;
+}
 var DEFAULT_TASKS = [
   {label:'กำหนดความถี่ของสุ่มตรวจสอบเรื่องความหนาทุกๆ 1 ชม.', start:1, finish:1, ach:100},
   {label:'กำหนดความถี่ของการวิเคราะห์ความเข้มข้นของเคมีทุกๆ 4 ชม.', start:1, finish:1, ach:100},
@@ -208,6 +227,7 @@ var report = {};
 var entries = {};
 var selectedYear = new Date().getFullYear();
 var chartRef = null;
+var histPanelOpen = false;
 
 function $(id){ return document.getElementById(id); }
 function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2600); }
@@ -287,6 +307,11 @@ function loadReportAndRender(){
     if (!report.tasks || !report.tasks.length) report.tasks = DEFAULT_TASKS.map(function(t){ return Object.assign({}, t); });
     else report.tasks = report.tasks.map(normalizeTask);
     if (!report.historicalYears) report.historicalYears = Object.assign({}, DEFAULT_HIST);
+    else {
+      var normalized = {};
+      Object.keys(report.historicalYears).forEach(function(y){ normalized[y] = normalizeHistYear(report.historicalYears[y]); });
+      report.historicalYears = normalized;
+    }
     if (!report.policyText) report.policyText = 'ควบคุมคุณภาพชิ้นงานจากกระบวนการชุบ';
     if (!report.planText) report.planText = 'ทบทวนความถี่ของการสุ่มตรวจสอบคุณภาพ';
     if (!report.policyItemNo) report.policyItemNo = '1';
@@ -298,17 +323,41 @@ function loadReportAndRender(){
   });
 }
 /* ดึงข้อมูลการผลิตจริงจาก B1/B2/R1 แบบสดทุกครั้งที่เปิดหน้า/เปลี่ยนปี — ไม่ต้องกดปุ่มรีเฟรช */
+/* R1 บันทึก totalKg/reworkKg ระดับวันเป็นหน่วย "ชิ้น" (บั๊กที่ต้นทาง v6) แต่ rows รายบ่อนั้นมี kg ที่แปลงจาก Part Master ถูกต้องอยู่แล้ว
+   ฟังก์ชันนี้จึงคำนวณ kg จริงของ R1 จาก rows แทนที่จะเชื่อ totalKg/reworkKg ระดับวันตรง ๆ — ไม่ต้องแก้ไฟล์ plating_v6_R1.html เลย
+   B1/B2 ใช้ totalKg/reworkKg ระดับวันตามปกติ เพราะถูกต้องอยู่แล้ว */
+function dayTotals(line, day){
+  if (line === 'R1'){
+    var rows = Array.isArray(day.rows) ? day.rows : [];
+    if (rows.length){
+      var prod=0, ng=0;
+      rows.forEach(function(r){
+        var kg = Number(r.kg||0);
+        prod += kg;
+        if (r.type !== 'N') ng += kg;
+      });
+      return { prodKg: prod, ngKg: ng };
+    }
+    // ไม่มี rows เก็บไว้ (ข้อมูลเก่ามาก) — fallback ใช้ค่าระดับวัน (จะเป็นหน่วยชิ้นที่เพี้ยน แต่ดีกว่าไม่มีข้อมูลเลย)
+    return { prodKg: Number(day.totalKg||0), ngKg: Number(day.reworkKg||0) };
+  }
+  return { prodKg: Number(day.totalKg||0), ngKg: Number(day.reworkKg||0) };
+}
+
 function loadLiveProduction(year){
-  return Promise.all(['B1','B2','R1'].map(fetchLineData)).then(function(results){
+  var lines = ['B1','B2','R1'];
+  return Promise.all(lines.map(fetchLineData)).then(function(results){
     var byMonth = {}; for (var mi=1; mi<=12; mi++) byMonth[pad2(mi)] = {prodKg:0, ngKg:0};
-    results.forEach(function(data){
+    results.forEach(function(data, idx){
+      var line = lines[idx];
       var recs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
       recs.forEach(function(day){
         if (!day || !day.date || day.date.slice(0,4) !== String(year)) return;
         var mm = day.date.slice(5,7);
         if (!byMonth[mm]) return;
-        byMonth[mm].prodKg += Number(day.totalKg||0);
-        byMonth[mm].ngKg += Number(day.reworkKg||0);
+        var t = dayTotals(line, day);
+        byMonth[mm].prodKg += t.prodKg;
+        byMonth[mm].ngKg += t.ngKg;
       });
     });
     liveProd[year] = byMonth;
@@ -391,16 +440,18 @@ function renderSheet(){
 
   // chart
   html += '<div class="chart-card"><div class="chartwrap"><canvas id="mainChart"></canvas></div>' +
-    '<div class="legend-note">แท่ง = ปริมาณการชุบ / ปริมาณงาน NG (ตัน) · เส้น = Target % / NG Ratio % ผลจริง — ข้อมูลปี '+selectedYear+' ที่มีเครื่องหมาย 🔗 ดึงจากระบบสายผลิตอัตโนมัติ</div></div>';
+    '<div class="legend-note">แท่ง = ปริมาณการชุบ / ปริมาณงาน NG (ตัน) · เส้น = Target % / NG Ratio % ผลจริง — ข้อมูลปี '+selectedYear+' ที่มีเครื่องหมาย 🔗 ดึงจากระบบสายผลิตอัตโนมัติ (R1 คำนวณ กก. จากน้ำหนัก/ชิ้นใน Part Master ให้เอง เพราะ R1 บันทึกเป็นจำนวนชิ้น)</div></div>';
 
   // ประวัติย้อนหลัง (ก่อนช่วงที่ระบบเก็บข้อมูลรายเดือน) — เพิ่ม/แก้/ลบปีได้
-  html += historicalYearsHtml();
 
   // data table
   html += dataTableHtml();
 
   // notes table (right side of original form, here shown below for width)
   html += noteTableHtml();
+
+  // ประวัติย้อนหลัง — ซ่อนไว้ท้ายสุด กดเปิด/ปิดได้
+  html += historicalYearsHtml();
 
   html += '<div class="sheet-foot"><span>APK-FR-MR-001</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>';
   html += '</div>';
@@ -439,22 +490,50 @@ function ganttHtml(){
   return '<div class="ganttwrap"><table class="gantt"><thead>'+head+'</thead><tbody id="ganttBody">'+rows+'</tbody></table>'+addRow+'</div>';
 }
 
-/* ══════════════ ประวัติย้อนหลัง (ปีเก่าก่อนมีข้อมูลรายเดือน) — เพิ่ม/ลบ/แก้ปีได้ ปีที่มีข้อมูลระบบจริงกดดึงอัตโนมัติได้ ══════════════ */
+/* ══════════════ ประวัติย้อนหลัง (ปีเก่าก่อนมีข้อมูลรายเดือน) — ซ่อนไว้เป็นค่าเริ่มต้น กดเปิดเพื่อแก้ไข ══════════════ */
 function historicalYearsHtml(){
   var years = Object.keys(report.historicalYears).sort();
-  var rows = years.map(function(y){
-    var v = report.historicalYears[y];
-    return '<div class="histrow" data-hist-year="'+y+'">' +
-      '<span class="histyear">'+y+'</span>' +
-      '<input type="number" step="0.01" class="histval" data-hist-input="'+y+'" value="'+(v==null?'':v)+'" '+(canEdit()?'':'disabled')+'> %' +
-      (canEdit() ? '<button class="btn btn-light btn-sm" data-hist-auto="'+y+'" title="คำนวณ % เฉลี่ยทั้งปีจากข้อมูลจริงในระบบ B1/B2/R1 (ถ้ามี)">📥 ดึงจากระบบ</button>' : '') +
-      (canEdit() ? '<span class="delbtn" data-hist-del="'+y+'" title="ลบปีนี้">🗑️</span>' : '') +
+  if (!histPanelOpen){
+    return '<div class="chart-card noprint">' +
+      '<button class="btn btn-light btn-sm" id="toggleHistBtn">📁 แสดงประวัติย้อนหลังรายปี ('+years.length+' ปี)</button>' +
     '</div>';
+  }
+  var headCells = years.map(function(y){ return '<th>'+y+' '+(canEdit()?'<span class="delbtn" data-hist-del="'+y+'" title="ลบปีนี้">🗑️</span>':'')+'</th>'; }).join('');
+  function fieldRow(field, label, unit){
+    var cells = years.map(function(y){
+      var h = report.historicalYears[y] || {};
+      var v = h[field];
+      return '<td><input type="number" step="0.01" class="histcell" data-hist-field="'+field+'" data-hist-year="'+y+'" value="'+(v==null?'':v)+'" '+(canEdit()?'':'disabled')+'></td>';
+    }).join('');
+    return '<tr><td class="rowlabel" style="text-align:left;">'+label+(unit?' ('+unit+')':'')+'</td>'+cells+'</tr>';
+  }
+  var ratioCells = years.map(function(y){
+    var h = report.historicalYears[y] || {};
+    var r = histRatio(h);
+    return '<td class="mono" style="font-weight:700;">'+(r==null?'—':round2(r)+'%')+'</td>';
   }).join('');
-  var addRow = canEdit() ? '<div class="histrow"><input type="number" id="newHistYear" placeholder="ปี เช่น 2025" style="width:100px;"><button class="btn btn-light btn-sm" id="addHistYearBtn">+ เพิ่มปี</button>' + (years.length ? '<button class="btn btn-light btn-sm" id="saveHistBtn">บันทึกประวัติย้อนหลัง</button>' : '') + '</div>' : '';
-  return '<div class="chart-card">' +
-    '<h4 style="font-size:11px; color:var(--navy); margin-bottom:8px;">ประวัติย้อนหลังรายปี (แสดงเป็นเส้นในกราฟด้านบน — ปีที่มีข้อมูลจริงในระบบกดปุ่ม "ดึงจากระบบ" ได้เลย)</h4>' +
-    '<div class="histgrid">' + rows + '</div>' + addRow +
+  var autoCells = canEdit() ? years.map(function(y){
+    return '<td><button class="btn btn-light btn-sm" data-hist-auto="'+y+'" title="ดึงปริมาณการชุบ/NG ทั้งปีจากระบบ B1/B2/R1 อัตโนมัติ">📥</button></td>';
+  }).join('') : '';
+
+  var addNewYear = canEdit() ? '<div class="histrow"><input type="number" id="newHistYear" placeholder="เพิ่มปี เช่น 2025" style="width:130px;"><button class="btn btn-light btn-sm" id="addHistYearBtn">+ เพิ่มปี</button><button class="btn btn-light btn-sm" id="saveHistBtn">บันทึกประวัติย้อนหลัง</button></div>' : '';
+
+  return '<div class="chart-card noprint">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+      '<h4 style="font-size:11px; color:var(--navy);">ประวัติย้อนหลังรายปี (ใช้วาดเส้น/แท่งกราฟช่วงก่อนเดือนม.ค.ในตารางด้านบน)</h4>' +
+      '<button class="btn btn-light btn-sm" id="toggleHistBtn">✕ ซ่อน</button>' +
+    '</div>' +
+    '<div class="datawrap"><table class="datatbl">' +
+      '<thead><tr><th style="text-align:left;">รายการ</th>'+headCells+'</tr></thead>' +
+      '<tbody>' +
+        fieldRow('target','Target','%') +
+        fieldRow('prod', metric.denomLabel||'ปริมาณการชุบ','Ton') +
+        fieldRow('ng', metric.numLabel||'ปริมาณงาน NG','Ton') +
+        '<tr><td class="rowlabel" style="text-align:left;">Result NG Ratio (%)</td>'+ratioCells+'</tr>' +
+        (autoCells ? '<tr><td class="rowlabel" style="text-align:left;">ดึงจากระบบ</td>'+autoCells+'</tr>' : '') +
+      '</tbody>' +
+    '</table></div>' +
+    addNewYear +
   '</div>';
 }
 
@@ -534,10 +613,10 @@ function drawChart(prevYearRatio){
   var labels = histYears.concat(MONTH_NAMES);
   var yTargets = report.targets[selectedYear] || {h1:metric.target, h2:metric.target};
 
-  var prodBars = histYears.map(function(){ return null; });
-  var ngBars = histYears.map(function(){ return null; });
-  var ratioLine = histYears.map(function(y){ return report.historicalYears[y]; });
-  var targetLine = histYears.map(function(){ return yTargets.h1; });
+  var prodBars = histYears.map(function(y){ var h=report.historicalYears[y]||{}; return h.prod==null?null:round2(h.prod); });
+  var ngBars = histYears.map(function(y){ var h=report.historicalYears[y]||{}; return h.ng==null?null:round2(h.ng); });
+  var ratioLine = histYears.map(function(y){ var h=report.historicalYears[y]||{}; var r=histRatio(h); return r==null?null:round2(r); });
+  var targetLine = histYears.map(function(y){ var h=report.historicalYears[y]||{}; return h.target==null?yTargets.h1:h.target; });
 
   for (var m=1;m<=12;m++){
     var c = monthCalc(selectedYear, m);
@@ -654,10 +733,16 @@ function wireSheetEvents(){
     fbPut(PATHS.report + '/' + metricId + '/notes', report.notes).then(function(){ toast('บันทึกตารางปัญหา/หมายเหตุแล้ว'); });
   });
 
-  document.querySelectorAll('[data-hist-input]').forEach(function(inp){
+  if ($('toggleHistBtn')) $('toggleHistBtn').addEventListener('click', function(){
+    histPanelOpen = !histPanelOpen;
+    renderSheet();
+  });
+  document.querySelectorAll('[data-hist-field]').forEach(function(inp){
     inp.addEventListener('change', function(){
-      var y = inp.getAttribute('data-hist-input');
-      report.historicalYears[y] = inp.value === '' ? null : Number(inp.value);
+      var y = inp.getAttribute('data-hist-year'), f = inp.getAttribute('data-hist-field');
+      report.historicalYears[y] = report.historicalYears[y] || {target:null, prod:null, ng:null};
+      report.historicalYears[y][f] = inp.value === '' ? null : Number(inp.value);
+      renderSheet();
     });
   });
   document.querySelectorAll('[data-hist-del]').forEach(function(el){
@@ -673,13 +758,14 @@ function wireSheetEvents(){
       var y = parseInt(btn.getAttribute('data-hist-auto'),10);
       var origText = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
       loadLiveProduction(y).then(function(){
-        var r = yearAvgRatio(y);
-        if (r == null){ toast('ไม่พบข้อมูลการผลิตของปี '+y+' ในระบบ B1/B2/R1'); btn.disabled=false; btn.textContent=origText; return; }
-        report.historicalYears[String(y)] = round2(r);
-        var input = document.querySelector('[data-hist-input="'+y+'"]');
-        if (input) input.value = round2(r);
-        toast('ดึงข้อมูลปี '+y+' สำเร็จ: '+round2(r)+'%');
-        btn.disabled = false; btn.textContent = origText;
+        var lp = liveProd[y]; var sumProd=0, sumNg=0, any=false;
+        Object.keys(lp||{}).forEach(function(mm){ if (lp[mm].prodKg>0){ sumProd+=lp[mm].prodKg; sumNg+=lp[mm].ngKg; any=true; } });
+        if (!any){ toast('ไม่พบข้อมูลการผลิตของปี '+y+' ในระบบ B1/B2/R1'); btn.disabled=false; btn.textContent=origText; return; }
+        report.historicalYears[String(y)] = report.historicalYears[String(y)] || {target:null,prod:null,ng:null};
+        report.historicalYears[String(y)].prod = round2(sumProd/1000);
+        report.historicalYears[String(y)].ng = round2(sumNg/1000);
+        toast('ดึงข้อมูลปี '+y+' สำเร็จ');
+        renderSheet();
       });
     });
   });
@@ -687,11 +773,11 @@ function wireSheetEvents(){
     var y = $('newHistYear').value;
     if (!y){ toast('กรุณากรอกปี'); return; }
     if (report.historicalYears[y] !== undefined){ toast('มีปีนี้อยู่แล้ว'); return; }
-    report.historicalYears[y] = 0;
+    report.historicalYears[y] = {target:null, prod:null, ng:null};
     renderSheet();
   });
   if ($('saveHistBtn')) $('saveHistBtn').addEventListener('click', function(){
-    fbPut(PATHS.report + '/' + metricId + '/historicalYears', report.historicalYears).then(function(){ toast('บันทึกประวัติย้อนหลังแล้ว'); renderSheet(); });
+    fbPut(PATHS.report + '/' + metricId + '/historicalYears', report.historicalYears).then(function(){ toast('บันทึกประวัติย้อนหลังแล้ว'); });
   });
 }
 function saveMetaFields(){
@@ -723,20 +809,21 @@ function fetchLineData(line){
 }
 function syncFromProduction(){
   var btn = $('syncBtn'); btn.disabled = true; btn.textContent = '⏳ กำลังดึงข้อมูล…';
-  Promise.all(['B1','B2','R1'].map(fetchLineData)).then(function(results){
+  var lines = ['B1','B2','R1'];
+  Promise.all(lines.map(fetchLineData)).then(function(results){
     var byMonth = {}; // 'MM' -> {prodKg, ngKg}
     for (var mi=1; mi<=12; mi++) byMonth[pad2(mi)] = {prodKg:0, ngKg:0};
-    results.forEach(function(data){
+    results.forEach(function(data, idx){
+      var line = lines[idx];
       var recs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
       recs.forEach(function(day){
         if (!day || !day.date) return;
         if (day.date.slice(0,4) !== String(selectedYear)) return;
         var mm = day.date.slice(5,7);
         if (!byMonth[mm]) return;
-        var totalKg = Number(day.totalKg||0);
-        var reworkKg = Number(day.reworkKg||0);
-        byMonth[mm].prodKg += totalKg;
-        byMonth[mm].ngKg += reworkKg;
+        var t = dayTotals(line, day);
+        byMonth[mm].prodKg += t.prodKg;
+        byMonth[mm].ngKg += t.ngKg;
       });
     });
     var patchByMonth = {};
