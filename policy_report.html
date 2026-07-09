@@ -102,6 +102,11 @@ table.datatbl .manual{color:var(--text-mid);}
 table.datatbl .empty-cell{color:var(--steel-2);}
 
 .notewrap{overflow-x:auto;}
+.histgrid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;}
+.histrow{display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:11px;}
+.histrow .histyear{font-weight:700; color:var(--navy); min-width:36px;}
+.histrow .histval{width:64px; border:1px solid var(--border); border-radius:5px; padding:3px 5px; font-family:inherit; font-size:11px;}
+.histrow #newHistYear{border:1px solid var(--border); border-radius:5px; padding:5px 8px; font-family:inherit; font-size:11px;}
 table.notetbl{width:100%; border-collapse:collapse; font-size:10.5px; min-width:700px;}
 table.notetbl th{background:var(--navy); color:#fff; padding:5px 4px; font-size:9.5px;}
 table.notetbl td{border:1px solid var(--border); padding:4px 6px; vertical-align:top;}
@@ -388,6 +393,9 @@ function renderSheet(){
   html += '<div class="chart-card"><div class="chartwrap"><canvas id="mainChart"></canvas></div>' +
     '<div class="legend-note">แท่ง = ปริมาณการชุบ / ปริมาณงาน NG (ตัน) · เส้น = Target % / NG Ratio % ผลจริง — ข้อมูลปี '+selectedYear+' ที่มีเครื่องหมาย 🔗 ดึงจากระบบสายผลิตอัตโนมัติ</div></div>';
 
+  // ประวัติย้อนหลัง (ก่อนช่วงที่ระบบเก็บข้อมูลรายเดือน) — เพิ่ม/แก้/ลบปีได้
+  html += historicalYearsHtml();
+
   // data table
   html += dataTableHtml();
 
@@ -429,6 +437,25 @@ function ganttHtml(){
     '<tr><th></th><th></th><th></th><th></th>' + MONTH_NAMES.map(function(mn){ return '<th style="font-size:8.5px;">'+mn+'</th>'; }).join('') + '<th></th>' + (canEdit()?'<th></th>':'') + '</tr>';
   var addRow = canEdit() ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="addTaskBtn">+ เพิ่มแถว</button><button class="btn btn-light btn-sm" id="saveGanttBtn">บันทึกตาราง</button></div>' : '';
   return '<div class="ganttwrap"><table class="gantt"><thead>'+head+'</thead><tbody id="ganttBody">'+rows+'</tbody></table>'+addRow+'</div>';
+}
+
+/* ══════════════ ประวัติย้อนหลัง (ปีเก่าก่อนมีข้อมูลรายเดือน) — เพิ่ม/ลบ/แก้ปีได้ ปีที่มีข้อมูลระบบจริงกดดึงอัตโนมัติได้ ══════════════ */
+function historicalYearsHtml(){
+  var years = Object.keys(report.historicalYears).sort();
+  var rows = years.map(function(y){
+    var v = report.historicalYears[y];
+    return '<div class="histrow" data-hist-year="'+y+'">' +
+      '<span class="histyear">'+y+'</span>' +
+      '<input type="number" step="0.01" class="histval" data-hist-input="'+y+'" value="'+(v==null?'':v)+'" '+(canEdit()?'':'disabled')+'> %' +
+      (canEdit() ? '<button class="btn btn-light btn-sm" data-hist-auto="'+y+'" title="คำนวณ % เฉลี่ยทั้งปีจากข้อมูลจริงในระบบ B1/B2/R1 (ถ้ามี)">📥 ดึงจากระบบ</button>' : '') +
+      (canEdit() ? '<span class="delbtn" data-hist-del="'+y+'" title="ลบปีนี้">🗑️</span>' : '') +
+    '</div>';
+  }).join('');
+  var addRow = canEdit() ? '<div class="histrow"><input type="number" id="newHistYear" placeholder="ปี เช่น 2025" style="width:100px;"><button class="btn btn-light btn-sm" id="addHistYearBtn">+ เพิ่มปี</button>' + (years.length ? '<button class="btn btn-light btn-sm" id="saveHistBtn">บันทึกประวัติย้อนหลัง</button>' : '') + '</div>' : '';
+  return '<div class="chart-card">' +
+    '<h4 style="font-size:11px; color:var(--navy); margin-bottom:8px;">ประวัติย้อนหลังรายปี (แสดงเป็นเส้นในกราฟด้านบน — ปีที่มีข้อมูลจริงในระบบกดปุ่ม "ดึงจากระบบ" ได้เลย)</h4>' +
+    '<div class="histgrid">' + rows + '</div>' + addRow +
+  '</div>';
 }
 
 /* ══════════════ ตารางข้อมูลรายเดือน ══════════════ */
@@ -474,23 +501,31 @@ function dataTableHtml(){
     '</tbody></table></div>';
 }
 
-/* ══════════════ ตาราง ปัญหา/หมายเหตุรายเดือน ══════════════ */
+/* ══════════════ ตาราง ปัญหา/หมายเหตุรายเดือน — แสดงเฉพาะเดือนที่มีการเพิ่มไว้ ══════════════ */
 function noteTableHtml(){
-  var rows = [];
-  for (var m=1;m<=12;m++){
-    var mk = monthKey(selectedYear,m);
+  var monthsInYear = [];
+  for (var m=1;m<=12;m++) monthsInYear.push(monthKey(selectedYear,m));
+  var existing = monthsInYear.filter(function(mk){ return !!report.notes[mk]; });
+
+  var rows = existing.map(function(mk){
     var n = report.notes[mk] || {};
-    rows.push('<tr>' +
-      '<td class="monthcell">'+MONTH_NAMES[m-1]+' '+selectedYear+'</td>' +
+    var mi = parseInt(mk.split('-')[1],10);
+    return '<tr>' +
+      '<td class="monthcell">'+MONTH_NAMES[mi-1]+' '+selectedYear+(canEdit()?' <span class="delbtn" data-note-del="'+mk+'" title="ลบรายการนี้">🗑️</span>':'')+'</td>' +
       '<td><textarea data-note-field="summary" data-note-month="'+mk+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(n.summary||'')+'</textarea></td>' +
       '<td><textarea data-note-field="problem" data-note-month="'+mk+'" '+(canEdit()?'':'disabled')+'>'+escapeHtml(n.problem||'')+'</textarea></td>' +
       '<td><input type="text" data-note-field="checkedBy" data-note-month="'+mk+'" value="'+escapeHtml(n.checkedBy||'')+'" '+(canEdit()?'':'disabled')+'></td>' +
-    '</tr>');
-  }
-  var save = canEdit() ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="saveNotesBtn">บันทึกตารางปัญหา/หมายเหตุ</button></div>' : '';
+    '</tr>';
+  });
+  var emptyRow = !rows.length ? '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:14px;">ยังไม่มีบันทึกปัญหาในปีนี้</td></tr>' : '';
+  var availMonths = monthsInYear.filter(function(mk){ return !report.notes[mk]; });
+  var addControl = canEdit() && availMonths.length ? '<div class="gantt-actions"><select id="newNoteMonth">' +
+      availMonths.map(function(mk){ var mi=parseInt(mk.split('-')[1],10); return '<option value="'+mk+'">'+MONTH_NAMES[mi-1]+' '+selectedYear+'</option>'; }).join('') +
+    '</select><button class="btn btn-light btn-sm" id="addNoteBtn">+ เพิ่มรายการปัญหา</button></div>' : '';
+  var save = canEdit() && rows.length ? '<div class="gantt-actions"><button class="btn btn-light btn-sm" id="saveNotesBtn">บันทึกตารางปัญหา/หมายเหตุ</button></div>' : '';
   return '<div class="notewrap"><table class="notetbl">' +
-    '<thead><tr><th style="width:110px;">Month</th><th>Summary Of Problem</th><th>Problem &amp; Activity to be Solved Following Month</th><th style="width:100px;">Checked By (QMR)</th></tr></thead>' +
-    '<tbody>'+rows.join('')+'</tbody></table>'+save+'</div>';
+    '<thead><tr><th style="width:130px;">Month</th><th>Summary Of Problem</th><th>Problem &amp; Activity to be Solved Following Month</th><th style="width:100px;">Checked By (QMR)</th></tr></thead>' +
+    '<tbody>'+(rows.join('')||emptyRow)+'</tbody></table>'+addControl+save+'</div>';
 }
 
 /* ══════════════ กราฟ ══════════════ */
@@ -602,8 +637,61 @@ function wireSheetEvents(){
       report.notes[mk][f] = el.value;
     });
   });
+  document.querySelectorAll('[data-note-del]').forEach(function(el){
+    el.addEventListener('click', function(){
+      var mk = el.getAttribute('data-note-del');
+      if (!confirm('ลบรายการปัญหาของเดือนนี้?')) return;
+      delete report.notes[mk];
+      fbPut(PATHS.report + '/' + metricId + '/notes', report.notes).then(function(){ toast('ลบแล้ว'); renderSheet(); });
+    });
+  });
+  if ($('addNoteBtn')) $('addNoteBtn').addEventListener('click', function(){
+    var mk = $('newNoteMonth').value;
+    report.notes[mk] = {summary:'', problem:'', checkedBy:''};
+    renderSheet();
+  });
   if ($('saveNotesBtn')) $('saveNotesBtn').addEventListener('click', function(){
     fbPut(PATHS.report + '/' + metricId + '/notes', report.notes).then(function(){ toast('บันทึกตารางปัญหา/หมายเหตุแล้ว'); });
+  });
+
+  document.querySelectorAll('[data-hist-input]').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      var y = inp.getAttribute('data-hist-input');
+      report.historicalYears[y] = inp.value === '' ? null : Number(inp.value);
+    });
+  });
+  document.querySelectorAll('[data-hist-del]').forEach(function(el){
+    el.addEventListener('click', function(){
+      var y = el.getAttribute('data-hist-del');
+      if (!confirm('ลบปี '+y+' ออกจากประวัติย้อนหลัง?')) return;
+      delete report.historicalYears[y];
+      fbPut(PATHS.report + '/' + metricId + '/historicalYears', report.historicalYears).then(function(){ toast('ลบแล้ว'); renderSheet(); });
+    });
+  });
+  document.querySelectorAll('[data-hist-auto]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var y = parseInt(btn.getAttribute('data-hist-auto'),10);
+      var origText = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
+      loadLiveProduction(y).then(function(){
+        var r = yearAvgRatio(y);
+        if (r == null){ toast('ไม่พบข้อมูลการผลิตของปี '+y+' ในระบบ B1/B2/R1'); btn.disabled=false; btn.textContent=origText; return; }
+        report.historicalYears[String(y)] = round2(r);
+        var input = document.querySelector('[data-hist-input="'+y+'"]');
+        if (input) input.value = round2(r);
+        toast('ดึงข้อมูลปี '+y+' สำเร็จ: '+round2(r)+'%');
+        btn.disabled = false; btn.textContent = origText;
+      });
+    });
+  });
+  if ($('addHistYearBtn')) $('addHistYearBtn').addEventListener('click', function(){
+    var y = $('newHistYear').value;
+    if (!y){ toast('กรุณากรอกปี'); return; }
+    if (report.historicalYears[y] !== undefined){ toast('มีปีนี้อยู่แล้ว'); return; }
+    report.historicalYears[y] = 0;
+    renderSheet();
+  });
+  if ($('saveHistBtn')) $('saveHistBtn').addEventListener('click', function(){
+    fbPut(PATHS.report + '/' + metricId + '/historicalYears', report.historicalYears).then(function(){ toast('บันทึกประวัติย้อนหลังแล้ว'); renderSheet(); });
   });
 }
 function saveMetaFields(){
