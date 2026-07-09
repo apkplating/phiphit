@@ -145,7 +145,7 @@ table.notetbl .monthcell{font-weight:700; white-space:nowrap; background:var(--s
     <div class="hdr-actions">
       <a href="kpi.html" class="back-link">← กลับ KPI</a>
       <select class="yearsel" id="yearSelect"></select>
-      <button class="btn btn-ghost btn-sm" id="syncBtn">🔄 ดึงข้อมูลจาก B1/B2/R1</button>
+      <button class="btn btn-ghost btn-sm" id="syncBtn" title="ข้อมูลในตาราง/กราฟดึงจาก B1/B2/R1 ให้อัตโนมัติอยู่แล้ว ปุ่มนี้ใช้บันทึกสำเนาลง KPI Entries เพิ่มเติมเท่านั้น">💾 บันทึกสำเนาเข้า KPI Entries</button>
       <button class="btn btn-ghost btn-sm" id="printBtn">🖨️ พิมพ์ / PDF</button>
       <button class="btn-logout btn btn-ghost" id="logoutBtn">ออกจากระบบ</button>
     </div>
@@ -270,10 +270,13 @@ function buildYearSelect(){
   $('yearSelect').addEventListener('change', function(){ selectedYear = parseInt(this.value,10); loadReportAndRender(); });
 }
 
-/* ══════════════ โหลดรายงาน + entries ══════════════ */
+/* ══════════════ โหลดรายงาน + entries + ข้อมูลผลิตสด (auto, ไม่ต้องกดปุ่ม) ══════════════ */
+var liveProd = {}; // liveProd[year] = {"01":{prodKg,ngKg}, ...}
+var lastLiveFetch = null;
+
 function loadReportAndRender(){
   $('sheetArea').innerHTML = '<div class="loading">กำลังโหลดข้อมูล…</div>';
-  Promise.all([ fbGet(PATHS.report + '/' + metricId), fbGet(PATHS.entries) ]).then(function(res){
+  Promise.all([ fbGet(PATHS.report + '/' + metricId), fbGet(PATHS.entries), loadLiveProduction(selectedYear) ]).then(function(res){
     report = res[0] || {};
     entries = res[1] || {};
     if (!report.tasks || !report.tasks.length) report.tasks = DEFAULT_TASKS.map(function(t){ return Object.assign({}, t); });
@@ -284,18 +287,50 @@ function loadReportAndRender(){
     if (!report.policyItemNo) report.policyItemNo = '1';
     if (!report.signatures) report.signatures = {approve:'พิพิธ', review:'พิพิธ', prepare:'พิพิธ'};
     if (!report.notes) report.notes = {};
+    if (!report.targets) report.targets = {};
+    if (!report.targets[selectedYear]) report.targets[selectedYear] = {h1: metric.target, h2: metric.target};
     renderSheet();
   });
 }
+/* ดึงข้อมูลการผลิตจริงจาก B1/B2/R1 แบบสดทุกครั้งที่เปิดหน้า/เปลี่ยนปี — ไม่ต้องกดปุ่มรีเฟรช */
+function loadLiveProduction(year){
+  return Promise.all(['B1','B2','R1'].map(fetchLineData)).then(function(results){
+    var byMonth = {}; for (var mi=1; mi<=12; mi++) byMonth[pad2(mi)] = {prodKg:0, ngKg:0};
+    results.forEach(function(data){
+      var recs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+      recs.forEach(function(day){
+        if (!day || !day.date || day.date.slice(0,4) !== String(year)) return;
+        var mm = day.date.slice(5,7);
+        if (!byMonth[mm]) return;
+        byMonth[mm].prodKg += Number(day.totalKg||0);
+        byMonth[mm].ngKg += Number(day.reworkKg||0);
+      });
+    });
+    liveProd[year] = byMonth;
+    lastLiveFetch = new Date();
+    return byMonth;
+  });
+}
 
-/* ══════════════ คำนวณข้อมูลรายเดือนจาก entries ══════════════ */
+/* ══════════════ คำนวณข้อมูลรายเดือน — ใช้ข้อมูลสดจากสายผลิตก่อน ถ้าไม่มีค่อย fallback เป็นค่าที่กรอกมือ ══════════════ */
 function monthKey(y,m){ return y+'-'+pad2(m); }
 function monthEntry(y,m){ return (entries[monthKey(y,m)] || {})[metricId]; }
+function targetForMonth(y,m){
+  var t = (report.targets && report.targets[y]) || {h1:metric.target, h2:metric.target};
+  return m <= 6 ? Number(t.h1) : Number(t.h2);
+}
 function monthCalc(y,m){
+  var lp = liveProd[y];
+  if (lp){
+    var b = lp[pad2(m)];
+    if (b && b.prodKg > 0){
+      return { prodT: b.prodKg/1000, ngT: b.ngKg/1000, ratio: (b.ngKg/b.prodKg)*100, source:'live' };
+    }
+  }
   var e = monthEntry(y,m);
   if (!e || e.numerator == null || e.denominator == null || Number(e.denominator) === 0) return null;
   var ngT = Number(e.numerator), prodT = Number(e.denominator);
-  return { prodT: prodT, ngT: ngT, ratio: (ngT/prodT)*100 };
+  return { prodT: prodT, ngT: ngT, ratio: (ngT/prodT)*100, source:'manual' };
 }
 function yearAvgRatio(y){
   var sumN=0, sumD=0, any=false;
@@ -305,7 +340,8 @@ function yearAvgRatio(y){
 
 /* ══════════════ Render ทั้งชีต ══════════════ */
 function renderSheet(){
-  var target = metric.target;
+  var yTargets = report.targets[selectedYear] || {h1:metric.target, h2:metric.target};
+  var target = yTargets.h2; // ใช้ค่าครึ่งหลังเป็นค่าเริ่มต้นของข้อความ Target Mark
   var prevYearRatio = yearAvgRatio(selectedYear-1);
   var targetMarkText = report.targetMarkText || (metric.name + ' <' + target + '% / เดือน');
 
@@ -330,6 +366,13 @@ function renderSheet(){
   html += '<div class="mb"><div class="lbl">Policy Item</div><div class="val"><input id="fItemNo" value="'+escapeHtml(report.policyItemNo)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
   html += '<div class="mb"><div class="lbl">Preview Result</div><div class="val">'+(selectedYear-1)+' '+escapeHtml(metric.name)+' '+(prevYearRatio==null?'—':round2(prevYearRatio)+'%')+'</div></div>';
   html += '<div class="mb"><div class="lbl">Target Mark</div><div class="val"><input id="fTargetMark" value="'+escapeHtml(targetMarkText)+'" '+(isAdmin()?'':'disabled')+'></div></div>';
+  html += '</div>';
+
+  // เป้าหมายรายครึ่งปี — ปรับได้ทุก 6 เดือน
+  html += '<div class="metabar" style="grid-template-columns:1fr 1fr 1fr;">';
+  html += '<div class="mb"><div class="lbl">เป้าหมาย ม.ค.–มิ.ย. (H1)</div><div class="val"><input type="number" step="0.1" id="fTargetH1" value="'+yTargets.h1+'" '+(isAdmin()?'':'disabled')+'> %</div></div>';
+  html += '<div class="mb"><div class="lbl">เป้าหมาย ก.ค.–ธ.ค. (H2)</div><div class="val"><input type="number" step="0.1" id="fTargetH2" value="'+yTargets.h2+'" '+(isAdmin()?'':'disabled')+'> %</div></div>';
+  html += '<div class="mb"><div class="lbl">ข้อมูลผลิตจริง</div><div class="val" style="font-size:10px; color:var(--text-mid);">🔗 ดึงอัตโนมัติจาก B1/B2/R1' + (lastLiveFetch ? ' — อัปเดต ' + lastLiveFetch.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '') + '</div></div>';
   html += '</div>';
 
   // policy / plan
@@ -390,32 +433,32 @@ function ganttHtml(){
 
 /* ══════════════ ตารางข้อมูลรายเดือน ══════════════ */
 function dataTableHtml(){
-  var target = metric.target;
+  var yTargets = report.targets[selectedYear] || {h1:metric.target, h2:metric.target};
   var rowsData = [];
   var totalProd=0, totalNg=0, anyData=false;
   for (var m=1;m<=12;m++){
     var c = monthCalc(selectedYear, m);
-    var e = monthEntry(selectedYear, m);
-    var synced = e && e.source === 'auto-sync';
     if (c){ totalProd+=c.prodT; totalNg+=c.ngT; anyData=true; }
-    rowsData.push({c:c, synced:synced});
+    rowsData.push({c:c, m:m, tgt: targetForMonth(selectedYear, m)});
   }
   var totalRatio = anyData && totalProd>0 ? (totalNg/totalProd)*100 : null;
 
   function rowCells(getter){
-    return rowsData.map(function(r){ return '<td>'+getter(r)+'</td>'; }).join('') + '<td class="totalcol">'+getter({c: anyData?{prodT:totalProd, ngT:totalNg, ratio:totalRatio}:null, synced:false})+'</td>';
+    return rowsData.map(getter).join('') + '<td class="totalcol">'+getter({c: anyData?{prodT:totalProd, ngT:totalNg, ratio:totalRatio}:null, m:null, tgt:null})+'</td>';
   }
-  var targetRow = rowCells(function(){ return target+'%'; });
-  var prodRow = rowCells(function(r){ return r.c ? '<span class="'+(r.synced?'synced':'manual')+'">'+round2(r.c.prodT)+(r.synced?' 🔗':'')+'</span>' : '<span class="empty-cell">—</span>'; });
-  var ngRow = rowCells(function(r){ return r.c ? '<span class="'+(r.synced?'synced':'manual')+'">'+round2(r.c.ngT)+'</span>' : '<span class="empty-cell">—</span>'; });
+  var targetRow = rowCells(function(r){ return '<td>'+(r.tgt==null?(yTargets.h1+'% / '+yTargets.h2+'%'):r.tgt+'%')+'</td>'; });
+  var prodRow = rowCells(function(r){ return '<td>'+(r.c ? '<span class="'+(r.c.source==='live'?'synced':'manual')+'">'+round2(r.c.prodT)+(r.c.source==='live'?' 🔗':'')+'</span>' : '<span class="empty-cell">—</span>')+'</td>'; });
+  var ngRow = rowCells(function(r){ return '<td>'+(r.c ? '<span class="'+(r.c.source==='live'?'synced':'manual')+'">'+round2(r.c.ngT)+'</span>' : '<span class="empty-cell">—</span>')+'</td>'; });
   var ratioRow = rowCells(function(r){
-    if (!r.c) return '<span class="empty-cell">—</span>';
-    var ok = r.c.ratio <= target;
-    return '<span style="color:'+(ok?'var(--green)':'var(--red)')+'; font-weight:700;">'+round2(r.c.ratio)+'%</span>';
+    if (!r.c) return '<td><span class="empty-cell">—</span></td>';
+    var tgt = r.tgt==null ? yTargets.h2 : r.tgt;
+    var ok = r.c.ratio <= tgt;
+    return '<td><span style="color:'+(ok?'var(--green)':'var(--red)')+'; font-weight:700;">'+round2(r.c.ratio)+'%</span></td>';
   });
   var selfRow = rowCells(function(r){
-    if (!r.c) return '<span class="empty-cell">—</span>';
-    return r.c.ratio <= target ? '😊' : '☹️';
+    if (!r.c) return '<td><span class="empty-cell">—</span></td>';
+    var tgt = r.tgt==null ? yTargets.h2 : r.tgt;
+    return '<td>'+(r.c.ratio <= tgt ? '😊' : '☹️')+'</td>';
   });
 
   var headCells = MONTH_NAMES.map(function(mn){ return '<th>'+mn+'</th>'; }).join('') + '<th>Total</th>';
@@ -454,19 +497,19 @@ function noteTableHtml(){
 function drawChart(prevYearRatio){
   var histYears = Object.keys(report.historicalYears).sort();
   var labels = histYears.concat(MONTH_NAMES);
-  var target = metric.target;
+  var yTargets = report.targets[selectedYear] || {h1:metric.target, h2:metric.target};
 
   var prodBars = histYears.map(function(){ return null; });
   var ngBars = histYears.map(function(){ return null; });
   var ratioLine = histYears.map(function(y){ return report.historicalYears[y]; });
-  var targetLine = histYears.map(function(){ return target; });
+  var targetLine = histYears.map(function(){ return yTargets.h1; });
 
   for (var m=1;m<=12;m++){
     var c = monthCalc(selectedYear, m);
     prodBars.push(c ? round2(c.prodT) : null);
     ngBars.push(c ? round2(c.ngT) : null);
     ratioLine.push(c ? round2(c.ratio) : null);
-    targetLine.push(target);
+    targetLine.push(targetForMonth(selectedYear, m));
   }
 
   if (chartRef) chartRef.destroy();
@@ -477,7 +520,7 @@ function drawChart(prevYearRatio){
       datasets:[
         {type:'bar', label: metric.denomLabel||'ปริมาณการชุบ (Ton)', data:prodBars, backgroundColor:'#16a34a', yAxisID:'y', order:3},
         {type:'bar', label: metric.numLabel||'ปริมาณงาน NG (Ton)', data:ngBars, backgroundColor:'#dc2626', yAxisID:'y', order:2},
-        {type:'line', label:'Target %', data:targetLine, borderColor:'#dc2626', borderDash:[4,3], pointRadius:0, yAxisID:'y1', order:0, tension:0},
+        {type:'line', label:'Target % (ปรับทุก 6 เดือน)', data:targetLine, borderColor:'#dc2626', borderDash:[4,3], pointRadius:0, yAxisID:'y1', order:0, tension:0, stepped:true},
         {type:'line', label:'Result NG Ratio (%)', data:ratioLine, borderColor:'#1d4ed8', backgroundColor:'#1d4ed8', pointRadius:3, yAxisID:'y1', order:1, tension:.25}
       ]
     },
@@ -497,7 +540,7 @@ function drawChart(prevYearRatio){
 function wireSheetEvents(){
   if (!isAdmin()) { document.querySelectorAll('#sigApprove,#sigReview,#sigPrepare').forEach(function(el){ el.disabled = true; }); }
 
-  document.querySelectorAll('#fYear,#fItemNo,#fTargetMark,#fPolicy,#fPlan').forEach(function(el){
+  document.querySelectorAll('#fYear,#fItemNo,#fTargetMark,#fPolicy,#fPlan,#fTargetH1,#fTargetH2').forEach(function(el){
     if (el.disabled) return;
     el.addEventListener('change', saveMetaFields);
   });
@@ -573,12 +616,17 @@ function saveMetaFields(){
     review:  $('sigReview')  ? $('sigReview').value  : report.signatures.review,
     prepare: $('sigPrepare') ? $('sigPrepare').value : report.signatures.prepare
   };
+  if (!report.targets) report.targets = {};
+  report.targets[selectedYear] = {
+    h1: $('fTargetH1') ? (Number($('fTargetH1').value)||0) : (report.targets[selectedYear]||{}).h1,
+    h2: $('fTargetH2') ? (Number($('fTargetH2').value)||0) : (report.targets[selectedYear]||{}).h2
+  };
   fbPut(PATHS.report + '/' + metricId, {
     policyItemNo: report.policyItemNo, targetMarkText: report.targetMarkText,
     policyText: report.policyText, planText: report.planText,
     signatures: report.signatures, tasks: report.tasks,
-    historicalYears: report.historicalYears, notes: report.notes
-  }).then(function(){ toast('บันทึกแล้ว'); });
+    historicalYears: report.historicalYears, notes: report.notes, targets: report.targets
+  }).then(function(){ toast('บันทึกแล้ว'); renderSheet(); });
 }
 
 /* ══════════════ ดึงข้อมูลอัตโนมัติจากสายผลิต B1/B2/R1 ══════════════ */
@@ -621,7 +669,7 @@ function syncFromProduction(){
     });
     if (!monthsWithData){
       toast('ไม่พบข้อมูลการผลิตของปี ' + selectedYear + ' ในระบบ B1/B2/R1');
-      btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก B1/B2/R1';
+      btn.disabled = false; btn.textContent = '💾 บันทึกสำเนาเข้า KPI Entries';
       return;
     }
     var chain = Promise.resolve();
@@ -631,7 +679,7 @@ function syncFromProduction(){
     chain.then(function(){
       toast('ดึงและบันทึกข้อมูล ' + monthsWithData + ' เดือนจากสายผลิตสำเร็จ');
       loadReportAndRender();
-    }).finally(function(){ btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก B1/B2/R1'; });
+    }).finally(function(){ btn.disabled = false; btn.textContent = '💾 บันทึกสำเนาเข้า KPI Entries'; });
   });
 }
 
