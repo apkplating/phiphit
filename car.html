@@ -82,6 +82,11 @@ tr:hover td{background:var(--steel-3);}
 .suggest-card h3{font-size:13.5px; color:var(--navy); margin-bottom:4px;}
 .suggest-card .meta{font-size:11.5px; color:var(--text-mid); margin-bottom:10px;}
 
+.alertbar{padding:12px 22px; font-size:12.5px; font-weight:600; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+.alertbar.overdue{background:#fee2e2; color:#991b1b; border-bottom:1px solid #fecaca;}
+.alertbar.due-soon{background:#fef3c7; color:#92400e; border-bottom:1px solid #fde68a;}
+.alertbar a{color:inherit; font-weight:700; text-decoration:underline;}
+
 .chk-row{display:flex; align-items:center; gap:7px; margin-bottom:8px; font-size:13px;}
 .chk-row input[type=checkbox]{width:16px; height:16px;}
 
@@ -146,6 +151,8 @@ tr:hover td{background:var(--steel-3);}
     <button class="tabbtn" data-tab="detail" id="detailTabBtn" style="display:none;">รายละเอียด</button>
   </div>
 
+  <div id="globalAlert" class="noprint"></div>
+
   <main>
     <div class="panel" id="panel-list">
       <div class="card">
@@ -158,7 +165,7 @@ tr:hover td{background:var(--steel-3);}
     <div class="panel" id="panel-detect">
       <div class="card">
         <h2>ตรวจพบ KPI เกินเป้าหมายอัตโนมัติ</h2>
-        <div class="sub">ตรวจสอบตัวชี้วัด "ปริมาณของเสียในกระบวนการผลิต" (PR) — เกิน 1 เดือน ระบบแนะนำออก CAR / เกินติดต่อกัน 3 เดือน แนะนำออก PAR</div>
+        <div class="sub">ตรวจสอบตัวชี้วัด "ปริมาณของเสียในกระบวนการผลิต" (PR) จากข้อมูลสด B1/B2/R1 โดยตรง — เกิน 1 เดือน ระบบแนะนำออก CAR / เกินติดต่อกัน 3 เดือน แนะนำออก PAR · ต้องออกเอกสารภายในวันที่ 5 ของเดือนถัดไป</div>
         <div id="detectWrap"><div class="empty">กำลังตรวจสอบ…</div></div>
       </div>
     </div>
@@ -192,6 +199,16 @@ var PATHS = {
   metrics: DB_URL + '/kpi/metrics',
   entries: DB_URL + '/kpi/entries'
 };
+var FB = {
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app'
+};
+var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
+
+// ── Discord Webhook: แจ้งเตือนเมื่อพบ KPI เกินเป้าที่ยังไม่ได้ออก CAR/PAR ──
+// ใช้ Webhook เดียวกับที่ po_master.html ใช้อยู่แล้ว (ช่องแจ้งเตือนผู้บริหาร/ผู้อนุมัติ)
+var DISCORD_WEBHOOK_CAR_ALERT = 'https://discordapp.com/api/webhooks/1517882647089647769/4aVSUKg8CYEDH9d1ZqZFaw90Rgc45pvfhvBnCMA9i1I-kpqLdkf9Ywi8GgMUcnaFgCaO';
 
 var session = null;
 var allRecords = {};
@@ -239,6 +256,7 @@ function enterApp(){
   $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
   document.querySelectorAll('.tabbtn[data-tab="new"]').forEach(function(b){ b.style.display = canEdit() ? '' : 'none'; });
   switchTab('list');
+  renderGlobalAlert();
 }
 function switchTab(tab){
   document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
@@ -292,6 +310,47 @@ function renderList(){
   });
 }
 
+/* ══════════════ ข้อมูลผลิตสดจาก B1/B2/R1 (เหมือน policy_report.html) ══════════════ */
+function fetchLineData(line){
+  return fetch(FB[line] + DAY_PATHS[line]).then(function(r){ return r.ok ? r.json() : {dayRecords:[]}; }).catch(function(){ return {dayRecords:[]}; });
+}
+/* R1 บันทึก totalKg/reworkKg ระดับวันเป็นหน่วย "ชิ้น" (บั๊กที่ต้นทาง v6) แต่ rows รายบ่อมี kg ที่แปลงจาก Part Master ถูกต้องอยู่แล้ว
+   จึงคำนวณจาก rows แทน ไม่ต้องแก้ไฟล์ plating_v6_R1.html — เหมือนที่ทำไว้ใน policy_report.html */
+function dayTotals(line, day){
+  if (line === 'R1'){
+    var rows = Array.isArray(day.rows) ? day.rows : [];
+    if (rows.length){
+      var prod=0, ng=0;
+      rows.forEach(function(r){ var kg = Number(r.kg||0); prod += kg; if (r.type !== 'N') ng += kg; });
+      return { prodKg: prod, ngKg: ng };
+    }
+    return { prodKg: Number(day.totalKg||0), ngKg: Number(day.reworkKg||0) };
+  }
+  return { prodKg: Number(day.totalKg||0), ngKg: Number(day.reworkKg||0) };
+}
+var _liveProdCache = {};
+function loadLiveProduction(year){
+  if (_liveProdCache[year]) return Promise.resolve(_liveProdCache[year]);
+  var lines = ['B1','B2','R1'];
+  return Promise.all(lines.map(fetchLineData)).then(function(results){
+    var byMonth = {}; for (var mi=1; mi<=12; mi++) byMonth[pad2(mi)] = {prodKg:0, ngKg:0};
+    results.forEach(function(data, idx){
+      var line = lines[idx];
+      var recs = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+      recs.forEach(function(day){
+        if (!day || !day.date || day.date.slice(0,4) !== String(year)) return;
+        var mm = day.date.slice(5,7);
+        if (!byMonth[mm]) return;
+        var t = dayTotals(line, day);
+        byMonth[mm].prodKg += t.prodKg;
+        byMonth[mm].ngKg += t.ngKg;
+      });
+    });
+    _liveProdCache[year] = byMonth;
+    return byMonth;
+  });
+}
+
 /* ══════════════ ตรวจพบอัตโนมัติจาก KPI ══════════════ */
 function computeValue(metric, entry){
   if (!entry) return null;
@@ -312,53 +371,138 @@ function lastNMonthKeys(n){
   for (var i=0;i<n;i++){ arr.unshift(d.getFullYear()+'-'+pad2(d.getMonth()+1)); d.setMonth(d.getMonth()-1); }
   return arr;
 }
+/* กำหนดวันครบกำหนดออกเอกสาร = วันที่ 5 ของเดือนถัดจากเดือนที่เกินเป้า */
+function dueDateForMonth(mk){
+  var y = parseInt(mk.slice(0,4),10), m = parseInt(mk.slice(5,7),10);
+  return new Date(y, m, 5); // m คือเดือนถัดไป (Date month เป็น 0-index อยู่แล้วเลยไม่ต้อง +1 อีก)
+}
+function fmtDateThai(d){
+  return d.getDate()+'/'+pad2(d.getMonth()+1)+'/'+(d.getFullYear()+543);
+}
 function refreshDetect(){
-  $('detectWrap').innerHTML = '<div class="empty">กำลังตรวจสอบ…</div>';
-  Promise.all([fbGet(PATHS.metrics), fbGet(PATHS.entries), fbGet(PATHS.records)]).then(function(res){
+  $('detectWrap').innerHTML = '<div class="empty">กำลังตรวจสอบ (ดึงข้อมูลสดจาก B1/B2/R1)…</div>';
+  runDetection().then(function(det){
+    if (!det){ $('detectWrap').innerHTML = '<div class="empty">ไม่พบตัวชี้วัด "ปริมาณของเสีย…" ในระบบ KPI</div>'; return; }
+    if (!det.hasData){ $('detectWrap').innerHTML = '<div class="empty">ยังไม่มีข้อมูล KPI ให้ตรวจสอบ</div>'; return; }
+    if (!det.exceeded){
+      $('detectWrap').innerHTML = '<div class="empty">✅ เดือนล่าสุด ('+monthLabel(det.mk)+') อยู่ในเป้าหมาย ไม่มีข้อเสนอ CAR/PAR</div>';
+      return;
+    }
+    var overdueTxt = det.daysOverdue > 0
+      ? '<div class="meta" style="color:var(--red); font-weight:800;">⚠️ เลยกำหนดออกเอกสารแล้ว '+det.daysOverdue+' วัน (กำหนดออกภายใน '+fmtDateThai(det.dueDate)+')</div>'
+      : '<div class="meta">กำหนดออกเอกสารภายใน <b>'+fmtDateThai(det.dueDate)+'</b> (เหลือ '+(-det.daysOverdue)+' วัน)</div>';
+    var html = '<div class="suggest-card'+(det.suggestType==='PAR'?' par':'')+'">' +
+      '<h3>'+escapeHtml(det.metric.name)+' — เดือน '+monthLabel(det.mk)+'</h3>' +
+      '<div class="meta">ค่าจริง '+round2(det.v)+'% (เป้าหมาย '+(det.metric.direction==='lower'?'≤':'≥')+' '+det.metric.target+'%) · เกินเป้าติดต่อกัน '+det.streak+' เดือน</div>' +
+      overdueTxt +
+      (det.already
+        ? '<div class="meta" style="color:var(--green); font-weight:700;">✓ ออกเอกสารแล้ว: '+escapeHtml(det.already.docNo||'')+'</div>'
+        : '<button class="btn btn-primary btn-sm" id="issueSuggestBtn">📄 ออก '+det.suggestType+' สำหรับเดือนนี้</button>') +
+    '</div>';
+    $('detectWrap').innerHTML = html;
+    if (!det.already && $('issueSuggestBtn')){
+      $('issueSuggestBtn').addEventListener('click', function(){
+        createFromKpi(det.suggestType, det.metric, det.metricId, {mk:det.mk, v:det.v}, det.streak);
+      });
+    }
+  });
+}
+/* ตรรกะตรวจจับกลาง — คืน object ผลตรวจ ใช้ทั้งแท็บ "ตรวจพบจาก KPI" และแบนเนอร์เตือนบนหน้ารายการ */
+function runDetection(){
+  return Promise.all([fbGet(PATHS.metrics), fbGet(PATHS.entries), fbGet(PATHS.records)]).then(function(res){
     var metrics = res[0] || {}; var entries = res[1] || {}; var records = res[2] || {};
     var target = Object.keys(metrics).filter(function(id){
       var m = metrics[id];
       return m.dept==='PR' && m.type==='ratio' && (m.name||'').indexOf('ของเสีย') !== -1;
     })[0];
-    if (!target){ $('detectWrap').innerHTML = '<div class="empty">ไม่พบตัวชี้วัด "ปริมาณของเสีย…" ในระบบ KPI</div>'; return; }
+    if (!target) return null;
     var metric = metrics[target];
     var months = lastNMonthKeys(12);
-    var results = months.map(function(mk){
-      var e = (entries[mk]||{})[target];
-      var v = computeValue(metric, e);
-      return { mk:mk, v:v, exceeded: isExceeded(metric, v) };
-    });
-    var withData = results.filter(function(r){ return r.v!=null; });
-    if (!withData.length){ $('detectWrap').innerHTML = '<div class="empty">ยังไม่มีข้อมูล KPI ให้ตรวจสอบ</div>'; return; }
-    var latest = withData[withData.length-1];
-    if (!latest.exceeded){
-      $('detectWrap').innerHTML = '<div class="empty">✅ เดือนล่าสุด ('+monthLabel(latest.mk)+') อยู่ในเป้าหมาย ไม่มีข้อเสนอ CAR/PAR</div>';
-      return;
-    }
-    var idx = results.indexOf(latest);
-    var streak = 0;
-    for (var i=idx; i>=0; i--){ if (results[i].exceeded){ streak++; } else break; }
-    var suggestType = streak >= 3 ? 'PAR' : 'CAR';
-    var already = Object.keys(records).filter(function(id){
-      var r = records[id];
-      return r.kpiMetricId===target && r.kpiMonth===latest.mk;
-    });
-    var html = '<div class="suggest-card'+(suggestType==='PAR'?' par':'')+'">' +
-      '<h3>'+escapeHtml(metric.name)+' — เดือน '+monthLabel(latest.mk)+'</h3>' +
-      '<div class="meta">ค่าจริง '+round2(latest.v)+'% (เป้าหมาย '+(metric.direction==='lower'?'≤':'≥')+' '+metric.target+'%) · เกินเป้าติดต่อกัน '+streak+' เดือน</div>' +
-      (already.length
-        ? '<div class="meta" style="color:var(--green); font-weight:700;">✓ ออกเอกสารแล้ว: '+escapeHtml(records[already[0]].docNo||'')+'</div>'
-        : '<button class="btn btn-primary btn-sm" id="issueSuggestBtn">📄 ออก '+suggestType+' สำหรับเดือนนี้</button>') +
-    '</div>';
-    $('detectWrap').innerHTML = html;
-    if (!already.length && $('issueSuggestBtn')){
-      $('issueSuggestBtn').addEventListener('click', function(){
-        createFromKpi(suggestType, metric, target, latest, streak);
+    var years = {}; months.forEach(function(mk){ years[mk.slice(0,4)] = true; });
+    return Promise.all(Object.keys(years).map(loadLiveProduction)).then(function(liveArr){
+      var liveByYear = {};
+      Object.keys(years).forEach(function(y, i){ liveByYear[y] = liveArr[i]; });
+      var results = months.map(function(mk){
+        var y = mk.slice(0,4), mm = mk.slice(5,7);
+        var lp = liveByYear[y];
+        var v = null;
+        if (lp && lp[mm] && lp[mm].prodKg > 0){
+          v = (lp[mm].ngKg / lp[mm].prodKg) * 100;
+        } else {
+          var e = (entries[mk]||{})[target];
+          v = computeValue(metric, e);
+        }
+        return { mk:mk, v:v, exceeded: isExceeded(metric, v) };
       });
-    }
+      var withData = results.filter(function(r){ return r.v!=null; });
+      if (!withData.length) return { hasData:false };
+      var latest = withData[withData.length-1];
+      if (!latest.exceeded) return { hasData:true, exceeded:false, mk:latest.mk };
+      var idx = results.indexOf(latest);
+      var streak = 0;
+      for (var i=idx; i>=0; i--){ if (results[i].exceeded){ streak++; } else break; }
+      var suggestType = streak >= 3 ? 'PAR' : 'CAR';
+      var already = Object.keys(records).filter(function(id){
+        var r = records[id];
+        return r.kpiMetricId===target && r.kpiMonth===latest.mk;
+      });
+      var due = dueDateForMonth(latest.mk);
+      var daysOverdue = Math.floor((new Date().setHours(0,0,0,0) - due.setHours(0,0,0,0)) / 86400000);
+      return {
+        hasData:true, exceeded:true, metric:metric, metricId:target,
+        mk:latest.mk, v:latest.v, streak:streak, suggestType:suggestType,
+        already: already.length ? records[already[0]] : null,
+        dueDate: dueDateForMonth(latest.mk), daysOverdue: daysOverdue
+      };
+    });
   });
 }
 function monthLabel(mk){ var p=mk.split('-'); return MONTH_NAMES[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543); }
+
+/* ── แจ้งเตือน Discord เมื่อพบ KPI เกินเป้าที่ยังไม่ได้ออกเอกสาร (กันสแปม: ส่งแค่วันละครั้งต่อเดือน/ประเภทที่ตรวจพบ) ── */
+function notifyDiscordCarAlert(det){
+  if (!DISCORD_WEBHOOK_CAR_ALERT) return;
+  var todayIso = new Date().toISOString().slice(0,10);
+  var debounceKey = 'car_alert_notified_' + det.mk + '_' + det.suggestType;
+  try {
+    if (localStorage.getItem(debounceKey) === todayIso) return; // แจ้งไปแล้ววันนี้
+  } catch(e){}
+  var overdue = det.daysOverdue > 0;
+  var payload = {
+    embeds: [{
+      title: (overdue ? '🚨 เลยกำหนดออก ' : '🔔 ต้องออก ') + det.suggestType + ' — ' + det.metric.name,
+      description: 'เดือน ' + monthLabel(det.mk) + ' · ค่าจริง ' + round2(det.v) + '% (เป้าหมาย ' + (det.metric.direction==='lower'?'≤':'≥') + ' ' + det.metric.target + '%) · เกินเป้าติดต่อกัน ' + det.streak + ' เดือน',
+      color: overdue ? 0xdc2626 : 0xd97706,
+      fields: [
+        { name:'กำหนดออกเอกสารภายใน', value: fmtDateThai(det.dueDate), inline:true },
+        { name: overdue ? 'เลยกำหนดมาแล้ว' : 'เหลือเวลา', value: (overdue ? det.daysOverdue : -det.daysOverdue) + ' วัน', inline:true },
+        { name:'ลิงก์ระบบ', value:'https://apkplating.github.io/phiphit/car.html', inline:false }
+      ],
+      timestamp: new Date().toISOString()
+    }]
+  };
+  fetch(DISCORD_WEBHOOK_CAR_ALERT, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  }).then(function(){
+    try { localStorage.setItem(debounceKey, todayIso); } catch(e){}
+  }).catch(function(e){ console.warn('notifyDiscordCarAlert failed:', e.message); });
+}
+
+/* แบนเนอร์เตือนบนสุด — ขึ้นทันทีที่ล็อกอิน ไม่ต้องกดเข้าแท็บ "ตรวจพบจาก KPI" ก่อน */
+function renderGlobalAlert(){
+  runDetection().then(function(det){
+    var el = $('globalAlert');
+    if (!det || !det.hasData || !det.exceeded || det.already){ el.innerHTML = ''; return; }
+    if (det.daysOverdue > 0){
+      el.innerHTML = '<div class="alertbar overdue">⚠️ ยังไม่ได้ออกเอกสาร '+det.suggestType+' สำหรับ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' — เลยกำหนด ('+fmtDateThai(det.dueDate)+') มาแล้ว '+det.daysOverdue+' วัน <a data-goto-detect href="#">ไปออกเอกสารตอนนี้ →</a></div>';
+    } else {
+      el.innerHTML = '<div class="alertbar due-soon">🔔 พบ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' เกินเป้า — ต้องออก '+det.suggestType+' ภายใน '+fmtDateThai(det.dueDate)+' (เหลือ '+(-det.daysOverdue)+' วัน) <a data-goto-detect href="#">ไปออกเอกสาร →</a></div>';
+    }
+    var link = el.querySelector('[data-goto-detect]');
+    if (link) link.addEventListener('click', function(e){ e.preventDefault(); switchTab('detect'); });
+    notifyDiscordCarAlert(det);
+  });
+}
 
 function createFromKpi(type, metric, metricId, latest, streak){
   var bt = todayBE();
@@ -624,6 +768,7 @@ function saveRecord(rec, id){
     currentDetailId = newId;
     refreshList();
     renderDetail(rec, newId);
+    renderGlobalAlert();
     btn.disabled = false; btn.textContent = '💾 บันทึก';
   };
   if (!id && !rec.docNo){

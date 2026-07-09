@@ -195,8 +195,10 @@ var DEFAULT_HIST = {
   2024:{target:5,  prod:743.00, ng:32.00}
 };
 /* รองรับข้อมูลเก่าที่เคยบันทึกเป็นตัวเลข % เดี่ยว ให้แปลงเป็นโครงสร้างใหม่ {target,prod,ng} */
-function normalizeHistYear(v){
+function normalizeHistYear(v, year){
   if (v != null && typeof v === 'object') return {target: v.target==null?null:Number(v.target), prod: v.prod==null?null:Number(v.prod), ng: v.ng==null?null:Number(v.ng)};
+  // รูปแบบเก่า (แค่ตัวเลข % เดียว) — ถ้าเป็นปีที่เรามีข้อมูลจริงครบ (target/prod/ng) อยู่แล้ว ให้อัปเกรดให้อัตโนมัติ
+  if (year != null && DEFAULT_HIST[year]) return Object.assign({}, DEFAULT_HIST[year]);
   return {target: null, prod: null, ng: null, ratioOverride: v==null?null:Number(v)};
 }
 function histRatio(h){
@@ -309,9 +311,15 @@ function loadReportAndRender(){
     else report.tasks = report.tasks.map(normalizeTask);
     if (!report.historicalYears) report.historicalYears = Object.assign({}, DEFAULT_HIST);
     else {
-      var normalized = {};
-      Object.keys(report.historicalYears).forEach(function(y){ normalized[y] = normalizeHistYear(report.historicalYears[y]); });
+      var normalized = {}; var upgraded = false;
+      Object.keys(report.historicalYears).forEach(function(y){
+        var orig = report.historicalYears[y];
+        var isLegacyFlat = !(orig != null && typeof orig === 'object');
+        normalized[y] = normalizeHistYear(orig, y);
+        if (isLegacyFlat && normalized[y].prod != null) upgraded = true; // อัปเกรดจาก % เดียวเป็นชุดข้อมูลเต็มสำเร็จ
+      });
       report.historicalYears = normalized;
+      if (upgraded) fbPut(PATHS.report + '/' + metricId + '/historicalYears', report.historicalYears);
     }
     if (!report.policyText) report.policyText = 'ควบคุมคุณภาพชิ้นงานจากกระบวนการชุบ';
     if (!report.planText) report.planText = 'ทบทวนความถี่ของการสุ่มตรวจสอบคุณภาพ';
