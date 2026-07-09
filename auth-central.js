@@ -117,6 +117,15 @@
       ]
     },
     {
+      key: 'car', label: 'CAR/PAR', group: 'คุณภาพ & ISO',
+      tabs: [
+        { id: 'list',   label: 'รายการ CAR/PAR' },
+        { id: 'detect', label: 'ตรวจพบจาก KPI' },
+        { id: 'new',    label: 'สร้างใหม่ (มือ)' },
+        { id: 'detail', label: 'รายละเอียด' }
+      ]
+    },
+    {
       key: 'analytics', label: 'Analytics', group: 'คุณภาพ & ISO',
       tabs: [
         { id: 'dashboard', label: 'แดชบอร์ด' }
