@@ -190,6 +190,7 @@ tr:hover td{background:var(--sky-pale);}
           </tbody>
         </table>
       </div>
+      <div id="wipCorrectionsList"></div>
     </div>
 
     <!-- ── คิวรอผลิต (Backlog) + Auto Scheduler ── -->
@@ -295,10 +296,12 @@ var FB_LINES = {
 var JM_URL     = FB_BASE + '/job-master.json';
 var INTAKE_URL = FB_BASE + '/intake.json';
 var DEL_URL    = FB_BASE + '/bl-delivery.json';
+var WIP_CORRECTIONS_PATH = FB_BASE + '/bl-wip-corrections.json'; // ปรับ WIP ด้วยมือ (ไม่แตะ Job Master/INV เลย)
 var blJmItems   = [];  // job intake items จาก Job Master + intake
 var blJmRecords = [];  // job records (type:'out') จาก Job Master
 var blDelRecords = [];  // delivery ที่บันทึกเพิ่มเติมใน bl_stock
 var blWipMap    = {};  // normKey → {pcs, kgs}
+var blWipCorrections = []; // [{id, partNo, pcs, note, addedAt}] — ปรับยอด "ชุบแล้วจริง" ด้วยมือ เฉพาะของเก่าที่ v4/5/6 ไม่มีบันทึก
 var blPendingList = []; // รายการรอชุบที่คำนวณแล้ว [{partNo, customer, partName, pendingPcs, oldestDate, daysWaiting}]
 var blStockLoaded = false;
 
@@ -410,7 +413,7 @@ async function loadData() {
   // โหลดรายการรอชุบจาก BL Stock — แค่ครั้งแรกที่เปิดหน้า (ไม่ดึงซ้ำทุก 30 วิ เพื่อลด Firebase egress)
   if (!blStockLoaded) {
     blStockLoaded = true;
-    try { await loadBLStockSource(); renderBLPendingList(); } catch(e) { console.warn('bl stock:', e.message); }
+    try { await loadBLStockSource(); renderBLPendingList(); renderWipCorrectionsList(); } catch(e) { console.warn('bl stock:', e.message); }
   }
 
   renderPOList();
@@ -843,8 +846,22 @@ async function loadBLStockSource() {
     });
   });
 
+  // 4) ยอดปรับ WIP ด้วยมือ (เฉพาะของเก่าที่ v4/5/6 ไม่มีบันทึกให้เห็น)
+  await loadWipCorrections();
+
   computeBLPendingList();
   populateBillDropdown(1); // เติมตัวเลือกเลขบิลในฟอร์มสร้าง/แก้ไข PO หลัก หลังข้อมูล BL Stock โหลดเสร็จ
+}
+
+async function loadWipCorrections() {
+  try {
+    var r = await fetch(WIP_CORRECTIONS_PATH);
+    var d = await r.json();
+    blWipCorrections = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+  } catch(e) { blWipCorrections = []; }
+}
+async function saveWipCorrectionsToFB() {
+  await fetch(WIP_CORRECTIONS_PATH, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(blWipCorrections) });
 }
 
 function blGetWip(partNo) {
@@ -900,9 +917,11 @@ function computeBLPendingList() {
       if (w > 0) wipPcs = Math.round(wipKgs * 1000 / w);
       else weightMissing = true; // ชุบไปแล้วเป็น กก. จริง แต่แปลงเป็นชิ้นไม่ได้ เพราะไม่มีน้ำหนัก/ชิ้นใน Part Master
     }
-    var consumed = wipPcs; // "ค้างชุบ" ดูแค่ว่าชุบแล้วหรือยัง (WIP จาก v4/5/6) เท่านั้น
-                            // ไม่เกี่ยวกับว่าส่งออกจาก INV (delivery) ไปแล้วหรือยัง — คนละเรื่องกัน
-                            // (delivery ยังถูกดึงมาเก็บไว้เผื่อใช้ในอนาคต แต่ไม่เอามาหักยอด "ค้างชุบ" ตรงนี้)
+    // บวกยอดที่ปรับด้วยมือเข้าไปด้วย (เฉพาะของเก่าที่ v4/5/6 หาไม่เจอ แต่รู้แน่ๆ ว่าชุบไปแล้ว)
+    var correctionPcs = 0;
+    blWipCorrections.forEach(function(c) { if (blNorm(c.partNo) === k) correctionPcs += Number(c.pcs || 0); });
+    wipPcs += correctionPcs;
+    var consumed = wipPcs; // "ค้างชุบ" ดูแค่ WIP (ชุบแล้วจาก v4/5/6) เท่านั้น — ไม่เกี่ยวกับ Job INV/delivery เลย
 
     // ไล่ล็อตจากเก่าสุด → ใหม่สุด หักยอด consumed ออกทีละล็อต (FIFO)
     // ล็อตที่เก่าที่สุดจะถูกหักออกก่อนเสมอ เหลือเท่าไหร่ต่อล็อตคือของที่ยังไม่ได้ชุบจริง
@@ -944,6 +963,7 @@ async function refreshBLStock() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังดึงข้อมูล...'; }
   await loadBLStockSource();
   renderBLPendingList();
+  renderWipCorrectionsList();
   if (btn) { btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก BL Stock'; }
 }
 
@@ -973,10 +993,61 @@ function renderBLPendingList() {
         '<select id="blline' + i + '" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;width:auto;">' +
           '<option value="B1">B1</option><option value="B2">B2</option><option value="R1">R1</option>' +
         '</select> ' +
-        '<button class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;" onclick="confirmBLToQueue(' + i + ',\'' + rowId + '\')">➕ เข้าคิว</button>' +
+        '<button class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;" onclick="confirmBLToQueue(' + i + ',\'' + rowId + '\')">➕ เข้าคิว</button> ' +
+        '<button class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;" onclick="openWipCorrection(' + i + ')" title="ระบุจำนวนที่ชุบไปแล้วจริง (สำหรับของเก่าที่ v4/5/6 ไม่มีบันทึก)">✏️ ปรับ WIP</button>' +
       '</td>' +
     '</tr>';
   }).join('');
+}
+
+// เปิด prompt ให้กรอกจำนวนที่ชุบไปแล้วจริง (สำหรับของเก่าที่ v4/5/6 หาไม่เจอ) — ไม่แตะ Job Master/INV เลย
+function openWipCorrection(i) {
+  var item = blPendingList[i];
+  if (!item) return;
+  var msg = 'ระบุจำนวนที่ "ชุบไปแล้วจริง" (ชิ้น) สำหรับ ' + item.partNo +
+    (item.bill ? ' (บิล ' + item.bill + ')' : '') +
+    '\n\nกรอกเต็มจำนวนค้างชุบ (' + item.pendingPcs.toLocaleString() + ' ชิ้น) ถ้าชุบหมดแล้วทั้งบิล\n' +
+    'หรือกรอกบางส่วนถ้าชุบไปแล้วแค่บางส่วน\n\n' +
+    'หมายเหตุ: ปรับเฉพาะยอด WIP ในระบบนี้เท่านั้น ไม่กระทบ Job Master/INV';
+  var val = prompt(msg, item.pendingPcs);
+  if (val === null) return; // ยกเลิก
+  var pcs = parseFloat(val);
+  if (!pcs || pcs <= 0) { showToast('toast-backlog','กรุณากรอกจำนวนที่ถูกต้อง','err'); return; }
+  var note = prompt('หมายเหตุ (ไม่บังคับ) เช่น "ชุบไปก่อนระบบนี้จะเริ่มใช้"', '') || '';
+  blWipCorrections.push({
+    id: 'wc_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    partNo: item.partNo,
+    pcs: pcs,
+    note: note,
+    addedAt: new Date().toISOString()
+  });
+  saveWipCorrectionsToFB();
+  computeBLPendingList();
+  renderBLPendingList();
+  renderWipCorrectionsList();
+  showToast('toast-backlog','✅ ปรับ WIP แล้ว +' + pcs.toLocaleString() + ' ชิ้น สำหรับ ' + item.partNo, 'ok');
+}
+
+async function removeWipCorrection(id) {
+  if (!confirm('ลบการปรับ WIP นี้? (ยอดค้างชุบของ P/No นี้จะกลับไปเป็นก่อนปรับ)')) return;
+  blWipCorrections = blWipCorrections.filter(function(c){ return c.id !== id; });
+  await saveWipCorrectionsToFB();
+  computeBLPendingList();
+  renderBLPendingList();
+  renderWipCorrectionsList();
+}
+
+function renderWipCorrectionsList() {
+  var box = document.getElementById('wipCorrectionsList');
+  if (!box) return;
+  if (!blWipCorrections.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:10px;color:var(--text-muted);margin:8px 0 4px;font-weight:600;">📝 ประวัติการปรับ WIP ด้วยมือ (' + blWipCorrections.length + ' รายการ)</div>' +
+    blWipCorrections.map(function(c) {
+      return '<div style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#f8fafc;border-radius:6px;margin-bottom:3px;">' +
+        '<span><b>' + esc(c.partNo) + '</b> +' + Number(c.pcs).toLocaleString() + ' ชิ้น' + (c.note ? ' — ' + esc(c.note) : '') + '</span>' +
+        '<button class="btn btn-sm" style="width:auto;margin:0;padding:2px 8px;background:var(--red);color:#fff;" onclick="removeWipCorrection(\'' + c.id + '\')">ลบ</button>' +
+      '</div>';
+    }).join('');
 }
 
 // ผู้ใช้กดยืนยันเองทีละรายการ — ไม่ auto-push เข้าคิวโดยไม่ถาม
