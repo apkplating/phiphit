@@ -304,6 +304,7 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
+<script src="unit-convert.js"></script>
 <script>
 // ══════════════════════════════════════════════════════
 //  AUTH (Central Auth)
@@ -599,7 +600,14 @@ async function loadWIP() {
 //  delivery ← jmRecords[type:'out'].qty + blDel[].qty
 // ══════════════════════════════════════════════════════
 function jobPartNo(job) { return job.partName || job.name || job.partNo || job.bill || ''; }
-function jobQty(job)   { return Number(job.qty || job.pcs || job.line || 0); }
+// jobQty = จำนวนรับเข้าเป็น "ชิ้น" เสมอ (ให้หน่วยตรงกับที่ใช้เทียบ/คำนวณทั่วทั้งไฟล์)
+// ถ้าบิลรับเข้าเป็น กก. ล้วน (ไม่มี qty/pcs เลย) ต้องแปลงผ่านน้ำหนัก/ชิ้นจาก Part Master ก่อน
+// ไม่งั้นจะได้ 0 ทั้งที่รับเข้าจริง (บั๊กแบบเดียวกับที่เจอซ้ำหลายจุดในระบบนี้)
+function jobQty(job) {
+  var raw = Number(job.qty || job.pcs || job.line || 0);
+  var kg = Number(job.qtyKg || 0);
+  return ucResolvePcs(raw, kg, jobPartNo(job), pmParts).pcs;
+}
 // jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
 function jobBill(job)  { return job.bill || job.id || ''; }
 
@@ -742,7 +750,7 @@ function renderStock() {
     var wkg=wo.kgs||0;
     if (!wpcs && wkg>0) {
       var pmw=pmLookup(p.partNo);
-      if (pmw && pmw.weightPerPc>0) wpcs=Math.round(wkg*1000/pmw.weightPerPc);
+      if (pmw && pmw.weightPerPc>0) wpcs=ucKgToPcs(wkg, pmw.weightPerPc);
     }
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
@@ -788,7 +796,7 @@ function renderStock() {
 
     // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
     if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
-      wip = Math.round(wipKg * 1000 / pm.weightPerPc);
+      wip = ucKgToPcs(wipKg, pm.weightPerPc);
     }
 
     var remain   = Math.max(0, p.receive - p.delivery);
@@ -869,7 +877,7 @@ function buildDetail(p) {
   var wipKg2 = wipObj.kgs||0;
   // แปลง kg→ชิ้น ถ้ามี weightPerPc
   if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
-    wipPcs = Math.round(wipKg2 * 1000 / pm.weightPerPc);
+    wipPcs = ucKgToPcs(wipKg2, pm.weightPerPc);
   }
   var wip = wipPcs;
   var remain=Math.max(0,p.receive-p.delivery);
@@ -907,7 +915,7 @@ function buildDetail(p) {
       if (pm.pcsPerRack) html += ' · '+pm.pcsPerRack+' ชิ้น/rack';
       // คำนวณ kg ที่ควรได้
       if (wip.kgs) {
-        var calcPcs = Math.round(wip.kgs * 1000 / pm.weightPerPc);
+        var calcPcs = ucKgToPcs(wip.kgs, pm.weightPerPc);
         html += ' → WIP '+wip.kgs.toFixed(2)+'kg ≈ <strong>'+calcPcs.toLocaleString()+' ชิ้น</strong>';
       }
       html += '</div>';
@@ -1510,7 +1518,7 @@ function renderTraceCard(partNo){
   var s2Lines = wo.lines||{};
   // แปลง กก. → ชิ้น ให้หน่วยตรงกับ Stock 1/4 (รับ/ขายนับเป็นชิ้นทั้งคู่) — ไม่งั้นเทียบกันไม่ได้
   if (!s2Pcs && s2Kg > 0 && pm && pm.weightPerPc > 0) {
-    s2Pcs = Math.round(s2Kg * 1000 / pm.weightPerPc);
+    s2Pcs = ucKgToPcs(s2Kg, pm.weightPerPc);
   }
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
@@ -1561,7 +1569,7 @@ function renderTraceCard(partNo){
           var pcsEq = g.pcs;
           var convertedFromKg = false;
           if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) {
-            pcsEq = Math.round(g.kg * 1000 / pm.weightPerPc);
+            pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
             convertedFromKg = true;
           }
           var qtyStr = pcsEq > 0

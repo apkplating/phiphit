@@ -1471,6 +1471,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
+<script src="unit-convert.js"></script>
 <script>
 // ═══════════════════════════════════════
 //  STATE
@@ -8924,12 +8925,9 @@ var _poCacheTime   = 0;
 var PO_CACHE_TTL   = 30000; // 30 วิ
 
 // หาน้ำหนัก/ชิ้น (กรัม) จาก Part Master ที่โหลดไว้แล้ว (ตัวแปร partList)
+// ใช้ยูทิลิตี้กลาง (unit-convert.js) ร่วมกับทุกไฟล์ในระบบ — แก้ที่เดียว ใช้ได้ทุกที่
 function getWeightGForPO(partNo) {
-  var pno = (partNo || '').toUpperCase().trim();
-  if (!pno) return 0;
-  var list = (typeof partList !== 'undefined') ? partList : [];
-  var p = list.find(function(x){ return (x.partNo||'').toUpperCase().trim() === pno; });
-  return (p && p.weightG > 0) ? p.weightG : 0;
+  return ucGetWeightG(partNo, (typeof partList !== 'undefined') ? partList : []);
 }
 
 function _buildItems(orders, liveRows, lineFilter) {

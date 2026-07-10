@@ -274,6 +274,7 @@ tr:hover td{background:var(--sky-pale);}
   </main>
 </div>
 
+<script src="unit-convert.js"></script>
 <script>
 // ══════════════════════════════════════════════
 //  CONFIG
@@ -516,20 +517,9 @@ async function loadActualOutput() {
 
 
 // ── หาน้ำหนัก/ชิ้น (กรัม) ของ P/No จาก Part Master ──
-// รองรับหลายชื่อ field เผื่อ part_master.html ใช้ key ไม่ตรงกัน
-// ถ้าพบว่าไม่ตรงกับที่ระบบใช้จริง ให้แก้รายชื่อใน WEIGHT_FIELD_CANDIDATES
-var WEIGHT_FIELD_CANDIDATES = ['weight', 'weightPerPc', 'weightPerPiece', 'unitWeight', 'pieceWeight', 'gPerPc', 'weightG', 'wtPerPc', 'g'];
+// ใช้ยูทิลิตี้กลาง (unit-convert.js) ร่วมกับทุกไฟล์ในระบบ — แก้ที่เดียว ใช้ได้ทุกที่
 function getPartWeight(partNo) {
-  var pno = (partNo || '').toUpperCase().trim();
-  if (!pno) return 0;
-  var part = pmParts.find(function(p) { return (p.partNo || '').toUpperCase().trim() === pno; });
-  if (!part) return 0;
-  for (var i = 0; i < WEIGHT_FIELD_CANDIDATES.length; i++) {
-    var v = part[WEIGHT_FIELD_CANDIDATES[i]];
-    var num = parseFloat(v);
-    if (v !== undefined && v !== null && v !== '' && !isNaN(num) && num > 0) return num;
-  }
-  return 0;
+  return ucGetWeightG(partNo, pmParts);
 }
 
 // นับยอดจริงเฉพาะ "วันเดียวกับที่สร้าง PO" เท่านั้น สำหรับสาย/partNo ที่ระบุ
