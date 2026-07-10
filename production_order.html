@@ -201,19 +201,10 @@ tr:hover td{background:var(--sky-pale);}
       <div style="font-size:10px;color:var(--text-muted);margin:-4px 0 10px;line-height:1.5;">
         ระบบออกใบสั่งผลิตให้อัตโนมัติทุกวัน 05:00 น. ผ่าน GitHub Actions (ไม่ต้องเปิดหน้านี้เลย) — เรียงตามลำดับเข้าคิวก่อนหลัง (FIFO) โดยรวมแล้วต้องไม่เกิน "กำลังการผลิตสูงสุดที่เคยทำได้" ของแต่ละสาย (คำนวณจากยอดผลิตจริงสูงสุดในอดีต)
         <br>หน้านี้จะรันซ้ำให้เองอีกครั้งเป็น fallback ตอนเปิดหน้า (เฉพาะสายที่ยังไม่ถูกรันในวันนั้น) เผื่อ GitHub Actions รันไม่สำเร็จ
+        <br>รายการในคิวนี้มาจากการกด "➕ เข้าคิว" ในตาราง "รายการรอชุบจาก BL Stock" ด้านบนเท่านั้น
         <div id="capacityInfo" style="margin-top:6px;font-weight:600;"></div>
         <div id="autoRunStatus" style="margin-top:4px;"></div>
       </div>
-
-      <div class="card-label" style="margin-bottom:6px;margin-top:4px;">เพิ่มรายการเข้าคิว</div>
-      <div id="blFormRow"></div>
-      <div class="field" style="margin-bottom:10px;">
-        <label>เลขบิลอ้างอิง (เลือกจากบิลที่มีจริง — เว้นว่างได้ถ้าไม่มี)</label>
-        <select id="blBillSelect" style="width:100%;">
-          <option value="">— ไม่ระบุเลขบิล —</option>
-        </select>
-      </div>
-      <button class="btn btn-outline" style="margin-bottom:10px;" onclick="addBacklogItem()">➕ เพิ่มเข้าคิว</button>
 
       <div style="overflow-x:auto;">
         <table>
@@ -369,7 +360,6 @@ function showApp() {
   var dateEl = document.getElementById('poDate');
   if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
   initSingleRow();   // เตรียมฟอร์มรายการเดียว
-  initBacklogRow();  // เตรียมฟอร์มเพิ่มรายการเข้าคิว backlog
   loadData();
 }
 
@@ -756,56 +746,6 @@ function renderCapacityInfo() {
   el.textContent = '📊 กำลังการผลิต (best-case จากประวัติ): ' + parts.join(' · ');
 }
 
-// ── ฟอร์มเพิ่มรายการเข้าคิว backlog (ใช้ buildRowHTML เดียวกับฟอร์มสร้าง PO) ──
-function initBacklogRow() {
-  var wrap = document.getElementById('blFormRow');
-  if (!wrap) return;
-  wrap.innerHTML = buildRowHTML('bl');
-  loadPM();
-  attachRowEvents('bl');
-  // คิว backlog ต้องระบุสายเจาะจง (auto scheduler คำนวณกำลังการผลิตแยกทีละสาย)
-  // ตัดตัวเลือก "ทุกสาย" ออก กันเลือกผิดแล้วรายการค้างในคิวตลอดไป
-  var polEl = document.getElementById('pol-bl');
-  if (polEl) {
-    var allOpt = polEl.querySelector('option[value="ALL"]');
-    if (allOpt) allOpt.remove();
-  }
-}
-
-function addBacklogItem() {
-  var idx = 'bl';
-  var customer = (document.getElementById('poc-'+idx)||{}).value||'';
-  var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
-  var partName = (document.getElementById('pon-'+idx)||{}).value||'';
-  var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
-  var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
-  var unit     = (document.getElementById('pou-'+idx)||{}).value||'pcs';
-  var bill     = (document.getElementById('blBillSelect')||{}).value||'';
-
-  if (!customer && !partNo) { showToast('toast-backlog','กรุณาระบุลูกค้าหรือหมายเลขชิ้นงาน','err'); return; }
-  if (!qty) { showToast('toast-backlog','กรุณากรอกจำนวน','err'); return; }
-  if (line === 'ALL' || !line) { showToast('toast-backlog','กรุณาเลือกสายผลิตให้เจาะจง (B1/B2/R1) ห้ามเลือก "ทุกสาย"','err'); return; }
-
-  backlogItems.push({
-    id: 'bl_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-    createdAt: new Date().toISOString(),
-    customer, partNo, partName, line, qty, unit, status: 'pending', bill
-  });
-  saveBacklogToFB();
-  renderBacklogList();
-  renderCapacityInfo();
-  showToast('toast-backlog','✅ เพิ่มเข้าคิวแล้ว','ok');
-
-  var curLine = line;
-  initBacklogRow();
-  setTimeout(function(){
-    var polEl = document.getElementById('pol-bl');
-    if (polEl) polEl.value = curLine;
-  }, 20);
-  var billEl = document.getElementById('blBillSelect');
-  if (billEl) billEl.value = ''; // เคลียร์ตัวเลือกเลขบิลหลังเพิ่มสำเร็จ (คงลิสต์ตัวเลือกไว้)
-}
-
 async function removeBacklogItem(id) {
   if (!confirm('ลบรายการนี้ออกจากคิว?')) return;
   backlogItems = backlogItems.filter(function(b){ return b.id !== id; });
@@ -904,29 +844,6 @@ async function loadBLStockSource() {
   });
 
   computeBLPendingList();
-  populateBLBillDropdown();
-}
-
-// เติมตัวเลือกเลขบิลจาก blJmItems ให้เลือกแทนการพิมพ์เอง (กันพิมพ์ผิด)
-function populateBLBillDropdown() {
-  var sel = document.getElementById('blBillSelect');
-  if (!sel) return;
-  var seen = {};
-  var bills = [];
-  blJmItems.forEach(function(job) {
-    var b = blJobBill(job);
-    if (!b || seen[b]) return;
-    seen[b] = true;
-    bills.push({ bill: b, date: job.date || '', customer: job.customer || '' });
-  });
-  bills.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }); // ใหม่สุดก่อน
-  var curVal = sel.value;
-  sel.innerHTML = '<option value="">— ไม่ระบุเลขบิล —</option>' +
-    bills.map(function(b) {
-      var label = b.bill + (b.date ? ' (' + b.date + ')' : '') + (b.customer ? ' — ' + b.customer : '');
-      return '<option value="' + esc(b.bill) + '">' + esc(label) + '</option>';
-    }).join('');
-  sel.value = curVal; // คงค่าที่เลือกไว้เดิมถ้ายังอยู่ในลิสต์
 }
 
 function blGetWip(partNo) {
