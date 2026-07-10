@@ -1436,6 +1436,10 @@ function renderTraceCard(partNo){
   var s2Pcs = wo.pcs||0;
   var s2Kg  = wo.kgs||0;
   var s2Lines = wo.lines||{};
+  // แปลง กก. → ชิ้น ให้หน่วยตรงกับ Stock 1/4 (รับ/ขายนับเป็นชิ้นทั้งคู่) — ไม่งั้นเทียบกันไม่ได้
+  if (!s2Pcs && s2Kg > 0 && pm && pm.weightPerPc > 0) {
+    s2Pcs = Math.round(s2Kg * 1000 / pm.weightPerPc);
+  }
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1467,10 +1471,30 @@ function renderTraceCard(partNo){
 
     var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var detailId = 'bdet-'+k+'-'+bi;
-    var plateHtml = plateEvents.length
-      ? plateEvents.map(function(ev){
-          var qtyStr = ev.pcs>0 ? ev.pcs.toLocaleString()+' ชิ้น' : (ev.kg>0 ? ev.kg.toFixed(2)+' kg' : '-');
-          return '<div style="font-size:10px;color:#0891b2;">🧪 '+fmtD(ev.date)+' · '+esc(ev.line)+' · '+qtyStr+'</div>';
+    // สรุปรวมตามวันที่+สาย แทนการโชว์ทีละแถวย่อย (บิลเดียวอาจมีบันทึกเป็นสิบๆ ครั้งในวันเดียว) — กระชับกว่าเยอะ
+    var plateGroups = {};
+    plateEvents.forEach(function(ev){
+      var gk = (ev.date||'-')+'|'+(ev.line||'-');
+      if (!plateGroups[gk]) plateGroups[gk] = { date: ev.date, line: ev.line, pcs: 0, kg: 0, count: 0 };
+      plateGroups[gk].pcs += ev.pcs;
+      plateGroups[gk].kg  += ev.kg;
+      plateGroups[gk].count++;
+    });
+    var plateGroupList = Object.keys(plateGroups).map(function(gk){ return plateGroups[gk]; })
+      .sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var plateHtml = plateGroupList.length
+      ? plateGroupList.map(function(g){
+          // แปลง กก. → ชิ้น ให้หน่วยตรงกับ "รับเข้า"/"ส่งออก" ที่นับเป็นชิ้นทั้งคู่ (สอดคล้องกันทั้งสายชุบ)
+          var pcsEq = g.pcs;
+          var convertedFromKg = false;
+          if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) {
+            pcsEq = Math.round(g.kg * 1000 / pm.weightPerPc);
+            convertedFromKg = true;
+          }
+          var qtyStr = pcsEq > 0
+            ? pcsEq.toLocaleString() + ' ชิ้น' + (convertedFromKg ? ' <span style="color:#94a3b8;">(≈จาก ' + g.kg.toFixed(2) + ' kg)</span>' : '')
+            : (g.kg > 0 ? g.kg.toFixed(2) + ' kg <span style="color:#dc2626;">(ไม่มีน้ำหนัก/ชิ้นใน Part Master แปลงเป็นชิ้นไม่ได้)</span>' : '-');
+          return '<div style="font-size:10px;color:#0891b2;">🧪 '+fmtD(g.date)+' · '+esc(g.line)+' · '+qtyStr+' <span style="color:#94a3b8;">('+g.count+' รอบ)</span></div>';
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ไม่พบบันทึกการชุบที่ผูกกับบิลนี้ (อาจชุบก่อนมีฟีเจอร์เลือกบิล หรือกดข้ามตอนชุบ)</div>';
     var invHtml = invEvents.length
