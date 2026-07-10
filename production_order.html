@@ -892,11 +892,13 @@ function computeBLPendingList() {
     var wo = blGetWip(p.partNo);
     var wipPcs = wo ? (wo.pcs || 0) : 0;
     var wipKgs = wo ? (wo.kgs || 0) : 0;
+    var weightMissing = false;
     // สายที่ชุบเป็น กก. (เช่น B2 barrel) จะได้ wo.pcs = 0 แต่มี wo.kgs อยู่
     // ต้องแปลง กก. → ชิ้น ด้วยน้ำหนัก/ชิ้นจาก Part Master ก่อน ไม่งั้นจะนับว่ายังไม่ได้ชุบทั้งที่ชุบไปแล้ว
     if (!wipPcs && wipKgs > 0) {
       var w = getPartWeight(p.partNo);
       if (w > 0) wipPcs = Math.round(wipKgs * 1000 / w);
+      else weightMissing = true; // ชุบไปแล้วเป็น กก. จริง แต่แปลงเป็นชิ้นไม่ได้ เพราะไม่มีน้ำหนัก/ชิ้นใน Part Master
     }
     var consumed = wipPcs; // "ค้างชุบ" ดูแค่ว่าชุบแล้วหรือยัง (WIP จาก v4/5/6) เท่านั้น
                             // ไม่เกี่ยวกับว่าส่งออกจาก INV (delivery) ไปแล้วหรือยัง — คนละเรื่องกัน
@@ -927,7 +929,8 @@ function computeBLPendingList() {
         bill: lot.bill,        // เลขบิลของล็อตนี้ล็อตเดียว — ไม่ปนกับล็อตอื่น
         lotDate: lot.date,     // วันที่รับเข้าของล็อตนี้
         pendingPcs: lotPending,
-        daysWaiting: daysWaiting
+        daysWaiting: daysWaiting,
+        weightMissing: weightMissing // true = ชุบไปแล้วจริง แต่แปลงหน่วยไม่ได้ ตัวเลข "ค้างชุบ" นี้อาจไม่ถูกต้อง
       });
     });
   });
@@ -962,7 +965,9 @@ function renderBLPendingList() {
       '<td>' + esc(item.customer) + '</td>' +
       '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(item.partNo) + '</td>' +
       '<td>' + esc(item.partName) + '</td>' +
-      '<td style="text-align:center;font-weight:700;">' + item.pendingPcs.toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">ชิ้น</span></td>' +
+      '<td style="text-align:center;font-weight:700;">' + item.pendingPcs.toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">ชิ้น</span>' +
+        (item.weightMissing ? '<div style="font-size:9px;color:var(--red);margin-top:2px;font-weight:400;">⚠️ ชุบแล้ว (กก.) แต่ไม่มีน้ำหนัก/ชิ้นใน Part Master — ตัวเลขนี้อาจไม่ถูกต้อง</div>' : '') +
+      '</td>' +
       '<td style="text-align:center;font-weight:700;color:' + ageColor + ';">' + (isOld?'⚠️ ':'') + ageStr + '</td>' +
       '<td>' +
         '<select id="blline' + i + '" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;width:auto;">' +
