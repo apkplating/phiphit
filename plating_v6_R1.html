@@ -8896,7 +8896,9 @@ var PO_CACHE_TTL   = 30000; // 30 วิ
 
 function _buildItems(orders, liveRows, lineFilter) {
   var items = [];
+  var today = isoDate(new Date());
   orders.forEach(function(po) {
+    if (po.date !== today) return; // ใบสั่งผลิตของวันนี้เท่านั้น
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
@@ -9025,7 +9027,9 @@ async function showPOPopup(lineFilter) {
   } catch(e) {}
 
   var pending = [];
+  var today = isoDate(new Date());
   orders.forEach(function(po) {
+    if (po.date !== today) return; // ใบสั่งผลิตของวันนี้เท่านั้น
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
