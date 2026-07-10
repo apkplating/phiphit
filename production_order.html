@@ -167,6 +167,31 @@ tr:hover td{background:var(--sky-pale);}
       <div class="toast" id="toast-po"></div>
     </div>
 
+    <!-- ── รายการรอชุบจาก BL Stock ── -->
+    <div class="card" id="blStockCard">
+      <div class="sec-head">
+        <div class="card-label" style="margin:0;">📥 รายการรอชุบจาก BL Stock</div>
+        <button class="btn btn-outline btn-sm" id="blRefreshBtn" onclick="refreshBLStock()" style="width:auto;margin:0;padding:5px 10px;">🔄 ดึงข้อมูลจาก BL Stock</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin:-4px 0 10px;line-height:1.5;">
+        ดึงยอด "รับเข้าแล้ว แต่ยังไม่ได้ชุบ" จาก bl_stock.html มาให้ดู เรียงจากล็อตเก่าสุดก่อน (FIFO) — แถวไหนค้างมาแล้ว ≥ 3 วันจะไฮไลต์สีแดงเตือนให้เห็น
+        <br>ระบบ<strong>ไม่ดันเข้าคิวให้อัตโนมัติ</strong> — กดปุ่ม "➕ เข้าคิว" เองทีละรายการ พร้อมเลือกสายผลิตก่อนยืนยัน
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>หมายเลขชิ้นงาน</th><th>ลูกค้า / ชื่อชิ้นงาน</th><th>ค้างชุบ</th>
+              <th>ล็อตเก่าสุด</th><th>ค้างมาแล้ว</th><th>สาย + เข้าคิว</th>
+            </tr>
+          </thead>
+          <tbody id="blPendingBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">กด "ดึงข้อมูลจาก BL Stock" เพื่อโหลดรายการ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ── คิวรอผลิต (Backlog) + Auto Scheduler ── -->
     <div class="card" id="backlogCard">
       <div class="sec-head">
@@ -267,6 +292,18 @@ var FB_LINES = {
   B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
   R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
+
+// ── BL Stock source (สำหรับดึง "รายการรอชุบ" มาโชว์ให้เลือกเข้าคิว) ──
+// ใช้ path เดียวกับ bl_stock.html ทุกจุด เพื่อให้ตัวเลขตรงกัน
+var JM_URL     = FB_BASE + '/job-master.json';
+var INTAKE_URL = FB_BASE + '/intake.json';
+var DEL_URL    = FB_BASE + '/bl-delivery.json';
+var blJmItems   = [];  // job intake items จาก Job Master + intake
+var blJmRecords = [];  // job records (type:'out') จาก Job Master
+var blDelRecords = [];  // delivery ที่บันทึกเพิ่มเติมใน bl_stock
+var blWipMap    = {};  // normKey → {pcs, kgs}
+var blPendingList = []; // รายการรอชุบที่คำนวณแล้ว [{partNo, customer, partName, pendingPcs, oldestDate, daysWaiting}]
+var blStockLoaded = false;
 
 var currentRole = null;
 var poOrders = [];   // [{id, date, planner, items:[{customer,partNo,partName,line,qty,unit}]}]
@@ -373,6 +410,12 @@ async function loadData() {
   await loadAutoMeta();
   // รัน auto scheduler อัตโนมัติ (ข้ามถ้ารันของวันนี้ไปแล้ว) — ไม่ต้องกดปุ่ม
   try { await runAutoScheduler(false); } catch(e) { console.warn('auto scheduler:', e.message); }
+
+  // โหลดรายการรอชุบจาก BL Stock — แค่ครั้งแรกที่เปิดหน้า (ไม่ดึงซ้ำทุก 30 วิ เพื่อลด Firebase egress)
+  if (!blStockLoaded) {
+    blStockLoaded = true;
+    try { await loadBLStockSource(); renderBLPendingList(); } catch(e) { console.warn('bl stock:', e.message); }
+  }
 
   renderPOList();
   renderBacklogList();
@@ -714,6 +757,13 @@ function initBacklogRow() {
   wrap.innerHTML = buildRowHTML('bl');
   loadPM();
   attachRowEvents('bl');
+  // คิว backlog ต้องระบุสายเจาะจง (auto scheduler คำนวณกำลังการผลิตแยกทีละสาย)
+  // ตัดตัวเลือก "ทุกสาย" ออก กันเลือกผิดแล้วรายการค้างในคิวตลอดไป
+  var polEl = document.getElementById('pol-bl');
+  if (polEl) {
+    var allOpt = polEl.querySelector('option[value="ALL"]');
+    if (allOpt) allOpt.remove();
+  }
 }
 
 function addBacklogItem() {
@@ -727,6 +777,7 @@ function addBacklogItem() {
 
   if (!customer && !partNo) { showToast('toast-backlog','กรุณาระบุลูกค้าหรือหมายเลขชิ้นงาน','err'); return; }
   if (!qty) { showToast('toast-backlog','กรุณากรอกจำนวน','err'); return; }
+  if (line === 'ALL' || !line) { showToast('toast-backlog','กรุณาเลือกสายผลิตให้เจาะจง (B1/B2/R1) ห้ามเลือก "ทุกสาย"','err'); return; }
 
   backlogItems.push({
     id: 'bl_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -780,6 +831,199 @@ function renderBacklogList() {
       '<td><button class="btn btn-sm" style="background:var(--red);color:#fff;" onclick="removeBacklogItem(\'' + b.id + '\')">🗑️</button></td>' +
     '</tr>';
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  BL STOCK IMPORT — ดึง "รายการรอชุบ" จาก bl_stock.html มาให้เลือกเข้าคิว
+//  (ตรรกะเดียวกับ buildMap()/getWip() ใน bl_stock.html เพื่อให้ตัวเลขตรงกัน)
+// ══════════════════════════════════════════════
+function blNorm(s) {
+  return String(s||'').trim().toUpperCase().replace(/[\s\-_\.]+/g,'').replace(/O/g,'0');
+}
+function blJobPartNo(job) { return job.partName || job.name || job.partNo || job.bill || ''; }
+function blJobQty(job) { return Number(job.qty || job.pcs || job.line || 0); }
+
+async function loadBLStockSource() {
+  // 1) Job Master items + intake (รับเข้า)
+  blJmItems = []; blJmRecords = [];
+  try {
+    var results = await Promise.all([
+      fetch(JM_URL).catch(function(){ return {ok:false}; }),
+      fetch(INTAKE_URL).catch(function(){ return {ok:false}; }),
+    ]);
+    if (results[0].ok) {
+      var jmData = await results[0].json();
+      if (jmData) {
+        blJmItems   = Array.isArray(jmData.items)   ? jmData.items   : [];
+        blJmRecords = Array.isArray(jmData.records) ? jmData.records : [];
+      }
+    }
+    if (results[1].ok) {
+      var intakeData = await results[1].json();
+      if (Array.isArray(intakeData)) {
+        var existIds = {};
+        blJmItems.forEach(function(j){ existIds[String(j.id)] = true; });
+        intakeData.forEach(function(job) { if (!existIds[String(job.id)]) blJmItems.push(job); });
+      }
+    }
+  } catch(e) { console.warn('loadBLStockSource jm:', e.message); }
+
+  // 2) Delivery ที่บันทึกเพิ่มเติมใน bl_stock
+  blDelRecords = [];
+  try {
+    var rDel = await fetch(DEL_URL);
+    if (rDel.ok) {
+      var delData = await rDel.json();
+      blDelRecords = Array.isArray(delData && delData.records) ? delData.records : [];
+    }
+  } catch(e) { console.warn('loadBLStockSource del:', e.message); }
+
+  // 3) WIP จาก 3 สาย (ใช้ allBarrelData ที่โหลดไว้แล้วจาก loadActualOutput — ไม่ fetch ซ้ำ)
+  //    หมายเหตุ: ไม่ได้ตัดข้อมูลเกิน 30 วัน หรือ status:'done' เหมือน bl_stock.html เป๊ะๆ
+  //    เพราะ allBarrelData ที่มีอยู่ไม่ได้เก็บ field เหล่านั้นไว้ — ตัวเลขอาจต่างจาก bl_stock.html เล็กน้อย
+  blWipMap = {};
+  ['B1','B2','R1'].forEach(function(line) {
+    (allBarrelData[line] || []).forEach(function(b) {
+      var k = blNorm(b.partNo);
+      if (!k) return;
+      if (!blWipMap[k]) blWipMap[k] = { pcs: 0, kgs: 0 };
+      blWipMap[k].pcs += Number(b.pcs || 0);
+      blWipMap[k].kgs += Number(b.kg  || 0);
+    });
+  });
+
+  computeBLPendingList();
+}
+
+function blGetWip(partNo) {
+  var k = blNorm(partNo);
+  if (blWipMap[k]) return blWipMap[k];
+  var pm = pmParts.find(function(p){ return (p.partNo||'').toUpperCase().trim() === k; });
+  if (pm && pm.name && blWipMap[blNorm(pm.name)]) return blWipMap[blNorm(pm.name)];
+  return null;
+}
+
+// คำนวณรายการที่ "รับเข้าแล้ว แต่ยังไม่ได้ชุบ" ต่อ P/No พร้อมวันที่ล็อตเก่าสุดที่ยังไม่ถูกใช้ (FIFO)
+function computeBLPendingList() {
+  var map = {};
+  blJmItems.forEach(function(job) {
+    var pn = blJobPartNo(job);
+    var k = blNorm(pn);
+    if (!k) return;
+    if (!map[k]) map[k] = { partNo: pn, customer: job.customer || '', receive: 0, delivery: 0, lots: [] };
+    var qty = blJobQty(job);
+    map[k].receive += qty;
+    if (job.date) map[k].lots.push({ date: job.date, qty: qty });
+    if (!map[k].customer && job.customer) map[k].customer = job.customer;
+  });
+  blJmRecords.forEach(function(r) {
+    if (r.type !== 'out') return;
+    var job = blJmItems.find(function(j){ return j.id === r.jobId; });
+    if (!job) return;
+    var k = blNorm(blJobPartNo(job));
+    if (map[k]) map[k].delivery += Number(r.qty || 0);
+  });
+  blDelRecords.forEach(function(d) {
+    var k = blNorm(d.partNo || '');
+    if (map[k]) map[k].delivery += Number(d.qty || 0);
+  });
+
+  var today = new Date();
+  var out = [];
+  Object.keys(map).forEach(function(k) {
+    var p = map[k];
+    var wo = blGetWip(p.partNo);
+    var wipPcs = wo ? (wo.pcs || 0) : 0;
+    var pending = Math.max(0, p.receive - p.delivery - wipPcs);
+    if (pending <= 0) return;
+
+    var pm = pmParts.find(function(pp){ return blNorm(pp.partNo) === k; });
+    var consumed = p.delivery + wipPcs;
+    var lots = p.lots.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var cum = 0, oldestDate = null;
+    for (var i = 0; i < lots.length; i++) {
+      cum += lots[i].qty;
+      if (cum > consumed) { oldestDate = lots[i].date; break; }
+    }
+    if (!oldestDate && lots.length) oldestDate = lots[lots.length-1].date;
+
+    var daysWaiting = null;
+    if (oldestDate) {
+      try {
+        var d0 = new Date(oldestDate + 'T00:00:00');
+        daysWaiting = Math.floor((today - d0) / 86400000);
+      } catch(e) {}
+    }
+
+    out.push({
+      partNo: p.partNo,
+      customer: p.customer,
+      partName: pm ? (pm.name || '') : '',
+      pendingPcs: pending,
+      oldestDate: oldestDate,
+      daysWaiting: daysWaiting
+    });
+  });
+
+  out.sort(function(a,b) { return (a.oldestDate||'9999').localeCompare(b.oldestDate||'9999'); }); // FIFO — เก่าสุดก่อน
+  blPendingList = out;
+}
+
+async function refreshBLStock() {
+  var btn = document.getElementById('blRefreshBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังดึงข้อมูล...'; }
+  await loadBLStockSource();
+  renderBLPendingList();
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 ดึงข้อมูลจาก BL Stock'; }
+}
+
+function renderBLPendingList() {
+  var body = document.getElementById('blPendingBody');
+  if (!body) return;
+  if (!blPendingList.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่มีรายการรอชุบจาก BL Stock ในตอนนี้</td></tr>';
+    return;
+  }
+  body.innerHTML = blPendingList.map(function(item, i) {
+    var isOld = item.daysWaiting !== null && item.daysWaiting >= 3;
+    var ageStr = item.daysWaiting === null ? '–' : (item.daysWaiting + ' วัน');
+    var ageColor = isOld ? 'var(--red)' : 'var(--text-muted)';
+    var rowId = 'blrow' + i;
+    return '<tr id="' + rowId + '"' + (isOld ? ' style="background:#fef2f2;"' : '') + '>' +
+      '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(item.partNo) + '</td>' +
+      '<td>' + esc(item.customer) + (item.partName ? '<div style="font-size:10px;color:var(--text-muted);">'+esc(item.partName)+'</div>' : '') + '</td>' +
+      '<td style="text-align:center;font-weight:700;">' + item.pendingPcs.toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">ชิ้น</span></td>' +
+      '<td style="text-align:center;font-size:11px;color:var(--text-muted);">' + esc(item.oldestDate || '-') + '</td>' +
+      '<td style="text-align:center;font-weight:700;color:' + ageColor + ';">' + (isOld?'⚠️ ':'') + ageStr + '</td>' +
+      '<td>' +
+        '<select id="blline' + i + '" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;width:auto;">' +
+          '<option value="B1">B1</option><option value="B2">B2</option><option value="R1">R1</option>' +
+        '</select> ' +
+        '<button class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;" onclick="confirmBLToQueue(' + i + ',\'' + rowId + '\')">➕ เข้าคิว</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ผู้ใช้กดยืนยันเองทีละรายการ — ไม่ auto-push เข้าคิวโดยไม่ถาม
+function confirmBLToQueue(i, rowId) {
+  var item = blPendingList[i];
+  if (!item) return;
+  var lineEl = document.getElementById('blline' + i);
+  var line = lineEl ? lineEl.value : 'B1';
+  backlogItems.push({
+    id: 'bl_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    createdAt: item.oldestDate ? (item.oldestDate + 'T00:00:00.000Z') : new Date().toISOString(), // ใช้วันที่รับเข้าจริงเพื่อรักษาลำดับ FIFO
+    customer: item.customer, partNo: item.partNo, partName: item.partName,
+    line: line, qty: item.pendingPcs, unit: 'pcs', status: 'pending'
+  });
+  saveBacklogToFB();
+  renderBacklogList();
+  renderCapacityInfo();
+  // เอาแถวนี้ออกจากลิสต์ที่รออยู่ (ป้องกันกดซ้ำ)
+  blPendingList.splice(i, 1);
+  renderBLPendingList();
+  showToast('toast-backlog','✅ เพิ่ม ' + item.partNo + ' เข้าคิวแล้ว','ok');
 }
 
 async function savePOToFB() {
