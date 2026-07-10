@@ -6510,6 +6510,9 @@ function renderBillList(active, selectedJobId) {
     var r    = isKgUnit ? rKg : rPcs;
     var remStr  = isKgUnit ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
     var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้)' : '';
+    var weightWarn = u.weightMissing
+      ? '<div style="font-size:9px;color:#dc2626;margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master — แปลงหน่วยไม่ได้ ยอด "ใช้วันนี้" อาจไม่ครบ</div>'
+      : '';
     var isSelected = j.id === selectedJobId;
     var bill = j.bill || '?';
     var cust = j.customer || '';
@@ -6521,6 +6524,7 @@ function renderBillList(active, selectedJobId) {
         (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">'+usedStr+'</span>' : '') +
         (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '') +
         (isSelected ? '<div style="font-size:10px;color:#16a34a;font-weight:600;margin-top:2px;">✅ เลือกอยู่</div>' : '') +
+        weightWarn +
       '</div>' +
       '<button class="preset-btn" data-jobid="'+j.id+'" data-bill="'+bill+'" data-pn="'+pn+'" data-cust="'+cust+'" '+
         'style="background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;">⭐ Preset</button>'+
@@ -6714,7 +6718,8 @@ function calcJobBal(jobId) {
 }
 
 function calcTodayUsed(jobId) {
-  var todayStr = new Date().toISOString().slice(0,10);
+  var todayStr = isoDate(new Date()); // ใช้เวลาไทย (local) ไม่ใช่ toISOString() ที่เป็น UTC
+                                       // toISOString() จะได้วันที่ผิดช่วงเที่ยงคืน-ตี 7 เวลาไทย
   var used = 0, usedKg = 0;
   (todayBarrels||[]).forEach(function(b){
     if (b.jobId !== jobId) return;
@@ -6729,7 +6734,20 @@ function calcTodayUsed(jobId) {
       usedKg += Number(b.kg||0);
     });
   });
-  return { used:used, usedKg:usedKg };
+  // แปลงหน่วยข้ามกันด้วยน้ำหนัก/ชิ้นจาก Part Master — ถ้ากรอกแค่ กก. แต่บิลนี้นับเป็นชิ้น (หรือกลับกัน)
+  // ไม่งั้นฝั่งที่ไม่มีตัวเลขดิบจะค้างที่ 0 ตลอด ทั้งที่ชุบไปแล้วจริง (แค่กรอกอีกหน่วยหนึ่ง)
+  var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
+  var weightG = job ? getWeightGForPO(job.partName || job.partNo || '') : 0;
+  var weightMissing = false;
+  if (!used && usedKg > 0) {
+    if (weightG > 0) used = Math.round((usedKg * 1000) / weightG);
+    else weightMissing = true; // มี กก. แต่แปลงเป็นชิ้นไม่ได้ เพราะไม่มีน้ำหนัก/ชิ้นใน Part Master
+  }
+  if (!usedKg && used > 0) {
+    if (weightG > 0) usedKg = (used * weightG) / 1000;
+    else weightMissing = true;
+  }
+  return { used:used, usedKg:usedKg, weightMissing:weightMissing };
 }
 
 function getJobStatus(job) {
@@ -6821,7 +6839,7 @@ async function confirmJobOut() {
 
   var rec = {
     id: 'R'+Date.now(), jobId: jobId, type:'out',
-    date: new Date().toISOString().slice(0,10),
+    date: isoDate(new Date()), // ใช้เวลาไทย (local) ไม่ใช่ toISOString() ที่เป็น UTC
     qty: qty, inv: inv, by: '', note: note
   };
   jobMasterRecords.unshift(rec);
@@ -8894,6 +8912,15 @@ var _poActualCache = null;
 var _poCacheTime   = 0;
 var PO_CACHE_TTL   = 30000; // 30 วิ
 
+// หาน้ำหนัก/ชิ้น (กรัม) จาก Part Master ที่โหลดไว้แล้ว (ตัวแปร partList)
+function getWeightGForPO(partNo) {
+  var pno = (partNo || '').toUpperCase().trim();
+  if (!pno) return 0;
+  var list = (typeof partList !== 'undefined') ? partList : [];
+  var p = list.find(function(x){ return (x.partNo||'').toUpperCase().trim() === pno; });
+  return (p && p.weightG > 0) ? p.weightG : 0;
+}
+
 function _buildItems(orders, liveRows, lineFilter) {
   var items = [];
   var today = isoDate(new Date());
@@ -8913,12 +8940,18 @@ function _buildItems(orders, liveRows, lineFilter) {
         totalPcs += Number(b.pcs||0);
         totalKg  += Number(b.kg||0);
       });
-      // auto-select: PO สั่งชิ้นแต่ barrel มีแค่ kg → ใช้ kg แทน (และกลับกัน)
+      // PO สั่งหน่วยหนึ่ง แต่ไลน์รายงานอีกหน่วย → แปลงด้วยน้ำหนัก/ชิ้นจาก Part Master ก่อนเทียบ
+      // (ห้ามเอาตัวเลข กก. มาแทนตัวเลขชิ้นตรงๆ เพราะคนละหน่วยกัน)
+      var weightG = getWeightGForPO(pno);
       var done;
       if (it.unit === 'kg') {
-        done = totalKg > 0 ? totalKg : totalPcs;
+        if (totalKg > 0) done = totalKg;
+        else if (totalPcs > 0 && weightG > 0) done = (totalPcs * weightG) / 1000;
+        else done = totalPcs; // แปลงไม่ได้ (ไม่มีน้ำหนัก/ชิ้น) — fallback ตัวเลขดิบ ดีกว่าไม่โชว์อะไรเลย
       } else {
-        done = totalPcs > 0 ? totalPcs : totalKg;
+        if (totalPcs > 0) done = totalPcs;
+        else if (totalKg > 0 && weightG > 0) done = Math.round((totalKg * 1000) / weightG);
+        else done = totalKg; // แปลงไม่ได้ (ไม่มีน้ำหนัก/ชิ้น) — fallback ตัวเลขดิบ ดีกว่าไม่โชว์อะไรเลย
       }
       var pct = Math.min(100, Math.round(done / it.qty * 100));
       items.push({
@@ -9087,10 +9120,27 @@ async function showPOPopup(lineFilter) {
   startPOStatusBar(lineFilter);
 
   // โหลด actual แบบ background แล้วอัปเดต progress bar ใน popup
-  fetchActual().then(function(actual) {
+  fetchActual().then(function(liveRows) {
     pending.forEach(function(it) {
-      var ao   = actual[it.partNo] || {pcs:0, kg:0};
-      var done = (it.unit === 'kg') ? ao.kg : ao.pcs;
+      var pno = (it.partNo||'').toUpperCase();
+      var totalPcs = 0, totalKg = 0;
+      liveRows.forEach(function(b) {
+        if (b.partNo !== pno) return;
+        if (it.poDate && b.date < it.poDate) return; // ก่อนวันที่สั่ง → ไม่นับ
+        totalPcs += Number(b.pcs||0);
+        totalKg  += Number(b.kg||0);
+      });
+      var weightG = getWeightGForPO(pno);
+      var done;
+      if (it.unit === 'kg') {
+        if (totalKg > 0) done = totalKg;
+        else if (totalPcs > 0 && weightG > 0) done = (totalPcs * weightG) / 1000;
+        else done = totalPcs;
+      } else {
+        if (totalPcs > 0) done = totalPcs;
+        else if (totalKg > 0 && weightG > 0) done = Math.round((totalKg * 1000) / weightG);
+        else done = totalKg;
+      }
       var pct  = Math.min(100, Math.round(done / it.qty * 100));
       var barColor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#d97706' : '#3b82f6';
       var bars = document.querySelectorAll('.po-pbar-' + it.partNo.replace(/[^a-zA-Z0-9]/g,'-'));
