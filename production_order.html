@@ -883,12 +883,19 @@ function computeBLPendingList() {
   var out = [];
   Object.keys(map).forEach(function(k) {
     var p = map[k];
+    var pm = pmParts.find(function(pp){ return blNorm(pp.partNo) === k; });
     var wo = blGetWip(p.partNo);
     var wipPcs = wo ? (wo.pcs || 0) : 0;
+    var wipKgs = wo ? (wo.kgs || 0) : 0;
+    // สายที่ชุบเป็น กก. (เช่น B2 barrel) จะได้ wo.pcs = 0 แต่มี wo.kgs อยู่
+    // ต้องแปลง กก. → ชิ้น ด้วยน้ำหนัก/ชิ้นจาก Part Master ก่อน ไม่งั้นจะนับว่ายังไม่ได้ชุบทั้งที่ชุบไปแล้ว
+    if (!wipPcs && wipKgs > 0) {
+      var w = getPartWeight(p.partNo);
+      if (w > 0) wipPcs = Math.round(wipKgs * 1000 / w);
+    }
     var pending = Math.max(0, p.receive - p.delivery - wipPcs);
     if (pending <= 0) return;
 
-    var pm = pmParts.find(function(pp){ return blNorm(pp.partNo) === k; });
     var consumed = p.delivery + wipPcs;
     var lots = p.lots.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var cum = 0, oldestDate = null, startIdx = -1;
