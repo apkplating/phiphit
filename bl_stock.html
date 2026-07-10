@@ -388,6 +388,7 @@ var jmItems   = [];  // Job Master items → รับเข้า (receive)
 var jmRecords = [];  // Job Master records (type:'out') → delivery จาก Job Master
 var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
 var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
+var wipByJob  = {};  // jobId → [{date, line, pcs, kg}] — ไม่จำกัด 30 วัน ใช้เฉพาะ Traceability drill-down รายบิล
 var pmParts   = [];  // Part Master [{id,partNo,name,customer,colors,weightPerPc,pcsPerRack}]
 
 // ══════════════════════════════════════════════════════
@@ -525,6 +526,7 @@ async function loadBLDel() {
 // ── WIP จาก 3 lines ─────────────────────────────────
 async function loadWIP() {
   wipMap = {};
+  wipByJob = {};
   var lines = [
     { url: DB_B1+'/plating-b1.json', label:'B1' },
     { url: DB_B2+'/plating-b2.json', label:'B2' },
@@ -549,10 +551,11 @@ async function loadWIP() {
         if (!dr.rows) return;
         // ข้าม: บันทึกที่ mark done แล้ว
         if (dr.status === 'done') return;
-        // ข้าม: บันทึกที่เก่ากว่า 30 วัน (ถ้าไม่มีวันที่ก็ผ่าน)
+        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น)
+        var withinCutoff = true;
         if (dr.date) {
           var drDate = new Date(dr.date + 'T00:00:00');
-          if (drDate < cutoff) return;
+          if (drDate < cutoff) withinCutoff = false;
         }
         dr.rows.forEach(function(row){
           // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
@@ -560,6 +563,16 @@ async function loadWIP() {
           var pn = (row.partName||'').trim();
           if (!pn) return;
           var k = norm(pn);
+
+          // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
+          // ไม่กระทบยอดรวม wipMap เดิมด้านล่างเลย
+          if (row.jobId && row.jobId !== 'NOBILL') {
+            if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
+            wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
+          }
+
+          if (!withinCutoff) return; // ยอดรวม wipMap ยังกรอง 30 วันเหมือนเดิม ไม่เปลี่ยนพฤติกรรมเดิม
+
           if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
           wipMap[k].pcs += Number(row.pcs||0);
           wipMap[k].kgs += Number(row.kg||0);
@@ -1434,18 +1447,38 @@ function renderTraceCard(partNo){
   var s4Out   = s1Out;
   var s4OutKg = s1OutKg;
 
-  // ── บิลรายการ ──
-  var billRows = bills.map(function(j){
+  // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ส่งออก INV ไหนบ้าง) ──
+  var billRows = bills.map(function(j, bi){
     var outQty = 0;
+    var invEvents = [];
     jmRecords.forEach(function(r){
-      if(r.type==='out' && r.jobId===j.id) outQty+=Number(r.qty||0);
+      if(r.type==='out' && r.jobId===j.id) {
+        outQty += Number(r.qty||0);
+        invEvents.push({ date: r.date||'', inv: r.inv||'-', qty: Number(r.qty||0) });
+      }
     });
     blDel.forEach(function(d){
       if(norm(d.partNo||'')===k) outQty+=Number(d.qty||0);
+      // หมายเหตุ: บันทึกใน bl_stock (blDel) ไม่ผูก jobId เฉพาะเจาะจง เลยไม่ขึ้นใน timeline ต่อบิล นับรวมแค่ยอด outQty
     });
     var rem=Math.max(0,jobQty(j)-outQty);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
     var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
+
+    var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var detailId = 'bdet-'+k+'-'+bi;
+    var plateHtml = plateEvents.length
+      ? plateEvents.map(function(ev){
+          var qtyStr = ev.pcs>0 ? ev.pcs.toLocaleString()+' ชิ้น' : (ev.kg>0 ? ev.kg.toFixed(2)+' kg' : '-');
+          return '<div style="font-size:10px;color:#0891b2;">🧪 '+fmtD(ev.date)+' · '+esc(ev.line)+' · '+qtyStr+'</div>';
+        }).join('')
+      : '<div style="font-size:10px;color:#94a3b8;">ไม่พบบันทึกการชุบที่ผูกกับบิลนี้ (อาจชุบก่อนมีฟีเจอร์เลือกบิล หรือกดข้ามตอนชุบ)</div>';
+    var invHtml = invEvents.length
+      ? invEvents.map(function(ev){
+          return '<div style="font-size:10px;color:#dc2626;">📤 '+fmtD(ev.date)+' · INV '+esc(ev.inv)+' · '+ev.qty.toLocaleString()+' ชิ้น</div>';
+        }).join('')
+      : '<div style="font-size:10px;color:#94a3b8;">ยังไม่มีบันทึกส่งออก</div>';
+
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
       +'<td style="font-size:11px;">'+fmtD(j.date||'')+'</td>'
@@ -1454,7 +1487,14 @@ function renderTraceCard(partNo){
       +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
       +'<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
       +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div></td>'
-      +'</tr>';
+      +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
+      +'</tr>'
+      +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
+        +'<div style="display:flex;gap:28px;flex-wrap:wrap;">'
+          +'<div><div style="font-size:10px;font-weight:700;color:#0891b2;margin-bottom:4px;">🧪 ชุบเมื่อ</div>'+plateHtml+'</div>'
+          +'<div><div style="font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px;">📤 ส่งออก (INV)</div>'+invHtml+'</div>'
+        +'</div>'
+      +'</td></tr>';
   }).join('');
 
   // ── สร้าง Stock bar แต่ละ Stock ──
@@ -1502,7 +1542,7 @@ function renderTraceCard(partNo){
       '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:5px;">รายการบิล</div>'
       +'<div style="overflow-x:auto;"><table class="st" style="min-width:340px;">'
         +'<thead><tr>'
-          +'<th class="tl">Bill No</th><th>วันรับ</th><th>รับเข้า</th><th>จ่ายออก</th><th>คงเหลือ</th><th>สถานะ</th>'
+          +'<th class="tl">Bill No</th><th>วันรับ</th><th>รับเข้า</th><th>จ่ายออก</th><th>คงเหลือ</th><th>สถานะ</th><th></th>'
         +'</tr></thead>'
         +'<tbody>'+billRows+'</tbody>'
       +'</table></div>'
