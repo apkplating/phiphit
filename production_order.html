@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="auth-central.js"></script>
-<script src="fb-auth.js"></script>
 <style>
 :root{
   --navy:#0f2044; --navy-2:#16305e;
@@ -168,6 +167,37 @@ tr:hover td{background:var(--sky-pale);}
       <div class="toast" id="toast-po"></div>
     </div>
 
+    <!-- ── คิวรอผลิต (Backlog) + Auto Scheduler ── -->
+    <div class="card" id="backlogCard">
+      <div class="sec-head">
+        <div class="card-label" style="margin:0;">🗂️ คิวรอผลิต (Backlog) — FIFO</div>
+        <button class="btn btn-outline btn-sm" id="autoRunBtn" onclick="runAutoScheduler(true)" style="width:auto;margin:0;padding:5px 10px;">▶ รันจัดคิวเดี๋ยวนี้</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin:-4px 0 10px;line-height:1.5;">
+        ระบบออกใบสั่งผลิตให้อัตโนมัติทุกวัน 05:00 น. ผ่าน GitHub Actions (ไม่ต้องเปิดหน้านี้เลย) — เรียงตามลำดับเข้าคิวก่อนหลัง (FIFO) โดยรวมแล้วต้องไม่เกิน "กำลังการผลิตสูงสุดที่เคยทำได้" ของแต่ละสาย (คำนวณจากยอดผลิตจริงสูงสุดในอดีต)
+        <br>หน้านี้จะรันซ้ำให้เองอีกครั้งเป็น fallback ตอนเปิดหน้า (เฉพาะสายที่ยังไม่ถูกรันในวันนั้น) เผื่อ GitHub Actions รันไม่สำเร็จ
+        <div id="capacityInfo" style="margin-top:6px;font-weight:600;"></div>
+        <div id="autoRunStatus" style="margin-top:4px;"></div>
+      </div>
+
+      <div class="card-label" style="margin-bottom:6px;margin-top:4px;">เพิ่มรายการเข้าคิว</div>
+      <div id="blFormRow"></div>
+      <button class="btn btn-outline" style="margin-bottom:10px;" onclick="addBacklogItem()">➕ เพิ่มเข้าคิว</button>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th><th>วันที่เข้าคิว</th><th>ลูกค้า</th><th>หมายเลขชิ้นงาน</th>
+              <th>ชื่อชิ้นงาน</th><th>สาย</th><th>จำนวน</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="backlogListBody"></tbody>
+        </table>
+      </div>
+      <div class="toast" id="toast-backlog"></div>
+    </div>
+
     <!-- ── รายการ PO ทั้งหมด ── -->
     <div class="card">
       <div class="sec-head">
@@ -193,7 +223,7 @@ tr:hover td{background:var(--sky-pale);}
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin:-6px 0 8px;">
         อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ) ·
-        <span style="color:var(--text-muted);">หมายเหตุ: ตัวกรอง "วันนี้เท่านั้น" ซ่อนแค่การแสดงผล — ใบสั่งผลิตเก่ายังคำนวณผลผลิตจริงต่อเนื่องตามปกติ ไม่ได้ถูกปิด/หยุดนับ</span>
+        <span style="color:var(--text-muted);">หมายเหตุ: % ผลิตจริงนับเฉพาะยอดที่ชุบ "วันเดียวกับที่สร้างใบสั่งผลิต" เท่านั้น — ถ้าผลิตไม่ครบภายในวันนั้น % จะค้างอยู่แบบนั้นตลอดไป (ไม่นับยอดที่ชุบในวันถัดไปเพิ่ม) เพื่อใช้ดูประสิทธิผลของแผนผลิตรายวัน</span>
       </div>
       <div style="overflow-x:auto;">
         <table>
@@ -228,6 +258,8 @@ tr:hover td{background:var(--sky-pale);}
 var SYSTEM_KEY = 'production_order';
 var FB_BASE    = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
 var PO_PATH    = FB_BASE + '/production-orders.json';
+var BACKLOG_PATH   = FB_BASE + '/production-backlog.json';    // คิวรอผลิต (FIFO) — แยกจาก PO
+var AUTO_META_PATH = FB_BASE + '/production-order-meta.json'; // เก็บวันที่รัน auto scheduler ล่าสุดของแต่ละสาย
 
 // Firebase URL ของแต่ละสาย (สำหรับดึงยอดผลิตจริง)
 var FB_LINES = {
@@ -243,6 +275,8 @@ var editingId = null;
 var poRowCount = 0;
 var actualOutput = {}; // {partNo: {pcs, kg}} — legacy, ไม่ใช้แล้ว
 var allBarrelData = {}; // {line: [{date, partNo, pcs, kg}]} — แยกตามวันเพื่อกรอง PO date
+var backlogItems = []; // [{id, createdAt, customer, partNo, partName, line, qty, unit, status}]
+var autoMeta = { lastAutoRun: {} }; // {lastAutoRun: {B1:'YYYY-MM-DD', B2:'...', R1:'...'}}
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -291,7 +325,8 @@ function showApp() {
   document.getElementById('appContent').style.display = 'block';
   var dateEl = document.getElementById('poDate');
   if (dateEl && !dateEl.value) dateEl.value = isoDate(new Date());
-  initSingleRow(); // เตรียมฟอร์มรายการเดียว
+  initSingleRow();   // เตรียมฟอร์มรายการเดียว
+  initBacklogRow();  // เตรียมฟอร์มเพิ่มรายการเข้าคิว backlog
   loadData();
 }
 
@@ -331,9 +366,17 @@ async function loadData() {
 
   // โหลด Part Master (ใช้น้ำหนัก/ชิ้นสำหรับแปลงหน่วย กก. <-> ชิ้น)
   await loadPM();
-  // โหลดยอดผลิตจริงจากทุกสาย (job records)
+  // โหลดยอดผลิตจริงจากทุกสาย (job records) — ใช้คำนวณ % และกำลังการผลิตในอดีตด้วย
   await loadActualOutput();
+  // โหลดคิว backlog + สถานะการรัน auto scheduler
+  await loadBacklog();
+  await loadAutoMeta();
+  // รัน auto scheduler อัตโนมัติ (ข้ามถ้ารันของวันนี้ไปแล้ว) — ไม่ต้องกดปุ่ม
+  try { await runAutoScheduler(false); } catch(e) { console.warn('auto scheduler:', e.message); }
+
   renderPOList();
+  renderBacklogList();
+  renderCapacityInfo();
   var tEl = document.getElementById('lastRefreshTime');
   if (tEl) {
     var now = new Date();
@@ -447,22 +490,25 @@ function getPartWeight(partNo) {
   return 0;
 }
 
-// นับยอดจริงตั้งแต่ poDate เป็นต้นไป สำหรับสาย/partNo ที่ระบุ
+// นับยอดจริงเฉพาะ "วันเดียวกับที่สร้าง PO" เท่านั้น สำหรับสาย/partNo ที่ระบุ
+// เหตุผล: ใบสั่งผลิตมีไว้ดูประสิทธิผลรายวัน — ถ้าผลิตไม่ครบภายในวันนั้น % จะค้างอยู่แบบนั้นตลอดไป
+// (ไม่ไปนับต่อในวันถัดไป แม้จะมีการชุบ P/No เดียวกันอีกในวันอื่น)
 // คืนค่า { actual, missingWeight } — missingWeight = true เมื่อไลน์รายงานคนละหน่วยกับ PO
 // และหา น้ำหนัก/ชิ้น ใน Part Master ไม่เจอ (แปลงหน่วยไม่ได้)
-function calcActual(line, partNo, poTimestamp, unit, maxQty) {
-  // poTimestamp = "YYYY-MM-DD HH:MM"
-  // นับ barrel ที่ date+time >= poTimestamp เท่านั้น
+function calcActual(line, partNo, poTimestamp, unit, maxQty, poDate) {
+  // poTimestamp = "YYYY-MM-DD HH:MM", poDate = "YYYY-MM-DD"
+  // นับ barrel ที่ date === poDate (วันเดียวกัน) และ date+time >= poTimestamp เท่านั้น
   var lineKey = line === 'ALL' ? null : line;
   var pno = (partNo || '').toUpperCase();
   var linesToCheck = lineKey ? [lineKey] : Object.keys(allBarrelData);
   var weightG = getPartWeight(pno); // กรัม/ชิ้น (0 = ไม่มีข้อมูล)
 
-  // รวม barrel ที่ตรง partNo และ datetime >= poTimestamp
+  // รวม barrel ที่ตรง partNo, วันเดียวกับ PO, และ datetime >= poTimestamp
   var relevant = [];
   linesToCheck.forEach(function(ln) {
     (allBarrelData[ln] || []).forEach(function(b) {
       if (b.partNo !== pno) return;
+      if (poDate && b.date !== poDate) return; // คนละวันกับที่สั่ง → ไม่นับ (ล็อกยอดรายวัน)
       if (poTimestamp) {
         var bDatetime = (b.date || '') + ' ' + (b.time || '00:00');
         if (bDatetime < poTimestamp) return; // ก่อน PO timestamp → ไม่นับ
@@ -519,6 +565,221 @@ function calcActual(line, partNo, poTimestamp, unit, maxQty) {
   // ปัดเศษ: ชิ้น = จำนวนเต็ม (ปัดลง กันนับเกินจากเศษน้ำหนัก), กก. = 2 ตำแหน่ง
   total = unit === 'pcs' ? Math.floor(total) : Math.round(total * 100) / 100;
   return { actual: total, missingWeight: missingWeight };
+}
+
+// ══════════════════════════════════════════════
+//  BACKLOG (คิวรอผลิต) + AUTO SCHEDULER
+// ══════════════════════════════════════════════
+async function loadBacklog() {
+  try {
+    var r = await fetch(BACKLOG_PATH);
+    var d = await r.json();
+    backlogItems = Array.isArray(d) ? d : (d ? Object.values(d) : []);
+  } catch(e) { backlogItems = []; }
+}
+async function saveBacklogToFB() {
+  await fetch(BACKLOG_PATH, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(backlogItems) });
+}
+async function loadAutoMeta() {
+  try {
+    var r = await fetch(AUTO_META_PATH);
+    var d = await r.json();
+    autoMeta = (d && typeof d === 'object') ? d : {};
+    if (!autoMeta.lastAutoRun) autoMeta.lastAutoRun = {};
+  } catch(e) { autoMeta = { lastAutoRun: {} }; }
+}
+async function saveAutoMetaToFB() {
+  await fetch(AUTO_META_PATH, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(autoMeta) });
+}
+
+// ค่ากิโลกรัมเทียบเท่าของ 1 แถวบาร์เรล — ใช้ kg ตรงๆ ถ้ามี ไม่งั้นแปลงจาก pcs ด้วยน้ำหนัก/ชิ้น
+function recordKgEquivalent(b) {
+  if (b.kg) return b.kg;
+  if (b.pcs) {
+    var w = getPartWeight(b.partNo);
+    if (w > 0) return (b.pcs * w) / 1000;
+  }
+  return 0;
+}
+
+// กำลังการผลิตสูงสุดที่เคยทำได้ในอดีต (best-case) ของแต่ละสาย หน่วย กก./วัน
+// คำนวณจากยอดรวมกิโลกรัมเทียบเท่าในแต่ละวัน (ทุกวันที่มีข้อมูลใน allBarrelData) แล้วเอาค่าสูงสุด
+function computeBestCapacityKg(line) {
+  var byDate = {};
+  (allBarrelData[line] || []).forEach(function(b) {
+    var kgEq = recordKgEquivalent(b);
+    if (!byDate[b.date]) byDate[b.date] = 0;
+    byDate[b.date] += kgEq;
+  });
+  var max = 0;
+  Object.keys(byDate).forEach(function(dt) { if (byDate[dt] > max) max = byDate[dt]; });
+  return Math.round(max * 100) / 100;
+}
+
+// รัน auto scheduler — ดึงจาก backlog มาออกใบสั่งผลิตวันนี้ให้อัตโนมัติ ต่อสาย
+// เกณฑ์: มาก่อนสั่งก่อน (FIFO ตาม createdAt) แต่รวมแล้วต้องไม่เกิน best-case capacity ของสายนั้น
+// force=true → รันใหม่ทันทีแม้จะรันของวันนี้ไปแล้ว (ปุ่ม "รันจัดคิวเดี๋ยวนี้")
+async function runAutoScheduler(force) {
+  var btn = document.getElementById('autoRunBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ กำลังจัดคิว...'; }
+  var today = isoDate(new Date());
+  var summaryLines = [];
+  var changed = false;
+
+  ['B1','B2','R1'].forEach(function(line) {
+    if (!force && autoMeta.lastAutoRun[line] === today) {
+      summaryLines.push(line + ': รันไปแล้ววันนี้ (' + today + ')');
+      return;
+    }
+    var capacityKg = computeBestCapacityKg(line);
+    if (capacityKg <= 0) {
+      summaryLines.push(line + ': ยังไม่มีข้อมูลกำลังการผลิตในอดีต — ข้าม');
+      autoMeta.lastAutoRun[line] = today;
+      return;
+    }
+    var pending = backlogItems.filter(function(b){ return b.line === line && b.status !== 'scheduled'; })
+      .sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
+
+    var selected = [];
+    var totalKg = 0;
+    var skippedNoWeight = 0;
+    for (var i = 0; i < pending.length; i++) {
+      var item = pending[i];
+      var itemKg;
+      if (item.unit === 'kg') {
+        itemKg = Number(item.qty) || 0;
+      } else {
+        var w = getPartWeight(item.partNo);
+        if (w > 0) { itemKg = (Number(item.qty)||0) * w / 1000; }
+        else { skippedNoWeight++; continue; } // ประเมินไม่ได้ (ไม่มีน้ำหนัก/ชิ้น) → ข้ามไปดูตัวถัดไป ยังค้างในคิว
+      }
+      if (totalKg + itemKg > capacityKg) break; // เกินกำลังการผลิต → หยุดตรงนี้ตามลำดับ FIFO
+      selected.push(item);
+      totalKg += itemKg;
+    }
+
+    if (selected.length) {
+      var poItems = selected.map(function(b) {
+        return { customer: b.customer, partNo: b.partNo, partName: b.partName, line: b.line, qty: b.qty, unit: b.unit };
+      });
+      var now = new Date();
+      poOrders.unshift({
+        id: Date.now() + Math.floor(Math.random()*10000),
+        date: today,
+        timestamp: today + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0'),
+        planner: 'ระบบ (Auto)',
+        items: poItems
+      });
+      var selectedIds = {};
+      selected.forEach(function(s){ selectedIds[s.id] = true; });
+      backlogItems.forEach(function(b) { if (selectedIds[b.id]) b.status = 'scheduled'; });
+      changed = true;
+      summaryLines.push(line + ': ออกใบสั่งผลิตอัตโนมัติ ' + selected.length + ' รายการ (รวม ' +
+        totalKg.toFixed(1) + '/' + capacityKg.toFixed(1) + ' กก.)' +
+        (skippedNoWeight ? ' — ข้าม ' + skippedNoWeight + ' รายการ (ไม่มีน้ำหนัก/ชิ้นใน Part Master)' : ''));
+    } else {
+      summaryLines.push(line + ': ไม่มีรายการในคิว หรือรายการแรกสุดเกินกำลังการผลิต (' + capacityKg.toFixed(1) + ' กก./วัน)' +
+        (skippedNoWeight ? ' — ข้าม ' + skippedNoWeight + ' รายการ (ไม่มีน้ำหนัก/ชิ้นใน Part Master)' : ''));
+    }
+    autoMeta.lastAutoRun[line] = today;
+  });
+
+  if (changed) await savePOToFB();
+  await saveBacklogToFB();
+  await saveAutoMetaToFB();
+
+  renderPOList();
+  renderBacklogList();
+  renderCapacityInfo();
+  var statusEl = document.getElementById('autoRunStatus');
+  if (statusEl) statusEl.innerHTML = 'ผลรันล่าสุด (' + new Date().toLocaleTimeString('th-TH') + '): ' + summaryLines.join(' · ');
+  if (btn) { btn.disabled = false; btn.textContent = '▶ รันจัดคิวเดี๋ยวนี้'; }
+}
+
+function renderCapacityInfo() {
+  var el = document.getElementById('capacityInfo');
+  if (!el) return;
+  var parts = ['B1','B2','R1'].map(function(line) {
+    var cap = computeBestCapacityKg(line);
+    var lastRun = (autoMeta.lastAutoRun||{})[line] || '-';
+    return line + ': สูงสุด ' + cap.toLocaleString(undefined,{maximumFractionDigits:1}) + ' กก./วัน (รันล่าสุด ' + lastRun + ')';
+  });
+  el.textContent = '📊 กำลังการผลิต (best-case จากประวัติ): ' + parts.join(' · ');
+}
+
+// ── ฟอร์มเพิ่มรายการเข้าคิว backlog (ใช้ buildRowHTML เดียวกับฟอร์มสร้าง PO) ──
+function initBacklogRow() {
+  var wrap = document.getElementById('blFormRow');
+  if (!wrap) return;
+  wrap.innerHTML = buildRowHTML('bl');
+  loadPM();
+  attachRowEvents('bl');
+}
+
+function addBacklogItem() {
+  var idx = 'bl';
+  var customer = (document.getElementById('poc-'+idx)||{}).value||'';
+  var partNo   = (document.getElementById('pop-'+idx)||{}).value||'';
+  var partName = (document.getElementById('pon-'+idx)||{}).value||'';
+  var line     = (document.getElementById('pol-'+idx)||{}).value||'B1';
+  var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
+  var unit     = (document.getElementById('pou-'+idx)||{}).value||'pcs';
+
+  if (!customer && !partNo) { showToast('toast-backlog','กรุณาระบุลูกค้าหรือหมายเลขชิ้นงาน','err'); return; }
+  if (!qty) { showToast('toast-backlog','กรุณากรอกจำนวน','err'); return; }
+
+  backlogItems.push({
+    id: 'bl_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    createdAt: new Date().toISOString(),
+    customer, partNo, partName, line, qty, unit, status: 'pending'
+  });
+  saveBacklogToFB();
+  renderBacklogList();
+  renderCapacityInfo();
+  showToast('toast-backlog','✅ เพิ่มเข้าคิวแล้ว','ok');
+
+  var curLine = line;
+  initBacklogRow();
+  setTimeout(function(){
+    var polEl = document.getElementById('pol-bl');
+    if (polEl) polEl.value = curLine;
+  }, 20);
+}
+
+async function removeBacklogItem(id) {
+  if (!confirm('ลบรายการนี้ออกจากคิว?')) return;
+  backlogItems = backlogItems.filter(function(b){ return b.id !== id; });
+  await saveBacklogToFB();
+  renderBacklogList();
+  renderCapacityInfo();
+}
+
+function renderBacklogList() {
+  var body = document.getElementById('backlogListBody');
+  if (!body) return;
+  var pending = backlogItems.filter(function(b){ return b.status !== 'scheduled'; })
+    .sort(function(a,b){ return (a.createdAt||'').localeCompare(b.createdAt||''); });
+
+  if (!pending.length) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px;">คิวว่าง — ไม่มีรายการรอผลิต</td></tr>';
+    return;
+  }
+
+  var lineBadgeMap = {B1:'badge-b1', B2:'badge-b2', R1:'badge-r1'};
+  body.innerHTML = pending.map(function(b, i) {
+    var lineBadge = lineBadgeMap[b.line] || 'badge-b1';
+    var createdDate = (b.createdAt||'').slice(0,10);
+    return '<tr>' +
+      '<td style="text-align:center;font-weight:700;">' + (i+1) + '</td>' +
+      '<td style="font-size:11px;white-space:nowrap;">' + esc(createdDate) + '</td>' +
+      '<td>' + esc(b.customer) + '</td>' +
+      '<td style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">' + esc(b.partNo) + '</td>' +
+      '<td>' + esc(b.partName) + '</td>' +
+      '<td><span class="badge '+lineBadge+'">' + esc(b.line) + '</span></td>' +
+      '<td style="text-align:center;font-weight:700;">' + (Number(b.qty)||0).toLocaleString() + ' <span style="font-size:10px;color:var(--text-muted);">' + (b.unit==='kg'?'กก.':'ชิ้น') + '</span></td>' +
+      '<td><button class="btn btn-sm" style="background:var(--red);color:#fff;" onclick="removeBacklogItem(\'' + b.id + '\')">🗑️</button></td>' +
+    '</tr>';
+  }).join('');
 }
 
 async function savePOToFB() {
@@ -829,7 +1090,7 @@ function renderPOList() {
     if (filterDateScope === 'today' && po.date !== today) return;
     (po.items||[]).forEach(function(it) {
       if (filterLine && it.line !== filterLine && it.line !== 'ALL') return;
-      var calcRes = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit, it.qty);
+      var calcRes = calcActual(it.line, it.partNo, po.timestamp || (po.date ? po.date + ' 00:00' : ''), it.unit, it.qty, po.date);
       var actual = calcRes.actual;
       var pct    = it.qty ? Math.min(100, Math.round(actual / it.qty * 100)) : 0;
       var status = actual >= it.qty ? 'done' : 'pending';
