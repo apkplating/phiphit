@@ -211,6 +211,12 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
         </select>
       </div>
       <div id="dInfoBox" class="info-box"></div>
+      <div class="field" id="dBillField" style="display:none;">
+        <label>ผูกกับบิล (เพื่อสอบกลับได้ว่า INV นี้เป็นของบิลไหน)</label>
+        <select id="dBillSel" onchange="checkDQty()">
+          <option value="">— ไม่ระบุบิล —</option>
+        </select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="field">
           <label>จำนวนส่ง (ชิ้น) *</label>
@@ -985,10 +991,19 @@ function populateDeliverySel() {
   sel.onchange=showDInfo;
 }
 
+// คำนวณยอดที่จ่ายออกแล้วของบิลเดียว (jobId) — รวมทั้งจาก Job Master out records และ Delivery ที่ผูก jobId ไว้
+// ใช้ร่วมกันทั้งฟอร์ม Delivery (เพื่อเช็คไม่ให้ส่งเกิน) และหน้า Traceability (เพื่อสอบกลับ)
+function getBillOutQty(job) {
+  var out = 0;
+  jmRecords.forEach(function(r){ if (r.type==='out' && r.jobId===job.id) out += Number(r.qty||0); });
+  blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
+  return out;
+}
+
 function showDInfo(){
   var val=document.getElementById('dPartSel').value;
   var box=document.getElementById('dInfoBox');
-  if(!val){box.style.display='none';return;}
+  if(!val){box.style.display='none';document.getElementById('dBillField').style.display='none';return;}
   var pn=val.split('||')[0], cu=val.split('||')[1]||'';
   var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
   var wip=(getWip(pn)||{}).pcs||0;
@@ -999,13 +1014,37 @@ function showDInfo(){
     ' &nbsp;WIP <strong style="color:var(--amber)">'+wip+'</strong>'+
     ' &nbsp;ส่งแล้ว <strong style="color:#059669">'+item.delivery+'</strong>'+
     ' &nbsp;→ <strong style="color:'+(remain<=0?'#94a3b8':'var(--navy)')+'">'+remain+' ชิ้น</strong>';
+  populateDBillSel(pn);
+}
+
+// เติมตัวเลือกบิลของ P/No ที่เลือกไว้ ให้ผูก Delivery เข้ากับบิลได้ (สอบกลับได้ว่า INV นี้ตัดจากบิลไหน)
+function populateDBillSel(pn) {
+  var fld = document.getElementById('dBillField');
+  var sel = document.getElementById('dBillSel');
+  if (!fld || !sel) return;
+  var k = norm(pn);
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  if (!bills.length) { fld.style.display='none'; sel.innerHTML='<option value="">— ไม่ระบุบิล —</option>'; return; }
+  sel.innerHTML = '<option value="">— ไม่ระบุบิล —</option>' +
+    bills.map(function(j){
+      var rem = Math.max(0, jobQty(j) - getBillOutQty(j));
+      return '<option value="'+esc(j.id)+'">'+esc(jobBill(j))+' — เหลือ '+rem.toLocaleString()+' ชิ้น ('+fmtD(j.date||'')+')</option>';
+    }).join('');
+  fld.style.display = 'block';
 }
 
 function checkDQty(){
   var val=document.getElementById('dPartSel').value; if(!val)return;
   var pn=val.split('||')[0];
-  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
-  var remain=item.receive-item.delivery;
+  var remain;
+  var billId=(document.getElementById('dBillSel')||{}).value;
+  if (billId) {
+    var job = jmItems.find(function(j){ return j.id===billId; });
+    remain = job ? Math.max(0, jobQty(job) - getBillOutQty(job)) : 0;
+  } else {
+    var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+    remain=item.receive-item.delivery;
+  }
   var qty=parseInt(document.getElementById('dQty').value)||0;
   document.getElementById('dQty').style.borderColor=qty>remain?'#ef4444':'var(--border)';
 }
@@ -1017,6 +1056,7 @@ async function saveDelivery(){
   var date=document.getElementById('dDate').value;
   var inv=document.getElementById('dInv').value.trim();
   var note=document.getElementById('dNote').value.trim();
+  var billId=(document.getElementById('dBillSel')||{}).value||'';
   var toast=document.getElementById('dToast');
 
   if(!val||!qty||!date){
@@ -1024,14 +1064,21 @@ async function saveDelivery(){
     setTimeout(function(){toast.className='toast';},2500); return;
   }
   var pn=val.split('||')[0], cu=val.split('||')[1]||'';
-  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
-  var remain=item.receive-item.delivery;
+
+  var remain;
+  if (billId) {
+    var job = jmItems.find(function(j){ return j.id===billId; });
+    remain = job ? Math.max(0, jobQty(job) - getBillOutQty(job)) : 0;
+  } else {
+    var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+    remain=item.receive-item.delivery;
+  }
   if(qty>remain){
-    toast.className='toast terr'; toast.textContent='⚠️ เกินคงเหลือ ['+remain.toLocaleString()+' ชิ้น]';
+    toast.className='toast terr'; toast.textContent='⚠️ เกินคงเหลือ ['+remain.toLocaleString()+' ชิ้น]'+(billId?' ของบิลนี้':'');
     setTimeout(function(){toast.className='toast';},3000); return;
   }
 
-  var rec={id:'DEL'+Date.now(),date:date,partNo:pn,customer:cu,qty:qty,inv:inv,note:note};
+  var rec={id:'DEL'+Date.now(),date:date,partNo:pn,customer:cu,qty:qty,inv:inv,note:note,jobId:billId||''};
   blDel.unshift(rec);
   try{
     await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -1042,6 +1089,8 @@ async function saveDelivery(){
     document.getElementById('dInv').value='';
     document.getElementById('dNote').value='';
     document.getElementById('dInfoBox').style.display='none';
+    document.getElementById('dBillField').style.display='none';
+    document.getElementById('dPartSel').value='';
     renderStock(); renderDHist(); populateDeliverySel();
   }catch(e){
     blDel.shift();
@@ -1453,17 +1502,16 @@ function renderTraceCard(partNo){
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ส่งออก INV ไหนบ้าง) ──
   var billRows = bills.map(function(j, bi){
-    var outQty = 0;
-    var invEvents = [];
+    var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
+    // เหตุการณ์ "ตัดสต็อก Job Master" (จากปุ่มยืนยันบิลในหน้า v4/5/6) — ช่อง inv ตรงนี้บางทีพนักงานพิมพ์ไม่ตรง format จริง
+    var jmOutEvents = [];
     jmRecords.forEach(function(r){
-      if(r.type==='out' && r.jobId===j.id) {
-        outQty += Number(r.qty||0);
-        invEvents.push({ date: r.date||'', inv: r.inv||'-', qty: Number(r.qty||0) });
-      }
+      if(r.type==='out' && r.jobId===j.id) jmOutEvents.push({ date: r.date||'', inv: r.inv||'-', qty: Number(r.qty||0) });
     });
+    // เหตุการณ์ "Delivery (INV จริง)" จากแท็บ Delivery — ผูก jobId ได้เฉพาะรายการที่บันทึกหลังอัปเดตนี้เท่านั้น
+    var delEvents = [];
     blDel.forEach(function(d){
-      if(norm(d.partNo||'')===k) outQty+=Number(d.qty||0);
-      // หมายเหตุ: บันทึกใน bl_stock (blDel) ไม่ผูก jobId เฉพาะเจาะจง เลยไม่ขึ้นใน timeline ต่อบิล นับรวมแค่ยอด outQty
+      if(d.jobId===j.id) delEvents.push({ date: d.date||'', inv: d.inv||'-', qty: Number(d.qty||0) });
     });
     var rem=Math.max(0,jobQty(j)-outQty);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
@@ -1497,11 +1545,16 @@ function renderTraceCard(partNo){
           return '<div style="font-size:10px;color:#0891b2;">🧪 '+fmtD(g.date)+' · '+esc(g.line)+' · '+qtyStr+' <span style="color:#94a3b8;">('+g.count+' รอบ)</span></div>';
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ไม่พบบันทึกการชุบที่ผูกกับบิลนี้ (อาจชุบก่อนมีฟีเจอร์เลือกบิล หรือกดข้ามตอนชุบ)</div>';
-    var invHtml = invEvents.length
-      ? invEvents.map(function(ev){
-          return '<div style="font-size:10px;color:#dc2626;">📤 '+fmtD(ev.date)+' · INV '+esc(ev.inv)+' · '+ev.qty.toLocaleString()+' ชิ้น</div>';
+    var delInvHtml = delEvents.length
+      ? delEvents.map(function(ev){
+          return '<div style="font-size:10px;color:#dc2626;">🧾 '+fmtD(ev.date)+' · INV '+esc(ev.inv)+' · '+ev.qty.toLocaleString()+' ชิ้น</div>';
         }).join('')
-      : '<div style="font-size:10px;color:#94a3b8;">ยังไม่มีบันทึกส่งออก</div>';
+      : '<div style="font-size:10px;color:#94a3b8;">ยังไม่มี Delivery ที่ผูกกับบิลนี้ (บันทึกผ่านแท็บ Delivery แล้วเลือกบิลนี้ จะขึ้นตรงนี้)</div>';
+    var jmOutHtml = jmOutEvents.length
+      ? jmOutEvents.map(function(ev){
+          return '<div style="font-size:10px;color:#94a3b8;">📋 '+fmtD(ev.date)+' · อ้างอิง "'+esc(ev.inv)+'" · '+ev.qty.toLocaleString()+' ชิ้น</div>';
+        }).join('')
+      : '';
 
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
@@ -1516,7 +1569,8 @@ function renderTraceCard(partNo){
       +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
         +'<div style="display:flex;gap:28px;flex-wrap:wrap;">'
           +'<div><div style="font-size:10px;font-weight:700;color:#0891b2;margin-bottom:4px;">🧪 ชุบเมื่อ</div>'+plateHtml+'</div>'
-          +'<div><div style="font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px;">📤 ส่งออก (INV)</div>'+invHtml+'</div>'
+          +'<div><div style="font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px;">🧾 Delivery (INV จริง)</div>'+delInvHtml
+            +(jmOutHtml?'<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">📋 ตัดสต็อก Job Master (ช่องอ้างอิง อาจไม่ใช่เลข INV จริง)</div>'+jmOutHtml:'')+'</div>'
         +'</div>'
       +'</td></tr>';
   }).join('');
