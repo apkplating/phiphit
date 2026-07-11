@@ -6308,6 +6308,9 @@ async function jobMasterLoad() {
     renderJobBoard();
     populateBarrelJobPick();
     if (typeof qcPopulateJobPick === 'function') qcPopulateJobPick();
+    // สำคัญ: ตารางประวัติ (renderHistory) ใช้ jobMasterItems หาเลขบิลที่ผูกไว้ (b.jobId → job.bill)
+    // ถ้าไม่รีเฟรชตรงนี้ แถวที่ผูกบิลไว้แล้วจะโชว์ "เพิ่มบิล" ค้างอยู่จนกว่าจะมี action อื่นมาเรียก renderHistory() ซ้ำ
+    if (typeof renderHistory === 'function') renderHistory();
   } catch(e) {
     document.getElementById('jobSyncLabel').textContent = '❌ ออฟไลน์';
   }
