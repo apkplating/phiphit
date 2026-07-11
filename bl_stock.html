@@ -394,6 +394,19 @@ var INTAKE_URL = DB_B1 + '/intake.json';      // intakeJobs จาก v4
 var jmItems   = [];  // Job Master items → รับเข้า (receive)
 var jmRecords = [];  // Job Master records (type:'out') → delivery จาก Job Master
 var blInvoices = []; // ใบ INV จริงจาก job_master.html (data.invoices) — แต่ละรายการในนั้นผูก jobId ไว้แล้ว ไม่ต้องเดา
+
+// เช็คว่า jmRecords out-record นี้ "ผูกกับเลข INV จริง" หรือไม่ — ใช้แทนการเดาจาก id prefix (เช่น "AUTO-")
+// เพราะพบว่ามีรายการเก่าที่สร้างจากโค้ดเวอร์ชันก่อนหน้าซึ่งใช้ id ขึ้นต้นด้วย "A"+timestamp (ไม่ใช่ "AUTO-")
+// การเช็คจากเลข INV จริงใน blInvoices ตรง ๆ แม่นกว่าและไม่ขึ้นกับรูปแบบ id ที่อาจเปลี่ยนไปตามเวอร์ชันโค้ด
+var _realInvNoSet = null;
+function isRealInvRef(r) {
+  if (!r || !r.inv) return false;
+  if (!_realInvNoSet) {
+    _realInvNoSet = {};
+    blInvoices.forEach(function(inv){ if (inv.invNo) _realInvNoSet[inv.invNo] = true; });
+  }
+  return !!_realInvNoSet[r.inv];
+}
 var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
 var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
 var wipByJob  = {};  // jobId → [{date, line, pcs, kg}] — ไม่จำกัด 30 วัน ใช้เฉพาะ Traceability drill-down รายบิล
@@ -470,6 +483,7 @@ async function loadJobMaster() {
   jmItems   = [];
   jmRecords = [];
   blInvoices = [];
+  _realInvNoSet = null; // รีเซ็ต cache — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef()
 
   // /job-master.json → items[] + records[] + invoices[] (ใบ INV จริง ผูก jobId ต่อรายการไว้แล้ว)
   if (jmRes.ok) {
@@ -670,8 +684,7 @@ function buildMap() {
     var kgVal  = Number(r.qtyKg||0);
     map[k].delivery    += pcsVal;
     map[k].deliveryKg  += kgVal;
-    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
-    if (!isAutoConsume) {
+    if (isRealInvRef(r)) {
       map[k].shipped    += pcsVal;
       map[k].shippedKg  += kgVal;
     }
@@ -1029,21 +1042,17 @@ function getBillInvEvents(jobId) {
   return events.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 }
 
-// คำนวณยอดที่จ่ายออกแล้วของบิลเดียว (jobId) — รวมทั้งจาก Job Master out records และ Delivery ที่ผูก jobId ไว้
-// ใช้ร่วมกันทั้งฟอร์ม Delivery (เพื่อเช็คไม่ให้ส่งเกิน) และหน้า Traceability (เพื่อสอบกลับ)
-// หมายเหตุ: job_master.html บันทึก out record เป็น qty (ชิ้น) หรือ qtyKg (กก.) แล้วแต่หน่วยของบิล —
-// ต้องแปลงผ่าน Part Master เป็นชิ้นเสมอ ไม่งั้นบิลที่ขายเป็น กก. จะนับจ่ายออกได้ 0 ทั้งที่ขายไปแล้วจริง
 // คำนวณยอดที่ "ส่งลูกค้าจริง" แล้วของบิลเดียว (jobId) — ใช้ทั้งฟอร์ม Delivery (เช็คไม่ให้ส่งเกิน) และตาราง "รายการบิล"
-// หมายเหตุ: jmRecords type:'out' มี 2 ที่มา — (1) "Auto จากรอบชุบ" (id ขึ้นต้น "AUTO-") หมายถึงวัตถุดิบเพิ่งเข้าสู่ WIP
-// ยังไม่ได้ส่งใคร กับ (2) ออกจาก INV จริง/กรอกเองใน bl_stock ซึ่งหมายถึงส่งลูกค้าจริงแล้ว — ต้องนับเฉพาะแบบที่ 2 เท่านั้น
+// หมายเหตุ: jmRecords type:'out' มี 2 ที่มา — (1) รายการที่ไม่ได้ผูกกับเลข INV จริง (เช่น "Auto จากรอบชุบ" หรือข้อมูลเก่าที่ไม่มีเลข INV)
+// หมายถึงวัตถุดิบเพิ่งเข้าสู่ WIP ยังไม่ได้ส่งใคร กับ (2) ออกจาก INV จริง/กรอกเองใน bl_stock ซึ่งหมายถึงส่งลูกค้าจริงแล้ว — ต้องนับเฉพาะแบบที่ 2 เท่านั้น
 // ไม่งั้น "คงเหลือ" ของบิลจะโชว์ 0 ทั้งที่จริงยังมีของอยู่ใน WIP รอส่ง (แค่ยังไม่ได้ออก INV เท่านั้น)
+// ใช้การเช็คกับเลข INV จริงใน blInvoices ตรง ๆ (isRealInvRef) แทนการเดารูปแบบ id — เพราะพบว่ามี id รูปแบบเก่าหลายแบบปนกันอยู่ในข้อมูลจริง
 function getBillOutQty(job) {
   var out = 0;
   var pn = jobPartNo(job);
   jmRecords.forEach(function(r){
     if (r.type!=='out' || r.jobId!==job.id) return;
-    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
-    if (isAutoConsume) return; // นับเป็น "เข้า WIP" ไม่ใช่ "ส่งลูกค้า" — ไม่รวมตรงนี้
+    if (!isRealInvRef(r)) return; // ไม่ผูกกับเลข INV จริง — ไม่นับเป็น "ส่งลูกค้า"
     out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
   });
   blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
@@ -1526,8 +1535,7 @@ function renderTraceCard(partNo){
     var kgVal  = Number(r.qtyKg||0);
     s1Out   += pcsVal;
     s1OutKg += kgVal;
-    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
-    if (!isAutoConsume) {
+    if (isRealInvRef(r)) {
       s4Out   += pcsVal;
       s4OutKg += kgVal;
     }
@@ -1626,26 +1634,9 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
-    // หมายเหตุ: เคยมีบล็อกสีเทาแสดงรายการตัดสต็อกดิบ + Delivery เพิ่มเติมไว้เทียบกับ INV จริง (สำหรับ debug ส่วนต่าง)
-    // เอาออกไปตามที่ขอรอบก่อน — ตอนนี้เพิ่มกลับมาแบบ "diagnostic" ชั่วคราว เพื่อไล่หาสาเหตุที่ยอด "จ่ายออก" ไม่ตรงกับ INV จริง
-    // แสดงรายการ jmRecords type:'out' ของบิลนี้ "ทุกตัวแบบดิบ" พร้อม id เต็ม จะได้เห็นชัดว่าตัวไหนไม่ได้ถูกกรองออกและทำไม
-    var rawOutRecords = jmRecords.filter(function(r){ return r.type==='out' && r.jobId===j.id; });
-    var diagHtml = '';
-    if (rawOutRecords.length) {
-      diagHtml = '<div style="margin-top:8px;padding:8px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:6px;">' +
-        '<div style="font-size:9px;font-weight:700;color:#92400e;margin-bottom:4px;">🔬 DIAGNOSTIC ชั่วคราว — รายการ "out" ดิบทั้งหมดของบิลนี้ (' + rawOutRecords.length + ' รายการ)</div>' +
-        rawOutRecords.map(function(r){
-          var isAuto = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
-          var pcsShown = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
-          return '<div style="font-size:9px;color:#78350f;font-family:monospace;">' +
-            (isAuto ? '⚙️ AUTO' : '✅ NOT-AUTO') + ' · id=' + esc(String(r.id||'')) +
-            ' · inv="' + esc(String(r.inv||'')) + '" · qty=' + (r.qty||0) + ' qtyKg=' + (r.qtyKg||0) +
-            ' · ≈' + pcsShown.toLocaleString() + ' ชิ้น' +
-            '</div>';
-        }).join('');
-      diagHtml += '</div>';
-    }
-    var extraHtml = diagHtml;
+    // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
+    // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
+    var extraHtml = '';
 
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
