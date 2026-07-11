@@ -1461,9 +1461,8 @@ function onInvLineJobSelect() {
     if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
   }
 
-  // ตั้งหน่วยจำนวนเริ่มต้น = "ชิ้น" เสมอ (นับของจริงที่ส่งมอบเป็นชิ้น ตรงกับใบส่งของ)
-  // ยกเว้นกรณีไม่มีข้อมูลน้ำหนัก/ชิ้นจาก Part Master และบิลรับเข้าเป็น กก. — จะแปลงชิ้น→กก. ไม่ได้ จึงต้องใช้ กก. แทน
-  var defaultUnit = (isKg && pmKg <= 0) ? 'kg' : 'pcs';
+  // ตั้งหน่วยจำนวนเริ่มต้น = หน่วยของบิลรับเข้า (กรอกตรงกับที่ชั่ง/นับจริง) — เปลี่ยนเป็นชิ้น/กก. เองได้ภายหลัง
+  var defaultUnit = isKg ? 'kg' : 'pcs';
   if (qtyUnitSel) qtyUnitSel.value = defaultUnit;
   qtyInput.step = defaultUnit==='kg' ? '0.01' : '1';
   qtyInput.placeholder = defaultUnit==='kg' ? '0.00' : '0';
@@ -1753,7 +1752,7 @@ function addInvLine() {
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
     unit: job.unit||'pcs', qty: stockQty,
     qtyEntered: qty, qtyUnit: qtyUnit, weightPerUnit: wPerUnit,
-    weight: parseFloat(totalKg.toFixed(3)), price: price, priceUnit: priceUnit, lot: lot,
+    weight: parseFloat(totalKg.toFixed(3)), pcs: totalPcs, price: price, priceUnit: priceUnit, lot: lot,
     amount: amount
   });
 
@@ -1802,13 +1801,14 @@ function renderInvLines() {
       var qVal = (l.qtyEntered!=null) ? l.qtyEntered : l.qty;
       var qtyStr = (qU==='kg' ? Number(qVal).toFixed(2) : Number(qVal).toLocaleString()) + (qU==='kg'?' กก.':' ชิ้น');
       var wStr   = l.weight ? Number(l.weight).toFixed(2)+' กก.' : '–';
+      var pcsHint = (qU==='kg' && l.pcs) ? '<br><span style="font-size:9px;color:var(--blue);">≈'+Number(l.pcs).toLocaleString()+' ชิ้น</span>' : '';
       var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
       var pmPartL = pmLookup(l.partName);
       var pmNameL = pmPartL ? (pmPartL.name||'') : '';
       return '<tr>'+
         '<td class="td-l">'+esc(l.partName)+(pmNameL?' <span style="color:var(--text-muted);font-weight:400;">'+esc(pmNameL)+'</span>':'')+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
         '<td>'+qtyStr+'</td>'+
-        '<td>'+wStr+'</td>'+
+        '<td>'+wStr+pcsHint+'</td>'+
         '<td>'+l.price.toFixed(2)+'<span style="font-size:9px;color:var(--text-muted);">'+puTH+'</span></td>'+
         '<td style="font-weight:700;color:var(--blue);">'+l.amount.toFixed(2)+'</td>'+
         '<td><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button></td>'+
@@ -2120,7 +2120,7 @@ function printInvoice(inv) {
   var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
 
   var rowsHtml = inv.items.map(function(l,i){
-    var qtyStr = l.unit==='kg' ? l.qty.toFixed(2) : l.qty.toLocaleString();
+    var qtyStr = invLineQtyDisplay(l);
     var wStr   = l.weight ? l.weight.toFixed(2) : '';
     var pmPart = pmLookup(l.partName);
     var pmName = pmPart ? (pmPart.name||'') : '';
@@ -2198,6 +2198,16 @@ function printInvoice(inv) {
 
 // HTML-escape helper
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// คืนค่า "จำนวน" สำหรับคอลัมน์ QUANTITY บนใบส่งของ — แสดงเป็น "จำนวนชิ้น" เสมอถ้าแปลงได้
+// (บิลที่ตัดสต็อกเป็น กก. เก็บ l.qty ไว้เป็นน้ำหนักรวม แต่ลูกค้าต้องการเห็นจำนวนชิ้นที่นับได้จริง)
+function invLineQtyDisplay(l) {
+  if (l.unit === 'kg') {
+    if (l.pcs != null && l.pcs > 0) return Number(l.pcs).toLocaleString();
+    return Number(l.qty).toFixed(2) + ' กก.'; // fallback: ไม่ทราบน้ำหนัก/ชิ้น จึงแสดงเป็น กก. แทน
+  }
+  return Number(l.qty).toLocaleString();
+}
 
 // ══════════════════════════════════════
 //  พิมพ์ลงฟอร์มสำเร็จรูป (ตำแหน่ง absolute, mm)
@@ -2305,7 +2315,7 @@ function buildFormOverlayBody(inv) {
   var items = inv.items.slice(0, P.maxRows);
   items.forEach(function(l, i){
     var y = P.rowY0 + i*P.rowH;
-    var qtyStr = l.unit==='kg' ? Number(l.qty).toFixed(2) : Number(l.qty).toLocaleString();
+    var qtyStr = invLineQtyDisplay(l);
     var wStr   = l.weight ? Number(l.weight).toFixed(2) : '';
     html += fldC(P.itemX, y, (i+1));
     var pmPartF = pmLookup(l.partName);
