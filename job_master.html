@@ -953,14 +953,19 @@ function saveLocal() {
 // ══════════════════════════════════════
 //  FIREBASE
 // ══════════════════════════════════════
+var _fbLastSavedAt = '';
+
 async function fbSave() {
   try {
+    var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, savedAt:new Date().toISOString() })
+      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, savedAt:savedAt })
     });
-    if (res.ok) setSyncOk();
-  } catch(e) { setSyncErr(); }
+    if (res.ok) { _fbLastSavedAt = savedAt; setSyncOk(); return true; }
+    setSyncErr();
+    return false;
+  } catch(e) { setSyncErr(); return false; }
 }
 
 async function fbLoad() {
@@ -969,6 +974,11 @@ async function fbLoad() {
     if (!res.ok) { setSyncErr(); return; }
     var data = await res.json();
     if (data) {
+      // ถ้า cloud ไม่ใหม่กว่าที่เราเพิ่งบันทึกขึ้นไปเอง ห้ามทับ local —
+      // กัน poll พอดีมาแทรกจังหวะระหว่างที่ fbSave() ยังไม่เสร็จ แล้วดึงข้อมูลเก่ามาทับของที่เพิ่งบันทึกไป (ราคา/บิล ฯลฯ หายไปเงียบๆ)
+      var cloudSavedAt = data.savedAt || '';
+      if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
+      if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       if (Array.isArray(data.items))    jobItems   = data.items;
       if (Array.isArray(data.records))  jobRecords = data.records;
       if (Array.isArray(data.invoices)) invoices   = data.invoices;
