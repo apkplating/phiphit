@@ -718,10 +718,13 @@ function buildMap() {
     // การตัดสต็อกจริงของทั้งระบบยังคงอิงจากใบรับงาน (Job Master) + INV เท่านั้น ไม่ได้พึ่งเลข WIP กล่องนี้เลย
     var wo = getWip(map[k].partNo);
     if (wo) {
-      var wipPcs = wo.pcs || 0;
-      var wipKg  = wo.kgs || 0;
-      wo.pcs = Math.max(0, wipPcs - (map[k].shipped   || 0));
-      wo.kgs = parseFloat(Math.max(0, wipKg - (map[k].shippedKg || 0)).toFixed(3));
+      // เก็บค่าดิบไว้ครั้งแรกที่เจอเท่านั้น (ก่อนจะถูกคำนวณเป็น net) — buildMap() ถูกเรียกซ้ำหลายจุดทั่วทั้งไฟล์
+      // ถ้าลบ "shipped" ออกจาก wo.pcs ตรง ๆ ทุกครั้งที่เรียก จะกลายเป็นลบซ้อนกันไปเรื่อย ๆ จนเหลือ 0 ถาวร
+      // (คือบั๊กที่เจอจริง: pcs=0 แต่ lines/dates ยังมีร่องรอยว่าเคยมีข้อมูลอยู่ก่อน)
+      if (wo.rawPcs === undefined) wo.rawPcs = wo.pcs || 0;
+      if (wo.rawKgs === undefined) wo.rawKgs = wo.kgs || 0;
+      wo.pcs = Math.max(0, wo.rawPcs - (map[k].shipped   || 0));
+      wo.kgs = parseFloat(Math.max(0, wo.rawKgs - (map[k].shippedKg || 0)).toFixed(3));
     }
   });
 
@@ -1560,15 +1563,6 @@ function renderTraceCard(partNo){
   if (!s2Pcs && s2Kg > 0 && pm && pm.weightPerPc > 0) {
     s2Pcs = ucKgToPcs(s2Kg, pm.weightPerPc);
   }
-  // 🔬 DIAGNOSTIC ชั่วคราว — เช็คว่า wipMap หา key เจอไหม และมี key อะไรอยู่บ้างในระบบ
-  var _diagKey = norm(partNo);
-  var _diagFound = wipMap.hasOwnProperty(_diagKey);
-  var _diagAllKeys = Object.keys(wipMap);
-  var s2Diag = '<div style="margin-top:4px;padding:6px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;font-size:8px;color:#78350f;font-family:monospace;text-align:left;">' +
-    '🔬 key ค้นหา="' + esc(_diagKey) + '" · เจอตรงๆ=' + _diagFound + '<br>' +
-    'wipMap ทั้งหมดมี ' + _diagAllKeys.length + ' key: ' + esc(_diagAllKeys.slice(0,15).join(', ')) + '<br>' +
-    'wo=' + esc(JSON.stringify(wo)) +
-    '</div>';
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1684,7 +1678,7 @@ function renderTraceCard(partNo){
 
   var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
-  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail + s2Diag;
+  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
