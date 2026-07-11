@@ -504,13 +504,21 @@ async function loadJobMaster() {
   _realInvNoSet = null; // รีเซ็ต cache — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef()
 
   // /job-master.json → items[] + records[] + invoices[] (ใบ INV จริง ผูก jobId ต่อรายการไว้แล้ว)
+  // หมายเหตุ: Firebase RTDB บางครั้งเก็บ array ที่มีช่องว่าง/ถูกลบรายการกลางๆ เป็น object คีย์ตัวเลขแทนที่จะเป็น
+  // array ปกติ — ถ้าเช็คด้วย Array.isArray() อย่างเดียวจะพลาดเคสนี้ไปเป็น [] ว่างเปล่าทั้งที่มีข้อมูลจริงอยู่
+  // (เจอจริง: blInvoices กลายเป็น 0 ทั้งที่ Job Master มี INV อยู่หลายร้อยใบ) ต้องรองรับทั้ง 2 แบบ
+  function toArr(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object') return Object.values(v);
+    return [];
+  }
   if (jmRes.ok) {
     try {
       var data = await jmRes.json();
       if (data) {
-        jmItems   = Array.isArray(data.items)   ? data.items   : [];
-        jmRecords = Array.isArray(data.records) ? data.records : [];
-        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
+        jmItems    = toArr(data.items);
+        jmRecords  = toArr(data.records);
+        blInvoices = toArr(data.invoices);
       }
     } catch(e) {}
   }
@@ -540,8 +548,11 @@ async function loadPartMaster() {
     var res = await fetch(PM_URL);
     if (!res.ok) return;
     var data = await res.json();
-    if (data && Array.isArray(data.parts)) {
-      pmParts = data.parts;
+    // รองรับกรณี Firebase เก็บ parts เป็น object คีย์ตัวเลขแทน array ปกติ
+    var partsArr = Array.isArray(data && data.parts) ? data.parts
+                 : (data && data.parts && typeof data.parts === 'object') ? Object.values(data.parts) : null;
+    if (partsArr) {
+      pmParts = partsArr;
       try { localStorage.setItem('bl_pmParts', JSON.stringify(pmParts)); } catch(e){}
     }
   } catch(e){
