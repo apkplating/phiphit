@@ -174,7 +174,7 @@ tr:hover td{background:var(--sky-pale);}
         <button class="btn btn-outline btn-sm" id="blRefreshBtn" onclick="refreshBLStock()" style="width:auto;margin:0;padding:5px 10px;">🔄 ดึงข้อมูลจาก BL Stock</button>
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin:-4px 0 10px;line-height:1.5;">
-        ดึงยอด "รับเข้าแล้ว แต่ยังไม่ได้ชุบ" จาก bl_stock.html มาให้ดู <strong>แยกเป็นรายล็อต/รายบิล</strong> (1 หมายเลขชิ้นงานอาจมีหลายบิลหลายแถว) เรียงจากล็อตเก่าสุดก่อน (FIFO) — แถวไหนค้างมาแล้ว ≥ 3 วันจะไฮไลต์สีแดงเตือนให้เห็น
+        ดึงยอด "รับเข้าแล้ว แต่ยังไม่ได้ชุบ" จาก bl_stock.html มาให้ดู <strong>แยกเป็นรายล็อต/รายบิล</strong> (1 หมายเลขชิ้นงานอาจมีหลายบิลหลายแถว) เรียงจากล็อตเก่าสุดก่อน (FIFO) — <strong>แสดงเฉพาะล็อตที่ค้างมาแล้ว ≥ 3 วัน</strong> (ไฮไลต์สีแดงเตือนให้เห็นชัด) ล็อตที่เพิ่งรับเข้ายังไม่ถึง 3 วันจะยังไม่โชว์ในตารางนี้
         <br>ระบบ<strong>ไม่ดันเข้าคิวให้อัตโนมัติ</strong> — กดปุ่ม "➕ เข้าคิว" เองทีละแถว/ทีละบิล พร้อมเลือกสายผลิตก่อนยืนยัน สั่งผลิตตัดที่บิลได้เลย ไม่ปนกับบิลอื่น
       </div>
       <div style="overflow-x:auto;">
@@ -960,11 +960,17 @@ async function refreshBLStock() {
 function renderBLPendingList() {
   var body = document.getElementById('blPendingBody');
   if (!body) return;
-  if (!blPendingList.length) {
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่มีรายการรอชุบจาก BL Stock ในตอนนี้</td></tr>';
+  // แสดงเฉพาะล็อตที่ค้างมาแล้ว ≥ 3 วัน — ล็อตใหม่ๆ ที่เพิ่งรับเข้ายังไม่ต้องโชว์ ให้ตารางดูสะอาด ไม่ยาวเกินจำเป็น
+  var visible = [];
+  blPendingList.forEach(function(item, idx){
+    if (item.daysWaiting !== null && item.daysWaiting >= 3) visible.push({ item: item, idx: idx });
+  });
+  if (!visible.length) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่มีล็อตที่ค้างชุบ ≥ 3 วันในตอนนี้</td></tr>';
     return;
   }
-  body.innerHTML = blPendingList.map(function(item, i) {
+  body.innerHTML = visible.map(function(v) {
+    var item = v.item, i = v.idx;
     var isOld = item.daysWaiting !== null && item.daysWaiting >= 3;
     var ageStr = item.daysWaiting === null ? '–' : (item.daysWaiting + ' วัน');
     var ageColor = isOld ? 'var(--red)' : 'var(--text-muted)';
@@ -1027,17 +1033,27 @@ async function removeWipCorrection(id) {
   renderWipCorrectionsList();
 }
 
+// เปิด/ปิดประวัติการปรับ WIP ด้วยมือ — ปิดไว้เป็นค่าเริ่มต้นให้หน้าจอดูสะอาด กดหัวข้อเพื่อขยายดูรายการทั้งหมด
+var wipCorrectionsExpanded = false;
+function toggleWipCorrections() {
+  wipCorrectionsExpanded = !wipCorrectionsExpanded;
+  renderWipCorrectionsList();
+}
 function renderWipCorrectionsList() {
   var box = document.getElementById('wipCorrectionsList');
   if (!box) return;
   if (!blWipCorrections.length) { box.innerHTML = ''; return; }
-  box.innerHTML = '<div style="font-size:10px;color:var(--text-muted);margin:8px 0 4px;font-weight:600;">📝 ประวัติการปรับ WIP ด้วยมือ (' + blWipCorrections.length + ' รายการ)</div>' +
-    blWipCorrections.map(function(c) {
+  var header = '<div onclick="toggleWipCorrections()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--text-muted);margin:8px 0 4px;font-weight:600;display:flex;align-items:center;gap:5px;">' +
+      '<span style="display:inline-block;transition:transform .15s;transform:rotate(' + (wipCorrectionsExpanded ? 90 : 0) + 'deg);">▶</span>' +
+      '📝 ประวัติการปรับ WIP ด้วยมือ (' + blWipCorrections.length + ' รายการ)' +
+    '</div>';
+  var list = !wipCorrectionsExpanded ? '' : blWipCorrections.map(function(c) {
       return '<div style="font-size:10px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#f8fafc;border-radius:6px;margin-bottom:3px;">' +
         '<span><b>' + esc(c.partNo) + '</b> +' + Number(c.pcs).toLocaleString() + ' ชิ้น' + (c.note ? ' — ' + esc(c.note) : '') + '</span>' +
         '<button class="btn btn-sm" style="width:auto;margin:0;padding:2px 8px;background:var(--red);color:#fff;" onclick="removeWipCorrection(\'' + c.id + '\')">ลบ</button>' +
       '</div>';
     }).join('');
+  box.innerHTML = header + list;
 }
 
 // ผู้ใช้กดยืนยันเองทีละรายการ — ไม่ auto-push เข้าคิวโดยไม่ถาม
