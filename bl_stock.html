@@ -552,6 +552,7 @@ async function loadBLDel() {
 async function loadWIP() {
   wipMap = {};
   wipByJob = {};
+  window._diagRowsTYT2302 = []; // 🔬 DIAGNOSTIC ชั่วคราว — เก็บทุกแถวดิบที่ตรงกับ TYT2-302 ไม่ว่าจะมี jobId/อยู่ในช่วง 30 วันหรือไม่
   var lines = [
     { url: DB_B1+'/plating-b1.json', label:'B1' },
     { url: DB_B2+'/plating-b2.json', label:'B2' },
@@ -590,6 +591,15 @@ async function loadWIP() {
           if (!pn) return;
           var k = norm(pn);
 
+          // 🔬 DIAGNOSTIC ชั่วคราว — เก็บทุกแถวที่ตรงกับ TYT2-302 แบบดิบไว้ก่อน ไม่สนเงื่อนไขอะไรทั้งสิ้น
+          if (k === norm('TYT2-302')) {
+            window._diagRowsTYT2302.push({
+              date: dr.date||'(ไม่มีวันที่)', line: ln.label, jobId: row.jobId||'(ไม่มี jobId)',
+              pcs: Number(row.pcs||0), kg: Number(row.kg||0), type: row.type||'',
+              withinCutoff: withinCutoff, drStatus: dr.status||'(ไม่มี status)'
+            });
+          }
+
           // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
           // ไม่กระทบยอดรวม wipMap เดิมด้านล่างเลย
           if (row.jobId && row.jobId !== 'NOBILL') {
@@ -608,6 +618,9 @@ async function loadWIP() {
       });
     } catch(e){}
   }));
+
+  console.log('[BL Stock] 🔬 ทุกแถวดิบที่ตรงกับ TYT2-302 (' + window._diagRowsTYT2302.length + ' แถว) ไม่ว่าจะมี jobId/อยู่ในช่วง 30 วันหรือไม่:');
+  console.table(window._diagRowsTYT2302);
 }
 
 // ══════════════════════════════════════════════════════
