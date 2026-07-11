@@ -452,8 +452,10 @@ function dlCSV(rows, filename) {
 function exportBillCSV(partNo) {
   var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
   if (!rows.length) return;
-  var out = [['เลขบิล','วันรับ','รับเข้า (ชิ้น)','จ่ายออก (ชิ้น)','คงเหลือ (ชิ้น)','สถานะ']];
-  rows.forEach(function(r){ out.push([r.bill, r.date, r.receive, r.out, r.remain, r.status]); });
+  var out = [['ประเภทแถว','เลขบิล','วันที่','รายละเอียด','จำนวน (ชิ้น)','น้ำหนัก (กก.)','เลข INV','คงเหลือหลังบิลนี้','สถานะบิล']];
+  rows.forEach(function(r){
+    out.push([r.type, r.bill, r.date, r.detail, r.qty, r.kg, r.ref, r.remainAfter, r.status]);
+  });
   var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
   dlCSV(out, 'stock_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.csv');
 }
@@ -1614,11 +1616,6 @@ function renderTraceCard(partNo){
         +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div>'
         +'<div style="font-size:9px;color:#64748b;margin-top:2px;">ส่งแล้ว '+shippedPct+'%</div></td>';
 
-    billsCsvRows.push({
-      bill: jobBill(j), date: fmtD(j.date||''), receive: jobQty(j), out: outQty, remain: rem,
-      status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%')
-    });
-
     var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var detailId = 'bdet-'+k+'-'+bi;
     // สรุปรวมตามวันที่+สาย แทนการโชว์ทีละแถวย่อย (บิลเดียวอาจมีบันทึกเป็นสิบๆ ครั้งในวันเดียว) — กระชับกว่าเยอะ
@@ -1662,6 +1659,20 @@ function renderTraceCard(partNo){
           return '<div style="font-size:10px;color:#dc2626;">🧾 '+fmtD(ev.date)+' · INV '+esc(ev.invNo)+' · '+qtyStr+'</div>';
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
+
+    // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
+    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
+      status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
+    plateGroupList.forEach(function(g){
+      var pcsEq = g.pcs;
+      if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
+      billsCsvRows.push({ type:'ชุบ', bill: jobBill(j), date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
+    });
+    invEvents.forEach(function(ev){
+      var pcsVal = ev.pcs;
+      if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
+      billsCsvRows.push({ type:'ขายออก', bill: jobBill(j), date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
+    });
 
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
     // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
