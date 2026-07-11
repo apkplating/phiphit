@@ -687,23 +687,28 @@ function buildMap() {
     var maxWipKg  = Math.max(0, map[k].receiveKg - map[k].deliveryKg);
     var wo = getWip(map[k].partNo);
     if (wo) {
-      var pm2 = pmLookup(map[k].partNo);
       var wipPcs = wo.pcs || 0;
       var wipKg  = wo.kgs || 0;
-
-      // กรณี kg-based: cap ด้วย maxWipKg
-      if (maxWipKg > 0 && wipKg > maxWipKg) {
-        var ratioKg = maxWipKg / wipKg;
-        wo.kgs = parseFloat(maxWipKg.toFixed(3));
-        wo.pcs = Math.round(wipPcs * ratioKg);
+      var hasReceiveData = (map[k].receive > 0 || map[k].receiveKg > 0);
+      // สำคัญ: ต้อง cap ทุกครั้งที่มีข้อมูล receive ไม่ใช่แค่ตอน maxWip > 0 —
+      // เดิมถ้าจ่ายออกเท่ากับ/เกินรับเข้า (maxWip กลายเป็น 0 พอดี) เงื่อนไข "maxWip > 0" จะเป็นเท็จ
+      // ทำให้ข้ามการ cap ไปทั้งบล็อก ปล่อยค่า WIP ดิบที่ยังไม่ตัดอะไรเลยโผล่มาแทนค่าที่ควรจะเหลือ (0 หรือใกล้ 0)
+      if (hasReceiveData) {
+        if (maxWipKg > 0 && wipKg > 0) {
+          var ratioKg = Math.min(1, maxWipKg / wipKg);
+          wo.kgs = parseFloat((wipKg * ratioKg).toFixed(3));
+          wo.pcs = Math.round(wipPcs * ratioKg);
+        } else if (maxWipPcs > 0 && wipPcs > 0) {
+          var ratioPcs = Math.min(1, maxWipPcs / wipPcs);
+          wo.pcs = Math.round(wipPcs * ratioPcs);
+          wo.kgs = parseFloat((wipKg * ratioPcs).toFixed(3));
+        } else if (maxWipKg <= 0 && maxWipPcs <= 0) {
+          // จ่ายออกเท่ากับหรือเกินรับเข้าแล้ว ไม่เหลือ WIP ให้โชว์
+          wo.pcs = 0;
+          wo.kgs = 0;
+        }
       }
-      // กรณี pcs-based: cap ด้วย maxWipPcs
-      else if (maxWipPcs > 0 && wipPcs > maxWipPcs) {
-        var ratioPcs = maxWipPcs / wipPcs;
-        wo.pcs = maxWipPcs;
-        wo.kgs = parseFloat((wipKg * ratioPcs).toFixed(3));
-      }
-      // ถ้าทั้ง receive เป็น 0 (ยังไม่มีข้อมูล JM) → ไม่ cap
+      // ถ้า receive เป็น 0 ทั้งคู่ (ยังไม่มีข้อมูล JM) → ไม่ cap เลย ปล่อยค่าดิบไว้ตามเดิม
     }
   });
 
@@ -1607,31 +1612,9 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
-    // ส่วนเสริม: โชว์รายการตัดสต็อก Job Master แบบดิบเสมอเมื่อมีข้อมูล (ไม่ใช่แค่ตอนไม่มี INV จริง)
-    // เดิมซ่อนไว้ถ้ามี INV จริงอยู่แล้ว แต่ยอด "จ่ายออก" ในตารางหลักรวมทั้งจาก INV จริง + out record อื่นๆ เข้าด้วยกัน
-    // ถ้าซ่อนไว้ พอยอดจ่ายออกรวม ≠ ผลรวม INV ที่เห็น จะหาที่มาของส่วนต่างไม่เจอเลยว่าอีกส่วนมาจากไหน
+    // หมายเหตุ: เคยมีบล็อกสีเทาแสดงรายการตัดสต็อกดิบ + Delivery เพิ่มเติมไว้เทียบกับ INV จริง (สำหรับ debug ส่วนต่าง)
+    // เอาออกตามที่ขอ ไม่โชว์ในหน้าจอปกติแล้ว — โชว์แค่รายการ INV จริงที่ยืนยันแล้วด้านบนพอ
     var extraHtml = '';
-    if (delEvents.length) {
-      extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">📦 Delivery เพิ่มเติม (บันทึกในแท็บ Delivery)</div>' +
-        delEvents.map(function(ev){ return '<div style="font-size:10px;color:#94a3b8;">📦 '+fmtD(ev.date)+' · INV '+esc(ev.inv)+' · '+ev.qty.toLocaleString()+' ชิ้น</div>'; }).join('');
-    }
-    if (jmOutEvents.length) {
-      var jmOutTotal = jmOutEvents.reduce(function(s,ev){ return s+ev.qty; },0);
-      var invTotal = invEvents.reduce(function(s,ev){
-        var v = ev.pcs!=null ? Number(ev.pcs) : (ev.unit==='pcs' ? Number(ev.qty) : 0);
-        return s+(v||0);
-      },0);
-      var label = invEvents.length
-        ? '📋 รายการตัดสต็อกทั้งหมดใน Job Master (รวม '+jmOutTotal.toLocaleString()+' ชิ้น — เทียบกับ INV จริงด้านบนที่รวม '+invTotal.toLocaleString()+' ชิ้น ถ้าไม่เท่ากันแปลว่ามีตัดสต็อกส่วนอื่นที่ไม่ได้ผูกกับ INV)'
-        : '📋 ตัดสต็อก Job Master (ไม่พบใน INV จริง — อาจพิมพ์อ้างอิงเอง ไม่ใช่เลข INV)';
-      extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">'+label+'</div>' +
-        jmOutEvents.map(function(ev){
-          var qtyStr = ev.qty > 0
-            ? (ev.qty.toLocaleString()+' ชิ้น'+(ev.convertedFromKg ? ' <span style="color:#94a3b8;">(≈จาก '+ev.qtyKg.toFixed(2)+' kg)</span>' : ''))
-            : (ev.qtyKg > 0 ? ev.qtyKg.toFixed(2)+' kg <span style="color:#dc2626;">(ไม่มีน้ำหนัก/ชิ้นใน Part Master แปลงเป็นชิ้นไม่ได้)</span>' : '0 ชิ้น');
-          return '<div style="font-size:10px;color:#94a3b8;">📋 '+fmtD(ev.date)+' · อ้างอิง "'+esc(ev.inv)+'" · '+qtyStr+'</div>';
-        }).join('');
-    }
 
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
