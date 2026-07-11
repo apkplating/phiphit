@@ -3535,6 +3535,10 @@ async function pullFromLines() {
       dayRecords.forEach(function(rec) {
         var rows = rec.rows || [];
         rows.forEach(function(barrel) {
+          // ข้าม R (งานซ่อม/rework) — ใช้วัตถุดิบที่ถูกนับไปแล้วตอนรอบปกติ (N) ไม่ใช่วัตถุดิบใหม่เข้าสู่กระบวนการ
+          // ถ้านับซ้ำจะทำให้ "Auto จากรอบชุบ" ตัดสต็อกเกินจริง (ตรงกับที่ bl_stock.html กรองไว้อยู่แล้วเช่นกัน)
+          if ((barrel.type||'').toUpperCase() === 'R') return;
+
           var roundEntryId = 'LINE-' + lineName + '-' + rec.id + '-' + barrel.id;
           if (processedRoundIds[roundEntryId]) return; // ตัดไปแล้ว
 
