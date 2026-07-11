@@ -8396,10 +8396,10 @@ function openAddBillModal(dayId, rowIdx) {
 
   var modal = document.createElement('div');
   modal.id = 'addBillModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:9999;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML =
-    '<div style="background:#fff;border-radius:14px;padding:20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);">' +
-      '<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;">✏️ '+(curLabel?'แก้ไข':'เพิ่ม')+'บิลให้รอบนี้</div>' +
+    '<div id="addBillModalBox" style="background:#fff;border-radius:14px;padding:20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.25);">' +
+      '<div id="addBillDragHandle" style="cursor:move;user-select:none;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;">↕️ ✏️ '+(curLabel?'แก้ไข':'เพิ่ม')+'บิลให้รอบนี้ <span style="font-size:10px;font-weight:400;color:#94a3b8;">(ลากหัวข้อเพื่อย้าย)</span></div>' +
       '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">ชิ้นงาน: <b>'+partNo+'</b></div>' +
       (active.length
         ? '<select id="addBillSel" onchange="var m=document.getElementById(&quot;addBillManual&quot;); if(m) m.value=&quot;&quot;;" style="width:100%;font-size:13px;padding:8px;border:1.5px solid #86efac;border-radius:8px;margin-bottom:10px;">' +
@@ -8416,7 +8416,48 @@ function openAddBillModal(dayId, rowIdx) {
     '</div>';
   document.body.appendChild(modal);
   modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+  makeModalDraggable('addBillModalBox', 'addBillDragHandle');
   setTimeout(function(){ var mi=document.getElementById('addBillManual'); if(mi) mi.focus(); }, 50);
+}
+
+// ลากย้ายกล่อง modal ได้ (จับที่ handle) — ใช้กับ modal ไหนก็ได้ที่มี id ของกล่องและ handle ระบุมา
+function makeModalDraggable(boxId, handleId) {
+  var box = document.getElementById(boxId);
+  var handle = document.getElementById(handleId);
+  if (!box || !handle) return;
+  var dragging = false, startX, startY, startLeft, startTop;
+  function onDown(e) {
+    dragging = true;
+    var pt = e.touches ? e.touches[0] : e;
+    var rect = box.getBoundingClientRect();
+    startX = pt.clientX; startY = pt.clientY;
+    startLeft = rect.left; startTop = rect.top;
+    box.style.position = 'fixed';
+    box.style.left = startLeft + 'px';
+    box.style.top = startTop + 'px';
+    box.style.margin = '0';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, {passive:false});
+    document.addEventListener('touchend', onUp);
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    if (e.cancelable) e.preventDefault();
+    var pt = e.touches ? e.touches[0] : e;
+    var dx = pt.clientX - startX, dy = pt.clientY - startY;
+    box.style.left = Math.max(0, startLeft + dx) + 'px';
+    box.style.top  = Math.max(0, startTop  + dy) + 'px';
+  }
+  function onUp() {
+    dragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+  }
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, {passive:true});
 }
 
 function saveBillToRow(dayId, rowIdx) {
