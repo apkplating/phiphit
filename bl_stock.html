@@ -453,7 +453,8 @@ function exportBillCSV(partNo) {
   var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
   if (!rows.length) return;
   var out = [['ประเภทแถว','เลขบิล','วันที่','รายละเอียด','จำนวน (ชิ้น)','น้ำหนัก (กก.)','เลข INV','คงเหลือหลังบิลนี้','สถานะบิล']];
-  rows.forEach(function(r){
+  rows.forEach(function(r, i){
+    if (r.type === 'บิล' && i > 0) out.push(['','','','','','','','','']); // เว้นบรรทัดว่างคั่นระหว่างบิล ให้แยกกลุ่มเห็นชัด
     out.push([r.type, r.bill, r.date, r.detail, r.qty, r.kg, r.ref, r.remainAfter, r.status]);
   });
   var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
@@ -1666,12 +1667,12 @@ function renderTraceCard(partNo){
     plateGroupList.forEach(function(g){
       var pcsEq = g.pcs;
       if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
-      billsCsvRows.push({ type:'ชุบ', bill: jobBill(j), date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
+      billsCsvRows.push({ type:'ชุบ', bill: '', date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
     });
     invEvents.forEach(function(ev){
       var pcsVal = ev.pcs;
       if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
-      billsCsvRows.push({ type:'ขายออก', bill: jobBill(j), date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
+      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
     });
 
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
