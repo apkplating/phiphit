@@ -1125,42 +1125,22 @@ function renderBoard() {
     var unitBadge = job.unit==='kg'
       ? '<span style="background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">กก.</span>'
       : '<span style="background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">ชิ้น</span>';
-
-    // ── แปลงหน่วยกลับไปมา (กก. ↔ ชิ้น) ผ่านน้ำหนัก/ชิ้นจาก Part Master ──
-    // ก่อนหน้านี้บิลที่รับเข้าเป็น กก. จะไม่โชว์จำนวนชิ้นเลย (แค่ "—") ทั้งที่คำนวณได้จาก Part Master
-    // ทำให้ดูตารางแล้วนึกภาพจำนวนจริงไม่ออกถ้าเคยชินกับหน่วยอีกแบบ เลยแปลงให้เห็นควบคู่กันไปเลยทั้ง 2 หน่วยเสมอ
-    var pmRow = pmLookup(job.partName);
-    var wpp   = (pmRow && pmRow.weightPerPc) ? Number(pmRow.weightPerPc) : 0; // กรัม/ชิ้น
-    function pcsToKgStr(pcs) { return wpp>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+(pcs*wpp/1000).toFixed(2)+' กก.)</span>' : ''; }
-    function kgToPcsStr(kg)  { return wpp>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+Math.round(kg*1000/wpp).toLocaleString()+' ชิ้น)</span>' : ''; }
-
-    var remainPcsCell, remainKgCell;
-    if (job.unit==='pcs' || !job.unit) {
-      remainPcsCell = '<td style="font-weight:800;color:'+remainColor+';">'+b.remain.toLocaleString()+'</td>';
-      remainKgCell  = '<td style="color:#94a3b8;font-size:10px;">'+(wpp>0 ? (b.remain*wpp/1000).toFixed(2) : '—')+'</td>';
-    } else {
-      remainPcsCell = '<td style="color:#94a3b8;font-size:10px;">'+(wpp>0 ? Math.round(b.remainKg*1000/wpp).toLocaleString() : '—')+'</td>';
-      remainKgCell  = '<td style="font-weight:800;color:'+remainColor+';">'+b.remainKg.toFixed(2)+'</td>';
-    }
-
-    // รับเข้า: โชว์หน่วยหลักตามบิล + หน่วยรองในวงเล็บ (ถ้ามีน้ำหนัก/ชิ้นให้แปลง)
-    var inCell = isKg
-      ? (b.totalInKg > 0 ? b.totalInKg.toFixed(2)+' <span style="font-size:9px;color:var(--text-muted);">กก.</span>'+kgToPcsStr(b.totalInKg) : '0')
-      : b.totalIn.toLocaleString()+pcsToKgStr(b.totalIn);
-
-    // จ่ายออก: totalOut(ชิ้น)/totalOutKg(กก.) เก็บแค่หน่วยเดียวตามบิลเสมอ (อีกหน่วยเป็น 0 เปล่าๆ) ต้องแปลงเอาจากหน่วยหลักเท่านั้น
-    var outCell = isKg
-      ? (b.totalOutKg > 0 ? b.totalOutKg.toFixed(2)+' <span style="font-size:9px;">กก.</span>'+kgToPcsStr(b.totalOutKg) : '0')
-      : b.totalOut.toLocaleString()+pcsToKgStr(b.totalOut);
-
+    var remainPcsCell = (job.unit==='pcs'||!job.unit)
+      ? '<td style="font-weight:800;color:'+remainColor+';">'+b.remain+'</td>'
+      : '<td style="color:#94a3b8;">—</td>';
+    var remainKgCell = job.unit==='kg'
+      ? '<td style="font-weight:800;color:'+remainColor+';">'+b.remainKg.toFixed(2)+'</td>'
+      : '<td style="color:#94a3b8;">—</td>';
     return '<tr>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+'</td>' +
       '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
       '<td>'+unitBadge+'</td>' +
-      '<td style="font-weight:700;">'+inCell+'</td>' +
-      '<td style="color:var(--orange);font-weight:700;">'+outCell+'</td>' +
+      '<td style="font-weight:700;">'+(isKg
+        ? (b.totalInKg > 0 ? b.totalInKg.toFixed(2)+' <span style="font-size:9px;color:var(--text-muted);">กก.</span>' : '0')
+        : b.totalIn)+'</td>' +
+      '<td style="color:var(--orange);font-weight:700;">'+b.totalOut+'</td>' +
       remainPcsCell +
       remainKgCell +
       daysCell +

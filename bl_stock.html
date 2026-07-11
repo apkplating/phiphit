@@ -259,7 +259,7 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
   <!-- ══ Tab: Traceability ══ -->
   <div id="tab-trace" style="display:none;">
     <div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
-      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No <span style="font-size:9px;font-weight:400;color:#cbd5e1;">build-wip-derived-v3</span></div>
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No <span style="font-size:9px;font-weight:400;color:#cbd5e1;">build-wip-fix-v2</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <div style="position:relative;flex:1;min-width:200px;">
           <input type="text" id="traceSearchInput"
@@ -442,7 +442,6 @@ function norm(s){
     .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
 function fmtD(s){
   if(!s||s==='–') return '–';
   try{ var d=new Date(s+'T00:00:00');
@@ -462,6 +461,7 @@ async function loadAll(manual) {
     console.log('[BL Stock] job-master:', JM_URL);
     console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
     console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
+    console.log('[BL Stock] 🔬 RAW wipMap["tyt2302"] ทันทีหลัง loadWIP() เสร็จ (ก่อนอะไรอื่นแตะต้อง):', JSON.stringify(wipMap[norm('TYT2-302')]));
     setSyncing(false, true);
     renderStock();
     renderDHist();
@@ -493,7 +493,7 @@ async function loadJobMaster() {
       if (data) {
         jmItems   = Array.isArray(data.items)   ? data.items   : [];
         jmRecords = Array.isArray(data.records) ? data.records : [];
-        blInvoices = Array.isArray(data.invoices) ? data.invoices : (data.invoices && typeof data.invoices==='object' ? Object.values(data.invoices) : []);
+        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
       }
     } catch(e) {}
   }
@@ -577,7 +577,7 @@ async function loadWIP() {
         // หมายเหตุ: เดิมมีเงื่อนไขข้ามวันที่ "mark done" แล้ว แต่ "done" หมายถึงปิดล็อกการบันทึกของวันนั้น
         // ไม่ได้แปลว่าของถูกส่งลูกค้าไปแล้ว — ทำให้ WIP ของวันที่ปิดไปแล้วแต่ยังไม่ได้ขายหายไปจากการนับทั้งหมด
         // สถานะ "ขายจริงหรือยัง" ตอนนี้เช็คจากเลข INV จริงแยกต่างหากแล้ว (isRealInvRef) จึงไม่ต้องพึ่ง status ตรงนี้อีก
-        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น — ใช้แค่ "รายไลน์"/วันที่อ้างอิงประกอบแล้ว ไม่ใช่ตัวเลขหลักของ STOCK2 อีกต่อไป)
+        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น)
         var withinCutoff = true;
         if (dr.date) {
           var drDate = new Date(dr.date + 'T00:00:00');
@@ -713,15 +713,20 @@ function buildMap() {
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
     }
 
-    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" — คำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) ──
-    // เดิมใช้ wo.pcs/wo.kgs (ยอดชุบจริงจากไฟล์ v4/5/6 ที่จำกัดแค่ 30 วันล่าสุด) มาลบ shipped ตรง ๆ
-    // แต่พบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง)
-    // เปลี่ยนมาใช้ "ยอดที่เข้ากระบวนการชุบทั้งหมด" (delivery รวม Auto จากรอบชุบ — เชื่อถือได้เพราะสร้างจากรอบชุบจริงทุกรอบ)
-    // ลบด้วย "ยอดขายจริง" (shipped เฉพาะที่ผูก INV จริง) แทน — ไม่ต้องพึ่งไฟล์ v4/5/6 โดยตรงอีกต่อไป
+    // ── หัก "ส่งลูกค้าจริง" ออกจาก WIP ตรง ๆ (ไม่ cap เทียบกับยอดรับเข้า JM) ──
+    // ตั้งใจปล่อยให้ WIP โชว์เกินยอดรับของ STOCK1 ได้ถ้าข้อมูลจริงเป็นแบบนั้น — ใช้เป็นสัญญาณเตือนว่า
+    // ชุบเกินยอดที่เคยรับเข้าจริง (เช่น สแกนผิดบิล/ปนกันข้ามบิล) จะได้เห็นความผิดปกติชัด ๆ ไม่ถูกบีบตัวเลขให้เนียนหายไป
+    // การตัดสต็อกจริงของทั้งระบบยังคงอิงจากใบรับงาน (Job Master) + INV เท่านั้น ไม่ได้พึ่งเลข WIP กล่องนี้เลย
     var wo = getWip(map[k].partNo);
-    if (!wo) { wo = { partName: map[k].partNo, pcs:0, kgs:0, lines:{}, dates:[] }; wipMap[k] = wo; }
-    wo.pcs = Math.max(0, (map[k].delivery   || 0) - (map[k].shipped   || 0));
-    wo.kgs = parseFloat(Math.max(0, (map[k].deliveryKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
+    if (wo) {
+      // เก็บค่าดิบไว้ครั้งแรกที่เจอเท่านั้น (ก่อนจะถูกคำนวณเป็น net) — buildMap() ถูกเรียกซ้ำหลายจุดทั่วทั้งไฟล์
+      // ถ้าลบ "shipped" ออกจาก wo.pcs ตรง ๆ ทุกครั้งที่เรียก จะกลายเป็นลบซ้อนกันไปเรื่อย ๆ จนเหลือ 0 ถาวร
+      // (คือบั๊กที่เจอจริง: pcs=0 แต่ lines/dates ยังมีร่องรอยว่าเคยมีข้อมูลอยู่ก่อน)
+      if (wo.rawPcs === undefined) wo.rawPcs = wo.pcs || 0;
+      if (wo.rawKgs === undefined) wo.rawKgs = wo.kgs || 0;
+      wo.pcs = Math.max(0, wo.rawPcs - (map[k].shipped   || 0));
+      wo.kgs = parseFloat(Math.max(0, wo.rawKgs - (map[k].shippedKg || 0)).toFixed(3));
+    }
   });
 
   return map;
@@ -1550,16 +1555,15 @@ function renderTraceCard(partNo){
   var s1Rem   = Math.max(0, s1In - s1Out);
   var s1RemKg = Math.max(0, s1InKg - s1OutKg);
 
-  // ── Stock 2: ชุบแล้ว แต่ยังไม่ได้ขาย ──
-  // เปลี่ยนมาคำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) โดยตรง
-  // เพราะพบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + จำกัดแค่ 30 วันล่าสุด
-  // + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง) ทำให้ตัวเลขไม่นิ่งและมักจะน้อยกว่าความเป็นจริง
-  // สูตรใหม่: ยอดที่เข้ากระบวนการชุบทั้งหมด (s1Out ซึ่งรวม "Auto จากรอบชุบ" ด้วย — เชื่อถือได้เพราะสร้างจาก
-  // รอบชุบจริงทุกรอบ) ลบด้วยยอดขายจริง (s4Out เฉพาะที่ผูก INV จริง) = ส่วนที่ชุบเสร็จแล้วแต่ยังไม่ได้ขาย
-  var s2Pcs = Math.max(0, s1Out   - s4Out);
-  var s2Kg  = Math.max(0, s1OutKg - s4OutKg);
-  var wo    = getWip(partNo)||{}; // ยังใช้ดู "รายไลน์" (B1/B2/R1) กับวันที่ชุบเป็นข้อมูลอ้างอิงประกอบเท่านั้น ไม่ใช้เป็นตัวเลขหลักแล้ว
+  // ── Stock 2: WIP (กำลังชุบ) ──
+  var wo    = getWip(partNo)||{};
+  var s2Pcs = wo.pcs||0;
+  var s2Kg  = wo.kgs||0;
   var s2Lines = wo.lines||{};
+  // แปลง กก. → ชิ้น ให้หน่วยตรงกับ Stock 1/4 (รับ/ขายนับเป็นชิ้นทั้งคู่) — ไม่งั้นเทียบกันไม่ได้
+  if (!s2Pcs && s2Kg > 0 && pm && pm.weightPerPc > 0) {
+    s2Pcs = ucKgToPcs(s2Kg, pm.weightPerPc);
+  }
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
