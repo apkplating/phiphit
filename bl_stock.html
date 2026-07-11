@@ -1607,14 +1607,24 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
-    // ส่วนเสริม: โชว์เฉพาะตอนไม่มีข้อมูลจาก INV จริง หรือมีรายการที่ไม่ตรงกัน (ไว้ตรวจสอบเผื่อมีอะไรตกหล่น)
+    // ส่วนเสริม: โชว์รายการตัดสต็อก Job Master แบบดิบเสมอเมื่อมีข้อมูล (ไม่ใช่แค่ตอนไม่มี INV จริง)
+    // เดิมซ่อนไว้ถ้ามี INV จริงอยู่แล้ว แต่ยอด "จ่ายออก" ในตารางหลักรวมทั้งจาก INV จริง + out record อื่นๆ เข้าด้วยกัน
+    // ถ้าซ่อนไว้ พอยอดจ่ายออกรวม ≠ ผลรวม INV ที่เห็น จะหาที่มาของส่วนต่างไม่เจอเลยว่าอีกส่วนมาจากไหน
     var extraHtml = '';
     if (delEvents.length) {
       extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">📦 Delivery เพิ่มเติม (บันทึกในแท็บ Delivery)</div>' +
         delEvents.map(function(ev){ return '<div style="font-size:10px;color:#94a3b8;">📦 '+fmtD(ev.date)+' · INV '+esc(ev.inv)+' · '+ev.qty.toLocaleString()+' ชิ้น</div>'; }).join('');
     }
-    if (jmOutEvents.length && !invEvents.length) {
-      extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">📋 ตัดสต็อก Job Master (ไม่พบใน INV จริง — อาจพิมพ์อ้างอิงเอง ไม่ใช่เลข INV)</div>' +
+    if (jmOutEvents.length) {
+      var jmOutTotal = jmOutEvents.reduce(function(s,ev){ return s+ev.qty; },0);
+      var invTotal = invEvents.reduce(function(s,ev){
+        var v = ev.pcs!=null ? Number(ev.pcs) : (ev.unit==='pcs' ? Number(ev.qty) : 0);
+        return s+(v||0);
+      },0);
+      var label = invEvents.length
+        ? '📋 รายการตัดสต็อกทั้งหมดใน Job Master (รวม '+jmOutTotal.toLocaleString()+' ชิ้น — เทียบกับ INV จริงด้านบนที่รวม '+invTotal.toLocaleString()+' ชิ้น ถ้าไม่เท่ากันแปลว่ามีตัดสต็อกส่วนอื่นที่ไม่ได้ผูกกับ INV)'
+        : '📋 ตัดสต็อก Job Master (ไม่พบใน INV จริง — อาจพิมพ์อ้างอิงเอง ไม่ใช่เลข INV)';
+      extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">'+label+'</div>' +
         jmOutEvents.map(function(ev){
           var qtyStr = ev.qty > 0
             ? (ev.qty.toLocaleString()+' ชิ้น'+(ev.convertedFromKg ? ' <span style="color:#94a3b8;">(≈จาก '+ev.qtyKg.toFixed(2)+' kg)</span>' : ''))
@@ -1657,7 +1667,9 @@ function renderTraceCard(partNo){
     return ln+':'+s2Lines[ln];
   }).join(' · ');
 
-  var s3Detail = s3 ? ('ผ่าน '+s3Pass+' / NG '+s3Ng) : '(ยังไม่มีข้อมูล QC)';
+  var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
+  // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
+  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
@@ -1673,12 +1685,11 @@ function renderTraceCard(partNo){
       +'</div>'
     +'</div>'
 
-    // stock boxes
+    // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
       +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' จ่าย '+s1Out)
-      +stockBox(2,'WIP ชุบ',s2Pcs,s2Kg,'#0891b2',lineDetail||'–')
-      +stockBox(3,'QC 100%',s3Pass,0,'#7c3aed',s3Detail)
-      +stockBox(4,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
+      +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
+      +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
     +'</div>'
 
     // bill table
