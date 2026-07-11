@@ -3273,10 +3273,14 @@ async function fbLoad(silent) {
     var cloudDayRecords   = data.dayRecords   || [];
     var cloudTodayBarrels = data.todayBarrels || [];
 
-    // merge dayRecords
+    // merge dayRecords — ถึงตรงนี้ยืนยันแล้วว่า cloud ใหม่กว่า (เช็ค savedAt ด้านบนแล้ว)
+    // ดังนั้นถ้า id ตรงกัน ให้ใช้เวอร์ชัน cloud ทับของเดิมไปเลย ไม่ใช่แค่เติมรายการใหม่ที่ไม่เคยมี
+    // (เดิมยึด local เป็นหลักเสมอสำหรับ id ที่มีอยู่แล้ว — ถ้า local ค้างข้อมูลเก่าจากบั๊กอื่น จะไม่มีทางได้ค่าที่ถูกต้องจาก cloud กลับมาเลย)
+    var cloudById = {};
+    cloudDayRecords.forEach(function(r){ cloudById[r.id] = r; });
     var localIds = {};
     dayRecords.forEach(function(r){ localIds[r.id] = true; });
-    var merged = dayRecords.slice();
+    var merged = dayRecords.map(function(r){ return cloudById[r.id] || r; });
     cloudDayRecords.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
     merged.sort(function(a,b){ return b.id - a.id; });
     dayRecords = merged;
@@ -8469,7 +8473,7 @@ function clearBillFromRow(dayId, rowIdx) {
 
 // บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง
 async function persistBillEdit(dayId, msg) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('b1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   var m = document.getElementById('addBillModal'); if (m) m.remove();
   renderHistory(); // อัปเดตหน้าจอทันที ไม่ต้องรอ Firebase — กันจอค้าง
   var synced = false;
