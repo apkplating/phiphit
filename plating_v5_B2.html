@@ -1478,6 +1478,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 // ═══════════════════════════════════════
 var todayBarrels = [];   // รายรอบวันนี้ (ยังไม่ save)
 var dayRecords   = [];   // ประวัติรายวัน (saved)
+var expandedDayIds = {}; // เก็บสถานะแถวที่ขยายไว้ในตาราง History — กันไม่ให้ยุบกลับตอน re-render (เช่น หลังบันทึกบิล)
 var discordWH    = '';
 var selTypeVal   = 'N';
 var selColorVal  = 'B';
@@ -2121,8 +2122,9 @@ function renderHistory() {
     var rc = r.ratio >= 20 ? 'ratio-hi' : r.ratio >= 10 ? 'ratio-mid' : 'ratio-lo';
     var rid = 'det-' + r.id;
 
+    var isOpen = !!expandedDayIds[r.id];
     html += '<tr class="hist-row" onclick="toggleDetail('+r.id+')">' +
-      '<td><button class="expand-btn" id="btn-'+r.id+'">▶</button></td>' +
+      '<td><button class="expand-btn'+(isOpen?' open':'')+'" id="btn-'+r.id+'">▶</button></td>' +
       '<td class="td-l" style="font-size:11px;">' + ds +
         (r.lotNo ? '<div style="font-size:9px;font-family:\'IBM Plex Mono\',monospace;"><span class="lot-chip badge-B" onclick="event.stopPropagation();openLotModal('+r.id+')" title="กดเพื่อดูรายละเอียด lot">📦 ' + r.lotNo + '</span></div>' : '') + '</td>' +
       '<td class="td-l" style="font-size:11px;font-family:\'IBM Plex Sans Thai\',sans-serif;">' + r.recorder + '</td>' +
@@ -2168,7 +2170,7 @@ function renderHistory() {
       '</tr>';
     }).join('');
 
-    html += '<tr class="detail-row" id="'+rid+'"><td colspan="13">' +
+    html += '<tr class="detail-row'+(isOpen?' open':'')+'" id="'+rid+'"><td colspan="13">' +
       '<div class="detail-inner"><div class="tbl-wrap">' +
         '<table class="detail-table"><thead><tr>' +
           '<th style="text-align:left;">เวลา</th><th>โม่</th><th>บ่อ</th>' +
@@ -2189,6 +2191,7 @@ function toggleDetail(id) {
   var isOpen = row.classList.contains('open');
   row.classList.toggle('open', !isOpen);
   btn.classList.toggle('open', !isOpen);
+  expandedDayIds[id] = !isOpen;
 }
 
 function delDay(id) {
@@ -8391,8 +8394,13 @@ function openAddBillModal(dayId, rowIdx) {
     return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
   });
 
-  // รายชื่อบิลทั้งหมดในระบบ ไว้ให้พิมพ์/เลือกเอง เผื่อไม่อยู่ในลิสต์แนะนำ (เช่น หมดสต็อกแล้ว หรือชื่อชิ้นงานสะกดไม่ตรงเป๊ะ)
-  var allBills = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim(); });
+  // รายชื่อบิลของ "ชิ้นงานเดียวกัน" เท่านั้น (รวมบิลที่หมดสต็อกแล้วด้วย) ไว้ให้เลือก/พิมพ์เอง
+  // ไม่โชว์บิลทั้งระบบ เพราะจะเยอะเกินไปจนกวนตา — ถ้าจะพิมพ์บิลที่ไม่เกี่ยวกับชิ้นงานนี้เลย (เช่น บิลเก่าก่อนมีระบบ) พิมพ์เองได้อยู่แล้วโดยไม่ต้องพึ่ง datalist
+  var allBills = (jobMasterItems||[]).filter(function(j){
+    if (!String(j.bill||'').trim()) return false;
+    var jNorm = normalizePartKey(j.partName||'');
+    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+  });
 
   // สร้าง modal
   var existing = document.getElementById('addBillModal');
@@ -8405,7 +8413,9 @@ function openAddBillModal(dayId, rowIdx) {
   }).join('');
 
   var dlOpts = allBills.map(function(j){
-    return '<option value="'+esc2(j.bill)+'">'+esc2(j.partName||'')+'</option>';
+    var b = calcJobBal(j.id);
+    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+'กก.' : b.remain.toLocaleString()+'ชิ้น';
+    return '<option value="'+esc2(j.bill)+'">เหลือ '+rem+(j.customer?' · '+esc2(j.customer):'')+'</option>';
   }).join('');
 
   var modal = document.createElement('div');
