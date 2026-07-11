@@ -1015,9 +1015,9 @@ function getBillInvEvents(jobId) {
         events.push({
           date: inv.date || '',
           invNo: inv.invNo || inv.id || '-',
-          customer: inv.customer || '',
           qty: Number(l.qty || 0),
-          unit: l.unit || 'pcs'
+          unit: l.unit || 'pcs',
+          pcs: (l.pcs!=null) ? Number(l.pcs) : null // จำนวนชิ้นที่แปลงแล้ว (จาก job_master.html) — INV เก่าอาจไม่มีค่านี้
         });
       }
     });
@@ -1590,10 +1590,17 @@ function renderTraceCard(partNo){
       : '<div style="font-size:10px;color:#94a3b8;">ไม่พบบันทึกการชุบที่ผูกกับบิลนี้ (อาจชุบก่อนมีฟีเจอร์เลือกบิล หรือกดข้ามตอนชุบ)</div>';
 
     // 🧾 ขายออก — ใช้ INV จริงจาก Job Master เป็นหลัก (ไม่ต้องพึ่งการกรอกซ้ำในแท็บ Delivery อีกแล้ว)
+    // แสดงจำนวนเป็น "ชิ้น" เสมอ ให้หน่วยตรงกับ "รับเข้า" (คอลัมน์ STOCK1) — ไม่งั้นดูขัดแย้งกัน (รับเป็นชิ้น แต่ขายออกโชว์ กก.)
     var invHtml = invEvents.length
       ? invEvents.map(function(ev){
-          var qtyStr = ev.qty.toLocaleString() + (ev.unit==='kg' ? ' kg' : ' ชิ้น');
-          return '<div style="font-size:10px;color:#dc2626;">🧾 '+fmtD(ev.date)+' · INV '+esc(ev.invNo)+' · '+qtyStr+(ev.customer?' · <span style="color:#94a3b8;">'+esc(ev.customer)+'</span>':'')+'</div>';
+          var pcsVal = ev.pcs;
+          if (pcsVal == null) {
+            // fallback สำหรับ INV เก่าก่อนมีฟีเจอร์นี้ — แปลงจาก กก./ชิ้นเดิม ผ่าน Part Master เอาเอง
+            pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
+          }
+          var qtyStr = pcsVal ? (pcsVal.toLocaleString()+' ชิ้น') : (ev.qty.toLocaleString()+' '+(ev.unit==='kg'?'kg':'ชิ้น'));
+          if (ev.unit==='kg') qtyStr += ' ('+ev.qty.toFixed(2)+' kg)';
+          return '<div style="font-size:10px;color:#dc2626;">🧾 '+fmtD(ev.date)+' · INV '+esc(ev.invNo)+' · '+qtyStr+'</div>';
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
