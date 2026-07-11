@@ -8520,14 +8520,14 @@ function saveBillToRow(dayId, rowIdx) {
       // ไม่พบใน Job Master — เป็นบิลเก่าก่อนมีระบบ (หรือพิมพ์ผิด) → บันทึกเป็นเลขอ้างอิงอย่างเดียว ไม่ผูกกับสต็อก
       row.jobId = '';
       row.manualBill = manualText;
-      persistBillEdit(dayId, '⚠️ บันทึกเป็นบิลอ้างอิง "'+manualText+'" (ไม่พบใน Job Master — ไม่ผูกสต็อก)');
+      persistBillEdit(dayId, rowIdx, '⚠️ บันทึกเป็นบิลอ้างอิง "'+manualText+'" (ไม่พบใน Job Master — ไม่ผูกสต็อก)');
       return;
     }
   }
 
   row.jobId = jobId;
   row.manualBill = ''; // ผูกกับ Job Master จริงแล้ว เคลียร์ค่าอ้างอิงเดิม (ถ้ามี)
-  persistBillEdit(dayId, '✅ บันทึกบิลแล้ว');
+  persistBillEdit(dayId, rowIdx, '✅ บันทึกบิลแล้ว');
 }
 
 // ล้างค่าบิลที่ผูก/พิมพ์ไว้ผิด กลับไปเป็นสถานะ "เพิ่มบิล" (ว่างเปล่า) — ไม่ลบรอบชุบ แค่ลบการผูกบิลของแถวนี้
@@ -8537,20 +8537,49 @@ function clearBillFromRow(dayId, rowIdx) {
   var row = dr.rows[rowIdx];
   row.jobId = '';
   row.manualBill = '';
-  persistBillEdit(dayId, '🗑️ ล้างค่าบิลแล้ว');
+  persistBillEdit(dayId, rowIdx, '🗑️ ล้างค่าบิลแล้ว');
 }
 
 // บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง
-async function persistBillEdit(dayId, msg) {
+// จากนั้น "อ่านข้อมูลกลับมาจาก Firebase จริง ๆ" อีกครั้งเพื่อยืนยันว่าค่าที่บันทึกไปขึ้นเซิร์ฟเวอร์แล้วจริง —
+// ไม่ใช่แค่เชื่อสถานะ 200 ของ PUT เฉยๆ
+async function persistBillEdit(dayId, rowIdx, msg) {
   try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
   var m = document.getElementById('addBillModal'); if (m) m.remove();
   renderHistory(); // อัปเดตหน้าจอทันที ไม่ต้องรอ Firebase — กันจอค้าง
+
+  var dr  = dayRecords.find(function(r){ return r.id === dayId; });
+  var row = dr && dr.rows ? dr.rows[rowIdx] : null;
+  var expectedJobId      = row ? (row.jobId || '') : '';
+  var expectedManualBill = row ? (row.manualBill || '') : '';
+
   var synced = false;
   try { synced = await fbSave(); } catch(e){ synced = false; }
-  if (synced) {
-    showToast('hist', msg, 'ok');
-  } else {
+
+  if (!synced) {
     showToast('hist', msg + ' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)', 'err');
+    return;
+  }
+
+  // ── ยืนยันซ้ำ: ดึงข้อมูลสด ๆ จาก Firebase กลับมาเช็คว่าค่าที่เพิ่งบันทึกไปมีอยู่จริงหรือไม่ ──
+  try {
+    var verifyUrl = fbDataUrl() + (fbDataUrl().indexOf('?')>=0?'&':'?') + '_v=' + Date.now();
+    var vres = await fetch(verifyUrl);
+    if (vres.ok) {
+      var vdata = await vres.json();
+      var vdr  = vdata && Array.isArray(vdata.dayRecords) ? vdata.dayRecords.find(function(r){ return r.id === dayId; }) : null;
+      var vrow = vdr && vdr.rows ? vdr.rows[rowIdx] : null;
+      var matches = vrow && (vrow.jobId||'') === expectedJobId && (vrow.manualBill||'') === expectedManualBill;
+      if (matches) {
+        showToast('hist', msg + ' — ยืนยันแล้วว่าขึ้น Firebase จริง ✅', 'ok');
+      } else {
+        showToast('hist', '⚠️ ส่งขึ้น Firebase สำเร็จ แต่ตรวจสอบย้อนกลับแล้วค่าไม่ตรง — ลองกดบันทึกอีกครั้ง หรือรีเฟรชแล้วเช็คใหม่', 'err');
+      }
+    } else {
+      showToast('hist', msg, 'ok');
+    }
+  } catch(e) {
+    showToast('hist', msg, 'ok');
   }
 }
 
