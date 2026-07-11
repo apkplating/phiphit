@@ -837,18 +837,6 @@ var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master';
 var jobItems   = [];
 var jobRecords = [];
 var invoices   = [];   // ใบส่งสินค้า/INV ที่ออกแล้ว
-
-// เช็คว่า jobRecords out-record นี้ "ผูกกับเลข INV จริง" หรือไม่ — ใช้แยก "Auto จากรอบชุบ" (เข้ากระบวนการชุบ)
-// ออกจาก "ขายจริง" (ผูก INV จริง) เพราะ jobRecords type:'out' ทั้ง 2 แบบถูกเก็บปนกันไว้ในชุดเดียวกัน
-var _realInvNoSet = null;
-function isRealInvRef(r) {
-  if (!r || !r.inv) return false;
-  if (!_realInvNoSet) {
-    _realInvNoSet = {};
-    invoices.forEach(function(inv){ if (inv.invNo) _realInvNoSet[inv.invNo] = true; });
-  }
-  return !!_realInvNoSet[r.inv];
-}
 var invDraft   = [];   // รายการสินค้าในบิล INV ที่กำลังสร้าง (ยังไม่บันทึก)
 var customers  = [];   // ทะเบียนลูกค้า {id, name, addressText}
 var billStatements = []; // ใบวางบิลที่ออกแล้ว {id, billNo, date, customer, invoiceIds, total}
@@ -993,7 +981,7 @@ async function fbLoad() {
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       if (Array.isArray(data.items))    jobItems   = data.items;
       if (Array.isArray(data.records))  jobRecords = data.records;
-      if (Array.isArray(data.invoices)) { invoices = data.invoices; _realInvNoSet = null; }
+      if (Array.isArray(data.invoices)) invoices   = data.invoices;
       if (Array.isArray(data.customers)) customers = data.customers;
       if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
       if (Array.isArray(data.priceList)) priceList = data.priceList;
@@ -1034,9 +1022,6 @@ function calcJob(jobId) {
       totalInKg += Number(r.qtyKg||0);
     }
     if (r.type==='out') {
-      // นับเฉพาะรายการที่ผูกกับเลข INV จริงเท่านั้น — ไม่นับ "Auto จากรอบชุบ" (แค่เข้ากระบวนการชุบ ยังไม่ได้ขายจริง)
-      // เดิมนับรวมทุกอย่าง ทำให้ "จ่ายออก"/"คงเหลือ"/"สถานะ จ่ายครบ" ผิดพลาดตามไปด้วย
-      if (!isRealInvRef(r)) return;
       totalOut   += Number(r.qty||0);
       totalOutKg += Number(r.qtyKg||0);
     }
@@ -2137,7 +2122,6 @@ function saveInvoice(doPrint) {
   invObj.vat = invObj.grandTotal*0.07;
   invObj.netTotal = invObj.grandTotal + invObj.vat;
   invoices.unshift(invObj);
-  _realInvNoSet = null; // มี INV ใหม่เพิ่มมา ต้องสร้าง cache ใหม่รอบหน้า
 
   saveLocal(); fbSave();
 
@@ -2612,7 +2596,6 @@ function editInvoice(invId) {
   jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
   // เอา invoice ออกจากรายการ (ชั่วคราว — จะถูกสร้างใหม่ตอนบันทึก)
   invoices.splice(idx,1);
-  _realInvNoSet = null;
   saveLocal(); fbSave();
 
   // โหลดข้อมูลกลับเข้าฟอร์ม
@@ -2639,7 +2622,6 @@ function deleteInvoice(invId) {
 
   jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
   invoices.splice(idx,1);
-  _realInvNoSet = null;
   saveLocal(); fbSave();
   showToast('sales','🗑️ ลบ INV '+inv.invNo+' และคืนสต็อกแล้ว','ok');
   renderSales();
