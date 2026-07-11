@@ -2051,12 +2051,20 @@ function renderHistory() {
     '</tr>';
 
     var detRows = (r.rows||[]).map(function(b,i) {
-      // หาบิลจาก jobMasterItems
+      // หาบิลจาก jobMasterItems — ถ้าไม่เจอ ให้ลองใช้ manualBill (บิลอ้างอิงที่พิมพ์เอง เช่น บิลเก่าก่อนมีระบบ ไม่ผูกสต็อก)
       var job = (jobMasterItems||[]).find(function(j){ return j.id === b.jobId; });
-      var billLabel = job ? job.bill : (b.jobId ? b.jobId.slice(-6) : '');
-      var billCell = billLabel
-        ? '<span style="font-family:monospace;font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:6px;">'+billLabel+'</span>'
-        : '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>';
+      var billLabel = job ? job.bill : (b.manualBill || (b.jobId ? b.jobId.slice(-6) : ''));
+      var billCell;
+      if (billLabel) {
+        var linked = !!job;
+        var badgeStyle = linked
+          ? 'background:#dbeafe;color:#1e40af;'
+          : 'background:#fef3c7;color:#92400e;border:1px dashed #f59e0b;';
+        var badgeTitle = linked ? 'ผูกกับ Job Master — กดเพื่อแก้ไข' : 'บิลอ้างอิง (ไม่พบใน Job Master — ไม่ผูกสต็อก) — กดเพื่อแก้ไข';
+        billCell = '<span onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" title="'+badgeTitle+'" style="cursor:pointer;font-family:monospace;font-size:10px;'+badgeStyle+'padding:1px 6px;border-radius:6px;">'+billLabel+(linked?'':' ⚠️')+'</span>';
+      } else {
+        billCell = '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>';
+      }
       return '<tr>' +
         '<td>' + (i+1) + '. ' + b.time + '</td>' +
         '<td>' + b.barrel + '</td>' +
@@ -8297,7 +8305,11 @@ function openAddBillModal(dayId, rowIdx) {
   if (!row) return;
   var partNo = (row.partName||'').trim();
 
-  // หาบิลที่มีคงเหลือสำหรับ P/No นี้
+  // ค่าที่ผูกอยู่ตอนนี้ (ถ้ามี) — ไว้ prefill ให้แก้ไขง่าย ไม่ต้องพิมพ์ใหม่ทั้งหมด
+  var curJob   = (jobMasterItems||[]).find(function(j){ return j.id === row.jobId; });
+  var curLabel = curJob ? curJob.bill : (row.manualBill || '');
+
+  // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ)
   var normSel = normalizePartKey(partNo);
   var active = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
@@ -8308,6 +8320,9 @@ function openAddBillModal(dayId, rowIdx) {
     return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
   });
 
+  // รายชื่อบิลทั้งหมดในระบบ ไว้ให้พิมพ์/เลือกเอง เผื่อไม่อยู่ในลิสต์แนะนำ (เช่น หมดสต็อกแล้ว หรือชื่อชิ้นงานสะกดไม่ตรงเป๊ะ)
+  var allBills = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim(); });
+
   // สร้าง modal
   var existing = document.getElementById('addBillModal');
   if (existing) existing.remove();
@@ -8315,7 +8330,11 @@ function openAddBillModal(dayId, rowIdx) {
   var opts = active.map(function(j){
     var b = calcJobBal(j.id);
     var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
-    return '<option value="'+j.id+'">['+( j.bill||'?')+'] เหลือ '+rem+'</option>';
+    return '<option value="'+j.id+'"'+(j.id===row.jobId?' selected':'')+'>['+( j.bill||'?')+'] เหลือ '+rem+'</option>';
+  }).join('');
+
+  var dlOpts = allBills.map(function(j){
+    return '<option value="'+esc2(j.bill)+'">'+esc2(j.partName||'')+'</option>';
   }).join('');
 
   var modal = document.createElement('div');
@@ -8323,12 +8342,16 @@ function openAddBillModal(dayId, rowIdx) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML =
     '<div style="background:#fff;border-radius:14px;padding:20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.2);">' +
-      '<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;">✏️ เพิ่มบิลให้รอบนี้</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:12px;">✏️ '+(curLabel?'แก้ไข':'เพิ่ม')+'บิลให้รอบนี้</div>' +
       '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">ชิ้นงาน: <b>'+partNo+'</b></div>' +
       (active.length
-        ? '<select id="addBillSel" style="width:100%;font-size:13px;padding:8px;border:1.5px solid #86efac;border-radius:8px;margin-bottom:12px;">' +
-          '<option value="">— เลือกบิล —</option>' + opts + '</select>'
-        : '<div style="color:#d97706;font-size:12px;margin-bottom:12px;">⚠️ ไม่มีบิลที่มีคงเหลือสำหรับชิ้นงานนี้</div>') +
+        ? '<select id="addBillSel" onchange="var m=document.getElementById(\'addBillManual\'); if(m) m.value=\'\';" style="width:100%;font-size:13px;padding:8px;border:1.5px solid #86efac;border-radius:8px;margin-bottom:10px;">' +
+          '<option value="">— เลือกจากบิลที่มีคงเหลือ —</option>' + opts + '</select>'
+        : '<div style="color:#d97706;font-size:11px;margin-bottom:10px;">⚠️ ไม่พบบิลที่มีคงเหลือตรงกับชิ้นงานนี้ — พิมพ์เลขบิลเองด้านล่างได้</div>') +
+      '<div style="font-size:11px;color:#94a3b8;margin:2px 0 4px;">หรือพิมพ์/เลือกเลขบิลเอง (รวมบิลเก่าก่อนมีระบบได้ด้วย)</div>' +
+      '<input type="text" id="addBillManual" list="addBillManualList" placeholder="เช่น 014/07" autocomplete="off" value="'+esc2(curJob?'':curLabel)+'" oninput="var s=document.getElementById(\'addBillSel\'); if(s) s.value=\'\';" style="width:100%;font-size:13px;padding:8px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:4px;box-sizing:border-box;">' +
+      '<div style="font-size:10px;color:#94a3b8;margin-bottom:10px;">ถ้าพิมพ์เลขที่ไม่พบใน Job Master จะบันทึกเป็น "บิลอ้างอิง" ไว้ดูย้อนหลัง แต่จะไม่ผูกกับสต็อก/Traceability อัตโนมัติ</div>' +
+      '<datalist id="addBillManualList">' + dlOpts + '</datalist>' +
       '<div style="display:flex;gap:8px;">' +
         '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
         '<button onclick="document.getElementById(\'addBillModal\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
@@ -8336,26 +8359,55 @@ function openAddBillModal(dayId, rowIdx) {
     '</div>';
   document.body.appendChild(modal);
   modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+  setTimeout(function(){ var mi=document.getElementById('addBillManual'); if(mi) mi.focus(); }, 50);
 }
 
 function saveBillToRow(dayId, rowIdx) {
   var sel = document.getElementById('addBillSel');
+  var manualInput = document.getElementById('addBillManual');
   var jobId = sel ? sel.value : '';
-  if (!jobId) { showToast('hist','กรุณาเลือกบิลก่อน','err'); return; }
+  var manualText = manualInput ? manualInput.value.trim() : '';
 
   var dr = dayRecords.find(function(r){ return r.id === dayId; });
   if (!dr || !dr.rows || !dr.rows[rowIdx]) return;
-  dr.rows[rowIdx].jobId = jobId;
+  var row = dr.rows[rowIdx];
 
-  // save กลับ Firebase + localStorage
+  if (!jobId && !manualText) { showToast('hist','กรุณาเลือกหรือพิมพ์เลขบิลก่อน','err'); return; }
+
+  if (!jobId && manualText) {
+    // ค้นหาบิลจากเลขที่พิมพ์เอง — ถ้ามีหลายรายการเลขบิลซ้ำกัน (คนละชิ้นงาน) ให้เลือกอันที่ตรงชิ้นงานแถวนี้ก่อน
+    var normSel0 = normalizePartKey((row.partName||'').trim());
+    var matches = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim() === manualText; });
+    if (matches.length > 1 && normSel0) {
+      var pref = matches.find(function(j){ return normalizePartKey(j.partName||'')===normSel0; });
+      if (pref) matches = [pref];
+    }
+    if (matches.length) {
+      jobId = matches[0].id;
+    } else {
+      // ไม่พบใน Job Master — เป็นบิลเก่าก่อนมีระบบ (หรือพิมพ์ผิด) → บันทึกเป็นเลขอ้างอิงอย่างเดียว ไม่ผูกกับสต็อก
+      row.jobId = '';
+      row.manualBill = manualText;
+      persistBillEdit(dayId, '⚠️ บันทึกเป็นบิลอ้างอิง "'+manualText+'" (ไม่พบใน Job Master — ไม่ผูกสต็อก)');
+      return;
+    }
+  }
+
+  row.jobId = jobId;
+  row.manualBill = ''; // ผูกกับ Job Master จริงแล้ว เคลียร์ค่าอ้างอิงเดิม (ถ้ามี)
+  persistBillEdit(dayId, '✅ บันทึกบิลแล้ว');
+}
+
+// บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง
+function persistBillEdit(dayId, msg) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dayRecords)); } catch(e){}
   Promise.resolve().then(function(){ fbSave(); return {ok:true}; }).then(function(){
-    showToast('hist','✅ บันทึกบิลแล้ว','ok');
-    document.getElementById('addBillModal').remove();
+    showToast('hist', msg, 'ok');
+    var m = document.getElementById('addBillModal'); if (m) m.remove();
     renderHistory();
   }).catch(function(){
-    showToast('hist','✅ บันทึกบิลแล้ว','ok');
-    document.getElementById('addBillModal').remove();
+    showToast('hist', msg, 'ok');
+    var m = document.getElementById('addBillModal'); if (m) m.remove();
     renderHistory();
   });
 }
