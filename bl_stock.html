@@ -461,6 +461,7 @@ async function loadAll(manual) {
     console.log('[BL Stock] job-master:', JM_URL);
     console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
     console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
+    console.log('[BL Stock] 🔬 RAW wipMap["tyt2302"] ทันทีหลัง loadWIP() เสร็จ (ก่อนอะไรอื่นแตะต้อง):', JSON.stringify(wipMap[norm('TYT2-302')]));
     setSyncing(false, true);
     renderStock();
     renderDHist();
