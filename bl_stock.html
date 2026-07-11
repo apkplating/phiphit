@@ -726,6 +726,15 @@ function buildMap() {
       if (wo.rawKgs === undefined) wo.rawKgs = wo.kgs || 0;
       wo.pcs = Math.max(0, wo.rawPcs - (map[k].shipped   || 0));
       wo.kgs = parseFloat(Math.max(0, wo.rawKgs - (map[k].shippedKg || 0)).toFixed(3));
+      if (k === norm('TYT2-302') && !window._tyt2302DiagLogged) {
+        window._tyt2302DiagLogged = true;
+        console.log('[BL Stock] 🔬 WIP subtraction สำหรับ TYT2-302:',
+          'rawPcs=' + wo.rawPcs, 'rawKgs=' + wo.rawKgs,
+          '| receive=' + map[k].receive, 'receiveKg=' + map[k].receiveKg,
+          '| delivery(รวม)=' + map[k].delivery, 'deliveryKg(รวม)=' + map[k].deliveryKg,
+          '| shipped(เฉพาะ INV จริง)=' + map[k].shipped, 'shippedKg(เฉพาะ INV จริง)=' + map[k].shippedKg,
+          '| ผลลัพธ์ net pcs=' + wo.pcs, 'net kgs=' + wo.kgs);
+      }
     }
   });
 
