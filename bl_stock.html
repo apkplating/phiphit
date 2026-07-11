@@ -460,7 +460,7 @@ function exportBillCSV(partNo) {
   var cur = null;
   rows.forEach(function(r){
     if (r.type === 'บิล') {
-      cur = { bill: r.bill, date: r.rawDate || '', qty: Number(r.qty || 0), plating: [], sells: [] };
+      cur = { bill: r.bill, date: r.rawDate || '', qty: Number(r.qty || 0), kg: Number(r.kg || 0), plating: [], sells: [] };
       groups.push(cur);
     } else if (r.type === 'ชุบ' && cur) {
       cur.plating.push({ line: r.detail, qty: Number(r.qty || 0), kg: Number(r.kg || 0) });
@@ -470,7 +470,6 @@ function exportBillCSV(partNo) {
   });
 
   groups.forEach(function(g){
-    var totalKg = g.plating.reduce(function(s, p){ return s + p.kg; }, 0);
     var lineCount = Math.max(g.plating.length, g.sells.length, 1);
     for (var i = 0; i < lineCount; i++) {
       var p = g.plating[i], s = g.sells[i];
@@ -478,7 +477,7 @@ function exportBillCSV(partNo) {
         i === 0 ? g.bill : '',
         i === 0 ? fmtDMY(g.date) : '',
         i === 0 ? g.qty : '',
-        i === 0 ? totalKg.toFixed(2) : '',
+        i === 0 ? g.kg.toFixed(2) : '',
         p ? p.line : '',
         p ? p.qty : '',
         p ? p.kg.toFixed(2) : '',
@@ -679,6 +678,8 @@ function jobQty(job) {
   var kg = Number(job.qtyKg || 0);
   return ucResolvePcs(raw, kg, jobPartNo(job), pmParts).pcs;
 }
+// jobKg = น้ำหนักรับเข้าจริงเป็น "กก." ตามที่บันทึกไว้ในบิล (ใช้แสดงคู่กับ jobQty เสมอ ไม่ใช่คำนวณย้อนจากรอบชุบ)
+function jobKg(job) { return Number(job.qtyKg || 0); }
 // jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
 function jobBill(job)  { return job.bill || job.id || ''; }
 
@@ -1111,6 +1112,17 @@ function getBillOutQty(job) {
     out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
   });
   blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
+  return out;
+}
+// getBillOutKg = จ่ายออกจริงเป็น "กก." ของบิลเดียว คู่กับ getBillOutQty (ชิ้น) — ให้ตารางแสดงได้ครบทั้งสองหน่วยเหมือนหน้า Job Master
+function getBillOutKg(job) {
+  var out = 0;
+  jmRecords.forEach(function(r){
+    if (r.type!=='out' || r.jobId!==job.id) return;
+    if (!isRealInvRef(r)) return;
+    out += Number(r.qtyKg||0);
+  });
+  blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qtyKg||0); });
   return out;
 }
 
@@ -1628,6 +1640,8 @@ function renderTraceCard(partNo){
   var billsCsvRows = []; // เก็บข้อมูลดิบคู่ขนานไปกับ HTML ไว้ใช้ export CSV
   var billRows = bills.map(function(j, bi){
     var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
+    var inKg = jobKg(j);
+    var outKg = getBillOutKg(j);
     // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
     var invEvents = getBillInvEvents(j.id);
     // แหล่งสำรอง (เผื่อ out record ไม่ได้มาจากการออก INV จริง เช่น พิมพ์อ้างอิงเองจากหน้าไลน์ชุบ)
@@ -1644,6 +1658,7 @@ function renderTraceCard(partNo){
       if(d.jobId===j.id) delEvents.push({ date: d.date||'', inv: d.inv||'-', qty: Number(d.qty||0) });
     });
     var rem=Math.max(0,jobQty(j)-outQty);
+    var remKg=Math.max(0,inKg-outKg);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
     var shippedPct = jobQty(j)>0 ? Math.max(0, Math.min(100, Math.round(outQty/jobQty(j)*100))) : 0;
     var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
@@ -1700,7 +1715,7 @@ function renderTraceCard(partNo){
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
     // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
-    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), rawDate: j.date||'', detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
+    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), rawDate: j.date||'', detail: 'รับเข้า', qty: jobQty(j), kg: inKg.toFixed(2), ref: '',
       status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
     plateGroupList.forEach(function(g){
       var pcsEq = g.pcs;
@@ -1719,12 +1734,19 @@ function renderTraceCard(partNo){
     // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
     var extraHtml = '';
 
+    // แสดงคู่ กก./ชิ้น ในเซลล์เดียว เหมือนสไตล์ตาราง Job Master ("108.00 กก. (5,400 ชิ้น)")
+    function kgPcsCell(kg, pcs, color, bold){
+      return '<td style="'+(color?'color:'+color+';':'')+(bold?'font-weight:700;':'')+'">'
+        + (kg>0 ? kg.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+' กก.' : '–')
+        + '<div style="font-size:9px;color:#94a3b8;font-weight:400;">('+pcs.toLocaleString()+' ชิ้น)</div></td>';
+    }
+
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
       +'<td style="font-size:11px;">'+fmtD(j.date||'')+'</td>'
-      +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
-      +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
-      +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
+      +kgPcsCell(inKg, jobQty(j), null, true)
+      +kgPcsCell(outKg, outQty, '#dc2626', false)
+      +kgPcsCell(remKg, rem, (rem>0?'#2563eb':'#94a3b8'), true)
       +statusCell
       +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
       +'</tr>'
