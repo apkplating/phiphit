@@ -2055,7 +2055,7 @@ function renderHistory() {
     var detRows = (r.rows||[]).map(function(b,i) {
       // หาบิลจาก jobMasterItems — ถ้าไม่เจอ ให้ลองใช้ manualBill (บิลอ้างอิงที่พิมพ์เอง เช่น บิลเก่าก่อนมีระบบ ไม่ผูกสต็อก)
       var job = (jobMasterItems||[]).find(function(j){ return j.id === b.jobId; });
-      var billLabel = job ? job.bill : (b.manualBill || (b.jobId ? b.jobId.slice(-6) : ''));
+      var billLabel = job ? job.bill : (b.manualBill || '');
       var billCell;
       if (billLabel) {
         var linked = !!job;
@@ -8371,6 +8371,9 @@ function openAddBillModal(dayId, rowIdx) {
         '<button onclick="saveBillToRow('+dayId+','+rowIdx+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">💾 บันทึก</button>' +
         '<button onclick="document.getElementById(\'addBillModal\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
       '</div>' +
+      (curLabel
+        ? '<button onclick="clearBillFromRow('+dayId+','+rowIdx+')" style="width:100%;margin-top:8px;background:none;border:1px dashed #fca5a5;color:#dc2626;border-radius:8px;padding:7px;font-size:12px;cursor:pointer;font-family:inherit;">🗑️ ล้างค่า (กลับไปเป็น "เพิ่มบิล")</button>'
+        : '') +
     '</div>';
   document.body.appendChild(modal);
   modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
@@ -8452,6 +8455,16 @@ function saveBillToRow(dayId, rowIdx) {
   row.jobId = jobId;
   row.manualBill = ''; // ผูกกับ Job Master จริงแล้ว เคลียร์ค่าอ้างอิงเดิม (ถ้ามี)
   persistBillEdit(dayId, '✅ บันทึกบิลแล้ว');
+}
+
+// ล้างค่าบิลที่ผูก/พิมพ์ไว้ผิด กลับไปเป็นสถานะ "เพิ่มบิล" (ว่างเปล่า) — ไม่ลบรอบชุบ แค่ลบการผูกบิลของแถวนี้
+function clearBillFromRow(dayId, rowIdx) {
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr || !dr.rows || !dr.rows[rowIdx]) return;
+  var row = dr.rows[rowIdx];
+  row.jobId = '';
+  row.manualBill = '';
+  persistBillEdit(dayId, '🗑️ ล้างค่าบิลแล้ว');
 }
 
 // บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง
