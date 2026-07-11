@@ -1549,7 +1549,10 @@ function renderTraceCard(partNo){
     // แหล่งสำรอง (เผื่อ out record ไม่ได้มาจากการออก INV จริง เช่น พิมพ์อ้างอิงเองจากหน้าไลน์ชุบ)
     var jmOutEvents = [];
     jmRecords.forEach(function(r){
-      if(r.type==='out' && r.jobId===j.id) jmOutEvents.push({ date: r.date||'', inv: r.inv||'-', qty: Number(r.qty||0) });
+      if(r.type!=='out' || r.jobId!==j.id) return;
+      var rawQty = Number(r.qty||0), rawKg = Number(r.qtyKg||0);
+      var pcsVal = ucResolvePcs(rawQty, rawKg, partNo, pmParts).pcs;
+      jmOutEvents.push({ date: r.date||'', inv: r.inv||'-', qty: pcsVal, qtyKg: rawKg, convertedFromKg: (!rawQty && rawKg>0) });
     });
     // แหล่งสำรอง: Delivery ที่บันทึกในแท็บ Delivery ของหน้านี้ (ผูก jobId ได้เฉพาะรายการที่บันทึกหลังมีตัวเลือกบิล)
     var delEvents = [];
@@ -1612,7 +1615,12 @@ function renderTraceCard(partNo){
     }
     if (jmOutEvents.length && !invEvents.length) {
       extraHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-weight:700;">📋 ตัดสต็อก Job Master (ไม่พบใน INV จริง — อาจพิมพ์อ้างอิงเอง ไม่ใช่เลข INV)</div>' +
-        jmOutEvents.map(function(ev){ return '<div style="font-size:10px;color:#94a3b8;">📋 '+fmtD(ev.date)+' · อ้างอิง "'+esc(ev.inv)+'" · '+ev.qty.toLocaleString()+' ชิ้น</div>'; }).join('');
+        jmOutEvents.map(function(ev){
+          var qtyStr = ev.qty > 0
+            ? (ev.qty.toLocaleString()+' ชิ้น'+(ev.convertedFromKg ? ' <span style="color:#94a3b8;">(≈จาก '+ev.qtyKg.toFixed(2)+' kg)</span>' : ''))
+            : (ev.qtyKg > 0 ? ev.qtyKg.toFixed(2)+' kg <span style="color:#dc2626;">(ไม่มีน้ำหนัก/ชิ้นใน Part Master แปลงเป็นชิ้นไม่ได้)</span>' : '0 ชิ้น');
+          return '<div style="font-size:10px;color:#94a3b8;">📋 '+fmtD(ev.date)+' · อ้างอิง "'+esc(ev.inv)+'" · '+qtyStr+'</div>';
+        }).join('');
     }
 
     return '<tr>'
