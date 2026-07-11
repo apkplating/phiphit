@@ -509,14 +509,19 @@ function setSyncErr() {
   document.getElementById('syncLabel').textContent = 'ออฟไลน์';
 }
 
+var _fbLastSavedAt = '';
+
 async function fbSave() {
   try {
+    var savedAt = new Date().toISOString();
     var res = await fetch(PM_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ parts: parts, savedAt: new Date().toISOString() })
+      body: JSON.stringify({ parts: parts, savedAt: savedAt })
     });
-    if (res.ok) setSyncOk(); else setSyncErr();
-  } catch(e) { setSyncErr(); }
+    if (res.ok) { _fbLastSavedAt = savedAt; setSyncOk(); return true; }
+    setSyncErr();
+    return false;
+  } catch(e) { setSyncErr(); return false; }
 }
 
 async function fbLoad() {
@@ -525,6 +530,10 @@ async function fbLoad() {
     if (!res.ok) { setSyncErr(); return; }
     var data = await res.json();
     if (data && Array.isArray(data.parts)) {
+      // ถ้า cloud ไม่ใหม่กว่าที่เราเพิ่งบันทึกขึ้นไปเอง ห้ามทับ local (กันแก้ไขล่าสุดหายเงียบๆ)
+      var cloudSavedAt = data.savedAt || '';
+      if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
+      if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       parts = data.parts;
       saveLocal();
       setSyncOk();
@@ -666,7 +675,7 @@ function previewCalc() {
   document.getElementById('previewPcs').textContent = Math.round(1000 / wt);
 }
 
-function savePart() {
+async function savePart() {
   if(currentRole==='viewer'){ return; }
   var partNo = document.getElementById('addPartNo').value.trim().toUpperCase();
   var name   = document.getElementById('addName').value.trim();
@@ -680,15 +689,16 @@ function savePart() {
 
   // upsert
   var idx = parts.findIndex(function(p){ return normKey(p.partNo)===normKey(partNo); });
+  var label = idx >= 0 ? ('✅ อัปเดต "'+partNo+'" สำเร็จ') : ('✅ เพิ่ม "'+partNo+'" สำเร็จ');
   if (idx >= 0) {
     parts[idx] = Object.assign({}, parts[idx], { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
-    showToast('add','✅ อัปเดต "'+partNo+'" สำเร็จ','ok');
   } else {
     parts.unshift({ id:'P'+Date.now(), partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, createdAt:new Date().toISOString() });
-    showToast('add','✅ เพิ่ม "'+partNo+'" สำเร็จ','ok');
   }
 
-  saveLocal(); fbSave(); renderAll();
+  saveLocal(); renderAll();
+  var synced = await fbSave();
+  showToast('add', synced ? label : (label+' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)'), synced ? 'ok' : 'err');
 
   // clear form
   ['addPartNo','addName','addCustomer','addWeight','addPcsPerRack','addNote'].forEach(function(id){
@@ -702,12 +712,14 @@ function savePart() {
 // ══════════════════════════════════════
 //  DELETE
 // ══════════════════════════════════════
-function deletePart(id) {
+async function deletePart(id) {
   if(currentRole==='viewer'){ return; }
   var p = parts.find(function(x){ return x.id===id; });
   if (!p || !confirm('ลบ "'+p.partNo+'" ออกจาก Part Master?')) return;
   parts = parts.filter(function(x){ return x.id!==id; });
-  saveLocal(); fbSave(); renderAll();
+  saveLocal(); renderAll();
+  var synced = await fbSave();
+  if (!synced) showToast('add','⚠️ ลบในเครื่องนี้แล้ว แต่ยังไม่ขึ้น Firebase','err');
 }
 
 // ══════════════════════════════════════
@@ -732,7 +744,7 @@ function closeModal() {
   document.getElementById('editModal').classList.remove('open');
 }
 
-function saveEdit() {
+async function saveEdit() {
   var id     = document.getElementById('editPartId').value;
   var name   = document.getElementById('editName').value.trim();
   var cust   = document.getElementById('editCustomer').value.trim();
@@ -754,8 +766,9 @@ function saveEdit() {
   if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
   parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
 
-  saveLocal(); fbSave();
-  showToast('edit','✅ บันทึกสำเร็จ','ok');
+  saveLocal();
+  var synced = await fbSave();
+  showToast('edit', synced ? '✅ บันทึกสำเร็จ' : '⚠️ บันทึกในเครื่องแล้ว แต่ยังไม่ขึ้น Firebase', synced ? 'ok' : 'err');
   setTimeout(function(){ closeModal(); renderAll(); }, 700);
 }
 
