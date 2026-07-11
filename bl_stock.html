@@ -649,14 +649,17 @@ function buildMap() {
   });
 
   // Delivery จาก Job Master records (type:'out')
+  // หมายเหตุ: r.qty (ชิ้น) และ r.qtyKg (กก.) มีค่าอย่างใดอย่างหนึ่งเท่านั้นตามหน่วยของบิล —
+  // ต้องแปลง qtyKg → ชิ้น ผ่าน Part Master ด้วย ไม่งั้นบิลที่ขายเป็น กก. จะนับ delivery (ชิ้น) ได้ 0
   jmRecords.forEach(function(r){
     if (r.type!=='out') return;
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
     var job = jmItems.find(function(j){ return j.id===r.jobId; });
     if (!job) return;
-    var k = norm(jobPartNo(job));
+    var pn = jobPartNo(job);
+    var k = norm(pn);
     if (!k || !map[k]) return;
-    map[k].delivery    += Number(r.qty||0);
+    map[k].delivery    += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
     map[k].deliveryKg  += Number(r.qtyKg||0);
   });
 
@@ -1024,9 +1027,15 @@ function getBillInvEvents(jobId) {
 
 // คำนวณยอดที่จ่ายออกแล้วของบิลเดียว (jobId) — รวมทั้งจาก Job Master out records และ Delivery ที่ผูก jobId ไว้
 // ใช้ร่วมกันทั้งฟอร์ม Delivery (เพื่อเช็คไม่ให้ส่งเกิน) และหน้า Traceability (เพื่อสอบกลับ)
+// หมายเหตุ: job_master.html บันทึก out record เป็น qty (ชิ้น) หรือ qtyKg (กก.) แล้วแต่หน่วยของบิล —
+// ต้องแปลงผ่าน Part Master เป็นชิ้นเสมอ ไม่งั้นบิลที่ขายเป็น กก. จะนับจ่ายออกได้ 0 ทั้งที่ขายไปแล้วจริง
 function getBillOutQty(job) {
   var out = 0;
-  jmRecords.forEach(function(r){ if (r.type==='out' && r.jobId===job.id) out += Number(r.qty||0); });
+  var pn = jobPartNo(job);
+  jmRecords.forEach(function(r){
+    if (r.type!=='out' || r.jobId!==job.id) return;
+    out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+  });
   blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
   return out;
 }
@@ -1494,13 +1503,14 @@ function renderTraceCard(partNo){
   var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
   var s1In  = bills.reduce(function(a,j){ return a+jobQty(j); },0);
   var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
-  // จ่ายออกจาก Job Master records
+  // จ่ายออกจาก Job Master records — แปลง qty(ชิ้น)/qtyKg(กก.) เป็นชิ้นเสมอผ่าน Part Master
+  // (ถ้านับแต่ r.qty เฉยๆ บิลที่ขายเป็น กก. จะได้ 0 ชิ้น ทั้งที่ s1OutKg นับกก.ได้ถูกต้องอยู่แล้ว)
   var s1Out = 0, s1OutKg = 0;
   jmRecords.forEach(function(r){
     if(r.type!=='out') return;
     var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
     if(!j||norm(jobPartNo(j))!==k) return;
-    s1Out   += Number(r.qty||0);
+    s1Out   += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
     s1OutKg += Number(r.qtyKg||0);
   });
   blDel.forEach(function(d){
