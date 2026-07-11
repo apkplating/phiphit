@@ -442,7 +442,6 @@ function norm(s){
     .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
 function fmtD(s){
   if(!s||s==='–') return '–';
   try{ var d=new Date(s+'T00:00:00');
@@ -493,7 +492,7 @@ async function loadJobMaster() {
       if (data) {
         jmItems   = Array.isArray(data.items)   ? data.items   : [];
         jmRecords = Array.isArray(data.records) ? data.records : [];
-        blInvoices = Array.isArray(data.invoices) ? data.invoices : (data.invoices && typeof data.invoices==='object' ? Object.values(data.invoices) : []);
+        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
       }
     } catch(e) {}
   }
