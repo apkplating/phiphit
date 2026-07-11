@@ -640,7 +640,7 @@ function buildMap() {
     var pn = jobPartNo(job);
     var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, jobIds:[], dueDate:job.dueDate||'' };
     map[k].receive    += jobQty(job);
     map[k].receiveKg  += Number(job.qtyKg||0);
     map[k].jobIds.push(job.id);
@@ -651,6 +651,13 @@ function buildMap() {
   // Delivery จาก Job Master records (type:'out')
   // หมายเหตุ: r.qty (ชิ้น) และ r.qtyKg (กก.) มีค่าอย่างใดอย่างหนึ่งเท่านั้นตามหน่วยของบิล —
   // ต้องแปลง qtyKg → ชิ้น ผ่าน Part Master ด้วย ไม่งั้นบิลที่ขายเป็น กก. จะนับ delivery (ชิ้น) ได้ 0
+  //
+  // ⚠️ สำคัญ: jobRecords type:'out' มี 2 ที่มาที่ "ความหมายไม่เหมือนกัน":
+  //   1. Auto จากรอบชุบ (id ขึ้นต้น "AUTO-") — job_master.html สร้างให้อัตโนมัติทุกรอบชุบจริง (matching ด้วยชื่อ P/No)
+  //      หมายถึง "วัตถุดิบเข้าสู่กระบวนการชุบแล้ว" (JM → WIP) ไม่ใช่ "ส่งของให้ลูกค้าแล้ว"
+  //   2. ออกจาก INV จริง (id ขึ้นต้น "R" ผูก invNo จริง) หรือกรอกเองใน bl_stock — หมายถึง "ส่งของให้ลูกค้าแล้วจริง" (WIP → ลูกค้า)
+  // ถ้าเอาทั้ง 2 แบบมารวมกันแล้วใช้ตัดเพดาน WIP จะเท่ากับตัดซ้ำสองชั้น (ทั้งตอนเข้า WIP และตอนเช็คว่า WIP เหลือเท่าไร)
+  // เก็บ "delivery" (รวมทั้งหมด) ไว้ใช้กับ STOCK1/หน้าภาพรวมเหมือนเดิม แต่แยก "shipped" (เฉพาะที่ส่งลูกค้าจริง) ไว้ใช้กับเพดาน WIP โดยเฉพาะ
   jmRecords.forEach(function(r){
     if (r.type!=='out') return;
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
@@ -659,16 +666,25 @@ function buildMap() {
     var pn = jobPartNo(job);
     var k = norm(pn);
     if (!k || !map[k]) return;
-    map[k].delivery    += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
-    map[k].deliveryKg  += Number(r.qtyKg||0);
+    var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+    var kgVal  = Number(r.qtyKg||0);
+    map[k].delivery    += pcsVal;
+    map[k].deliveryKg  += kgVal;
+    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
+    if (!isAutoConsume) {
+      map[k].shipped    += pcsVal;
+      map[k].shippedKg  += kgVal;
+    }
   });
 
-  // Delivery เพิ่มเติมที่บันทึกใน bl_stock
+  // Delivery เพิ่มเติมที่บันทึกใน bl_stock — ถือเป็น "ส่งลูกค้าจริง" เสมอ (กรอกเองในแท็บ Delivery)
   blDel.forEach(function(d){
     var k = norm(d.partNo||'');
     if (!k || !map[k]) return;
     map[k].delivery   += Number(d.qty||0);
     map[k].deliveryKg += Number(d.qtyKg||0);
+    map[k].shipped    += Number(d.qty||0);
+    map[k].shippedKg  += Number(d.qtyKg||0);
   });
 
   // ── เติมข้อมูลจาก Part Master ──
@@ -682,33 +698,16 @@ function buildMap() {
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
     }
 
-    // ── cap WIP ไม่ให้เกิน (receive - delivery) ──
-    var maxWipPcs = Math.max(0, map[k].receive   - map[k].delivery);
-    var maxWipKg  = Math.max(0, map[k].receiveKg - map[k].deliveryKg);
+    // ── หัก "ส่งลูกค้าจริง" ออกจาก WIP ตรง ๆ (ไม่ cap เทียบกับยอดรับเข้า JM) ──
+    // ตั้งใจปล่อยให้ WIP โชว์เกินยอดรับของ STOCK1 ได้ถ้าข้อมูลจริงเป็นแบบนั้น — ใช้เป็นสัญญาณเตือนว่า
+    // ชุบเกินยอดที่เคยรับเข้าจริง (เช่น สแกนผิดบิล/ปนกันข้ามบิล) จะได้เห็นความผิดปกติชัด ๆ ไม่ถูกบีบตัวเลขให้เนียนหายไป
+    // การตัดสต็อกจริงของทั้งระบบยังคงอิงจากใบรับงาน (Job Master) + INV เท่านั้น ไม่ได้พึ่งเลข WIP กล่องนี้เลย
     var wo = getWip(map[k].partNo);
     if (wo) {
       var wipPcs = wo.pcs || 0;
       var wipKg  = wo.kgs || 0;
-      var hasReceiveData = (map[k].receive > 0 || map[k].receiveKg > 0);
-      // สำคัญ: ต้อง cap ทุกครั้งที่มีข้อมูล receive ไม่ใช่แค่ตอน maxWip > 0 —
-      // เดิมถ้าจ่ายออกเท่ากับ/เกินรับเข้า (maxWip กลายเป็น 0 พอดี) เงื่อนไข "maxWip > 0" จะเป็นเท็จ
-      // ทำให้ข้ามการ cap ไปทั้งบล็อก ปล่อยค่า WIP ดิบที่ยังไม่ตัดอะไรเลยโผล่มาแทนค่าที่ควรจะเหลือ (0 หรือใกล้ 0)
-      if (hasReceiveData) {
-        if (maxWipKg > 0 && wipKg > 0) {
-          var ratioKg = Math.min(1, maxWipKg / wipKg);
-          wo.kgs = parseFloat((wipKg * ratioKg).toFixed(3));
-          wo.pcs = Math.round(wipPcs * ratioKg);
-        } else if (maxWipPcs > 0 && wipPcs > 0) {
-          var ratioPcs = Math.min(1, maxWipPcs / wipPcs);
-          wo.pcs = Math.round(wipPcs * ratioPcs);
-          wo.kgs = parseFloat((wipKg * ratioPcs).toFixed(3));
-        } else if (maxWipKg <= 0 && maxWipPcs <= 0) {
-          // จ่ายออกเท่ากับหรือเกินรับเข้าแล้ว ไม่เหลือ WIP ให้โชว์
-          wo.pcs = 0;
-          wo.kgs = 0;
-        }
-      }
-      // ถ้า receive เป็น 0 ทั้งคู่ (ยังไม่มีข้อมูล JM) → ไม่ cap เลย ปล่อยค่าดิบไว้ตามเดิม
+      wo.pcs = Math.max(0, wipPcs - (map[k].shipped   || 0));
+      wo.kgs = parseFloat(Math.max(0, wipKg - (map[k].shippedKg || 0)).toFixed(3));
     }
   });
 
@@ -1034,11 +1033,17 @@ function getBillInvEvents(jobId) {
 // ใช้ร่วมกันทั้งฟอร์ม Delivery (เพื่อเช็คไม่ให้ส่งเกิน) และหน้า Traceability (เพื่อสอบกลับ)
 // หมายเหตุ: job_master.html บันทึก out record เป็น qty (ชิ้น) หรือ qtyKg (กก.) แล้วแต่หน่วยของบิล —
 // ต้องแปลงผ่าน Part Master เป็นชิ้นเสมอ ไม่งั้นบิลที่ขายเป็น กก. จะนับจ่ายออกได้ 0 ทั้งที่ขายไปแล้วจริง
+// คำนวณยอดที่ "ส่งลูกค้าจริง" แล้วของบิลเดียว (jobId) — ใช้ทั้งฟอร์ม Delivery (เช็คไม่ให้ส่งเกิน) และตาราง "รายการบิล"
+// หมายเหตุ: jmRecords type:'out' มี 2 ที่มา — (1) "Auto จากรอบชุบ" (id ขึ้นต้น "AUTO-") หมายถึงวัตถุดิบเพิ่งเข้าสู่ WIP
+// ยังไม่ได้ส่งใคร กับ (2) ออกจาก INV จริง/กรอกเองใน bl_stock ซึ่งหมายถึงส่งลูกค้าจริงแล้ว — ต้องนับเฉพาะแบบที่ 2 เท่านั้น
+// ไม่งั้น "คงเหลือ" ของบิลจะโชว์ 0 ทั้งที่จริงยังมีของอยู่ใน WIP รอส่ง (แค่ยังไม่ได้ออก INV เท่านั้น)
 function getBillOutQty(job) {
   var out = 0;
   var pn = jobPartNo(job);
   jmRecords.forEach(function(r){
     if (r.type!=='out' || r.jobId!==job.id) return;
+    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
+    if (isAutoConsume) return; // นับเป็น "เข้า WIP" ไม่ใช่ "ส่งลูกค้า" — ไม่รวมตรงนี้
     out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
   });
   blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
@@ -1510,18 +1515,29 @@ function renderTraceCard(partNo){
   var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
   // จ่ายออกจาก Job Master records — แปลง qty(ชิ้น)/qtyKg(กก.) เป็นชิ้นเสมอผ่าน Part Master
   // (ถ้านับแต่ r.qty เฉยๆ บิลที่ขายเป็น กก. จะได้ 0 ชิ้น ทั้งที่ s1OutKg นับกก.ได้ถูกต้องอยู่แล้ว)
-  var s1Out = 0, s1OutKg = 0;
+  // s1Out/s1OutKg = ทุกอย่างที่ออกจาก JM (รวม "Auto จากรอบชุบ" ด้วย — ถูกต้องแล้วสำหรับ STOCK1 ที่แปลว่า "วัตถุดิบออกจากคลังดิบ")
+  // s4Out/s4OutKg = เฉพาะที่ "ส่งลูกค้าจริง" เท่านั้น (ไม่รวม Auto จากรอบชุบ ซึ่งหมายถึงแค่เข้าสู่ WIP ยังไม่ได้ส่งใคร)
+  var s1Out = 0, s1OutKg = 0, s4Out = 0, s4OutKg = 0;
   jmRecords.forEach(function(r){
     if(r.type!=='out') return;
     var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
     if(!j||norm(jobPartNo(j))!==k) return;
-    s1Out   += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
-    s1OutKg += Number(r.qtyKg||0);
+    var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
+    var kgVal  = Number(r.qtyKg||0);
+    s1Out   += pcsVal;
+    s1OutKg += kgVal;
+    var isAutoConsume = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
+    if (!isAutoConsume) {
+      s4Out   += pcsVal;
+      s4OutKg += kgVal;
+    }
   });
   blDel.forEach(function(d){
     if(norm(d.partNo||'')!==k) return;
     s1Out   += Number(d.qty||0);
     s1OutKg += Number(d.qtyKg||0);
+    s4Out   += Number(d.qty||0);
+    s4OutKg += Number(d.qtyKg||0);
   });
   var s1Rem   = Math.max(0, s1In - s1Out);
   var s1RemKg = Math.max(0, s1InKg - s1OutKg);
@@ -1542,9 +1558,7 @@ function renderTraceCard(partNo){
   var s3Pass=0, s3Ng=0;
   if(s3){ s3Pass=s3.pass||0; s3Ng=s3.ng||0; }
 
-  // ── Stock 4: จ่ายออก (INV) ──
-  var s4Out   = s1Out;
-  var s4OutKg = s1OutKg;
+  // ── Stock 4: จ่ายออก (INV) — s4Out/s4OutKg คำนวณไว้แล้วด้านบน (เฉพาะส่งลูกค้าจริง ไม่รวม Auto จากรอบชุบ) ──
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
   var billRows = bills.map(function(j, bi){
