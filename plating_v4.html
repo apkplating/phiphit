@@ -3216,16 +3216,21 @@ async function fbSave() {
     if (res.ok) {
       _fbLastSavedAt = savedAt;
       showToast('entry','☁️ Sync ขึ้น Firebase แล้ว','ok');
+      return true;
     } else {
       if (res.status === 401 || res.status === 403) {
         console.warn('Firebase auth expired ('+res.status+'). Re-configure in settings.');
         updateLiveIndicator(false);
+        // แจ้งผู้ใช้ตรง ๆ — ก่อนหน้านี้เงียบแค่ log console ทำให้ดูเหมือนบันทึกสำเร็จทั้งที่จริงไม่ขึ้น Firebase เลย
+        showToast('entry','⚠️ Sync ไป Firebase ไม่สำเร็จ (หมดสิทธิ์เข้าถึง) — บันทึกไว้ในเครื่องนี้เท่านั้น ลองรีเฟรชหน้าหรือแจ้งแอดมิน','err');
       } else {
         showToast('entry','Firebase Error: ' + res.status,'err');
       }
+      return false;
     }
   } catch(e) {
     showToast('entry','Firebase: ' + e.message,'err');
+    return false;
   }
 }
 
@@ -8450,17 +8455,19 @@ function saveBillToRow(dayId, rowIdx) {
 }
 
 // บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง
-function persistBillEdit(dayId, msg) {
+async function persistBillEdit(dayId, msg) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dayRecords)); } catch(e){}
-  Promise.resolve().then(function(){ fbSave(); return {ok:true}; }).then(function(){
+  var m = document.getElementById('addBillModal'); if (m) m.remove();
+  renderHistory(); // อัปเดตหน้าจอทันที ไม่ต้องรอ Firebase — กันจอค้าง
+  var synced = false;
+  try { synced = await fbSave(); } catch(e){ synced = false; }
+  if (synced) {
     showToast('hist', msg, 'ok');
-    var m = document.getElementById('addBillModal'); if (m) m.remove();
-    renderHistory();
-  }).catch(function(){
-    showToast('hist', msg, 'ok');
-    var m = document.getElementById('addBillModal'); if (m) m.remove();
-    renderHistory();
-  });
+  } else {
+    // fbSave() แจ้ง error ของตัวเองไปแล้ว (เช่น หมดสิทธิ์เข้าถึง) — ย้ำอีกทีตรงนี้ให้ชัดว่าไม่ขึ้น Firebase
+    // ข้อมูลยังอยู่ในเครื่องนี้ (localStorage) แต่ถ้าไม่ sync ขึ้นได้ อุปกรณ์อื่น/รีโหลดหน้าจะไม่เห็นการเปลี่ยนแปลงนี้
+    showToast('hist', msg + ' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)', 'err');
+  }
 }
 
 // ═══════════════════════════════════════════════
