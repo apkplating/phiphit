@@ -381,6 +381,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         </select>
       </div>
     </div>
+    <div id="invLineQtyConvert" style="display:none;font-size:11px;color:var(--blue);margin:-6px 0 8px;font-weight:600;"></div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>น้ำหนัก/หน่วย (กก. ต่อ 1 ชิ้น) <span style="font-size:10px;color:var(--text-muted);">(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)</span> <span id="invLineWeightAutoBadge" style="font-size:10px;color:var(--green);"></span></label>
@@ -608,6 +609,11 @@ input:focus,select:focus{border-color:var(--blue2);}
   <!-- รายการ INV -->
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:10px 12px 6px;" class="card-label">🧾 รายการ INV</div>
+    <div style="padding:0 12px 10px;">
+      <input type="text" id="salesInvSearch" placeholder="🔍 ค้นหา เลข INV / ลูกค้า / P.No..."
+        autocomplete="off" oninput="renderSales()"
+        style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;box-sizing:border-box;">
+    </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
       <table class="jt" style="min-width:560px;">
         <thead><tr>
@@ -1439,17 +1445,7 @@ function onInvLineJobSelect() {
   var rem = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain+' ชิ้น';
   var infoText = '📦 ' + job.partName + ' · ลูกค้า: ' + (job.customer||'–') + ' · คงเหลือ: ' + rem;
 
-  // ตั้งหน่วยจำนวนเริ่มต้น = หน่วยของบิลรับเข้า (เปลี่ยนเป็นชิ้น/กก. เองได้ภายหลัง)
-  if (qtyUnitSel) qtyUnitSel.value = isKg ? 'kg' : 'pcs';
-  qtyInput.step = isKg ? '0.01' : '1';
-  qtyInput.placeholder = isKg ? '0.00' : '0';
-
-  // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
-  var custEl = document.getElementById('invCustomer');
-  if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
-
-  // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
-  var found = getPriceForPart(job.partName, job.customer);
+  // น้ำหนัก/หน่วย ดึงจาก Part Master เท่านั้นเสมอ (weightPerPc หน่วยกรัม → แปลงเป็น กก.) — ต้องหาก่อน เพื่อใช้ตัดสินหน่วยจำนวนเริ่มต้น
   var priceInput     = document.getElementById('invLinePrice');
   var weightInput    = document.getElementById('invLineWeight');
   var priceUnitInput = document.getElementById('invLinePriceUnit');
@@ -1458,6 +1454,26 @@ function onInvLineJobSelect() {
   weightInput.value = '';
   if (badgeEl) badgeEl.textContent = '';
 
+  var pmPart = pmLookup(job.partName);
+  var pmKg = (pmPart && pmPart.weightPerPc) ? (Number(pmPart.weightPerPc)/1000) : 0;
+  if (pmKg > 0) {
+    weightInput.value = pmKg.toFixed(4);
+    if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
+  }
+
+  // ตั้งหน่วยจำนวนเริ่มต้น = "ชิ้น" เสมอ (นับของจริงที่ส่งมอบเป็นชิ้น ตรงกับใบส่งของ)
+  // ยกเว้นกรณีไม่มีข้อมูลน้ำหนัก/ชิ้นจาก Part Master และบิลรับเข้าเป็น กก. — จะแปลงชิ้น→กก. ไม่ได้ จึงต้องใช้ กก. แทน
+  var defaultUnit = (isKg && pmKg <= 0) ? 'kg' : 'pcs';
+  if (qtyUnitSel) qtyUnitSel.value = defaultUnit;
+  qtyInput.step = defaultUnit==='kg' ? '0.01' : '1';
+  qtyInput.placeholder = defaultUnit==='kg' ? '0.00' : '0';
+
+  // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
+  var custEl = document.getElementById('invCustomer');
+  if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
+
+  // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
+  var found = getPriceForPart(job.partName, job.customer);
   if (found) {
     var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
     infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+' ('+esc(found.source)+')';
@@ -1465,12 +1481,8 @@ function onInvLineJobSelect() {
     if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
   }
 
-  // น้ำหนัก/หน่วย ดึงจาก Part Master เท่านั้นเสมอ (weightPerPc หน่วยกรัม → แปลงเป็น กก.)
-  var pmPart = pmLookup(job.partName);
-  var pmKg = (pmPart && pmPart.weightPerPc) ? (Number(pmPart.weightPerPc)/1000) : 0;
-  if (pmKg > 0) {
-    weightInput.value = pmKg.toFixed(4);
-    if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
+  if (!pmKg) {
+    infoText += '<br>⚠️ <span style="color:var(--red);">ไม่พบน้ำหนัก/ชิ้นใน Part Master</span> — กรุณากรอก "น้ำหนัก/หน่วย" เองถ้าต้องแปลงหน่วย';
   }
 
   infoEl.innerHTML = infoText;
@@ -1507,6 +1519,24 @@ function onInvLineQtyOrWeightChange() {
 
   var totalWeightInput = document.getElementById('invLineTotalWeight');
   if (totalWeightInput) totalWeightInput.value = totalKg ? totalKg.toFixed(3) : '';
+
+  // ── แสดงผลแปลงหน่วยแบบสด: ชิ้น ↔ กก. เสมอ ไม่ว่าจะเลือกกรอกเป็นหน่วยไหน — กันสับสนกก./ชิ้น ──
+  var convEl = document.getElementById('invLineQtyConvert');
+  if (convEl) {
+    if (qty > 0 && wPerUnit > 0) {
+      if (qtyUnit === 'pcs') {
+        convEl.innerHTML = '🔄 = ' + totalKg.toFixed(3) + ' กก. (' + qty.toLocaleString() + ' ชิ้น × ' + wPerUnit.toFixed(4) + ' กก./ชิ้น)';
+      } else {
+        convEl.innerHTML = '🔄 = ' + totalPcs.toLocaleString() + ' ชิ้น (' + qty.toFixed(3) + ' กก. ÷ ' + wPerUnit.toFixed(4) + ' กก./ชิ้น)';
+      }
+      convEl.style.display = 'block';
+    } else if (qty > 0 && qtyUnit === 'kg' && wPerUnit <= 0) {
+      convEl.innerHTML = '⚠️ ไม่ทราบน้ำหนัก/ชิ้น — ไม่สามารถแปลงเป็นจำนวนชิ้นได้ กรุณากรอก "น้ำหนัก/หน่วย"';
+      convEl.style.display = 'block';
+    } else {
+      convEl.style.display = 'none';
+    }
+  }
 
   var amount = priceUnit === 'kg' ? (totalKg * price) : (totalPcs * price);
   var prevEl = document.getElementById('invLineAmountPreview');
@@ -2458,11 +2488,18 @@ function renderSales() {
     }).join('');
   }
 
-  // ── รายการ INV ──
-  var invSorted = list.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); });
+  // ── รายการ INV (รองรับค้นหา เลข INV / ลูกค้า / P.No) ──
+  var invSearchEl = document.getElementById('salesInvSearch');
+  var invSearchQ  = invSearchEl ? invSearchEl.value.trim().toLowerCase() : '';
+  var invSorted = list.filter(function(inv){
+    if (!invSearchQ) return true;
+    var parts = (inv.items||[]).map(function(it){ return it.partName||''; }).join(' ');
+    var hay = ((inv.invNo||'')+' '+(inv.customer||'')+' '+(inv.po||'')+' '+parts).toLowerCase();
+    return hay.indexOf(invSearchQ) !== -1;
+  }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); });
   var invBody = document.getElementById('salesInvBody');
   if (!invSorted.length) {
-    invBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>';
+    invBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">'+(invSearchQ?'ไม่พบรายการที่ตรงกับ "'+esc(invSearchEl.value.trim())+'"':'ยังไม่มีข้อมูล')+'</td></tr>';
   } else {
     invBody.innerHTML = invSorted.map(function(inv){
       var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
