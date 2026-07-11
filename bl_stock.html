@@ -1799,7 +1799,7 @@ function renderTraceCard(partNo){
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
-      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' จ่าย '+s1Out)
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In.toLocaleString()+' ชิ้น ('+s1InKg.toFixed(2)+' กก.) จ่าย '+s1Out.toLocaleString()+' ชิ้น ('+s1OutKg.toFixed(2)+' กก.)')
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
       +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
     +'</div>'
