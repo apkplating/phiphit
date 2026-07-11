@@ -493,7 +493,7 @@ async function loadJobMaster() {
       if (data) {
         jmItems   = Array.isArray(data.items)   ? data.items   : [];
         jmRecords = Array.isArray(data.records) ? data.records : [];
-        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
+        blInvoices = Array.isArray(data.invoices) ? data.invoices : (data.invoices && typeof data.invoices==='object' ? Object.values(data.invoices) : []);
       }
     } catch(e) {}
   }
