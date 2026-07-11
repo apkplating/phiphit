@@ -259,7 +259,7 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
   <!-- ══ Tab: Traceability ══ -->
   <div id="tab-trace" style="display:none;">
     <div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
-      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No <span style="font-size:9px;font-weight:400;color:#cbd5e1;">build-wip-fix-v2</span></div>
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No <span style="font-size:9px;font-weight:400;color:#cbd5e1;">build-wip-derived-v3</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <div style="position:relative;flex:1;min-width:200px;">
           <input type="text" id="traceSearchInput"
@@ -442,6 +442,24 @@ function norm(s){
     .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Export รายการบิลของ P/No นี้เป็น CSV (ส่งให้ลูกค้าดูสถานะได้) — ใส่ BOM ให้ Excel เปิดภาษาไทยไม่เพี้ยน
+function dlCSV(rows, filename) {
+  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(v==null?'':v).toString().replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+function exportBillCSV(partNo) {
+  var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
+  if (!rows.length) return;
+  var out = [['ประเภทแถว','เลขบิล','วันที่','รายละเอียด','จำนวน (ชิ้น)','น้ำหนัก (กก.)','เลข INV','คงเหลือหลังบิลนี้','สถานะบิล']];
+  rows.forEach(function(r, i){
+    if (r.type === 'บิล' && i > 0) out.push(['','','','','','','','','']); // เว้นบรรทัดว่างคั่นระหว่างบิล ให้แยกกลุ่มเห็นชัด
+    out.push([r.type, r.bill, r.date, r.detail, r.qty, r.kg, r.ref, r.remainAfter, r.status]);
+  });
+  var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
+  dlCSV(out, 'stock_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.csv');
+}
 function fmtD(s){
   if(!s||s==='–') return '–';
   try{ var d=new Date(s+'T00:00:00');
@@ -461,7 +479,6 @@ async function loadAll(manual) {
     console.log('[BL Stock] job-master:', JM_URL);
     console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
     console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
-    console.log('[BL Stock] 🔬 RAW wipMap["tyt2302"] ทันทีหลัง loadWIP() เสร็จ (ก่อนอะไรอื่นแตะต้อง):', JSON.stringify(wipMap[norm('TYT2-302')]));
     setSyncing(false, true);
     renderStock();
     renderDHist();
@@ -577,7 +594,7 @@ async function loadWIP() {
         // หมายเหตุ: เดิมมีเงื่อนไขข้ามวันที่ "mark done" แล้ว แต่ "done" หมายถึงปิดล็อกการบันทึกของวันนั้น
         // ไม่ได้แปลว่าของถูกส่งลูกค้าไปแล้ว — ทำให้ WIP ของวันที่ปิดไปแล้วแต่ยังไม่ได้ขายหายไปจากการนับทั้งหมด
         // สถานะ "ขายจริงหรือยัง" ตอนนี้เช็คจากเลข INV จริงแยกต่างหากแล้ว (isRealInvRef) จึงไม่ต้องพึ่ง status ตรงนี้อีก
-        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น)
+        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น — ใช้แค่ "รายไลน์"/วันที่อ้างอิงประกอบแล้ว ไม่ใช่ตัวเลขหลักของ STOCK2 อีกต่อไป)
         var withinCutoff = true;
         if (dr.date) {
           var drDate = new Date(dr.date + 'T00:00:00');
@@ -713,20 +730,15 @@ function buildMap() {
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
     }
 
-    // ── หัก "ส่งลูกค้าจริง" ออกจาก WIP ตรง ๆ (ไม่ cap เทียบกับยอดรับเข้า JM) ──
-    // ตั้งใจปล่อยให้ WIP โชว์เกินยอดรับของ STOCK1 ได้ถ้าข้อมูลจริงเป็นแบบนั้น — ใช้เป็นสัญญาณเตือนว่า
-    // ชุบเกินยอดที่เคยรับเข้าจริง (เช่น สแกนผิดบิล/ปนกันข้ามบิล) จะได้เห็นความผิดปกติชัด ๆ ไม่ถูกบีบตัวเลขให้เนียนหายไป
-    // การตัดสต็อกจริงของทั้งระบบยังคงอิงจากใบรับงาน (Job Master) + INV เท่านั้น ไม่ได้พึ่งเลข WIP กล่องนี้เลย
+    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" — คำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) ──
+    // เดิมใช้ wo.pcs/wo.kgs (ยอดชุบจริงจากไฟล์ v4/5/6 ที่จำกัดแค่ 30 วันล่าสุด) มาลบ shipped ตรง ๆ
+    // แต่พบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง)
+    // เปลี่ยนมาใช้ "ยอดที่เข้ากระบวนการชุบทั้งหมด" (delivery รวม Auto จากรอบชุบ — เชื่อถือได้เพราะสร้างจากรอบชุบจริงทุกรอบ)
+    // ลบด้วย "ยอดขายจริง" (shipped เฉพาะที่ผูก INV จริง) แทน — ไม่ต้องพึ่งไฟล์ v4/5/6 โดยตรงอีกต่อไป
     var wo = getWip(map[k].partNo);
-    if (wo) {
-      // เก็บค่าดิบไว้ครั้งแรกที่เจอเท่านั้น (ก่อนจะถูกคำนวณเป็น net) — buildMap() ถูกเรียกซ้ำหลายจุดทั่วทั้งไฟล์
-      // ถ้าลบ "shipped" ออกจาก wo.pcs ตรง ๆ ทุกครั้งที่เรียก จะกลายเป็นลบซ้อนกันไปเรื่อย ๆ จนเหลือ 0 ถาวร
-      // (คือบั๊กที่เจอจริง: pcs=0 แต่ lines/dates ยังมีร่องรอยว่าเคยมีข้อมูลอยู่ก่อน)
-      if (wo.rawPcs === undefined) wo.rawPcs = wo.pcs || 0;
-      if (wo.rawKgs === undefined) wo.rawKgs = wo.kgs || 0;
-      wo.pcs = Math.max(0, wo.rawPcs - (map[k].shipped   || 0));
-      wo.kgs = parseFloat(Math.max(0, wo.rawKgs - (map[k].shippedKg || 0)).toFixed(3));
-    }
+    if (!wo) { wo = { partName: map[k].partNo, pcs:0, kgs:0, lines:{}, dates:[] }; wipMap[k] = wo; }
+    wo.pcs = Math.max(0, (map[k].delivery   || 0) - (map[k].shipped   || 0));
+    wo.kgs = parseFloat(Math.max(0, (map[k].deliveryKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
   });
 
   return map;
@@ -1555,15 +1567,16 @@ function renderTraceCard(partNo){
   var s1Rem   = Math.max(0, s1In - s1Out);
   var s1RemKg = Math.max(0, s1InKg - s1OutKg);
 
-  // ── Stock 2: WIP (กำลังชุบ) ──
-  var wo    = getWip(partNo)||{};
-  var s2Pcs = wo.pcs||0;
-  var s2Kg  = wo.kgs||0;
+  // ── Stock 2: ชุบแล้ว แต่ยังไม่ได้ขาย ──
+  // เปลี่ยนมาคำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) โดยตรง
+  // เพราะพบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + จำกัดแค่ 30 วันล่าสุด
+  // + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง) ทำให้ตัวเลขไม่นิ่งและมักจะน้อยกว่าความเป็นจริง
+  // สูตรใหม่: ยอดที่เข้ากระบวนการชุบทั้งหมด (s1Out ซึ่งรวม "Auto จากรอบชุบ" ด้วย — เชื่อถือได้เพราะสร้างจาก
+  // รอบชุบจริงทุกรอบ) ลบด้วยยอดขายจริง (s4Out เฉพาะที่ผูก INV จริง) = ส่วนที่ชุบเสร็จแล้วแต่ยังไม่ได้ขาย
+  var s2Pcs = Math.max(0, s1Out   - s4Out);
+  var s2Kg  = Math.max(0, s1OutKg - s4OutKg);
+  var wo    = getWip(partNo)||{}; // ยังใช้ดู "รายไลน์" (B1/B2/R1) กับวันที่ชุบเป็นข้อมูลอ้างอิงประกอบเท่านั้น ไม่ใช้เป็นตัวเลขหลักแล้ว
   var s2Lines = wo.lines||{};
-  // แปลง กก. → ชิ้น ให้หน่วยตรงกับ Stock 1/4 (รับ/ขายนับเป็นชิ้นทั้งคู่) — ไม่งั้นเทียบกันไม่ได้
-  if (!s2Pcs && s2Kg > 0 && pm && pm.weightPerPc > 0) {
-    s2Pcs = ucKgToPcs(s2Kg, pm.weightPerPc);
-  }
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1574,6 +1587,7 @@ function renderTraceCard(partNo){
   // ── Stock 4: จ่ายออก (INV) — s4Out/s4OutKg คำนวณไว้แล้วด้านบน (เฉพาะส่งลูกค้าจริง ไม่รวม Auto จากรอบชุบ) ──
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
+  var billsCsvRows = []; // เก็บข้อมูลดิบคู่ขนานไปกับ HTML ไว้ใช้ export CSV
   var billRows = bills.map(function(j, bi){
     var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
     // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
@@ -1593,7 +1607,15 @@ function renderTraceCard(partNo){
     });
     var rem=Math.max(0,jobQty(j)-outQty);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
+    var shippedPct = jobQty(j)>0 ? Math.max(0, Math.min(100, Math.round(outQty/jobQty(j)*100))) : 0;
     var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
+    // สถานะ: ถ้าส่งครบแล้ว (คงเหลือ = 0 และเคยมียอดรับเข้าจริง) โชว์ badge "ปิดบิล" แทนแถบเปล่าๆ ที่ไม่มีคำอธิบาย
+    // ถ้ายังไม่ครบ โชว์ % ที่ส่งไปแล้วกำกับใต้แถบ ให้รู้ความคืบหน้าจริงโดยไม่ต้องกดสอบกลับ
+    var statusCell = (rem<=0 && jobQty(j)>0)
+      ? '<td><span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✅ ปิดบิล</span></td>'
+      : '<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
+        +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div>'
+        +'<div style="font-size:9px;color:#64748b;margin-top:2px;">ส่งแล้ว '+shippedPct+'%</div></td>';
 
     var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var detailId = 'bdet-'+k+'-'+bi;
@@ -1639,6 +1661,20 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
+    // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
+    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
+      status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
+    plateGroupList.forEach(function(g){
+      var pcsEq = g.pcs;
+      if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
+      billsCsvRows.push({ type:'ชุบ', bill: '', date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
+    });
+    invEvents.forEach(function(ev){
+      var pcsVal = ev.pcs;
+      if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
+      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
+    });
+
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
     // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
     var extraHtml = '';
@@ -1649,8 +1685,7 @@ function renderTraceCard(partNo){
       +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
       +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
       +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
-      +'<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
-      +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div></td>'
+      +statusCell
       +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
       +'</tr>'
       +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
@@ -1681,6 +1716,10 @@ function renderTraceCard(partNo){
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
+  // เก็บข้อมูลดิบไว้ให้ปุ่ม Export CSV ดึงไปใช้ (คีย์ด้วย P/No)
+  window._traceCsvData = window._traceCsvData || {};
+  window._traceCsvData[partNo] = billsCsvRows;
+
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
@@ -1692,6 +1731,7 @@ function renderTraceCard(partNo){
       +'<div style="text-align:right;">'
         +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
         +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
+        +(bills.length?'<button onclick="exportBillCSV(\''+esc(partNo).replace(/'/g,"\\'")+'\')" style="margin-top:6px;font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid #86efac;background:#f0fdf4;color:#166534;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export CSV</button>':'')
       +'</div>'
     +'</div>'
 
