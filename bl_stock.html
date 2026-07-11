@@ -449,14 +449,46 @@ function dlCSV(rows, filename) {
   var blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
 }
+// Export แบบจัดกลุ่มตามบิล: 1 บิล = 1 บล็อกแถว (เลขบิล/วันที่/จำนวนรับเข้า อยู่แถวแรกของบล็อกเท่านั้น)
+// ไลน์ชุบ (E-G) และ INV ขายออก (H-J) เรียงขนานกันไปทีละแถว ถ้าจำนวนไม่เท่ากันจะเว้นว่างฝั่งที่หมดก่อน
 function exportBillCSV(partNo) {
   var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
   if (!rows.length) return;
-  var out = [['ประเภทแถว','เลขบิล','วันที่','รายละเอียด','จำนวน (ชิ้น)','น้ำหนัก (กก.)','เลข INV','คงเหลือหลังบิลนี้','สถานะบิล']];
-  rows.forEach(function(r, i){
-    if (r.type === 'บิล' && i > 0) out.push(['','','','','','','','','']); // เว้นบรรทัดว่างคั่นระหว่างบิล ให้แยกกลุ่มเห็นชัด
-    out.push([r.type, r.bill, r.date, r.detail, r.qty, r.kg, r.ref, r.remainAfter, r.status]);
+  var out = [['เลขบิล','วันที่รับเข้า','จำนวน(ชิ้น)','จำนวน(กก)','ไลน์ชุบ','จำนวน(ชิ้น)','จำนวน(กก)','inv','จำนวน(ชิ้น)','จำนวน(กก)']];
+
+  var groups = [];
+  var cur = null;
+  rows.forEach(function(r){
+    if (r.type === 'บิล') {
+      cur = { bill: r.bill, date: r.rawDate || '', qty: Number(r.qty || 0), plating: [], sells: [] };
+      groups.push(cur);
+    } else if (r.type === 'ชุบ' && cur) {
+      cur.plating.push({ line: r.detail, qty: Number(r.qty || 0), kg: Number(r.kg || 0) });
+    } else if (r.type === 'ขายออก' && cur) {
+      cur.sells.push({ inv: r.ref, qty: Number(r.qty || 0), kg: Number(r.kg || 0) });
+    }
   });
+
+  groups.forEach(function(g){
+    var totalKg = g.plating.reduce(function(s, p){ return s + p.kg; }, 0);
+    var lineCount = Math.max(g.plating.length, g.sells.length, 1);
+    for (var i = 0; i < lineCount; i++) {
+      var p = g.plating[i], s = g.sells[i];
+      out.push([
+        i === 0 ? g.bill : '',
+        i === 0 ? fmtDMY(g.date) : '',
+        i === 0 ? g.qty : '',
+        i === 0 ? totalKg.toFixed(2) : '',
+        p ? p.line : '',
+        p ? p.qty : '',
+        p ? p.kg.toFixed(2) : '',
+        s ? s.inv : '',
+        s ? s.qty : '',
+        s ? s.kg.toFixed(2) : ''
+      ]);
+    }
+  });
+
   var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
   dlCSV(out, 'stock_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.csv');
 }
@@ -465,6 +497,12 @@ function fmtD(s){
   try{ var d=new Date(s+'T00:00:00');
     var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     return d.getDate()+' '+m[d.getMonth()+1]; }catch(e){return s;}
+}
+// วันที่แบบ D/M/YYYY (ให้ตรงกับรูปแบบไฟล์ CSV ที่ต้องการ เช่น 9/7/2026)
+function fmtDMY(s){
+  if(!s) return '';
+  try{ var d=new Date(s+'T00:00:00');
+    return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); }catch(e){return s;}
 }
 
 // ══════════════════════════════════════════════════════
@@ -1662,7 +1700,7 @@ function renderTraceCard(partNo){
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
     // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
-    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
+    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), rawDate: j.date||'', detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
       status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
     plateGroupList.forEach(function(g){
       var pcsEq = g.pcs;
@@ -1672,7 +1710,9 @@ function renderTraceCard(partNo){
     invEvents.forEach(function(ev){
       var pcsVal = ev.pcs;
       if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
-      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
+      // น้ำหนัก: ถ้าบันทึกเป็น กก. อยู่แล้วใช้ตรงๆ ไม่งั้นแปลงจากจำนวนชิ้น x น้ำหนัก/ชิ้น (Part Master) ให้มีค่าน้ำหนักกำกับเสมอ
+      var kgVal = ev.unit==='kg' ? ev.qty : (pm && pm.weightPerPc > 0 ? (pcsVal * pm.weightPerPc / 1000) : 0);
+      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: kgVal.toFixed(2), ref: ev.invNo, status:'', remainAfter:'' });
     });
 
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
