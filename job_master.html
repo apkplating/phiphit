@@ -991,21 +991,13 @@ async function fbLoad() {
       var cloudSavedAt = data.savedAt || '';
       if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
-      // หมายเหตุ: Firebase RTDB บางครั้งเก็บ array ที่มีช่องว่าง/ถูกลบรายการกลางๆ เป็น object คีย์ตัวเลข
-      // แทนที่จะเป็น array ปกติ — เช็คด้วย Array.isArray() อย่างเดียวจะพลาดเคสนี้ (ข้ามการอัปเดตไปเงียบๆ)
-      // เจอจริง: blInvoices ในหน้า bl_stock.html กลายเป็น 0 ทั้งที่มี INV จริงหลายร้อยใบ ต้องรองรับทั้ง 2 แบบ
-      function toArr(v) {
-        if (Array.isArray(v)) return v;
-        if (v && typeof v === 'object') return Object.values(v);
-        return null; // ไม่ใช่ array/object เลย — ไม่อัปเดตทับของเดิม
-      }
-      var _items = toArr(data.items);          if (_items)    jobItems   = _items;
-      var _recs  = toArr(data.records);         if (_recs)     jobRecords = _recs;
-      var _invs  = toArr(data.invoices);        if (_invs)     { invoices = _invs; _realInvNoSet = null; }
-      var _custs = toArr(data.customers);       if (_custs)    customers = _custs;
-      var _bills = toArr(data.billStatements);  if (_bills)    billStatements = _bills;
-      var _price = toArr(data.priceList);       if (_price)    priceList = _price;
-      var _hidC  = toArr(data.hiddenCustomers); if (_hidC)     hiddenCustomers = _hidC;
+      if (Array.isArray(data.items))    jobItems   = data.items;
+      if (Array.isArray(data.records))  jobRecords = data.records;
+      if (Array.isArray(data.invoices)) { invoices = data.invoices; _realInvNoSet = null; }
+      if (Array.isArray(data.customers)) customers = data.customers;
+      if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
+      if (Array.isArray(data.priceList)) priceList = data.priceList;
+      if (Array.isArray(data.hiddenCustomers)) hiddenCustomers = data.hiddenCustomers;
       saveLocal();
       setSyncOk();
       // refresh UI
@@ -3446,11 +3438,8 @@ async function loadPartMaster() {
     var res = await fetch(PM_URL);
     if (!res.ok) { pmLoadError = 'HTTP '+res.status; return; }
     var data = await res.json();
-    // รองรับกรณี Firebase เก็บ parts เป็น object คีย์ตัวเลขแทน array ปกติ (ดู bl_stock.html/job_master.html fbLoad สำหรับปัญหาเดียวกัน)
-    var partsArr = Array.isArray(data && data.parts) ? data.parts
-                 : (data && data.parts && typeof data.parts === 'object') ? Object.values(data.parts) : null;
-    if (partsArr) {
-      pmParts = partsArr;
+    if (data && Array.isArray(data.parts)) {
+      pmParts = data.parts;
       try { localStorage.setItem('jm_pmParts', JSON.stringify(pmParts)); } catch(e){}
     } else {
       pmLoadError = 'รูปแบบข้อมูลไม่ถูกต้อง (ไม่มี parts array)';

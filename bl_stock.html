@@ -443,23 +443,6 @@ function norm(s){
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// Export รายการบิลของ P/No นี้เป็น CSV (ส่งให้ลูกค้าดูสถานะได้) — ใส่ BOM ให้ Excel เปิดภาษาไทยไม่เพี้ยน
-function dlCSV(rows, filename) {
-  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(v==null?'':v).toString().replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-  var blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-}
-function exportBillCSV(partNo) {
-  var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
-  if (!rows.length) return;
-  var out = [['ประเภทแถว','เลขบิล','วันที่','รายละเอียด','จำนวน (ชิ้น)','น้ำหนัก (กก.)','เลข INV','คงเหลือหลังบิลนี้','สถานะบิล']];
-  rows.forEach(function(r, i){
-    if (r.type === 'บิล' && i > 0) out.push(['','','','','','','','','']); // เว้นบรรทัดว่างคั่นระหว่างบิล ให้แยกกลุ่มเห็นชัด
-    out.push([r.type, r.bill, r.date, r.detail, r.qty, r.kg, r.ref, r.remainAfter, r.status]);
-  });
-  var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
-  dlCSV(out, 'stock_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.csv');
-}
 function fmtD(s){
   if(!s||s==='–') return '–';
   try{ var d=new Date(s+'T00:00:00');
@@ -504,21 +487,13 @@ async function loadJobMaster() {
   _realInvNoSet = null; // รีเซ็ต cache — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef()
 
   // /job-master.json → items[] + records[] + invoices[] (ใบ INV จริง ผูก jobId ต่อรายการไว้แล้ว)
-  // หมายเหตุ: Firebase RTDB บางครั้งเก็บ array ที่มีช่องว่าง/ถูกลบรายการกลางๆ เป็น object คีย์ตัวเลขแทนที่จะเป็น
-  // array ปกติ — ถ้าเช็คด้วย Array.isArray() อย่างเดียวจะพลาดเคสนี้ไปเป็น [] ว่างเปล่าทั้งที่มีข้อมูลจริงอยู่
-  // (เจอจริง: blInvoices กลายเป็น 0 ทั้งที่ Job Master มี INV อยู่หลายร้อยใบ) ต้องรองรับทั้ง 2 แบบ
-  function toArr(v) {
-    if (Array.isArray(v)) return v;
-    if (v && typeof v === 'object') return Object.values(v);
-    return [];
-  }
   if (jmRes.ok) {
     try {
       var data = await jmRes.json();
       if (data) {
-        jmItems    = toArr(data.items);
-        jmRecords  = toArr(data.records);
-        blInvoices = toArr(data.invoices);
+        jmItems   = Array.isArray(data.items)   ? data.items   : [];
+        jmRecords = Array.isArray(data.records) ? data.records : [];
+        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
       }
     } catch(e) {}
   }
@@ -548,11 +523,8 @@ async function loadPartMaster() {
     var res = await fetch(PM_URL);
     if (!res.ok) return;
     var data = await res.json();
-    // รองรับกรณี Firebase เก็บ parts เป็น object คีย์ตัวเลขแทน array ปกติ
-    var partsArr = Array.isArray(data && data.parts) ? data.parts
-                 : (data && data.parts && typeof data.parts === 'object') ? Object.values(data.parts) : null;
-    if (partsArr) {
-      pmParts = partsArr;
+    if (data && Array.isArray(data.parts)) {
+      pmParts = data.parts;
       try { localStorage.setItem('bl_pmParts', JSON.stringify(pmParts)); } catch(e){}
     }
   } catch(e){
@@ -1598,7 +1570,6 @@ function renderTraceCard(partNo){
   // ── Stock 4: จ่ายออก (INV) — s4Out/s4OutKg คำนวณไว้แล้วด้านบน (เฉพาะส่งลูกค้าจริง ไม่รวม Auto จากรอบชุบ) ──
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
-  var billsCsvRows = []; // เก็บข้อมูลดิบคู่ขนานไปกับ HTML ไว้ใช้ export CSV
   var billRows = bills.map(function(j, bi){
     var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
     // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
@@ -1618,15 +1589,7 @@ function renderTraceCard(partNo){
     });
     var rem=Math.max(0,jobQty(j)-outQty);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
-    var shippedPct = jobQty(j)>0 ? Math.max(0, Math.min(100, Math.round(outQty/jobQty(j)*100))) : 0;
     var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
-    // สถานะ: ถ้าส่งครบแล้ว (คงเหลือ = 0 และเคยมียอดรับเข้าจริง) โชว์ badge "ปิดบิล" แทนแถบเปล่าๆ ที่ไม่มีคำอธิบาย
-    // ถ้ายังไม่ครบ โชว์ % ที่ส่งไปแล้วกำกับใต้แถบ ให้รู้ความคืบหน้าจริงโดยไม่ต้องกดสอบกลับ
-    var statusCell = (rem<=0 && jobQty(j)>0)
-      ? '<td><span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✅ ปิดบิล</span></td>'
-      : '<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
-        +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div>'
-        +'<div style="font-size:9px;color:#64748b;margin-top:2px;">ส่งแล้ว '+shippedPct+'%</div></td>';
 
     var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var detailId = 'bdet-'+k+'-'+bi;
@@ -1672,20 +1635,6 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
-    // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
-    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), detail: 'รับเข้า', qty: jobQty(j), kg: '', ref: '',
-      status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
-    plateGroupList.forEach(function(g){
-      var pcsEq = g.pcs;
-      if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
-      billsCsvRows.push({ type:'ชุบ', bill: '', date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
-    });
-    invEvents.forEach(function(ev){
-      var pcsVal = ev.pcs;
-      if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
-      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: (ev.unit==='kg'?ev.qty.toFixed(2):''), ref: ev.invNo, status:'', remainAfter:'' });
-    });
-
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
     // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
     var extraHtml = '';
@@ -1696,7 +1645,8 @@ function renderTraceCard(partNo){
       +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
       +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
       +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
-      +statusCell
+      +'<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
+      +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div></td>'
       +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
       +'</tr>'
       +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
@@ -1727,10 +1677,6 @@ function renderTraceCard(partNo){
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
-  // เก็บข้อมูลดิบไว้ให้ปุ่ม Export CSV ดึงไปใช้ (คีย์ด้วย P/No)
-  window._traceCsvData = window._traceCsvData || {};
-  window._traceCsvData[partNo] = billsCsvRows;
-
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
@@ -1742,7 +1688,6 @@ function renderTraceCard(partNo){
       +'<div style="text-align:right;">'
         +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
         +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
-        +(bills.length?'<button onclick="exportBillCSV(\''+esc(partNo).replace(/'/g,"\\'")+'\')" style="margin-top:6px;font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid #86efac;background:#f0fdf4;color:#166534;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export CSV</button>':'')
       +'</div>'
     +'</div>'
 
