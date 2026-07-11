@@ -1627,8 +1627,25 @@ function renderTraceCard(partNo){
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
     // หมายเหตุ: เคยมีบล็อกสีเทาแสดงรายการตัดสต็อกดิบ + Delivery เพิ่มเติมไว้เทียบกับ INV จริง (สำหรับ debug ส่วนต่าง)
-    // เอาออกตามที่ขอ ไม่โชว์ในหน้าจอปกติแล้ว — โชว์แค่รายการ INV จริงที่ยืนยันแล้วด้านบนพอ
-    var extraHtml = '';
+    // เอาออกไปตามที่ขอรอบก่อน — ตอนนี้เพิ่มกลับมาแบบ "diagnostic" ชั่วคราว เพื่อไล่หาสาเหตุที่ยอด "จ่ายออก" ไม่ตรงกับ INV จริง
+    // แสดงรายการ jmRecords type:'out' ของบิลนี้ "ทุกตัวแบบดิบ" พร้อม id เต็ม จะได้เห็นชัดว่าตัวไหนไม่ได้ถูกกรองออกและทำไม
+    var rawOutRecords = jmRecords.filter(function(r){ return r.type==='out' && r.jobId===j.id; });
+    var diagHtml = '';
+    if (rawOutRecords.length) {
+      diagHtml = '<div style="margin-top:8px;padding:8px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:6px;">' +
+        '<div style="font-size:9px;font-weight:700;color:#92400e;margin-bottom:4px;">🔬 DIAGNOSTIC ชั่วคราว — รายการ "out" ดิบทั้งหมดของบิลนี้ (' + rawOutRecords.length + ' รายการ)</div>' +
+        rawOutRecords.map(function(r){
+          var isAuto = typeof r.id === 'string' && r.id.indexOf('AUTO-') === 0;
+          var pcsShown = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
+          return '<div style="font-size:9px;color:#78350f;font-family:monospace;">' +
+            (isAuto ? '⚙️ AUTO' : '✅ NOT-AUTO') + ' · id=' + esc(String(r.id||'')) +
+            ' · inv="' + esc(String(r.inv||'')) + '" · qty=' + (r.qty||0) + ' qtyKg=' + (r.qtyKg||0) +
+            ' · ≈' + pcsShown.toLocaleString() + ' ชิ้น' +
+            '</div>';
+        }).join('');
+      diagHtml += '</div>';
+    }
+    var extraHtml = diagHtml;
 
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
