@@ -167,6 +167,56 @@ tr:hover td{background:var(--sky-pale);}
       <div class="toast" id="toast-po"></div>
     </div>
 
+    <!-- ── รายการ PO ทั้งหมด ── -->
+    <div class="card">
+      <div class="sec-head">
+        <h3>📜 ใบสั่งผลิตทั้งหมด</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="manualRefresh()" id="refreshBtn" class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;">🔄 รีเฟรชผลผลิต</button>
+          <select id="filterDateScope" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="today">วันนี้เท่านั้น</option>
+            <option value="all">ทุกวัน (ทั้งหมด)</option>
+          </select>
+          <select id="filterLine" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="">— ทุกสาย —</option>
+            <option value="B1">B-1 Barrel</option>
+            <option value="B2">B-2 Barrel</option>
+            <option value="R1">R-1 Rack</option>
+          </select>
+          <select id="filterStatus" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
+            <option value="">— ทุกสถานะ —</option>
+            <option value="pending">ยังไม่ครบ</option>
+            <option value="done">ครบแล้ว</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin:-6px 0 8px;">
+        อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ) ·
+        <span style="color:var(--text-muted);">หมายเหตุ: % ผลิตจริงนับเฉพาะยอดที่ชุบ "วันเดียวกับที่สร้างใบสั่งผลิต" เท่านั้น — ถ้าผลิตไม่ครบภายในวันนั้น % จะค้างอยู่แบบนั้นตลอดไป (ไม่นับยอดที่ชุบในวันถัดไปเพิ่ม) เพื่อใช้ดูประสิทธิผลของแผนผลิตรายวัน</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>ลูกค้า</th>
+              <th>หมายเลขชิ้นงาน</th>
+              <th>ชื่อชิ้นงาน</th>
+              <th>สาย</th>
+              <th style="text-align:center;">เป้า</th>
+              <th style="text-align:center;">ผลิตจริง</th>
+              <th style="min-width:100px;">ความคืบหน้า</th>
+              <th style="text-align:center;">สถานะ</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="poListBody">
+            <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ── รายการรอชุบจาก BL Stock ── -->
     <div class="card" id="blStockCard">
       <div class="sec-head">
@@ -219,56 +269,6 @@ tr:hover td{background:var(--sky-pale);}
         </table>
       </div>
       <div class="toast" id="toast-backlog"></div>
-    </div>
-
-    <!-- ── รายการ PO ทั้งหมด ── -->
-    <div class="card">
-      <div class="sec-head">
-        <h3>📜 ใบสั่งผลิตทั้งหมด</h3>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button onclick="manualRefresh()" id="refreshBtn" class="btn btn-outline btn-sm" style="width:auto;margin:0;padding:5px 10px;">🔄 รีเฟรชผลผลิต</button>
-          <select id="filterDateScope" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
-            <option value="today">วันนี้เท่านั้น</option>
-            <option value="all">ทุกวัน (ทั้งหมด)</option>
-          </select>
-          <select id="filterLine" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
-            <option value="">— ทุกสาย —</option>
-            <option value="B1">B-1 Barrel</option>
-            <option value="B2">B-2 Barrel</option>
-            <option value="R1">R-1 Rack</option>
-          </select>
-          <select id="filterStatus" onchange="renderPOList()" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;width:auto;background:#fff;">
-            <option value="">— ทุกสถานะ —</option>
-            <option value="pending">ยังไม่ครบ</option>
-            <option value="done">ครบแล้ว</option>
-          </select>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin:-6px 0 8px;">
-        อัปเดตล่าสุด: <span id="lastRefreshTime">-</span> (ระบบดึงข้อมูลผลผลิตอัตโนมัติทุก 30 วิ) ·
-        <span style="color:var(--text-muted);">หมายเหตุ: % ผลิตจริงนับเฉพาะยอดที่ชุบ "วันเดียวกับที่สร้างใบสั่งผลิต" เท่านั้น — ถ้าผลิตไม่ครบภายในวันนั้น % จะค้างอยู่แบบนั้นตลอดไป (ไม่นับยอดที่ชุบในวันถัดไปเพิ่ม) เพื่อใช้ดูประสิทธิผลของแผนผลิตรายวัน</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>วันที่</th>
-              <th>ลูกค้า</th>
-              <th>หมายเลขชิ้นงาน</th>
-              <th>ชื่อชิ้นงาน</th>
-              <th>สาย</th>
-              <th style="text-align:center;">เป้า</th>
-              <th style="text-align:center;">ผลิตจริง</th>
-              <th style="min-width:100px;">ความคืบหน้า</th>
-              <th style="text-align:center;">สถานะ</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="poListBody">
-            <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
-          </tbody>
-        </table>
-      </div>
     </div>
 
   </main>
