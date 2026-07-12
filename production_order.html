@@ -315,6 +315,7 @@ var actualOutput = {}; // {partNo: {pcs, kg}} — legacy, ไม่ใช้แ�
 var allBarrelData = {}; // {line: [{date, partNo, pcs, kg}]} — แยกตามวันเพื่อกรอง PO date
 var backlogItems = []; // [{id, createdAt, customer, partNo, partName, line, qty, unit, status}]
 var autoMeta = { lastAutoRun: {} }; // {lastAutoRun: {B1:'YYYY-MM-DD', B2:'...', R1:'...'}}
+var poSourceMode = {}; // idx -> 'pm' | 'backlog' — แหล่งข้อมูลที่ใช้ค้นหาในฟอร์มสร้าง/แก้ไข PO
 
 // ══════════════════════════════════════════════
 //  AUTH
@@ -1173,17 +1174,193 @@ function initSingleRow() {
   wrap.appendChild(div);
   loadPM();
   attachRowEvents(1);
+  setPoSource(1, poSourceMode[1] || 'pm');
+}
+
+// ══════════════════════════════════════════════
+//  SOURCE TOGGLE — Part Master ↔ คิวรอผลิต (Backlog)
+// ══════════════════════════════════════════════
+function setPoSource(idx, mode) {
+  poSourceMode[idx] = mode;
+  var pmBtn = document.getElementById('srcbtn-pm-' + idx);
+  var blBtn = document.getElementById('srcbtn-bl-' + idx);
+  if (pmBtn) pmBtn.className = 'btn btn-sm ' + (mode === 'pm' ? 'btn-primary' : 'btn-outline');
+  if (blBtn) blBtn.className = 'btn btn-sm ' + (mode === 'backlog' ? 'btn-primary' : 'btn-outline');
+  var searchEl = document.getElementById('pm-search-' + idx);
+  if (searchEl) {
+    searchEl.value = '';
+    searchEl.placeholder = mode === 'backlog'
+      ? 'พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า / เลขบิล จากคิวรอผลิต...'
+      : 'พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า...';
+  }
+  var dropdown = document.getElementById('pm-drop-' + idx);
+  if (dropdown) dropdown.style.display = 'none';
+  clearBacklogSelection(idx);
+  var hintEl = document.getElementById('src-hint-' + idx);
+  if (hintEl) hintEl.textContent = mode === 'backlog'
+    ? 'เลือกรายการจากคิวรอผลิต — ฟิลด์จะถูกล็อกให้ตรงกับคิวโดยอัตโนมัติ (ปรับลดจำนวนได้ถ้าจะสั่งผลิตแค่บางส่วน)'
+    : 'หรือกรอกด้านล่างด้วยตนเอง';
+}
+
+function clearBacklogSelection(idx) {
+  var hid = document.getElementById('pobacklogid-' + idx);
+  if (hid) hid.value = '';
+  ['poc','pop','pon','pol','pou','pob'].forEach(function(pfx){
+    var el = document.getElementById(pfx + '-' + idx);
+    if (el) { el.disabled = false; el.style.background = ''; }
+  });
+  var qEl = document.getElementById('poq-' + idx);
+  if (qEl) qEl.removeAttribute('max');
+  var noteEl = document.getElementById('poq-note-' + idx);
+  if (noteEl) noteEl.textContent = '';
+}
+
+// รวมจำนวนที่ "ถูกจองไว้แล้ว" จากรายการที่เพิ่มในฟอร์ม (staged) แต่ยังไม่บันทึก — กันเลือกรายการคิวเดิมซ้ำจนเกินจำนวนจริง
+function reservedQtyForBacklog(id) {
+  return stagedItems.filter(function(it){ return it.backlogId === id; })
+    .reduce(function(sum, it){ return sum + (Number(it.qty) || 0); }, 0);
+}
+
+function backlogSearch(query, idx) {
+  var q = (query || '').toLowerCase().trim();
+  var dropdown = document.getElementById('pm-drop-' + idx);
+  if (!dropdown) return;
+  var pending = backlogItems.filter(function(b){ return b.status !== 'scheduled'; });
+  var withAvail = pending.map(function(b){
+    var avail = (Number(b.qty) || 0) - reservedQtyForBacklog(b.id);
+    return { b: b, avail: avail };
+  }).filter(function(x){ return x.avail > 0.0001; });
+  var matched = !q ? withAvail : withAvail.filter(function(x){
+    var b = x.b;
+    return (b.partNo||'').toLowerCase().indexOf(q) !== -1 ||
+           (b.partName||'').toLowerCase().indexOf(q) !== -1 ||
+           (b.customer||'').toLowerCase().indexOf(q) !== -1 ||
+           (b.bill||'').toLowerCase().indexOf(q) !== -1;
+  });
+  matched.sort(function(a,b){ return (a.b.createdAt||'').localeCompare(b.b.createdAt||''); }); // FIFO
+  matched = matched.slice(0, 8);
+
+  if (!matched.length) {
+    dropdown.innerHTML = '<div style="padding:10px 12px;font-size:11px;color:var(--text-muted);">ไม่พบรายการในคิวรอผลิต' + (q ? ('ที่ตรงกับ "' + esc(query) + '"') : '') + '</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+  var lineBadgeMap = {B1:'badge-b1', B2:'badge-b2', R1:'badge-r1'};
+  dropdown.innerHTML = matched.map(function(x) {
+    var b = x.b;
+    var badge = lineBadgeMap[b.line] || 'badge-b1';
+    return '<div data-blid="' + esc(b.id) + '" data-rowidx="' + idx + '" class="pm-item">' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        '<span class="badge ' + badge + '">' + esc(b.line) + '</span>' +
+        '<span style="font-weight:700;color:#0f2044;">' + esc(b.partNo||'') + '</span>' +
+        '<span style="font-size:10px;color:var(--text-muted);">' + (b.bill ? ('บิล ' + esc(b.bill)) : 'ไม่มีเลขบิล') + '</span>' +
+      '</div>' +
+      '<div style="color:#475569;">' + esc(b.customer||'') + ' · ' + esc(b.partName||'') + '</div>' +
+      '<div style="font-size:11px;color:var(--green);font-weight:700;">คงเหลือในคิว: ' + x.avail.toLocaleString() + ' ' + (b.unit==='kg'?'กก.':'ชิ้น') + '</div>' +
+    '</div>';
+  }).join('');
+  dropdown.onclick = function(e) {
+    var item = e.target.closest('[data-blid]');
+    if (!item) return;
+    backlogSelectItem(idx, item.getAttribute('data-blid'));
+  };
+  dropdown.style.display = 'block';
+}
+
+function backlogSelectItem(idx, backlogId) {
+  var b = backlogItems.find(function(x){ return x.id === backlogId; });
+  if (!b) return;
+  var avail = (Number(b.qty) || 0) - reservedQtyForBacklog(b.id);
+  if (avail <= 0.0001) { showToast('toast-po','รายการนี้ถูกใช้ครบแล้วในรายการที่เพิ่มไว้','err'); return; }
+
+  var searchEl = document.getElementById('pm-search-' + idx);
+  if (searchEl) searchEl.value = (b.partNo||'') + ' — ' + (b.partName||'') + (b.bill ? (' (บิล ' + b.bill + ')') : '');
+  var hid = document.getElementById('pobacklogid-' + idx);
+  if (hid) hid.value = b.id;
+
+  var setVal = function(pfx, val) { var el = document.getElementById(pfx + '-' + idx); if (el) el.value = val; };
+  setVal('poc', b.customer || '');
+  setVal('pop', b.partNo || '');
+  setVal('pon', b.partName || '');
+  setVal('pol', b.line || 'B1');
+  setVal('pou', b.unit || 'pcs');
+
+  var pobEl = document.getElementById('pob-' + idx);
+  if (pobEl) {
+    if (b.bill) {
+      var exists = Array.prototype.some.call(pobEl.options, function(o){ return o.value === b.bill; });
+      if (!exists) {
+        var opt = document.createElement('option');
+        opt.value = b.bill; opt.textContent = b.bill + ' (จากคิวรอผลิต)';
+        pobEl.appendChild(opt);
+      }
+    }
+    pobEl.value = b.bill || '';
+  }
+
+  // ล็อกฟิลด์ที่มาจากคิว ป้องกันแก้จนไม่ตรงกับคิว (ยกเว้นจำนวนที่ปรับลดได้สำหรับสั่งผลิตบางส่วน)
+  ['poc','pop','pon','pol','pou','pob'].forEach(function(pfx){
+    var el = document.getElementById(pfx + '-' + idx);
+    if (el) { el.disabled = true; el.style.background = '#f1f5f9'; }
+  });
+
+  var qEl = document.getElementById('poq-' + idx);
+  if (qEl) { qEl.value = avail; qEl.max = avail; qEl.min = 0; }
+  var noteEl = document.getElementById('poq-note-' + idx);
+  if (noteEl) noteEl.innerHTML = 'คงเหลือในคิว: <b>' + avail.toLocaleString() + ' ' + (b.unit==='kg'?'กก.':'ชิ้น') + '</b> (แก้จำนวนลงได้ถ้าจะสั่งผลิตแค่บางส่วน — ส่วนที่เหลือจะยังค้างอยู่ในคิว)';
+
+  var dropdown = document.getElementById('pm-drop-' + idx);
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+function dispatchSearch(idx, val) {
+  if ((poSourceMode[idx] || 'pm') === 'backlog') backlogSearch(val, idx);
+  else pmSearch(val, idx);
+}
+
+function attachRowEvents(idx) {
+  setTimeout(function() {
+    var searchEl = document.getElementById('pm-search-' + idx);
+    if (searchEl) {
+      searchEl.setAttribute('autocomplete', 'off');
+      searchEl.addEventListener('input', function(){ dispatchSearch(idx, this.value); });
+      searchEl.addEventListener('focus', function(){ dispatchSearch(idx, this.value); });
+      searchEl.addEventListener('blur', function(){
+        setTimeout(function(){
+          var d = document.getElementById('pm-drop-' + idx);
+          if (d) d.style.display = 'none';
+        }, 200);
+      });
+    }
+    var qEl = document.getElementById('poq-' + idx);
+    if (qEl) {
+      qEl.addEventListener('input', function(){
+        var maxAttr = this.getAttribute('max');
+        if (maxAttr !== null && maxAttr !== '') {
+          var maxVal = parseFloat(maxAttr);
+          var curVal = parseFloat(this.value);
+          if (!isNaN(curVal) && !isNaN(maxVal) && curVal > maxVal) this.value = maxVal;
+        }
+      });
+    }
+    populateBillDropdown(idx);
+  }, 0);
 }
 
 function buildRowHTML(idx) {
   return (
     '<div class="field" style="margin-bottom:8px;">' +
-      '<label>🔍 ค้นหาจาก Part Master</label>' +
+      '<label>🔍 ค้นหาจาก</label>' +
+      '<div style="display:flex;gap:6px;margin-bottom:6px;">' +
+        '<button type="button" class="btn btn-sm" id="srcbtn-pm-'+idx+'" style="width:auto;margin:0;" onclick="setPoSource('+idx+',\'pm\')">📇 Part Master</button>' +
+        '<button type="button" class="btn btn-sm" id="srcbtn-bl-'+idx+'" style="width:auto;margin:0;" onclick="setPoSource('+idx+',\'backlog\')">🗂️ คิวรอผลิต (Backlog)</button>' +
+      '</div>' +
       '<div style="position:relative;">' +
         '<input type="text" id="pm-search-'+idx+'" autocomplete="off">' +
         '<div id="pm-drop-'+idx+'" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;"></div>' +
       '</div>' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:3px;">หรือกรอกด้านล่างด้วยตนเอง</div>' +
+      '<div id="src-hint-'+idx+'" style="font-size:10px;color:var(--text-muted);margin-top:3px;">หรือกรอกด้านล่างด้วยตนเอง</div>' +
+      '<input type="hidden" id="pobacklogid-'+idx+'" value="">' +
     '</div>' +
     '<div class="grid2" style="margin-bottom:6px;">' +
       '<div class="field" style="margin:0;"><label>ลูกค้า</label><input type="text" id="poc-'+idx+'" placeholder="ชื่อลูกค้า"></div>' +
@@ -1202,6 +1379,7 @@ function buildRowHTML(idx) {
             '<option value="kg">กก.</option>' +
           '</select>' +
         '</div>' +
+        '<div id="poq-note-'+idx+'" style="font-size:10px;color:var(--green);margin-top:3px;"></div>' +
       '</div>' +
     '</div>' +
     '<div class="field" style="margin:8px 0 0;">' +
@@ -1209,25 +1387,6 @@ function buildRowHTML(idx) {
       '<select id="pob-'+idx+'"><option value="">— ไม่ระบุเลขบิล —</option></select>' +
     '</div>'
   );
-}
-
-function attachRowEvents(idx) {
-  setTimeout(function() {
-    var searchEl = document.getElementById('pm-search-' + idx);
-    if (searchEl) {
-      searchEl.setAttribute('autocomplete', 'off');
-      searchEl.setAttribute('placeholder', 'พิมพ์หมายเลข / ชื่อชิ้นงาน / ลูกค้า...');
-      searchEl.addEventListener('input', function(){ pmSearch(this.value, idx); });
-      searchEl.addEventListener('focus', function(){ pmSearch(this.value, idx); });
-      searchEl.addEventListener('blur', function(){
-        setTimeout(function(){
-          var d = document.getElementById('pm-drop-' + idx);
-          if (d) d.style.display = 'none';
-        }, 200);
-      });
-    }
-    populateBillDropdown(idx);
-  }, 0);
 }
 
 // เติมตัวเลือกเลขบิลจริงจาก blJmItems ให้เลือกแทนพิมพ์เอง (กันพิมพ์ผิด) — ใช้ร่วมกันทั้งฟอร์มสร้าง/แก้ไข PO
@@ -1261,19 +1420,34 @@ function addItemToStaged() {
   var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value)||0;
   var unit     = (document.getElementById('pou-'+idx)||{}).value||'pcs';
   var bill     = (document.getElementById('pob-'+idx)||{}).value||'';
+  var backlogId = (document.getElementById('pobacklogid-'+idx)||{}).value||'';
 
   if (!customer && !partNo) { showToast('toast-po','กรุณาระบุลูกค้าหรือหมายเลขชิ้นงาน','err'); return; }
   if (!qty) { showToast('toast-po','กรุณากรอกจำนวน','err'); return; }
 
-  stagedItems.push({customer, partNo, partName, line, qty, unit, bill});
+  // ถ้ามาจากคิวรอผลิต ต้องเช็คว่าจำนวนไม่เกินยอดคงเหลือในคิว (กันจำนวนไม่ตรงกัน)
+  if (backlogId) {
+    var bItem = backlogItems.find(function(x){ return x.id === backlogId; });
+    if (!bItem) { showToast('toast-po','รายการในคิวถูกลบไปแล้ว กรุณาเลือกใหม่','err'); return; }
+    var avail = (Number(bItem.qty)||0) - reservedQtyForBacklog(backlogId);
+    if (qty > avail + 0.0001) {
+      showToast('toast-po','จำนวนเกินยอดคงเหลือในคิว (' + avail.toLocaleString() + ' ' + (bItem.unit==='kg'?'กก.':'ชิ้น') + ')','err');
+      return;
+    }
+  }
+
+  stagedItems.push({customer, partNo, partName, line, qty, unit, bill, backlogId: backlogId || null});
   renderStagedList();
-  // เคลียร์ฟอร์ม (reset fields แต่คง line ไว้)
+  // เคลียร์ฟอร์ม (reset fields แต่คง line ไว้ถ้าเป็นโหมด Part Master/manual)
   var curLine = line;
+  var curMode = poSourceMode[idx] || 'pm';
   initSingleRow();
-  setTimeout(function(){
-    var polEl = document.getElementById('pol-1');
-    if (polEl) polEl.value = curLine; // คง line เดิมไว้เผื่อเพิ่มรายการซ้ำสาย
-  }, 20);
+  if (curMode === 'pm') {
+    setTimeout(function(){
+      var polEl = document.getElementById('pol-1');
+      if (polEl) polEl.value = curLine; // คง line เดิมไว้เผื่อเพิ่มรายการซ้ำสาย
+    }, 20);
+  }
   // โชว์ save button ถ้ามีรายการแล้ว
   var saveBtn = document.getElementById('savePOBtn');
   if (saveBtn) saveBtn.style.display = 'block';
@@ -1299,6 +1473,7 @@ function renderStagedList() {
     var badgeClass = lineBadge[it.line]||'badge-b1';
     return '<div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;gap:8px;flex-wrap:wrap;">' +
       '<span class="badge ' + badgeClass + '">' + esc(it.line) + '</span>' +
+      (it.backlogId ? '<span style="font-size:9px;color:#fff;background:var(--blue);padding:2px 6px;border-radius:20px;font-weight:700;">🗂️ จากคิว</span>' : '') +
       '<span style="font-family:monospace;font-size:11px;color:var(--navy);font-weight:700;">' + esc(it.partNo||'-') + '</span>' +
       '<span style="font-size:12px;flex:1;">' + esc(it.partName||'') + '</span>' +
       '<span style="font-size:11px;color:var(--text-muted);">' + esc(it.customer||'-') + '</span>' +
@@ -1338,6 +1513,13 @@ async function savePO() {
   if (!planner) { showToast('toast-po','กรุณาระบุผู้สั่งผลิต','err'); return; }
   var items = stagedItems.slice();
 
+  // เก็บ backlogId ของรายการเดิม (ก่อนแก้ไข) ไว้กันหักยอดคิวซ้ำตอนบันทึกทับใบสั่งผลิตเดิม
+  var prevBacklogIds = {};
+  if (editingId) {
+    var prevPO = poOrders.find(function(o){ return o.id === editingId; });
+    (prevPO && prevPO.items || []).forEach(function(it){ if (it.backlogId) prevBacklogIds[it.backlogId] = true; });
+  }
+
   if (editingId) {
     var idx = poOrders.findIndex(function(o){ return o.id === editingId; });
     if (idx !== -1) poOrders[idx] = { id: editingId, date, timestamp, planner, items };
@@ -1347,15 +1529,34 @@ async function savePO() {
 
   try {
     await savePOToFB();
-    showToast('toast-po','✅ บันทึกใบสั่งผลิตสำเร็จ','ok');
+
+    // ตัดยอดคิวรอผลิต (backlog) เฉพาะรายการที่มาจากคิวและยังไม่เคยถูกตัดตอนบันทึกครั้งก่อน
+    var backlogChanged = false;
+    items.forEach(function(it) {
+      if (!it.backlogId || prevBacklogIds[it.backlogId]) return;
+      var b = backlogItems.find(function(x){ return x.id === it.backlogId; });
+      if (!b) return;
+      var remaining = (Number(b.qty)||0) - (Number(it.qty)||0);
+      if (remaining <= 0.0001) {
+        backlogItems = backlogItems.filter(function(x){ return x.id !== it.backlogId; });
+      } else {
+        b.qty = Math.round(remaining * 1000) / 1000; // เหลือบางส่วน — ยังค้างอยู่ในคิวต่อ
+      }
+      backlogChanged = true;
+    });
+    if (backlogChanged) await saveBacklogToFB();
+
+    showToast('toast-po','✅ บันทึกใบสั่งผลิตสำเร็จ' + (backlogChanged ? ' (ตัดยอดจากคิวรอผลิตแล้ว)' : ''),'ok');
     cancelEdit();
     renderPOList();
+    if (backlogChanged) { renderBacklogList(); renderCapacityInfo(); }
   } catch(e) { showToast('toast-po','❌ บันทึกไม่สำเร็จ: ' + e.message,'err'); }
 }
 
 function cancelEdit() {
   editingId = null;
   stagedItems = [];
+  poSourceMode[1] = 'pm'; // เริ่มฟอร์มใหม่ให้กลับมาโหมด Part Master เสมอ
   document.getElementById('formTitle').textContent = '➕ สร้างใบสั่งผลิตใหม่';
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('poPlanner').value = '';
@@ -1383,8 +1584,9 @@ function editPO(id) {
   // โหลดรายการเดิมเข้า stagedItems
   stagedItems = (po.items||[]).map(function(it){
     return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
-             line:it.line||'B1', qty:it.qty||0, unit:it.unit||'pcs', bill:it.bill||'' };
+             line:it.line||'B1', qty:it.qty||0, unit:it.unit||'pcs', bill:it.bill||'', backlogId: it.backlogId||null };
   });
+  poSourceMode[1] = 'pm'; // ฟอร์มเพิ่มรายการใหม่ระหว่างแก้ไข เริ่มที่โหมด Part Master เสมอ
   renderStagedList();
   initSingleRow();
   var saveBtn = document.getElementById('savePOBtn');
