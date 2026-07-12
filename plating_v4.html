@@ -1661,7 +1661,7 @@ function renderBarrels() {
     return '<tr>' +
       '<td class="td-l">' + r.time + '</td>' +
       '<td>' + r.barrel + '</td>' +
-      '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + (r.partName||'–') + '</td>' +
+      '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + pmDisplayName(r.partName) + '</td>' +
       '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
       '<td style="font-size:10px;color:var(--text-muted);">' + (r.lotNo||'–') + '</td>' +
       '<td><span class="badge-'+r.type+'">'+r.type+'</span></td>' +
@@ -1901,7 +1901,7 @@ async function saveDayAndDiscord() {
   // สร้าง barrel row fields แบบแยก field ถ้าเกิน 1024 ตัวอักษร
   var allRowLines = (rec.rows||[]).map(function(b,i){
     return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
-      + (b.partName?' — '+b.partName:'')
+      + (b.partName?' — '+pmDisplayName(b.partName):'')
       + (b.customer?' ('+b.customer+')':'')
       + (b.lotNo?' Lot:'+b.lotNo:'');
   });
@@ -2070,7 +2070,7 @@ function renderHistory() {
       return '<tr>' +
         '<td>' + (i+1) + '. ' + b.time + '</td>' +
         '<td>' + b.barrel + '</td>' +
-        '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">' + (b.partName||'–') + '</td>' +
+        '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;">' + pmDisplayName(b.partName) + '</td>' +
         '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">' + (b.customer||'–') + '</td>' +
         '<td>' + billCell + '</td>' +
         '<td style="font-size:10px;color:var(--text-muted);">' + (b.lotNo||'–') + '</td>' +
@@ -2155,7 +2155,7 @@ function exportCSVDetail() {
   dayRecords.forEach(function(r) {
     (r.rows||[]).forEach(function(b) {
       rowsDet.push([r.date, r.lotNo, r.recorder, b.time, b.barrel,
-                    b.partName||'', b.customer||'', b.lotNo||'', b.type, b.color, b.kg||0, b.pcs||0]
+                    pmDisplayName(b.partName), b.customer||'', b.lotNo||'', b.type, b.color, b.kg||0, b.pcs||0]
         .map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(','));
     });
   });
@@ -2275,10 +2275,12 @@ function openLotModal(id) {
       '<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">ไม่มีรายรอบบันทึกไว้</div>';
   } else {
     // group by partName + customer + color + type
+    // ── ใช้ P/No ที่แท้จริงจาก PM เป็น key จัดกลุ่ม (กันข้อมูลเก่าที่เคยเก็บชื่อไม่ตรงรูปแบบเดียวกัน ทำให้แยกกลุ่มผิด) ──
     var groups = {};
     rows.forEach(function(b) {
-      var key = (b.partName||'(ไม่ระบุชิ้นงาน)') + '|' + (b.customer||'') + '|' + b.color + '|' + b.type;
-      if (!groups[key]) groups[key] = {partName: b.partName||'(ไม่ระบุชิ้นงาน)', customer: b.customer||'', color: b.color, type: b.type, lotNos: [], times: [], totalKg: 0, totalPcs: 0, count: 0};
+      var pn  = pmCanonicalPartNo(b.partName) || '(ไม่ระบุชิ้นงาน)';
+      var key = pn + '|' + (b.customer||'') + '|' + b.color + '|' + b.type;
+      if (!groups[key]) groups[key] = {partName: pmDisplayName(b.partName), customer: b.customer||'', color: b.color, type: b.type, lotNos: [], times: [], totalKg: 0, totalPcs: 0, count: 0};
       groups[key].totalKg += parseFloat(b.kg)||0;
       groups[key].totalPcs += parseInt(b.pcs)||0;
       groups[key].count++;
@@ -3593,7 +3595,7 @@ async function sendLiveDiscordSilent(wh, s, liveData) {
   var timeStr = now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   var allRowLines = todayBarrels.map(function(b,i){
     return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
-      +(b.partName?' — '+b.partName:'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
+      +(b.partName?' — '+pmDisplayName(b.partName):'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
   });
   var barrelField = {
     name: '🔩 รายรอบ ('+todayBarrels.length+' รอบ)',
@@ -3636,7 +3638,7 @@ async function sendLiveDiscord() {
 
   var allRowLines = todayBarrels.map(function(b,i){
     return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.kg||0)+'Kgs'
-      +(b.partName?' — '+b.partName:'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
+      +(b.partName?' — '+pmDisplayName(b.partName):'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
   });
   var barrelFields=[], chunk='', chunkNum=0;
   allRowLines.forEach(function(line){
@@ -4555,6 +4557,32 @@ function loadPartList() {
 }
 function savePartListData() {
   console.info('[Part Master] ข้อมูลชิ้นงานจัดการที่ part_master.html');
+}
+
+// ══════════════════════════════════════════════════
+//  PM DISPLAY HELPERS — แหล่งความจริงเดียวสำหรับ "ชื่อชิ้นงาน" ที่แสดงผล
+//  หลักการ: เก็บแค่ P/No ไว้ในข้อมูล (bPartName ฯลฯ) ส่วนชื่อที่โชว์ให้คนอ่าน
+//  ต้องดึงสดจาก Part Master (partList) ทุกครั้งที่ render — ห้ามเก็บชื่อแบบตายตัว
+//  กันปัญหาชื่อไม่ตรงกันระหว่างไฟล์ / ไม่ตรงกับที่แก้ไว้ล่าสุดใน PM
+// ══════════════════════════════════════════════════
+function pmCanonicalPartNo(text) {
+  var raw = (text || '').trim();
+  if (!raw) return '';
+  // เผื่อข้อมูลเก่าที่เคยเก็บแบบ "P/No ชื่อ" ปนกันมา — ใช้ token แรกเทียบกับ PM
+  var firstToken = raw.split(/\s+/)[0];
+  var k = firstToken.toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
+  var hit = (partList||[]).find(function(p){
+    return (p.partNo||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'') === k;
+  });
+  return hit ? hit.partNo : firstToken;
+}
+function pmDisplayName(text) {
+  var raw = (text || '').trim();
+  if (!raw) return '–';
+  var pn  = pmCanonicalPartNo(raw);
+  var hit = (partList||[]).find(function(p){ return p.partNo === pn; });
+  if (!hit) return raw; // ไม่เจอใน PM (ถูกลบไปแล้ว/พิมพ์เอง) — โชว์ค่าดิบไปก่อนดีกว่าลบทิ้ง
+  return hit.partNo + (hit.partName ? ' ' + hit.partName : '');
 }
 
 function plSelColor(c) {
@@ -6405,8 +6433,9 @@ function barrelPmAcPick(idx) {
   document.getElementById('bPartSearch').value = partNo;
   document.getElementById('ac-bPartSearch').style.display = 'none';
 
-  // auto-fill hidden fields ที่ logic เดิมอ่าน
-  document.getElementById('bPartName').value = partNo + (nm && nm !== partNo ? ' '+nm : '');
+  // auto-fill hidden fields ที่ logic เดิมอ่าน — เก็บแค่ P/No เพียวๆ (เหมือน job_master.html)
+  // ชื่อที่โชว์ให้คนอ่านจะดึงสดจาก Part Master ตอน render ผ่าน pmDisplayName() เสมอ ไม่เก็บชื่อทับไว้ตรงนี้
+  document.getElementById('bPartName').value = partNo;
   if (cust) document.getElementById('bCustomer').value = cust;
 
   var statusEl = document.getElementById('bPartSearchStatus');

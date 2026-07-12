@@ -1171,7 +1171,7 @@ function renderBoard() {
     return '<tr>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+'</td>' +
-      '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
+      '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+ pmDisplayName(job.partName) +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
       '<td>'+unitBadge+'</td>' +
       '<td style="font-weight:700;">'+inCell+'</td>' +
@@ -1848,8 +1848,7 @@ function renderInvLines() {
       var wStr   = l.weight ? Number(l.weight).toFixed(2)+' กก.' : '–';
       var pcsHint = (qU==='kg' && l.pcs) ? '<br><span style="font-size:9px;color:var(--blue);">≈'+Number(l.pcs).toLocaleString()+' ชิ้น</span>' : '';
       var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
-      var pmPartL = pmLookup(l.partName);
-      var pmNameL = pmPartL ? (pmPartL.name||'') : '';
+      var pmNameL = (function(){ var p=pmLookup(l.partName); return p ? (p.name||'') : ''; })();
       return '<tr>'+
         '<td class="td-l">'+esc(l.partName)+(pmNameL?' <span style="color:var(--text-muted);font-weight:400;">'+esc(pmNameL)+'</span>':'')+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
         '<td>'+qtyStr+'</td>'+
@@ -3493,6 +3492,16 @@ function pmLookup(partName) {
     return no.indexOf(k)>=0 || k.indexOf(no)>=0;
   });
   return loose || null;
+}
+
+// ── ชื่อชิ้นงานสำหรับแสดงผล — ดึงสดจาก Part Master เสมอ (ห้ามเอาไปเก็บถาวรในข้อมูล) ──
+// ใช้จุดเดียวทั่วทั้งไฟล์แทนการเขียน pmLookup+ต่อชื่อซ้ำๆ กัน กันชื่อที่โชว์ไม่ตรงกันในแต่ละตาราง
+function pmDisplayName(partName) {
+  var raw = (partName || '').trim();
+  if (!raw) return '–';
+  var pm = pmLookup(raw);
+  if (!pm) return raw; // ไม่เจอใน PM (ถูกลบไปแล้ว/พิมพ์เอง) — โชว์ค่าดิบไปก่อนดีกว่าลบทิ้ง
+  return (pm.partNo || raw) + (pm.name ? ' ' + pm.name : '');
 }
 
 var LINE_FB_PATHS = {
