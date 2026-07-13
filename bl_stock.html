@@ -943,9 +943,9 @@ function buildDetail(p) {
       html += '<div style="font-size:10px;color:var(--text-muted);">⚖️ '+pm.weightPerPc.toFixed(2)+' g/ชิ้น';
       if (pm.pcsPerRack) html += ' · '+pm.pcsPerRack+' ชิ้น/rack';
       // คำนวณ kg ที่ควรได้
-      if (wip.kgs) {
-        var calcPcs = ucKgToPcs(wip.kgs, pm.weightPerPc);
-        html += ' → WIP '+wip.kgs.toFixed(2)+'kg ≈ <strong>'+calcPcs.toLocaleString()+' ชิ้น</strong>';
+      if (wo.kgs) {
+        var calcPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+        html += ' → WIP '+wo.kgs.toFixed(2)+'kg ≈ <strong>'+calcPcs.toLocaleString()+' ชิ้น</strong>';
       }
       html += '</div>';
     }
@@ -965,8 +965,8 @@ function buildDetail(p) {
 
   html+='<div style="padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;text-align:center;">';
   html+='<div style="font-size:9px;color:var(--text-muted);">WIP ชุบแล้ว</div>';
-  html+='<div style="font-size:16px;font-weight:800;color:var(--amber);">'+(wip.pcs||0).toLocaleString()+'</div>';
-  if(wip.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wip.kgs.toFixed(1)+' Kgs · '+Object.keys(wip.lines||{}).join('/')+'</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--amber);">'+wip.toLocaleString()+'</div>';
+  if(wo.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wo.kgs.toFixed(1)+' Kgs · '+Object.keys(wo.lines||{}).join('/')+'</div>';
   else html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น</div>';
   html+='</div>';
 
