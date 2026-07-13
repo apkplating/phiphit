@@ -143,6 +143,11 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
     <button onclick="loadAll(true)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--navy);">🔄 รีเฟรช</button> <button onclick="showDebug()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff3cd;cursor:pointer;color:#856404;">🔍 Debug</button>
   </div>
 
+  <!-- แถบตรวจสอบไฟล์/ข้อมูล — โชว์บนหน้าเว็บตรงๆ ไม่ต้องเปิด Console/view-source อีกต่อไป -->
+  <div id="verifyBar" style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:5px 9px;margin-bottom:10px;line-height:1.6;word-break:break-all;">
+    ⏳ กำลังตรวจสอบ...
+  </div>
+
   <!-- ══ STOCK BOARD ══ -->
   <div id="tab-stock">
     <div class="sum-grid">
@@ -463,6 +468,7 @@ async function loadAll(manual) {
     console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
     console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
     setSyncing(false, true);
+    updateVerifyBar();
     renderStock();
     renderDHist();
     populateDeliverySel();
@@ -470,6 +476,7 @@ async function loadAll(manual) {
     renderHist();
   } catch(e) {
     setSyncing(false, false, e.message);
+    updateVerifyBar();
   }
 }
 
@@ -1437,6 +1444,24 @@ function setSyncing(loading,ok,errMsg){
     dot.className='sdot err';
     lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
   }
+}
+
+// เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
+var BUILD_VERSION = 'bl-stock-2026-07-13-verifybar-1';
+
+function updateVerifyBar(){
+  var el = document.getElementById('verifyBar');
+  if (!el) return;
+  var t = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var invWarn = blInvoices.length === 0
+    ? ' <span style="color:#dc2626;font-weight:700;">⚠️ INV=0 (ผิดปกติถ้าเคยมี INV จริงในระบบ)</span>'
+    : ' <span style="color:#16a34a;">✅</span>';
+  el.innerHTML =
+    '🔖 build: <strong>' + esc(BUILD_VERSION) + '</strong> · หน้านี้: ' + esc(location.href) + '<br>' +
+    '📡 job-master.json: ' + esc(JM_URL) + '<br>' +
+    'jmItems=' + jmItems.length + ' · jmRecords=' + jmRecords.length +
+    ' · blInvoices=' + blInvoices.length + invWarn +
+    ' · wipMap=' + Object.keys(wipMap).length + ' P/No · เช็คล่าสุด ' + t;
 }
 
 // ══════════════════════════════════════════════════════
