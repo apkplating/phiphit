@@ -443,65 +443,11 @@ function norm(s){
 }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// Export รายการบิลของ P/No นี้เป็น CSV (ส่งให้ลูกค้าดูสถานะได้) — ใส่ BOM ให้ Excel เปิดภาษาไทยไม่เพี้ยน
-function dlCSV(rows, filename) {
-  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(v==null?'':v).toString().replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-  var blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-}
-// Export แบบจัดกลุ่มตามบิล: 1 บิล = 1 บล็อกแถว (เลขบิล/วันที่/จำนวนรับเข้า อยู่แถวแรกของบล็อกเท่านั้น)
-// ไลน์ชุบ (E-G) และ INV ขายออก (H-J) เรียงขนานกันไปทีละแถว ถ้าจำนวนไม่เท่ากันจะเว้นว่างฝั่งที่หมดก่อน
-function exportBillCSV(partNo) {
-  var rows = (window._traceCsvData && window._traceCsvData[partNo]) || [];
-  if (!rows.length) return;
-  var out = [['เลขบิล','วันที่รับเข้า','จำนวน(ชิ้น)','จำนวน(กก)','ไลน์ชุบ','จำนวน(ชิ้น)','จำนวน(กก)','inv','จำนวน(ชิ้น)','จำนวน(กก)']];
-
-  var groups = [];
-  var cur = null;
-  rows.forEach(function(r){
-    if (r.type === 'บิล') {
-      cur = { bill: r.bill, date: r.rawDate || '', qty: Number(r.qty || 0), kg: Number(r.kg || 0), plating: [], sells: [] };
-      groups.push(cur);
-    } else if (r.type === 'ชุบ' && cur) {
-      cur.plating.push({ line: r.detail, qty: Number(r.qty || 0), kg: Number(r.kg || 0) });
-    } else if (r.type === 'ขายออก' && cur) {
-      cur.sells.push({ inv: r.ref, qty: Number(r.qty || 0), kg: Number(r.kg || 0) });
-    }
-  });
-
-  groups.forEach(function(g){
-    var lineCount = Math.max(g.plating.length, g.sells.length, 1);
-    for (var i = 0; i < lineCount; i++) {
-      var p = g.plating[i], s = g.sells[i];
-      out.push([
-        i === 0 ? g.bill : '',
-        i === 0 ? fmtDMY(g.date) : '',
-        i === 0 ? g.qty : '',
-        i === 0 ? g.kg.toFixed(2) : '',
-        p ? p.line : '',
-        p ? p.qty : '',
-        p ? p.kg.toFixed(2) : '',
-        s ? s.inv : '',
-        s ? s.qty : '',
-        s ? s.kg.toFixed(2) : ''
-      ]);
-    }
-  });
-
-  var safeName = partNo.replace(/[^a-zA-Z0-9ก-๙\-_]/g, '_');
-  dlCSV(out, 'stock_' + safeName + '_' + new Date().toISOString().slice(0,10) + '.csv');
-}
 function fmtD(s){
   if(!s||s==='–') return '–';
   try{ var d=new Date(s+'T00:00:00');
     var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     return d.getDate()+' '+m[d.getMonth()+1]; }catch(e){return s;}
-}
-// วันที่แบบ D/M/YYYY (ให้ตรงกับรูปแบบไฟล์ CSV ที่ต้องการ เช่น 9/7/2026)
-function fmtDMY(s){
-  if(!s) return '';
-  try{ var d=new Date(s+'T00:00:00');
-    return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); }catch(e){return s;}
 }
 
 // ══════════════════════════════════════════════════════
@@ -531,26 +477,55 @@ async function loadAll(manual) {
 async function loadJobMaster() {
   // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
   var [jmRes, intakeRes] = await Promise.all([
-    fetch(JM_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
-    fetch(INTAKE_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+    fetch(JM_URL).catch(function(){ return {ok:false}; }),
+    fetch(INTAKE_URL).catch(function(){ return {ok:false}; }),
   ]);
 
-  jmItems   = [];
-  jmRecords = [];
-  blInvoices = [];
-  _realInvNoSet = null; // รีเซ็ต cache — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef()
+  // สำคัญ: ไม่รีเซ็ตเป็น [] ก่อนเช็คผลจริงอีกต่อไป — เดิมรีเซ็ตทิ้งทันทีตรงนี้ก่อน แล้วค่อยเติมใหม่จาก fetch
+  // ถ้า fetch รอบไหนบังเอิญตอบมาไม่ครบ/ไม่มี invoices (เช่น โดน poll ทุก 30 วิ แล้วชนจังหวะ Firebase เขียนข้อมูลพอดี)
+  // ค่าจะถูกทิ้งเป็นว่างเปล่าไปเลยและไม่มีทางกลับมาได้จนกว่าจะ fetch ใหม่สำเร็จ — พบเป็นสาเหตุจริงของ blInvoices=0
+  // ทางแก้: เก็บ "ค่าที่โหลดสำเร็จไว้ก่อนหน้า" ไว้เป็น fallback แทนการทิ้งเป็น [] ถ้ารอบนี้โหลดได้ไม่ครบ
+  var prevJmItems = jmItems, prevJmRecords = jmRecords, prevBlInvoices = blInvoices;
+  var newJmItems = [], newJmRecords = [], newBlInvoices = [];
 
   // /job-master.json → items[] + records[] + invoices[] (ใบ INV จริง ผูก jobId ต่อรายการไว้แล้ว)
   if (jmRes.ok) {
     try {
       var data = await jmRes.json();
       if (data) {
-        jmItems   = Array.isArray(data.items)   ? data.items   : [];
-        jmRecords = Array.isArray(data.records) ? data.records : [];
-        blInvoices = Array.isArray(data.invoices) ? data.invoices : [];
+        newJmItems   = Array.isArray(data.items)   ? data.items   : [];
+        newJmRecords = Array.isArray(data.records) ? data.records : [];
+        newBlInvoices = Array.isArray(data.invoices) ? data.invoices : (data.invoices && typeof data.invoices==='object' ? Object.values(data.invoices) : []);
       }
     } catch(e) {}
   }
+
+  // ── ลองใหม่อัตโนมัติ ถ้า invoices ว่างเปล่าผิดปกติ (ทั้งที่ items/records โหลดมาได้จริง) ──
+  // เคสนี้เกิดตอนโหลดครั้งแรก (ยังไม่มี "ค่าก่อนหน้า" ให้ fallback) เช่น เปิดหน้าใหม่/รีเฟรชวันใหม่
+  // ลองซ้ำสูงสุด 2 ครั้ง เว้นช่วงสั้นๆ ก่อนจะยอมรับว่าว่างจริง (กันจังหวะ Firebase ตอบไม่ครบชั่วคราว)
+  var retriesLeft = 2;
+  while (newJmItems.length > 0 && newBlInvoices.length === 0 && !prevBlInvoices.length && retriesLeft > 0) {
+    retriesLeft--;
+    await new Promise(function(r){ setTimeout(r, 700); });
+    try {
+      var retryRes = await fetch(JM_URL);
+      if (retryRes.ok) {
+        var retryData = await retryRes.json();
+        if (retryData && Array.isArray(retryData.invoices) && retryData.invoices.length) {
+          newBlInvoices = retryData.invoices;
+        } else if (retryData && retryData.invoices && typeof retryData.invoices==='object') {
+          var retryArr = Object.values(retryData.invoices);
+          if (retryArr.length) newBlInvoices = retryArr;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // ใช้ค่าใหม่ถ้ามีข้อมูลจริง (ไม่ใช่ [] ว่างเปล่า) — ถ้ารอบนี้ได้ [] ว่างเปล่ามา (โหลดพลาด/ชนจังหวะ) ให้คงค่าก่อนหน้าไว้แทนที่จะทิ้ง
+  jmItems    = newJmItems.length    ? newJmItems    : prevJmItems;
+  jmRecords  = newJmRecords.length  ? newJmRecords  : prevJmRecords;
+  blInvoices = newBlInvoices.length ? newBlInvoices : prevBlInvoices;
+  _realInvNoSet = null; // รีเซ็ต cache เสมอ — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef() จาก blInvoices ล่าสุด (ใหม่หรือค่าเดิมที่คงไว้)
 
   // /intake.json → intakeJobs[] (รับเข้าจาก Tab กรอกรายรอบ)
   if (intakeRes.ok) {
@@ -574,7 +549,7 @@ async function loadJobMaster() {
 // ── Part Master — ทะเบียนชิ้นงานกลาง ───────────────
 async function loadPartMaster() {
   try {
-    var res = await fetch(PM_URL, {cache:'no-store'});
+    var res = await fetch(PM_URL);
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.parts)) {
@@ -596,7 +571,7 @@ function pmLookup(partNo) {
 // ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
 async function loadBLDel() {
   try {
-    var res = await fetch(DEL_URL, {cache:'no-store'});
+    var res = await fetch(DEL_URL);
     var data = res.ok ? await res.json() : null;
     blDel = Array.isArray(data && data.records) ? data.records : [];
   } catch(e){ blDel=[]; }
@@ -612,15 +587,9 @@ async function loadWIP() {
     { url: DB_R1+'/plating-r1.json', label:'R1' },
   ];
 
-  // คำนวณ delivery ที่ออกไปแล้ว (จาก jmRecords + blDel) เพื่อ cap WIP
-  // WIP = งานที่ชุบแล้ว แต่ยังไม่ถูกส่งออก
-  // กรองเฉพาะ 30 วันล่าสุด เพื่อให้ WIP สะท้อนงานที่ค้างอยู่จริง
-  var cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-
   await Promise.all(lines.map(async function(ln){
     try {
-      var res = await fetch(ln.url, {cache:'no-store'});
+      var res = await fetch(ln.url);
       if (!res.ok) return;
       var data = await res.json();
       var recs = Array.isArray(data) ? data
@@ -628,15 +597,6 @@ async function loadWIP() {
 
       recs.forEach(function(dr){
         if (!dr.rows) return;
-        // หมายเหตุ: เดิมมีเงื่อนไขข้ามวันที่ "mark done" แล้ว แต่ "done" หมายถึงปิดล็อกการบันทึกของวันนั้น
-        // ไม่ได้แปลว่าของถูกส่งลูกค้าไปแล้ว — ทำให้ WIP ของวันที่ปิดไปแล้วแต่ยังไม่ได้ขายหายไปจากการนับทั้งหมด
-        // สถานะ "ขายจริงหรือยัง" ตอนนี้เช็คจากเลข INV จริงแยกต่างหากแล้ว (isRealInvRef) จึงไม่ต้องพึ่ง status ตรงนี้อีก
-        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น — ใช้แค่ "รายไลน์"/วันที่อ้างอิงประกอบแล้ว ไม่ใช่ตัวเลขหลักของ STOCK2 อีกต่อไป)
-        var withinCutoff = true;
-        if (dr.date) {
-          var drDate = new Date(dr.date + 'T00:00:00');
-          if (drDate < cutoff) withinCutoff = false;
-        }
         dr.rows.forEach(function(row){
           // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
           if ((row.type||'').toUpperCase() === 'R') return;
@@ -645,13 +605,13 @@ async function loadWIP() {
           var k = norm(pn);
 
           // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
-          // ไม่กระทบยอดรวม wipMap เดิมด้านล่างเลย
           if (row.jobId && row.jobId !== 'NOBILL') {
             if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
             wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
           }
 
-          if (!withinCutoff) return; // ยอดรวม wipMap ยังกรอง 30 วันเหมือนเดิม ไม่เปลี่ยนพฤติกรรมเดิม
+          // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
+          // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
 
           if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
           wipMap[k].pcs += Number(row.pcs||0);
@@ -678,8 +638,6 @@ function jobQty(job) {
   var kg = Number(job.qtyKg || 0);
   return ucResolvePcs(raw, kg, jobPartNo(job), pmParts).pcs;
 }
-// jobKg = น้ำหนักรับเข้าจริงเป็น "กก." ตามที่บันทึกไว้ในบิล (ใช้แสดงคู่กับ jobQty เสมอ ไม่ใช่คำนวณย้อนจากรอบชุบ)
-function jobKg(job) { return Number(job.qtyKg || 0); }
 // jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
 function jobBill(job)  { return job.bill || job.id || ''; }
 
@@ -712,7 +670,7 @@ function buildMap() {
     var pn = jobPartNo(job);
     var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, autoConsumed:0, autoConsumedKg:0, jobIds:[], dueDate:job.dueDate||'' };
     map[k].receive    += jobQty(job);
     map[k].receiveKg  += Number(job.qtyKg||0);
     map[k].jobIds.push(job.id);
@@ -728,8 +686,11 @@ function buildMap() {
   //   1. Auto จากรอบชุบ (id ขึ้นต้น "AUTO-") — job_master.html สร้างให้อัตโนมัติทุกรอบชุบจริง (matching ด้วยชื่อ P/No)
   //      หมายถึง "วัตถุดิบเข้าสู่กระบวนการชุบแล้ว" (JM → WIP) ไม่ใช่ "ส่งของให้ลูกค้าแล้ว"
   //   2. ออกจาก INV จริง (id ขึ้นต้น "R" ผูก invNo จริง) หรือกรอกเองใน bl_stock — หมายถึง "ส่งของให้ลูกค้าแล้วจริง" (WIP → ลูกค้า)
-  // ถ้าเอาทั้ง 2 แบบมารวมกันแล้วใช้ตัดเพดาน WIP จะเท่ากับตัดซ้ำสองชั้น (ทั้งตอนเข้า WIP และตอนเช็คว่า WIP เหลือเท่าไร)
-  // เก็บ "delivery" (รวมทั้งหมด) ไว้ใช้กับ STOCK1/หน้าภาพรวมเหมือนเดิม แต่แยก "shipped" (เฉพาะที่ส่งลูกค้าจริง) ไว้ใช้กับเพดาน WIP โดยเฉพาะ
+  // เดิม "delivery" รวมทั้ง 2 แบบเข้าด้วยกัน แล้วใช้ทั้งกับสถานะ "จ่ายครบ" ของหน้า Stock Board และตัดเพดาน WIP
+  // ปัญหาคือของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) พอบวกรวมกันเลยนับซ้ำสอง
+  // ทำให้ "delivery" รวมเกินยอด "receive" ได้ (เจอจริง: รับ 16,200 แต่ delivery รวม 20,700)
+  // แก้โดยแยกเป็น 2 ตัวแปรคนละความหมาย: "delivery"/"shipped" = เฉพาะส่งลูกค้าจริง (ใช้กับสถานะ "จ่ายครบ" ให้ตรงกับ job_master.html)
+  // "autoConsumed" = เฉพาะ Auto จากรอบชุบ (JM→WIP อย่างเดียว ใช้กับเพดาน WIP โดยเฉพาะ)
   jmRecords.forEach(function(r){
     if (r.type!=='out') return;
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
@@ -740,11 +701,14 @@ function buildMap() {
     if (!k || !map[k]) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
     var kgVal  = Number(r.qtyKg||0);
-    map[k].delivery    += pcsVal;
-    map[k].deliveryKg  += kgVal;
     if (isRealInvRef(r)) {
-      map[k].shipped    += pcsVal;
-      map[k].shippedKg  += kgVal;
+      map[k].delivery    += pcsVal;
+      map[k].deliveryKg  += kgVal;
+      map[k].shipped      += pcsVal;
+      map[k].shippedKg    += kgVal;
+    } else {
+      map[k].autoConsumed   += pcsVal;
+      map[k].autoConsumedKg += kgVal;
     }
   });
 
@@ -769,15 +733,9 @@ function buildMap() {
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
     }
 
-    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" — คำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) ──
-    // เดิมใช้ wo.pcs/wo.kgs (ยอดชุบจริงจากไฟล์ v4/5/6 ที่จำกัดแค่ 30 วันล่าสุด) มาลบ shipped ตรง ๆ
-    // แต่พบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง)
-    // เปลี่ยนมาใช้ "ยอดที่เข้ากระบวนการชุบทั้งหมด" (delivery รวม Auto จากรอบชุบ — เชื่อถือได้เพราะสร้างจากรอบชุบจริงทุกรอบ)
-    // ลบด้วย "ยอดขายจริง" (shipped เฉพาะที่ผูก INV จริง) แทน — ไม่ต้องพึ่งไฟล์ v4/5/6 โดยตรงอีกต่อไป
-    var wo = getWip(map[k].partNo);
-    if (!wo) { wo = { partName: map[k].partNo, pcs:0, kgs:0, lines:{}, dates:[] }; wipMap[k] = wo; }
-    wo.pcs = Math.max(0, (map[k].delivery   || 0) - (map[k].shipped   || 0));
-    wo.kgs = parseFloat(Math.max(0, (map[k].deliveryKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
+    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" (WIP) = ชุบไปแล้ว (จาก wipMap ไฟล์ v4/5/6) − ขายออกจริง (INV) ──
+    // ไม่แก้ไข wo.pcs/wo.kgs ตรงนี้โดยตรง (wipMap เป็น object ที่ใช้ร่วมกันทั้งหน้า ถ้าแก้ค่าดิบทิ้งไปจะกระทบจุดอื่นที่อ่านค่าดิบต่อ)
+    // ไปคำนวณ "WIP หลังหักขาย" ที่จุดแสดงผลแต่ละจุดแทน โดยใช้สูตรเดียวกัน: max(0, ชุบดิบ − ขายจริง)
   });
 
   return map;
@@ -822,12 +780,12 @@ function renderStock() {
   var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
     var wo=getWip(p.partNo)||{};
-    var wpcs=wo.pcs||0;
-    var wkg=wo.kgs||0;
-    if (!wpcs && wkg>0) {
-      var pmw=pmLookup(p.partNo);
-      if (pmw && pmw.weightPerPc>0) wpcs=ucKgToPcs(wkg, pmw.weightPerPc);
-    }
+    var pmw=pmLookup(p.partNo);
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pmw && pmw.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pmw.weightPerPc);
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wpcs = Math.max(0, platedPcs   - (p.shipped||0));
+    var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
     sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
@@ -865,15 +823,13 @@ function renderStock() {
   }
 
   tbody.innerHTML = filtParts.map(function(p,i){
-    var wipObj = getWip(p.partNo)||{};
-    var wip    = wipObj.pcs||0;
-    var wipKg  = wipObj.kgs||0;
     var pm     = pmLookup(p.partNo);
-
-    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
-    if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
-      wip = ucKgToPcs(wipKg, pm.weightPerPc);
-    }
+    var wo     = getWip(p.partNo)||{};
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wip   = Math.max(0, platedPcs  - (p.shipped||0));
+    var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
 
     var remain   = Math.max(0, p.receive - p.delivery);
     var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
@@ -948,16 +904,13 @@ function toggleDetail(i) {
 
 function buildDetail(p) {
   var k=norm(p.partNo);
-  var wipObj = getWip(p.partNo)||{};
-  var wipPcs = wipObj.pcs||0;
-  var wipKg2 = wipObj.kgs||0;
-  // แปลง kg→ชิ้น ถ้ามี weightPerPc
-  if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
-    wipPcs = ucKgToPcs(wipKg2, pm.weightPerPc);
-  }
-  var wip = wipPcs;
-  var remain=Math.max(0,p.receive-p.delivery);
   var pm=pmLookup(p.partNo); // Part Master data
+  var wo=getWip(p.partNo)||{};
+  var platedPcs = wo.pcs||0;
+  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+  // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
+  var wip = Math.max(0, platedPcs - (p.shipped||0));
+  var remain=Math.max(0,p.receive-p.delivery);
 
   // Job master items ของ P/No นี้
   var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
@@ -1112,17 +1065,6 @@ function getBillOutQty(job) {
     out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
   });
   blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
-  return out;
-}
-// getBillOutKg = จ่ายออกจริงเป็น "กก." ของบิลเดียว คู่กับ getBillOutQty (ชิ้น) — ให้ตารางแสดงได้ครบทั้งสองหน่วยเหมือนหน้า Job Master
-function getBillOutKg(job) {
-  var out = 0;
-  jmRecords.forEach(function(r){
-    if (r.type!=='out' || r.jobId!==job.id) return;
-    if (!isRealInvRef(r)) return;
-    out += Number(r.qtyKg||0);
-  });
-  blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qtyKg||0); });
   return out;
 }
 
@@ -1381,14 +1323,6 @@ async function showDebug() {
   info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
   info('blDel     : ' + blDel.length + ' รายการ');
   info('pmParts   : ' + pmParts.length + ' P/No ใน Part Master' + (pmParts.length===0?' ⚠️ ยังไม่มีข้อมูล':''));
-  info('blInvoices: ' + blInvoices.length + ' ใบ INV จริง' + (blInvoices.length===0?' ⚠️ ว่างเปล่า — jmRecords ทั้งหมดจะไม่นับเป็น "ส่งลูกค้า" (จ่ายออก=0 ทุกบิล)':''));
-  if (blInvoices.length > 0) {
-    info('blInvoices sample: ' + blInvoices.slice(0,3).map(function(inv){ return JSON.stringify({invNo:inv.invNo, jobId:inv.jobId}); }).join('  |  '));
-  }
-  var outRecsSample = jmRecords.filter(function(r){return r.type==='out';}).slice(0,3);
-  if (outRecsSample.length > 0) {
-    info('jmRecords(out) sample .inv: ' + outRecsSample.map(function(r){ return JSON.stringify(r.inv); }).join(', '));
-  }
   var wipKeys = Object.keys(wipMap);
   info('wipMap : ' + wipKeys.length + ' P/No');
   if (wipKeys.length > 0) {
@@ -1422,7 +1356,7 @@ async function showDebug() {
     info('URL: ' + t.url);
     try {
       var t0 = Date.now();
-      var res = await fetch(t.url, {cache:'no-store'});
+      var res = await fetch(t.url);
       var ms = Date.now() - t0;
       info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
       if (!res.ok) {
@@ -1608,11 +1542,15 @@ function renderTraceCard(partNo){
     if(!j||norm(jobPartNo(j))!==k) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
     var kgVal  = Number(r.qtyKg||0);
-    s1Out   += pcsVal;
-    s1OutKg += kgVal;
+    // สำคัญ: s1Out ต้องนับเฉพาะ "เข้า WIP" (Auto/ไม่ผูก INV จริง) เท่านั้น ไม่ใช่รวมกับ s4Out (ขายจริง) ด้วย
+    // เพราะของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) ถ้าบวกรวมกันจะกลายเป็นนับซ้ำสอง
+    // ทำให้ "จ่าย" รวมเกินยอด "รับ" ได้ (เจอจริง: รับ 16,200 แต่จ่าย 20,700) — Auto คือ JM→WIP, INV จริงคือ WIP→ลูกค้า คนละขั้นตอนกัน
     if (isRealInvRef(r)) {
       s4Out   += pcsVal;
       s4OutKg += kgVal;
+    } else {
+      s1Out   += pcsVal;
+      s1OutKg += kgVal;
     }
   });
   blDel.forEach(function(d){
@@ -1622,19 +1560,25 @@ function renderTraceCard(partNo){
     s4Out   += Number(d.qty||0);
     s4OutKg += Number(d.qtyKg||0);
   });
-  var s1Rem   = Math.max(0, s1In - s1Out);
-  var s1RemKg = Math.max(0, s1InKg - s1OutKg);
-
-  // ── Stock 2: ชุบแล้ว แต่ยังไม่ได้ขาย ──
-  // เปลี่ยนมาคำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) โดยตรง
-  // เพราะพบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + จำกัดแค่ 30 วันล่าสุด
-  // + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง) ทำให้ตัวเลขไม่นิ่งและมักจะน้อยกว่าความเป็นจริง
-  // สูตรใหม่: ยอดที่เข้ากระบวนการชุบทั้งหมด (s1Out ซึ่งรวม "Auto จากรอบชุบ" ด้วย — เชื่อถือได้เพราะสร้างจาก
-  // รอบชุบจริงทุกรอบ) ลบด้วยยอดขายจริง (s4Out เฉพาะที่ผูก INV จริง) = ส่วนที่ชุบเสร็จแล้วแต่ยังไม่ได้ขาย
-  var s2Pcs = Math.max(0, s1Out   - s4Out);
-  var s2Kg  = Math.max(0, s1OutKg - s4OutKg);
-  var wo    = getWip(partNo)||{}; // ยังใช้ดู "รายไลน์" (B1/B2/R1) กับวันที่ชุบเป็นข้อมูลอ้างอิงประกอบเท่านั้น ไม่ใช้เป็นตัวเลขหลักแล้ว
+  // Pipeline: STOCK1 = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6 ตรงๆ)
+  //           STOCK2 (WIP) = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+  //           STOCK3 = ขายจริงผ่าน INV
+  // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
+  var wo      = getWip(partNo)||{};
   var s2Lines = wo.lines||{};
+  // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้ wo.pcs=0 ทั้งที่ wo.kgs มีค่าจริง ต้องแปลงผ่าน Part Master ก่อนใช้
+  var platedPcs = wo.pcs||0;
+  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) {
+    platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+  }
+
+  // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
+  var s1Rem   = Math.max(0, s1In   - platedPcs);
+  var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
+
+  // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
+  var s2Pcs = Math.max(0, platedPcs - s4Out);
+  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1645,11 +1589,8 @@ function renderTraceCard(partNo){
   // ── Stock 4: จ่ายออก (INV) — s4Out/s4OutKg คำนวณไว้แล้วด้านบน (เฉพาะส่งลูกค้าจริง ไม่รวม Auto จากรอบชุบ) ──
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
-  var billsCsvRows = []; // เก็บข้อมูลดิบคู่ขนานไปกับ HTML ไว้ใช้ export CSV
   var billRows = bills.map(function(j, bi){
     var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
-    var inKg = jobKg(j);
-    var outKg = getBillOutKg(j);
     // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
     var invEvents = getBillInvEvents(j.id);
     // แหล่งสำรอง (เผื่อ out record ไม่ได้มาจากการออก INV จริง เช่น พิมพ์อ้างอิงเองจากหน้าไลน์ชุบ)
@@ -1666,17 +1607,8 @@ function renderTraceCard(partNo){
       if(d.jobId===j.id) delEvents.push({ date: d.date||'', inv: d.inv||'-', qty: Number(d.qty||0) });
     });
     var rem=Math.max(0,jobQty(j)-outQty);
-    var remKg=Math.max(0,inKg-outKg);
     var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
-    var shippedPct = jobQty(j)>0 ? Math.max(0, Math.min(100, Math.round(outQty/jobQty(j)*100))) : 0;
     var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
-    // สถานะ: ถ้าส่งครบแล้ว (คงเหลือ = 0 และเคยมียอดรับเข้าจริง) โชว์ badge "ปิดบิล" แทนแถบเปล่าๆ ที่ไม่มีคำอธิบาย
-    // ถ้ายังไม่ครบ โชว์ % ที่ส่งไปแล้วกำกับใต้แถบ ให้รู้ความคืบหน้าจริงโดยไม่ต้องกดสอบกลับ
-    var statusCell = (rem<=0 && jobQty(j)>0)
-      ? '<td><span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;">✅ ปิดบิล</span></td>'
-      : '<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
-        +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div>'
-        +'<div style="font-size:9px;color:#64748b;margin-top:2px;">ส่งแล้ว '+shippedPct+'%</div></td>';
 
     var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
     var detailId = 'bdet-'+k+'-'+bi;
@@ -1722,40 +1654,18 @@ function renderTraceCard(partNo){
         }).join('')
       : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
 
-    // ── เก็บข้อมูลละเอียดไว้ export CSV: แถวสรุปบิล + แถวชุบแต่ละครั้ง + แถวขายแต่ละ INV ──
-    billsCsvRows.push({ type:'บิล', bill: jobBill(j), date: fmtD(j.date||''), rawDate: j.date||'', detail: 'รับเข้า', qty: jobQty(j), kg: inKg.toFixed(2), ref: '',
-      status: (rem<=0 && jobQty(j)>0) ? 'ปิดบิล' : ('ส่งแล้ว '+shippedPct+'%'), remainAfter: rem });
-    plateGroupList.forEach(function(g){
-      var pcsEq = g.pcs;
-      if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
-      billsCsvRows.push({ type:'ชุบ', bill: '', date: fmtD(g.date||''), detail: 'ไลน์ '+g.line+' ('+g.count+' รอบ)', qty: pcsEq, kg: g.kg.toFixed(2), ref: '', status:'', remainAfter:'' });
-    });
-    invEvents.forEach(function(ev){
-      var pcsVal = ev.pcs;
-      if (pcsVal == null) pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
-      // น้ำหนัก: ถ้าบันทึกเป็น กก. อยู่แล้วใช้ตรงๆ ไม่งั้นแปลงจากจำนวนชิ้น x น้ำหนัก/ชิ้น (Part Master) ให้มีค่าน้ำหนักกำกับเสมอ
-      var kgVal = ev.unit==='kg' ? ev.qty : (pm && pm.weightPerPc > 0 ? (pcsVal * pm.weightPerPc / 1000) : 0);
-      billsCsvRows.push({ type:'ขายออก', bill: '', date: fmtD(ev.date||''), detail: 'ขายออก', qty: pcsVal, kg: kgVal.toFixed(2), ref: ev.invNo, status:'', remainAfter:'' });
-    });
-
     // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
     // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
     var extraHtml = '';
 
-    // แสดงคู่ กก./ชิ้น ในเซลล์เดียว เหมือนสไตล์ตาราง Job Master ("108.00 กก. (5,400 ชิ้น)")
-    function kgPcsCell(kg, pcs, color, bold){
-      return '<td style="'+(color?'color:'+color+';':'')+(bold?'font-weight:700;':'')+'">'
-        + (kg>0 ? kg.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+' กก.' : '–')
-        + '<div style="font-size:9px;color:#94a3b8;font-weight:400;">('+pcs.toLocaleString()+' ชิ้น)</div></td>';
-    }
-
     return '<tr>'
       +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
       +'<td style="font-size:11px;">'+fmtD(j.date||'')+'</td>'
-      +kgPcsCell(inKg, jobQty(j), null, true)
-      +kgPcsCell(outKg, outQty, '#dc2626', false)
-      +kgPcsCell(remKg, rem, (rem>0?'#2563eb':'#94a3b8'), true)
-      +statusCell
+      +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
+      +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
+      +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
+      +'<td><div style="background:#e2e8f0;border-radius:4px;height:6px;width:60px;overflow:hidden;">'
+      +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div></td>'
       +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
       +'</tr>'
       +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
@@ -1786,10 +1696,6 @@ function renderTraceCard(partNo){
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
-  // เก็บข้อมูลดิบไว้ให้ปุ่ม Export CSV ดึงไปใช้ (คีย์ด้วย P/No)
-  window._traceCsvData = window._traceCsvData || {};
-  window._traceCsvData[partNo] = billsCsvRows;
-
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
@@ -1801,13 +1707,12 @@ function renderTraceCard(partNo){
       +'<div style="text-align:right;">'
         +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
         +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
-        +(bills.length?'<button onclick="exportBillCSV(\''+esc(partNo).replace(/'/g,"\\'")+'\')" style="margin-top:6px;font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid #86efac;background:#f0fdf4;color:#166534;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export CSV</button>':'')
       +'</div>'
     +'</div>'
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
-      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In.toLocaleString()+' ชิ้น ('+s1InKg.toFixed(2)+' กก.) จ่าย '+s1Out.toLocaleString()+' ชิ้น ('+s1OutKg.toFixed(2)+' กก.)')
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs)
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
       +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
     +'</div>'
@@ -1837,7 +1742,7 @@ async function loadQCData(){
   ];
   await Promise.all(qcPaths.map(async function(p){
     try {
-      var res = await fetch(p.url, {cache:'no-store'});
+      var res = await fetch(p.url);
       if(!res.ok) return;
       var data = await res.json();
       var recs = Array.isArray(data) ? data : (Array.isArray(data&&data.records)?data.records:[]);
