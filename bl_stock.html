@@ -587,12 +587,6 @@ async function loadWIP() {
     { url: DB_R1+'/plating-r1.json', label:'R1' },
   ];
 
-  // คำนวณ delivery ที่ออกไปแล้ว (จาก jmRecords + blDel) เพื่อ cap WIP
-  // WIP = งานที่ชุบแล้ว แต่ยังไม่ถูกส่งออก
-  // กรองเฉพาะ 30 วันล่าสุด เพื่อให้ WIP สะท้อนงานที่ค้างอยู่จริง
-  var cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-
   await Promise.all(lines.map(async function(ln){
     try {
       var res = await fetch(ln.url);
@@ -603,15 +597,6 @@ async function loadWIP() {
 
       recs.forEach(function(dr){
         if (!dr.rows) return;
-        // หมายเหตุ: เดิมมีเงื่อนไขข้ามวันที่ "mark done" แล้ว แต่ "done" หมายถึงปิดล็อกการบันทึกของวันนั้น
-        // ไม่ได้แปลว่าของถูกส่งลูกค้าไปแล้ว — ทำให้ WIP ของวันที่ปิดไปแล้วแต่ยังไม่ได้ขายหายไปจากการนับทั้งหมด
-        // สถานะ "ขายจริงหรือยัง" ตอนนี้เช็คจากเลข INV จริงแยกต่างหากแล้ว (isRealInvRef) จึงไม่ต้องพึ่ง status ตรงนี้อีก
-        // เช็คว่าอยู่ในช่วง 30 วันไหม (ใช้กรอง wipMap ที่เป็นยอดรวม/สถานะปัจจุบันเท่านั้น — ใช้แค่ "รายไลน์"/วันที่อ้างอิงประกอบแล้ว ไม่ใช่ตัวเลขหลักของ STOCK2 อีกต่อไป)
-        var withinCutoff = true;
-        if (dr.date) {
-          var drDate = new Date(dr.date + 'T00:00:00');
-          if (drDate < cutoff) withinCutoff = false;
-        }
         dr.rows.forEach(function(row){
           // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
           if ((row.type||'').toUpperCase() === 'R') return;
@@ -620,13 +605,13 @@ async function loadWIP() {
           var k = norm(pn);
 
           // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
-          // ไม่กระทบยอดรวม wipMap เดิมด้านล่างเลย
           if (row.jobId && row.jobId !== 'NOBILL') {
             if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
             wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
           }
 
-          if (!withinCutoff) return; // ยอดรวม wipMap ยังกรอง 30 วันเหมือนเดิม ไม่เปลี่ยนพฤติกรรมเดิม
+          // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
+          // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
 
           if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
           wipMap[k].pcs += Number(row.pcs||0);
