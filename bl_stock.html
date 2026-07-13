@@ -795,15 +795,9 @@ function renderStock() {
   var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
     var wo=getWip(p.partNo)||{};
-    var wpcs=wo.pcs||0;
-    var wkg=wo.kgs||0;
-    if (!wpcs && wkg>0) {
-      var pmw=pmLookup(p.partNo);
-      if (pmw && pmw.weightPerPc>0) wpcs=ucKgToPcs(wkg, pmw.weightPerPc);
-    }
-    // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว (ไม่แก้ค่าดิบใน wipMap ตรงๆ กันกระทบจุดอื่น)
-    wpcs = Math.max(0, wpcs - (p.shipped||0));
-    wkg  = Math.max(0, wkg  - (p.shippedKg||0));
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wpcs = Math.max(0, (wo.pcs||0) - (p.shipped||0));
+    var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
     sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
@@ -841,18 +835,11 @@ function renderStock() {
   }
 
   tbody.innerHTML = filtParts.map(function(p,i){
-    var wipObj = getWip(p.partNo)||{};
-    var wip    = wipObj.pcs||0;
-    var wipKg  = wipObj.kgs||0;
     var pm     = pmLookup(p.partNo);
-
-    // ถ้า pcs=0 แต่มี kg → แปลงผ่าน Part Master ถ้ามี weightPerPc
-    if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
-      wip = ucKgToPcs(wipKg, pm.weightPerPc);
-    }
-    // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว
-    wip   = Math.max(0, wip   - (p.shipped||0));
-    wipKg = Math.max(0, wipKg - (p.shippedKg||0));
+    var wo     = getWip(p.partNo)||{};
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wip   = Math.max(0, (wo.pcs||0) - (p.shipped||0));
+    var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
 
     var remain   = Math.max(0, p.receive - p.delivery);
     var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
@@ -927,16 +914,10 @@ function toggleDetail(i) {
 
 function buildDetail(p) {
   var k=norm(p.partNo);
-  var wipObj = getWip(p.partNo)||{};
-  var wipPcs = wipObj.pcs||0;
-  var wipKg2 = wipObj.kgs||0;
   var pm=pmLookup(p.partNo); // Part Master data
-  // แปลง kg→ชิ้น ถ้ามี weightPerPc
-  if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
-    wipPcs = ucKgToPcs(wipKg2, pm.weightPerPc);
-  }
-  // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว (ตรงกับ STOCK2 ในหน้า Traceability)
-  var wip = Math.max(0, wipPcs - (p.shipped||0));
+  var wo=getWip(p.partNo)||{};
+  // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
+  var wip = Math.max(0, (wo.pcs||0) - (p.shipped||0));
   var remain=Math.max(0,p.receive-p.delivery);
 
   // Job master items ของ P/No นี้
@@ -1587,19 +1568,20 @@ function renderTraceCard(partNo){
     s4Out   += Number(d.qty||0);
     s4OutKg += Number(d.qtyKg||0);
   });
-  // Pipeline ตามที่ต้องการ: STOCK1 = รับเข้า − ยอดที่ v4,5,6 ดึงไปชุบ (จากประวัติการชุบจริง)
-  //                        STOCK2 = ยอดที่ชุบแล้ว (จากประวัติ v4,5,6) − ยอดขายจริง (INV)
-  //                        STOCK3 = ยอดขายจริง (INV)
-  // ไม่ cap ให้พอดีกับยอดรับอีกต่อไป — ปล่อยให้เห็นตามข้อมูลจริงจาก v4,5,6 แม้จะดูขัดแย้งกันบ้าง
-  // เพราะถ้าตัวเลขขัดแย้งกัน (เช่น ชุบน้อยกว่าที่ขายได้จริง) คือสัญญาณเตือนว่าข้อมูลการชุบในไฟล์ v4,5,6 บันทึกไม่ครบ ควรเห็นไว้ ไม่ใช่ถูกกลบไป
+  // Pipeline: STOCK1 = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6 ตรงๆ)
+  //           STOCK2 (WIP) = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+  //           STOCK3 = ขายจริงผ่าน INV
+  // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
   var wo      = getWip(partNo)||{};
   var s2Lines = wo.lines||{};
-  var s2Pcs = Math.max(0, (wo.pcs||0) - s4Out);
-  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
 
   // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
   var s1Rem   = Math.max(0, s1In   - (wo.pcs||0));
   var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
+
+  // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
+  var s2Pcs = Math.max(0, (wo.pcs||0) - s4Out);
+  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
