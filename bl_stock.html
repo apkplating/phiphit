@@ -685,7 +685,7 @@ function buildMap() {
     var pn = jobPartNo(job);
     var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, autoConsumed:0, autoConsumedKg:0, jobIds:[], dueDate:job.dueDate||'' };
     map[k].receive    += jobQty(job);
     map[k].receiveKg  += Number(job.qtyKg||0);
     map[k].jobIds.push(job.id);
@@ -701,8 +701,11 @@ function buildMap() {
   //   1. Auto จากรอบชุบ (id ขึ้นต้น "AUTO-") — job_master.html สร้างให้อัตโนมัติทุกรอบชุบจริง (matching ด้วยชื่อ P/No)
   //      หมายถึง "วัตถุดิบเข้าสู่กระบวนการชุบแล้ว" (JM → WIP) ไม่ใช่ "ส่งของให้ลูกค้าแล้ว"
   //   2. ออกจาก INV จริง (id ขึ้นต้น "R" ผูก invNo จริง) หรือกรอกเองใน bl_stock — หมายถึง "ส่งของให้ลูกค้าแล้วจริง" (WIP → ลูกค้า)
-  // ถ้าเอาทั้ง 2 แบบมารวมกันแล้วใช้ตัดเพดาน WIP จะเท่ากับตัดซ้ำสองชั้น (ทั้งตอนเข้า WIP และตอนเช็คว่า WIP เหลือเท่าไร)
-  // เก็บ "delivery" (รวมทั้งหมด) ไว้ใช้กับ STOCK1/หน้าภาพรวมเหมือนเดิม แต่แยก "shipped" (เฉพาะที่ส่งลูกค้าจริง) ไว้ใช้กับเพดาน WIP โดยเฉพาะ
+  // เดิม "delivery" รวมทั้ง 2 แบบเข้าด้วยกัน แล้วใช้ทั้งกับสถานะ "จ่ายครบ" ของหน้า Stock Board และตัดเพดาน WIP
+  // ปัญหาคือของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) พอบวกรวมกันเลยนับซ้ำสอง
+  // ทำให้ "delivery" รวมเกินยอด "receive" ได้ (เจอจริง: รับ 16,200 แต่ delivery รวม 20,700)
+  // แก้โดยแยกเป็น 2 ตัวแปรคนละความหมาย: "delivery"/"shipped" = เฉพาะส่งลูกค้าจริง (ใช้กับสถานะ "จ่ายครบ" ให้ตรงกับ job_master.html)
+  // "autoConsumed" = เฉพาะ Auto จากรอบชุบ (JM→WIP อย่างเดียว ใช้กับเพดาน WIP โดยเฉพาะ)
   jmRecords.forEach(function(r){
     if (r.type!=='out') return;
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
@@ -713,11 +716,14 @@ function buildMap() {
     if (!k || !map[k]) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
     var kgVal  = Number(r.qtyKg||0);
-    map[k].delivery    += pcsVal;
-    map[k].deliveryKg  += kgVal;
     if (isRealInvRef(r)) {
-      map[k].shipped    += pcsVal;
-      map[k].shippedKg  += kgVal;
+      map[k].delivery    += pcsVal;
+      map[k].deliveryKg  += kgVal;
+      map[k].shipped      += pcsVal;
+      map[k].shippedKg    += kgVal;
+    } else {
+      map[k].autoConsumed   += pcsVal;
+      map[k].autoConsumedKg += kgVal;
     }
   });
 
@@ -743,14 +749,12 @@ function buildMap() {
     }
 
     // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" — คำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) ──
-    // เดิมใช้ wo.pcs/wo.kgs (ยอดชุบจริงจากไฟล์ v4/5/6 ที่จำกัดแค่ 30 วันล่าสุด) มาลบ shipped ตรง ๆ
-    // แต่พบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง)
-    // เปลี่ยนมาใช้ "ยอดที่เข้ากระบวนการชุบทั้งหมด" (delivery รวม Auto จากรอบชุบ — เชื่อถือได้เพราะสร้างจากรอบชุบจริงทุกรอบ)
-    // ลบด้วย "ยอดขายจริง" (shipped เฉพาะที่ผูก INV จริง) แทน — ไม่ต้องพึ่งไฟล์ v4/5/6 โดยตรงอีกต่อไป
+    // ใช้ "autoConsumed" (เฉพาะ Auto จากรอบชุบ = เข้า WIP) ลบด้วย "shipped" (เฉพาะขายจริงผ่าน INV = ออกจาก WIP)
+    // ไม่ใช้ "delivery" ตรงนี้ เพราะตอนนี้ delivery เปลี่ยนความหมายเป็น "ส่งลูกค้าจริง" แล้ว (เท่ากับ shipped) เพื่อให้ตรงกับสถานะ "จ่ายครบ" ของ Stock Board
     var wo = getWip(map[k].partNo);
     if (!wo) { wo = { partName: map[k].partNo, pcs:0, kgs:0, lines:{}, dates:[] }; wipMap[k] = wo; }
-    wo.pcs = Math.max(0, (map[k].delivery   || 0) - (map[k].shipped   || 0));
-    wo.kgs = parseFloat(Math.max(0, (map[k].deliveryKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
+    wo.pcs = Math.max(0, (map[k].autoConsumed   || 0) - (map[k].shipped   || 0));
+    wo.kgs = parseFloat(Math.max(0, (map[k].autoConsumedKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
   });
 
   return map;
@@ -1562,11 +1566,15 @@ function renderTraceCard(partNo){
     if(!j||norm(jobPartNo(j))!==k) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
     var kgVal  = Number(r.qtyKg||0);
-    s1Out   += pcsVal;
-    s1OutKg += kgVal;
+    // สำคัญ: s1Out ต้องนับเฉพาะ "เข้า WIP" (Auto/ไม่ผูก INV จริง) เท่านั้น ไม่ใช่รวมกับ s4Out (ขายจริง) ด้วย
+    // เพราะของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) ถ้าบวกรวมกันจะกลายเป็นนับซ้ำสอง
+    // ทำให้ "จ่าย" รวมเกินยอด "รับ" ได้ (เจอจริง: รับ 16,200 แต่จ่าย 20,700) — Auto คือ JM→WIP, INV จริงคือ WIP→ลูกค้า คนละขั้นตอนกัน
     if (isRealInvRef(r)) {
       s4Out   += pcsVal;
       s4OutKg += kgVal;
+    } else {
+      s1Out   += pcsVal;
+      s1OutKg += kgVal;
     }
   });
   blDel.forEach(function(d){
