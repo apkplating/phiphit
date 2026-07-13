@@ -966,8 +966,15 @@ function saveLocal() {
 //  FIREBASE
 // ══════════════════════════════════════
 var _fbLastSavedAt = '';
+var _cloudReady = false; // true หลัง fbLoad() รอบแรกสำเร็จ — กัน fbSave() เขียนทับคลาวด์ด้วยข้อมูลจาก localStorage ที่อาจว่าง/เก่ากว่าก่อนที่จะ sync กับคลาวด์จริงเสร็จ (ต้นเหตุที่ invoices หายไปจาก Firebase)
 
 async function fbSave() {
+  // รอจนกว่าจะโหลดข้อมูลจากคลาวด์รอบแรกสำเร็จก่อน (สูงสุด ~20 วิ) ป้องกันการบันทึกทับด้วยข้อมูลเครื่องนี้ที่ยังไม่ sync ครบ
+  var waitTries = 0;
+  while (!_cloudReady && waitTries < 100) {
+    await new Promise(function(r){ setTimeout(r, 200); });
+    waitTries++;
+  }
   try {
     var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
@@ -982,14 +989,14 @@ async function fbSave() {
 
 async function fbLoad() {
   try {
-    var res = await fetch(FB_PATH+'.json');
+    var res = await fetch(FB_PATH+'.json', {cache:'no-store'});
     if (!res.ok) { setSyncErr(); return; }
     var data = await res.json();
     if (data) {
       // ถ้า cloud ไม่ใหม่กว่าที่เราเพิ่งบันทึกขึ้นไปเอง ห้ามทับ local —
       // กัน poll พอดีมาแทรกจังหวะระหว่างที่ fbSave() ยังไม่เสร็จ แล้วดึงข้อมูลเก่ามาทับของที่เพิ่งบันทึกไป (ราคา/บิล ฯลฯ หายไปเงียบๆ)
       var cloudSavedAt = data.savedAt || '';
-      if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
+      if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); _cloudReady = true; return; }
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       if (Array.isArray(data.items))    jobItems   = data.items;
       if (Array.isArray(data.records))  jobRecords = data.records;
@@ -1004,6 +1011,7 @@ async function fbLoad() {
       var active = document.querySelector('.view.active');
       if (active) tab(active.id.replace('v-',''));
     }
+    _cloudReady = true; // ถือว่ารอบแรกเสร็จแล้ว ไม่ว่า data จะว่างหรือไม่ (path ไม่มีข้อมูลจริงๆ ก็ต้องปล่อยให้ fbSave ทำงานต่อได้ ไม่งั้นจะรอค้างตลอดไป)
   } catch(e) { setSyncErr(); }
 }
 
