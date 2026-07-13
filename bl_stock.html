@@ -1381,6 +1381,14 @@ async function showDebug() {
   info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
   info('blDel     : ' + blDel.length + ' รายการ');
   info('pmParts   : ' + pmParts.length + ' P/No ใน Part Master' + (pmParts.length===0?' ⚠️ ยังไม่มีข้อมูล':''));
+  info('blInvoices: ' + blInvoices.length + ' ใบ INV จริง' + (blInvoices.length===0?' ⚠️ ว่างเปล่า — jmRecords ทั้งหมดจะไม่นับเป็น "ส่งลูกค้า" (จ่ายออก=0 ทุกบิล)':''));
+  if (blInvoices.length > 0) {
+    info('blInvoices sample: ' + blInvoices.slice(0,3).map(function(inv){ return JSON.stringify({invNo:inv.invNo, jobId:inv.jobId}); }).join('  |  '));
+  }
+  var outRecsSample = jmRecords.filter(function(r){return r.type==='out';}).slice(0,3);
+  if (outRecsSample.length > 0) {
+    info('jmRecords(out) sample .inv: ' + outRecsSample.map(function(r){ return JSON.stringify(r.inv); }).join(', '));
+  }
   var wipKeys = Object.keys(wipMap);
   info('wipMap : ' + wipKeys.length + ' P/No');
   if (wipKeys.length > 0) {
