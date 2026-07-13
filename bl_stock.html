@@ -748,13 +748,9 @@ function buildMap() {
       if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
     }
 
-    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" — คำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) ──
-    // ใช้ "autoConsumed" (เฉพาะ Auto จากรอบชุบ = เข้า WIP) ลบด้วย "shipped" (เฉพาะขายจริงผ่าน INV = ออกจาก WIP)
-    // ไม่ใช้ "delivery" ตรงนี้ เพราะตอนนี้ delivery เปลี่ยนความหมายเป็น "ส่งลูกค้าจริง" แล้ว (เท่ากับ shipped) เพื่อให้ตรงกับสถานะ "จ่ายครบ" ของ Stock Board
-    var wo = getWip(map[k].partNo);
-    if (!wo) { wo = { partName: map[k].partNo, pcs:0, kgs:0, lines:{}, dates:[] }; wipMap[k] = wo; }
-    wo.pcs = Math.max(0, (map[k].autoConsumed   || 0) - (map[k].shipped   || 0));
-    wo.kgs = parseFloat(Math.max(0, (map[k].autoConsumedKg || 0) - (map[k].shippedKg || 0)).toFixed(3));
+    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" (WIP) = ชุบไปแล้ว (จาก wipMap ไฟล์ v4/5/6) − ขายออกจริง (INV) ──
+    // ไม่แก้ไข wo.pcs/wo.kgs ตรงนี้โดยตรง (wipMap เป็น object ที่ใช้ร่วมกันทั้งหน้า ถ้าแก้ค่าดิบทิ้งไปจะกระทบจุดอื่นที่อ่านค่าดิบต่อ)
+    // ไปคำนวณ "WIP หลังหักขาย" ที่จุดแสดงผลแต่ละจุดแทน โดยใช้สูตรเดียวกัน: max(0, ชุบดิบ − ขายจริง)
   });
 
   return map;
@@ -805,6 +801,9 @@ function renderStock() {
       var pmw=pmLookup(p.partNo);
       if (pmw && pmw.weightPerPc>0) wpcs=ucKgToPcs(wkg, pmw.weightPerPc);
     }
+    // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว (ไม่แก้ค่าดิบใน wipMap ตรงๆ กันกระทบจุดอื่น)
+    wpcs = Math.max(0, wpcs - (p.shipped||0));
+    wkg  = Math.max(0, wkg  - (p.shippedKg||0));
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
     sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
@@ -851,6 +850,9 @@ function renderStock() {
     if (!wip && wipKg > 0 && pm && pm.weightPerPc > 0) {
       wip = ucKgToPcs(wipKg, pm.weightPerPc);
     }
+    // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว
+    wip   = Math.max(0, wip   - (p.shipped||0));
+    wipKg = Math.max(0, wipKg - (p.shippedKg||0));
 
     var remain   = Math.max(0, p.receive - p.delivery);
     var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
@@ -928,13 +930,14 @@ function buildDetail(p) {
   var wipObj = getWip(p.partNo)||{};
   var wipPcs = wipObj.pcs||0;
   var wipKg2 = wipObj.kgs||0;
+  var pm=pmLookup(p.partNo); // Part Master data
   // แปลง kg→ชิ้น ถ้ามี weightPerPc
   if (!wipPcs && wipKg2 > 0 && pm && pm.weightPerPc > 0) {
     wipPcs = ucKgToPcs(wipKg2, pm.weightPerPc);
   }
-  var wip = wipPcs;
+  // WIP ที่โชว์ = ชุบดิบ − ขายจริงแล้ว (ตรงกับ STOCK2 ในหน้า Traceability)
+  var wip = Math.max(0, wipPcs - (p.shipped||0));
   var remain=Math.max(0,p.receive-p.delivery);
-  var pm=pmLookup(p.partNo); // Part Master data
 
   // Job master items ของ P/No นี้
   var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
@@ -1584,19 +1587,19 @@ function renderTraceCard(partNo){
     s4Out   += Number(d.qty||0);
     s4OutKg += Number(d.qtyKg||0);
   });
-  var s1Rem   = Math.max(0, s1In - s1Out);
-  var s1RemKg = Math.max(0, s1InKg - s1OutKg);
-
-  // ── Stock 2: ชุบแล้ว แต่ยังไม่ได้ขาย ──
-  // เปลี่ยนมาคำนวณจากตัวเลขของ Job Master เอง แทนที่จะพึ่งข้อมูลดิบจาก wipMap (ไฟล์ v4/5/6) โดยตรง
-  // เพราะพบว่าข้อมูลดิบมีช่องโหว่จริง (บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น + จำกัดแค่ 30 วันล่าสุด
-  // + ไม่ sync ตามหลังถ้ารอบชุบถูกแก้ไข/ลบทีหลัง) ทำให้ตัวเลขไม่นิ่งและมักจะน้อยกว่าความเป็นจริง
-  // สูตรใหม่: ยอดที่เข้ากระบวนการชุบทั้งหมด (s1Out ซึ่งรวม "Auto จากรอบชุบ" ด้วย — เชื่อถือได้เพราะสร้างจาก
-  // รอบชุบจริงทุกรอบ) ลบด้วยยอดขายจริง (s4Out เฉพาะที่ผูก INV จริง) = ส่วนที่ชุบเสร็จแล้วแต่ยังไม่ได้ขาย
-  var s2Pcs = Math.max(0, s1Out   - s4Out);
-  var s2Kg  = Math.max(0, s1OutKg - s4OutKg);
-  var wo    = getWip(partNo)||{}; // ยังใช้ดู "รายไลน์" (B1/B2/R1) กับวันที่ชุบเป็นข้อมูลอ้างอิงประกอบเท่านั้น ไม่ใช้เป็นตัวเลขหลักแล้ว
+  // Pipeline ตามที่ต้องการ: STOCK1 = รับเข้า − ยอดที่ v4,5,6 ดึงไปชุบ (จากประวัติการชุบจริง)
+  //                        STOCK2 = ยอดที่ชุบแล้ว (จากประวัติ v4,5,6) − ยอดขายจริง (INV)
+  //                        STOCK3 = ยอดขายจริง (INV)
+  // ไม่ cap ให้พอดีกับยอดรับอีกต่อไป — ปล่อยให้เห็นตามข้อมูลจริงจาก v4,5,6 แม้จะดูขัดแย้งกันบ้าง
+  // เพราะถ้าตัวเลขขัดแย้งกัน (เช่น ชุบน้อยกว่าที่ขายได้จริง) คือสัญญาณเตือนว่าข้อมูลการชุบในไฟล์ v4,5,6 บันทึกไม่ครบ ควรเห็นไว้ ไม่ใช่ถูกกลบไป
+  var wo      = getWip(partNo)||{};
   var s2Lines = wo.lines||{};
+  var s2Pcs = Math.max(0, (wo.pcs||0) - s4Out);
+  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
+
+  // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
+  var s1Rem   = Math.max(0, s1In   - (wo.pcs||0));
+  var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1730,7 +1733,7 @@ function renderTraceCard(partNo){
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
-      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' จ่าย '+s1Out)
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+(wo.pcs||0))
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
       +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
     +'</div>'
