@@ -531,8 +531,8 @@ async function loadAll(manual) {
 async function loadJobMaster() {
   // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
   var [jmRes, intakeRes] = await Promise.all([
-    fetch(JM_URL).catch(function(){ return {ok:false}; }),
-    fetch(INTAKE_URL).catch(function(){ return {ok:false}; }),
+    fetch(JM_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+    fetch(INTAKE_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
   ]);
 
   jmItems   = [];
@@ -574,7 +574,7 @@ async function loadJobMaster() {
 // ── Part Master — ทะเบียนชิ้นงานกลาง ───────────────
 async function loadPartMaster() {
   try {
-    var res = await fetch(PM_URL);
+    var res = await fetch(PM_URL, {cache:'no-store'});
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.parts)) {
@@ -596,7 +596,7 @@ function pmLookup(partNo) {
 // ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
 async function loadBLDel() {
   try {
-    var res = await fetch(DEL_URL);
+    var res = await fetch(DEL_URL, {cache:'no-store'});
     var data = res.ok ? await res.json() : null;
     blDel = Array.isArray(data && data.records) ? data.records : [];
   } catch(e){ blDel=[]; }
@@ -620,7 +620,7 @@ async function loadWIP() {
 
   await Promise.all(lines.map(async function(ln){
     try {
-      var res = await fetch(ln.url);
+      var res = await fetch(ln.url, {cache:'no-store'});
       if (!res.ok) return;
       var data = await res.json();
       var recs = Array.isArray(data) ? data
@@ -1414,7 +1414,7 @@ async function showDebug() {
     info('URL: ' + t.url);
     try {
       var t0 = Date.now();
-      var res = await fetch(t.url);
+      var res = await fetch(t.url, {cache:'no-store'});
       var ms = Date.now() - t0;
       info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
       if (!res.ok) {
@@ -1829,7 +1829,7 @@ async function loadQCData(){
   ];
   await Promise.all(qcPaths.map(async function(p){
     try {
-      var res = await fetch(p.url);
+      var res = await fetch(p.url, {cache:'no-store'});
       if(!res.ok) return;
       var data = await res.json();
       var recs = Array.isArray(data) ? data : (Array.isArray(data&&data.records)?data.records:[]);
