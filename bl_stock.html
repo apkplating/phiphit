@@ -780,8 +780,11 @@ function renderStock() {
   var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
     var wo=getWip(p.partNo)||{};
+    var pmw=pmLookup(p.partNo);
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pmw && pmw.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pmw.weightPerPc);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wpcs = Math.max(0, (wo.pcs||0) - (p.shipped||0));
+    var wpcs = Math.max(0, platedPcs   - (p.shipped||0));
     var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
@@ -822,8 +825,10 @@ function renderStock() {
   tbody.innerHTML = filtParts.map(function(p,i){
     var pm     = pmLookup(p.partNo);
     var wo     = getWip(p.partNo)||{};
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wip   = Math.max(0, (wo.pcs||0) - (p.shipped||0));
+    var wip   = Math.max(0, platedPcs  - (p.shipped||0));
     var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
 
     var remain   = Math.max(0, p.receive - p.delivery);
@@ -901,8 +906,10 @@ function buildDetail(p) {
   var k=norm(p.partNo);
   var pm=pmLookup(p.partNo); // Part Master data
   var wo=getWip(p.partNo)||{};
+  var platedPcs = wo.pcs||0;
+  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
   // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
-  var wip = Math.max(0, (wo.pcs||0) - (p.shipped||0));
+  var wip = Math.max(0, platedPcs - (p.shipped||0));
   var remain=Math.max(0,p.receive-p.delivery);
 
   // Job master items ของ P/No นี้
@@ -1559,13 +1566,18 @@ function renderTraceCard(partNo){
   // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
   var wo      = getWip(partNo)||{};
   var s2Lines = wo.lines||{};
+  // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้ wo.pcs=0 ทั้งที่ wo.kgs มีค่าจริง ต้องแปลงผ่าน Part Master ก่อนใช้
+  var platedPcs = wo.pcs||0;
+  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) {
+    platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+  }
 
   // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
-  var s1Rem   = Math.max(0, s1In   - (wo.pcs||0));
+  var s1Rem   = Math.max(0, s1In   - platedPcs);
   var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
 
   // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
-  var s2Pcs = Math.max(0, (wo.pcs||0) - s4Out);
+  var s2Pcs = Math.max(0, platedPcs - s4Out);
   var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
@@ -1682,15 +1694,7 @@ function renderTraceCard(partNo){
 
   var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
-  // 🔬 DIAGNOSTIC ชั่วคราว — โชว์ในหน้าจอตรงๆ ไม่ต้องเปิด Console
-  var _diagKey = norm(partNo);
-  var _diagFound = wipMap.hasOwnProperty(_diagKey);
-  var _diagKeys = Object.keys(wipMap);
-  var _diagText = '<div style="margin-top:4px;padding:6px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;font-size:8px;color:#78350f;font-family:monospace;text-align:left;">'
-    + '🔬 key="'+esc(_diagKey)+'" เจอ='+_diagFound+' | wipMap ทั้งหมด='+_diagKeys.length+' key'
-    + '<br>wo='+esc(JSON.stringify(wo))
-    + '</div>';
-  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail + _diagText;
+  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
@@ -1708,7 +1712,7 @@ function renderTraceCard(partNo){
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
-      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+(wo.pcs||0))
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs)
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
       +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
     +'</div>'
