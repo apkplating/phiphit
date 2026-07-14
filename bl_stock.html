@@ -585,13 +585,37 @@ async function loadBLDel() {
 }
 
 // ── WIP จาก 3 lines ─────────────────────────────────
+// ประมวลผลแถวชุบ 1 แถว เข้า wipByJob + wipMap — ใช้ร่วมกันทั้งจาก dayRecords (บันทึกแล้ว) และ live.json (ยังไม่กดบันทึกสรุปวันนี้)
+function processWipRow(row, date, lineLabel) {
+  // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
+  if ((row.type||'').toUpperCase() === 'R') return;
+  var pn = (row.partName||'').trim();
+  if (!pn) return;
+  var k = norm(pn);
+
+  // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
+  if (row.jobId && row.jobId !== 'NOBILL') {
+    if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
+    wipByJob[row.jobId].push({ date: date||'', line: lineLabel, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
+  }
+
+  if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[], rows:[] };
+  // เก็บดิบไว้ทีละแถว (ไม่รวมทันที) — ไว้แปลง กก.→ชิ้น รายแถวตอนใช้งานจริง กัน "บวกรวมก่อนค่อยแปลง"
+  // ซึ่งพลาดกรณีบางแถวมี pcs จริงปนกับแถวที่กรอกแต่ กก. (ยอดรวมไม่เป็น 0 เลยข้ามการแปลงไปทั้งที่บางแถวควรแปลง)
+  wipMap[k].rows.push({ pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
+  wipMap[k].pcs += Number(row.pcs||0);
+  wipMap[k].kgs += Number(row.kg||0);
+  wipMap[k].lines[lineLabel] = (wipMap[k].lines[lineLabel]||0) + Number(row.pcs||0);
+  if (date && wipMap[k].dates.indexOf(date) < 0) wipMap[k].dates.push(date);
+}
+
 async function loadWIP() {
   wipMap = {};
   wipByJob = {};
   var lines = [
-    { url: DB_B1+'/plating-b1.json', label:'B1' },
-    { url: DB_B2+'/plating-b2.json', label:'B2' },
-    { url: DB_R1+'/plating-r1.json', label:'R1' },
+    { url: DB_B1+'/plating-b1.json', liveUrl: DB_B1+'/live.json', label:'B1' },
+    { url: DB_B2+'/plating-b2.json', liveUrl: DB_B2+'/live.json', label:'B2' },
+    { url: DB_R1+'/plating-r1.json', liveUrl: DB_R1+'/live.json', label:'R1' },
   ];
 
   await Promise.all(lines.map(async function(ln){
@@ -604,32 +628,25 @@ async function loadWIP() {
 
       recs.forEach(function(dr){
         if (!dr.rows) return;
-        dr.rows.forEach(function(row){
-          // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
-          if ((row.type||'').toUpperCase() === 'R') return;
-          var pn = (row.partName||'').trim();
-          if (!pn) return;
-          var k = norm(pn);
-
-          // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
-          if (row.jobId && row.jobId !== 'NOBILL') {
-            if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
-            wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
-          }
-
-          // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
-          // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
-
-          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[], rows:[] };
-          // เก็บดิบไว้ทีละแถว (ไม่รวมทันที) — ไว้แปลง กก.→ชิ้น รายแถวตอนใช้งานจริง กัน "บวกรวมก่อนค่อยแปลง"
-          // ซึ่งพลาดกรณีบางแถวมี pcs จริงปนกับแถวที่กรอกแต่ กก. (ยอดรวมไม่เป็น 0 เลยข้ามการแปลงไปทั้งที่บางแถวควรแปลง)
-          wipMap[k].rows.push({ pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
-          wipMap[k].pcs += Number(row.pcs||0);
-          wipMap[k].kgs += Number(row.kg||0);
-          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + Number(row.pcs||0);
-          if (dr.date && wipMap[k].dates.indexOf(dr.date) < 0) wipMap[k].dates.push(dr.date);
-        });
+        dr.rows.forEach(function(row){ processWipRow(row, dr.date, ln.label); });
       });
+    } catch(e){}
+  }));
+
+  // ── อ่าน /live.json เพิ่ม — โชว์ยอดชุบวันนี้แบบ real-time ก่อนกด "บันทึกสรุปวันนี้" ──
+  // ⚠️ ความเสี่ยงที่รู้ไว้ (ยังไม่แก้ตอนนี้ ตามที่ตกลงกันไว้): เวลากด "บันทึกสรุปวันนี้" ฝั่ง plating_v4/5/6.html
+  // จะเคลียร์ /live.json ให้ว่างเปล่าอัตโนมัติทันทีหลังบันทึก (กันนับซ้ำกับ dayRecords) แต่ถ้าจังหวะนั้นเน็ตหลุดพอดี
+  // การเคลียร์อาจไม่สำเร็จ ทำให้ /live.json ค้างข้อมูลเก่าไว้ ถูกนับซ้ำกับ dayRecords ไปเรื่อยๆ จนกว่าจะมีการกดเพิ่ม/ลบรายรอบใหม่
+  // (ซึ่งจะ push live.json ทับใหม่เอง) — ถ้าเจอตัวเลขเพี้ยนแบบไม่มีเหตุผล ให้สงสัยจุดนี้ก่อน
+  await Promise.all(lines.map(async function(ln){
+    try {
+      var res = await fetch(ln.liveUrl);
+      if (!res.ok) return;
+      var live = await res.json();
+      if (!live || !Array.isArray(live.rows) || !live.rows.length) return;
+      var today = isoToday();
+      if ((live.date||'') !== today) return; // ข้อมูล live ของวันอื่น (ค้างเก่า) ไม่นับ
+      live.rows.forEach(function(row){ processWipRow(row, today, ln.label); });
     } catch(e){}
   }));
 }
@@ -1513,7 +1530,7 @@ function setSyncing(loading,ok,errMsg){
 }
 
 // เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
-var BUILD_VERSION = 'bl-stock-2026-07-14-billsonly-4';
+var BUILD_VERSION = 'bl-stock-2026-07-14-liverealtime-5';
 
 function updateVerifyBar(){
   var el = document.getElementById('verifyBar');
