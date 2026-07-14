@@ -615,6 +615,11 @@ async function loadWIP() {
           if (row.jobId && row.jobId !== 'NOBILL') {
             if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
             wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
+            // 🔬 DIAGNOSTIC ชั่วคราว — เก็บว่าแต่ละ jobId เจอ partName ดิบ + key ที่ normalize แล้วอะไรบ้าง
+            // ไว้เทียบว่า wipMap (key ตาม partName) กับ wipByJob (key ตาม jobId) เห็นข้อมูลตรงกันไหม
+            if (!window._jobIdRawParts) window._jobIdRawParts = {};
+            if (!window._jobIdRawParts[row.jobId]) window._jobIdRawParts[row.jobId] = {};
+            window._jobIdRawParts[row.jobId][pn + ' → ' + k] = (window._jobIdRawParts[row.jobId][pn + ' → ' + k] || 0) + 1;
           }
 
           // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
@@ -1759,6 +1764,16 @@ function renderTraceCard(partNo){
     + '🔬 wipByJob รวมทุกบิล (' + bills.length + ' บิล): ' + _jobSumRows + ' แถว, kg รวม=' + _jobSumKg.toFixed(2)
     + '<br>เทียบ wipMap: ' + _rowsRaw.length + ' แถว, kg รวม=' + platedKg.toFixed(2)
     + ' (ต่าง ' + (_jobSumKg-platedKg).toFixed(2) + ' kg)'
+    + '</div>';
+  // 🔬 เช็คว่าแต่ละบิลเจอ partName ดิบว่าอะไรบ้าง (เผื่อสะกดไม่ตรงกับ "TYT2-302" ทำให้ normalize ไปคนละ key ใน wipMap)
+  var _partNameVariants = {};
+  bills.forEach(function(j){
+    var raw = (window._jobIdRawParts && window._jobIdRawParts[j.id]) || {};
+    Object.keys(raw).forEach(function(variant){ _partNameVariants[variant] = (_partNameVariants[variant]||0) + raw[variant]; });
+  });
+  var _variantLines = Object.keys(_partNameVariants).map(function(v){ return v + ' (' + _partNameVariants[v] + ' แถว)'; }).join('<br>');
+  s2CombinedDetail += '<div style="margin-top:2px;padding:5px;background:#f0fdf4;border:1px dashed #4ade80;border-radius:4px;font-size:8px;color:#14532d;font-family:monospace;text-align:left;">'
+    + '🔬 partName ดิบที่เจอในทุกบิล (รูปแบบ "ดิบ → keyที่ normalize แล้ว"):<br>' + (_variantLines || '(ไม่มีข้อมูล)')
     + '</div>';
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
