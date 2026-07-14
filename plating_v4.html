@@ -2696,7 +2696,7 @@ function applyPreset(idx) {
       if (realRemainPcs > 0 || realRemainKg > 0) {
         // บิลนี้ยังมีคงเหลือ → set ค่าทันที ข้าม step ②
         _barrelPartSelected = true;
-        document.getElementById('bPartName').value = job.partName || partNo;
+        document.getElementById('bPartName').value = partNo;
         if (cu) document.getElementById('bCustomer').value = cu;
         document.getElementById('bPartSearchStatus').innerHTML =
           '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cu?' · '+cu:'')+'</span>';
