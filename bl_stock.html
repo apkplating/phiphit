@@ -1467,7 +1467,7 @@ function setSyncing(loading,ok,errMsg){
 }
 
 // เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
-var BUILD_VERSION = 'bl-stock-2026-07-13-verifybar-1';
+var BUILD_VERSION = 'bl-stock-2026-07-14-rowconvert-2';
 
 function updateVerifyBar(){
   var el = document.getElementById('verifyBar');
@@ -1740,6 +1740,16 @@ function renderTraceCard(partNo){
   var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
+  // 🔬 DIAGNOSTIC ชั่วคราว — โชว์รายละเอียดแถวดิบที่ใช้คำนวณ platedPcs ให้เห็นตรงๆ
+  var _rowsRaw = wo.rows || [];
+  var _pcsOnlyRows = _rowsRaw.filter(function(r){ return r.pcs>0; }).length;
+  var _kgOnlyRows  = _rowsRaw.filter(function(r){ return r.pcs===0 && r.kg>0; }).length;
+  var _zeroRows    = _rowsRaw.filter(function(r){ return r.pcs===0 && r.kg===0; }).length;
+  s2CombinedDetail += '<div style="margin-top:4px;padding:5px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;font-size:8px;color:#78350f;font-family:monospace;text-align:left;">'
+    + '🔬 rows=' + _rowsRaw.length + ' (pcs>0:' + _pcsOnlyRows + ' · kgเท่านั้น:' + _kgOnlyRows + ' · ว่างเปล่า:' + _zeroRows + ')'
+    + '<br>platedPcs=' + platedPcs + ' platedKg=' + platedKg.toFixed(2)
+    + '<br>weightPerPc=' + (pm ? pm.weightPerPc : '(ไม่มี Part Master)')
+    + '</div>';
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
