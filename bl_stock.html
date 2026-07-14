@@ -620,7 +620,10 @@ async function loadWIP() {
           // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
           // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
 
-          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
+          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[], rows:[] };
+          // เก็บดิบไว้ทีละแถว (ไม่รวมทันที) — ไว้แปลง กก.→ชิ้น รายแถวตอนใช้งานจริง กัน "บวกรวมก่อนค่อยแปลง"
+          // ซึ่งพลาดกรณีบางแถวมี pcs จริงปนกับแถวที่กรอกแต่ กก. (ยอดรวมไม่เป็น 0 เลยข้ามการแปลงไปทั้งที่บางแถวควรแปลง)
+          wipMap[k].rows.push({ pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
           wipMap[k].pcs += Number(row.pcs||0);
           wipMap[k].kgs += Number(row.kg||0);
           wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + Number(row.pcs||0);
@@ -667,6 +670,29 @@ function getWip(partNo) {
     }
   }
   return wo || null;
+}
+
+// คำนวณยอดชุบจริง (ชิ้น) ให้ถูกต้องเสมอ — แปลง กก.→ชิ้น "ทีละแถว" ก่อนรวม ไม่ใช่รวมดิบก่อนแล้วค่อยแปลงทั้งก้อน
+// (เดิมแปลงทั้งก้อนแค่ตอนยอดรวม=0 เป๊ะ พลาดกรณีมีแถว pcs จริงปนกับแถวที่กรอกแต่ กก. ทำให้ยอดรวมน้อยกว่าความจริง)
+function getWipPlatedPcs(partNo) {
+  var wo = getWip(partNo);
+  if (!wo) return { pcs:0, kgs:0 };
+  var pm = pmLookup(partNo);
+  var wpp = pm && pm.weightPerPc ? Number(pm.weightPerPc) : 0;
+  if (!wo.rows || !wo.rows.length) {
+    // fallback สำหรับข้อมูลเก่าที่ยังไม่มี rows[] เก็บไว้ (เผื่อ wipMap มาจากแหล่งอื่น) — ใช้ตรรกะเดิม
+    var pcs = wo.pcs||0;
+    if (!pcs && (wo.kgs||0) > 0 && wpp > 0) pcs = ucKgToPcs(wo.kgs, wpp);
+    return { pcs: pcs, kgs: wo.kgs||0 };
+  }
+  var totalPcs = 0, totalKg = 0;
+  wo.rows.forEach(function(r){
+    totalKg += r.kg;
+    if (r.pcs > 0) { totalPcs += r.pcs; }
+    else if (r.kg > 0 && wpp > 0) { totalPcs += ucKgToPcs(r.kg, wpp); }
+    // ถ้าแถวนั้น pcs=0 และ kg=0 หรือแปลงไม่ได้ (ไม่มี weightPerPc) → ข้าม นับเป็น 0 สำหรับแถวนั้น (เห็นได้จาก pcs vs kg ไม่ตรงกันในหน้าจอ)
+  });
+  return { pcs: totalPcs, kgs: totalKg };
 }
 
 function buildMap() {
@@ -786,13 +812,10 @@ function renderStock() {
   // Summary
   var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
-    var wo=getWip(p.partNo)||{};
-    var pmw=pmLookup(p.partNo);
-    var platedPcs = wo.pcs||0;
-    if (!platedPcs && (wo.kgs||0) > 0 && pmw && pmw.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pmw.weightPerPc);
+    var wp = getWipPlatedPcs(p.partNo);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wpcs = Math.max(0, platedPcs   - (p.shipped||0));
-    var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+    var wpcs = Math.max(0, wp.pcs - (p.shipped||0));
+    var wkg  = Math.max(0, wp.kgs - (p.shippedKg||0));
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
     sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
@@ -831,12 +854,10 @@ function renderStock() {
 
   tbody.innerHTML = filtParts.map(function(p,i){
     var pm     = pmLookup(p.partNo);
-    var wo     = getWip(p.partNo)||{};
-    var platedPcs = wo.pcs||0;
-    if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+    var wp     = getWipPlatedPcs(p.partNo);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wip   = Math.max(0, platedPcs  - (p.shipped||0));
-    var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+    var wip   = Math.max(0, wp.pcs - (p.shipped||0));
+    var wipKg = Math.max(0, wp.kgs - (p.shippedKg||0));
 
     var remain   = Math.max(0, p.receive - p.delivery);
     var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
@@ -913,10 +934,9 @@ function buildDetail(p) {
   var k=norm(p.partNo);
   var pm=pmLookup(p.partNo); // Part Master data
   var wo=getWip(p.partNo)||{};
-  var platedPcs = wo.pcs||0;
-  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+  var wp=getWipPlatedPcs(p.partNo);
   // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
-  var wip = Math.max(0, platedPcs - (p.shipped||0));
+  var wip = Math.max(0, wp.pcs - (p.shipped||0));
   var remain=Math.max(0,p.receive-p.delivery);
 
   // Job master items ของ P/No นี้
@@ -1591,19 +1611,19 @@ function renderTraceCard(partNo){
   // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
   var wo      = getWip(partNo)||{};
   var s2Lines = wo.lines||{};
-  // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้ wo.pcs=0 ทั้งที่ wo.kgs มีค่าจริง ต้องแปลงผ่าน Part Master ก่อนใช้
-  var platedPcs = wo.pcs||0;
-  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) {
-    platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
-  }
+  // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้บางแถวไม่มี pcs — ต้องแปลงทีละแถวก่อนรวม ไม่ใช่รวมดิบก่อนแล้วค่อยแปลงทั้งก้อน
+  // (ถ้ามีบางแถวมี pcs จริงปนกับแถวที่กรอกแต่ กก. ยอดรวมจะไม่เป็น 0 เป๊ะ ทำให้ข้ามการแปลงกก.ของแถวอื่นไปเงียบๆ)
+  var wp = getWipPlatedPcs(partNo);
+  var platedPcs = wp.pcs;
+  var platedKg  = wp.kgs;
 
   // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
   var s1Rem   = Math.max(0, s1In   - platedPcs);
-  var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
+  var s1RemKg = Math.max(0, s1InKg - platedKg);
 
   // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
   var s2Pcs = Math.max(0, platedPcs - s4Out);
-  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
+  var s2Kg  = Math.max(0, platedKg  - s4OutKg);
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
