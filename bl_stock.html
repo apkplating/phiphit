@@ -663,18 +663,46 @@ function jobBill(job)  { return job.bill || job.id || ''; }
 // คืนค่า net WIP = wipMap - delivery ที่จ่ายออกแล้ว
 function getWip(partNo) {
   var k = norm(partNo);
-  var wo = wipMap[k];
-  if (!wo) {
+  if (!k) return null;
+
+  // หา "ทุก key" ใน wipMap ที่น่าจะหมายถึงชิ้นงานเดียวกัน แล้วรวมข้อมูลเข้าด้วยกัน แทนที่จะคืนแค่ key แรกที่เจอ
+  // สาเหตุที่ต้องทำแบบนี้: พบจริงว่าไฟล์ v4/5/6 บันทึก P/No ไม่สม่ำเสมอ บางรอบบันทึกแค่ "TYT2-302"
+  // บางรอบบันทึก "TYT2-302 CAP INNER" (ต่อชื่อชิ้นงานเข้าไปด้วย) ทำให้ normalize ได้คนละ key กัน
+  // ("TYT2302" vs "TYT2302CAPINNER") กลายเป็นข้อมูลแยกกันอยู่ 2 ก้อนใน wipMap ทั้งที่จริงคือชิ้นงานเดียวกัน
+  // เดิมโค้ดคืนแค่ก้อนแรกที่เจอ (exact match) ทำให้อีกก้อนหายไปเงียบๆ จากการคำนวณเลย
+  var matchKeys = [];
+  Object.keys(wipMap).forEach(function(wk){
+    if (wk === k) { matchKeys.push(wk); return; }
+    // prefix match: key หนึ่งขึ้นต้นด้วยอีก key หนึ่งเป๊ะ (กันจับคู่ผิดของชิ้นงานที่ชื่อคล้ายกันแต่ไม่ใช่ตัวเดียวกัน
+    // เช่น "TYT2302" ไม่ควรจับคู่กับ "TYT2303" เพราะไม่ใช่ prefix ของกันและกัน)
+    if (k.length >= 5 && (wk.indexOf(k) === 0 || k.indexOf(wk) === 0)) matchKeys.push(wk);
+  });
+
+  if (!matchKeys.length) {
+    // ยังไม่เจอเลย ลองหาผ่านชื่อใน Part Master เป็นทางสำรองสุดท้าย
     var pm = pmLookup(partNo);
-    if (pm && pm.name) { var kn = norm(pm.name); if (wipMap[kn]) wo = wipMap[kn]; }
-  }
-  if (!wo) {
-    var keys = Object.keys(wipMap);
-    for (var i=0; i<keys.length; i++) {
-      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { wo = wipMap[keys[i]]; break; }
+    if (pm && pm.name) {
+      var kn = norm(pm.name);
+      Object.keys(wipMap).forEach(function(wk){
+        if (wk === kn || (kn.length >= 5 && (wk.indexOf(kn) === 0 || kn.indexOf(wk) === 0))) matchKeys.push(wk);
+      });
     }
   }
-  return wo || null;
+
+  if (!matchKeys.length) return null;
+  if (matchKeys.length === 1) return wipMap[matchKeys[0]];
+
+  // รวมหลาย key เข้าด้วยกันเป็นก้อนเดียว (ไม่แก้ wipMap ต้นฉบับ สร้างเป็น object ใหม่ทุกครั้งที่เรียก)
+  var merged = { partName: partNo, pcs:0, kgs:0, lines:{}, dates:[], rows:[] };
+  matchKeys.forEach(function(wk){
+    var wo = wipMap[wk];
+    merged.pcs += wo.pcs||0;
+    merged.kgs += wo.kgs||0;
+    (wo.rows||[]).forEach(function(r){ merged.rows.push(r); });
+    Object.keys(wo.lines||{}).forEach(function(ln){ merged.lines[ln] = (merged.lines[ln]||0) + wo.lines[ln]; });
+    (wo.dates||[]).forEach(function(d){ if (merged.dates.indexOf(d) < 0) merged.dates.push(d); });
+  });
+  return merged;
 }
 
 // คำนวณยอดชุบจริง (ชิ้น) ให้ถูกต้องเสมอ — แปลง กก.→ชิ้น "ทีละแถว" ก่อนรวม ไม่ใช่รวมดิบก่อนแล้วค่อยแปลงทั้งก้อน
@@ -1472,7 +1500,7 @@ function setSyncing(loading,ok,errMsg){
 }
 
 // เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
-var BUILD_VERSION = 'bl-stock-2026-07-14-rowconvert-2';
+var BUILD_VERSION = 'bl-stock-2026-07-14-mergekeys-3';
 
 function updateVerifyBar(){
   var el = document.getElementById('verifyBar');
