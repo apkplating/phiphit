@@ -1750,6 +1750,16 @@ function renderTraceCard(partNo){
     + '<br>platedPcs=' + platedPcs + ' platedKg=' + platedKg.toFixed(2)
     + '<br>weightPerPc=' + (pm ? pm.weightPerPc : '(ไม่มี Part Master)')
     + '</div>';
+  // 🔬 เปรียบเทียบกับผลรวมจาก wipByJob (ต่อบิล) ของทุกบิลใน P/No นี้ — ควรเท่ากับ wipMap ถ้าไม่มีบั๊ก
+  var _jobSumKg = 0, _jobSumRows = 0;
+  bills.forEach(function(j){
+    (wipByJob[j.id]||[]).forEach(function(ev){ _jobSumKg += ev.kg; _jobSumRows++; });
+  });
+  s2CombinedDetail += '<div style="margin-top:2px;padding:5px;background:#eff6ff;border:1px dashed #60a5fa;border-radius:4px;font-size:8px;color:#1e3a8a;font-family:monospace;text-align:left;">'
+    + '🔬 wipByJob รวมทุกบิล (' + bills.length + ' บิล): ' + _jobSumRows + ' แถว, kg รวม=' + _jobSumKg.toFixed(2)
+    + '<br>เทียบ wipMap: ' + _rowsRaw.length + ' แถว, kg รวม=' + platedKg.toFixed(2)
+    + ' (ต่าง ' + (_jobSumKg-platedKg).toFixed(2) + ' kg)'
+    + '</div>';
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
