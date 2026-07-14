@@ -615,11 +615,6 @@ async function loadWIP() {
           if (row.jobId && row.jobId !== 'NOBILL') {
             if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
             wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
-            // 🔬 DIAGNOSTIC ชั่วคราว — เก็บว่าแต่ละ jobId เจอ partName ดิบ + key ที่ normalize แล้วอะไรบ้าง
-            // ไว้เทียบว่า wipMap (key ตาม partName) กับ wipByJob (key ตาม jobId) เห็นข้อมูลตรงกันไหม
-            if (!window._jobIdRawParts) window._jobIdRawParts = {};
-            if (!window._jobIdRawParts[row.jobId]) window._jobIdRawParts[row.jobId] = {};
-            window._jobIdRawParts[row.jobId][pn + ' → ' + k] = (window._jobIdRawParts[row.jobId][pn + ' → ' + k] || 0) + 1;
           }
 
           // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
@@ -724,6 +719,24 @@ function getWipPlatedPcs(partNo) {
     if (r.pcs > 0) { totalPcs += r.pcs; }
     else if (r.kg > 0 && wpp > 0) { totalPcs += ucKgToPcs(r.kg, wpp); }
     // ถ้าแถวนั้น pcs=0 และ kg=0 หรือแปลงไม่ได้ (ไม่มี weightPerPc) → ข้าม นับเป็น 0 สำหรับแถวนั้น (เห็นได้จาก pcs vs kg ไม่ตรงกันในหน้าจอ)
+  });
+  return { pcs: totalPcs, kgs: totalKg };
+}
+
+// คำนวณยอดชุบเฉพาะที่ "ผูกบิลไว้แล้วเท่านั้น" (ไม่รวมรอบชุบที่ไม่มีบิล/NOBILL) — ใช้ wipByJob (คีย์ตาม jobId)
+// แทน getWip()/wipMap (คีย์ตาม P/No ล้วนๆ ซึ่งรวมรอบที่ไม่มีบิลด้วย) ตามที่พิพิธต้องการเห็นตัวเลขที่ตามรอยได้ครบก่อน
+function getPlatedPcsFromBills(partNo) {
+  var k = norm(partNo);
+  var pm = pmLookup(partNo);
+  var wpp = pm && pm.weightPerPc ? Number(pm.weightPerPc) : 0;
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  var totalPcs = 0, totalKg = 0;
+  bills.forEach(function(j){
+    (wipByJob[j.id]||[]).forEach(function(ev){
+      totalKg += ev.kg;
+      if (ev.pcs > 0) { totalPcs += ev.pcs; }
+      else if (ev.kg > 0 && wpp > 0) { totalPcs += ucKgToPcs(ev.kg, wpp); }
+    });
   });
   return { pcs: totalPcs, kgs: totalKg };
 }
@@ -845,7 +858,7 @@ function renderStock() {
   // Summary
   var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
   parts.forEach(function(p){
-    var wp = getWipPlatedPcs(p.partNo);
+    var wp = getPlatedPcsFromBills(p.partNo);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
     var wpcs = Math.max(0, wp.pcs - (p.shipped||0));
     var wkg  = Math.max(0, wp.kgs - (p.shippedKg||0));
@@ -887,7 +900,7 @@ function renderStock() {
 
   tbody.innerHTML = filtParts.map(function(p,i){
     var pm     = pmLookup(p.partNo);
-    var wp     = getWipPlatedPcs(p.partNo);
+    var wp     = getPlatedPcsFromBills(p.partNo);
     // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
     var wip   = Math.max(0, wp.pcs - (p.shipped||0));
     var wipKg = Math.max(0, wp.kgs - (p.shippedKg||0));
@@ -967,7 +980,7 @@ function buildDetail(p) {
   var k=norm(p.partNo);
   var pm=pmLookup(p.partNo); // Part Master data
   var wo=getWip(p.partNo)||{};
-  var wp=getWipPlatedPcs(p.partNo);
+  var wp=getPlatedPcsFromBills(p.partNo);
   // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
   var wip = Math.max(0, wp.pcs - (p.shipped||0));
   var remain=Math.max(0,p.receive-p.delivery);
@@ -1500,7 +1513,7 @@ function setSyncing(loading,ok,errMsg){
 }
 
 // เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
-var BUILD_VERSION = 'bl-stock-2026-07-14-mergekeys-3';
+var BUILD_VERSION = 'bl-stock-2026-07-14-billsonly-4';
 
 function updateVerifyBar(){
   var el = document.getElementById('verifyBar');
@@ -1646,7 +1659,7 @@ function renderTraceCard(partNo){
   var s2Lines = wo.lines||{};
   // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้บางแถวไม่มี pcs — ต้องแปลงทีละแถวก่อนรวม ไม่ใช่รวมดิบก่อนแล้วค่อยแปลงทั้งก้อน
   // (ถ้ามีบางแถวมี pcs จริงปนกับแถวที่กรอกแต่ กก. ยอดรวมจะไม่เป็น 0 เป๊ะ ทำให้ข้ามการแปลงกก.ของแถวอื่นไปเงียบๆ)
-  var wp = getWipPlatedPcs(partNo);
+  var wp = getPlatedPcsFromBills(partNo);
   var platedPcs = wp.pcs;
   var platedKg  = wp.kgs;
 
@@ -1773,47 +1786,6 @@ function renderTraceCard(partNo){
   var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
-  // 🔬 DIAGNOSTIC ชั่วคราว — โชว์รายละเอียดแถวดิบที่ใช้คำนวณ platedPcs ให้เห็นตรงๆ
-  var _rowsRaw = wo.rows || [];
-  var _pcsOnlyRows = _rowsRaw.filter(function(r){ return r.pcs>0; }).length;
-  var _kgOnlyRows  = _rowsRaw.filter(function(r){ return r.pcs===0 && r.kg>0; }).length;
-  var _zeroRows    = _rowsRaw.filter(function(r){ return r.pcs===0 && r.kg===0; }).length;
-  s2CombinedDetail += '<div style="margin-top:4px;padding:5px;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;font-size:8px;color:#78350f;font-family:monospace;text-align:left;">'
-    + '🔬 rows=' + _rowsRaw.length + ' (pcs>0:' + _pcsOnlyRows + ' · kgเท่านั้น:' + _kgOnlyRows + ' · ว่างเปล่า:' + _zeroRows + ')'
-    + '<br>platedPcs=' + platedPcs + ' platedKg=' + platedKg.toFixed(2)
-    + '<br>weightPerPc=' + (pm ? pm.weightPerPc : '(ไม่มี Part Master)')
-    + '</div>';
-  // 🔬 เปรียบเทียบกับผลรวมจาก wipByJob (ต่อบิล) ของทุกบิลใน P/No นี้ — ควรเท่ากับ wipMap ถ้าไม่มีบั๊ก
-  var _jobSumKg = 0, _jobSumRows = 0;
-  bills.forEach(function(j){
-    (wipByJob[j.id]||[]).forEach(function(ev){ _jobSumKg += ev.kg; _jobSumRows++; });
-  });
-  s2CombinedDetail += '<div style="margin-top:2px;padding:5px;background:#eff6ff;border:1px dashed #60a5fa;border-radius:4px;font-size:8px;color:#1e3a8a;font-family:monospace;text-align:left;">'
-    + '🔬 wipByJob รวมทุกบิล (' + bills.length + ' บิล): ' + _jobSumRows + ' แถว, kg รวม=' + _jobSumKg.toFixed(2)
-    + '<br>เทียบ wipMap: ' + _rowsRaw.length + ' แถว, kg รวม=' + platedKg.toFixed(2)
-    + ' (ต่าง ' + (_jobSumKg-platedKg).toFixed(2) + ' kg)'
-    + '</div>';
-  // 🔬 เช็คว่าแต่ละบิลเจอ partName ดิบว่าอะไรบ้าง (เผื่อสะกดไม่ตรงกับ "TYT2-302" ทำให้ normalize ไปคนละ key ใน wipMap)
-  var _partNameVariants = {};
-  bills.forEach(function(j){
-    var raw = (window._jobIdRawParts && window._jobIdRawParts[j.id]) || {};
-    Object.keys(raw).forEach(function(variant){ _partNameVariants[variant] = (_partNameVariants[variant]||0) + raw[variant]; });
-  });
-  var _variantLines = Object.keys(_partNameVariants).map(function(v){ return v + ' (' + _partNameVariants[v] + ' แถว)'; }).join('<br>');
-  s2CombinedDetail += '<div style="margin-top:2px;padding:5px;background:#f0fdf4;border:1px dashed #4ade80;border-radius:4px;font-size:8px;color:#14532d;font-family:monospace;text-align:left;">'
-    + '🔬 partName ดิบที่เจอในทุกบิล (รูปแบบ "ดิบ → keyที่ normalize แล้ว"):<br>' + (_variantLines || '(ไม่มีข้อมูล)')
-    + '</div>';
-  // 🔬 เช็คว่า getWip() ไปรวม key ไหนใน wipMap มาบ้างจริงๆ (เผื่อรวมกว้างเกินไปไปโดนชิ้นงานอื่นที่สะกดคล้ายกัน)
-  var _mergedKeysInfo = [];
-  Object.keys(wipMap).forEach(function(wk){
-    if (wk === k || (k.length >= 5 && (wk.indexOf(k) === 0 || k.indexOf(wk) === 0))) {
-      var wo2 = wipMap[wk];
-      _mergedKeysInfo.push(wk + ' (partName ดิบ="' + esc(wo2.partName) + '", ' + (wo2.rows||[]).length + ' แถว, ' + (wo2.kgs||0).toFixed(2) + ' kg)');
-    }
-  });
-  s2CombinedDetail += '<div style="margin-top:2px;padding:5px;background:#fdf4ff;border:1px dashed #c084fc;border-radius:4px;font-size:8px;color:#581c87;font-family:monospace;text-align:left;">'
-    + '🔬 key ทั้งหมดที่ getWip("' + esc(partNo) + '") รวมเข้าด้วยกันจริง (key ค้นหา="' + k + '"):<br>' + _mergedKeysInfo.join('<br>')
-    + '</div>';
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
