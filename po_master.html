@@ -1489,14 +1489,17 @@ function renderSummary(){
 
 // ── สรุปยอดซื้อแยกตามผู้ขาย (เฉพาะปีที่เลือก, ไม่รวมยกเลิก) ──
 function renderVendorBreakdown(year){
+  // byVendor[vendor] = { months: [0..11] ยอดรวมต่อเดือน, total: ยอดรวมทั้งปี, count: จำนวน PO ทั้งปี }
   var byVendor = {};
   poList.forEach(function(po){
     if (!po.date || po.date.slice(0,4) !== year) return;
     if (po.status === 'cancelled') return;
     var key = po.vendorName || '(ไม่ระบุผู้ขาย)';
-    if (!byVendor[key]) byVendor[key] = {count:0,total:0};
-    byVendor[key].count += 1;
+    if (!byVendor[key]) byVendor[key] = { months: new Array(12).fill(0), total:0, count:0 };
+    var m = parseInt(po.date.slice(5,7),10)-1;
+    byVendor[key].months[m] += (po.grandTotal||0);
     byVendor[key].total += (po.grandTotal||0);
+    byVendor[key].count += 1;
   });
   var vendorNames = Object.keys(byVendor);
   if (vendorNames.length === 0) {
@@ -1504,15 +1507,26 @@ function renderVendorBreakdown(year){
       '<div class="empty-note">ยังไม่มีข้อมูล PO ในปีนี้</div>';
   }
   vendorNames.sort(function(a,b){ return byVendor[b].total - byVendor[a].total; });
-  var grandTotal = 0, grandCount = 0;
+
+  var monthTotals = new Array(12).fill(0);
+  var grandTotal = 0;
   var rows = vendorNames.map(function(v){
-    grandTotal += byVendor[v].total;
-    grandCount += byVendor[v].count;
-    return '<tr><td>'+esc(v)+'</td><td class="num">'+byVendor[v].count+'</td><td class="num">'+fmtMoney(byVendor[v].total)+'</td></tr>';
+    var d = byVendor[v];
+    grandTotal += d.total;
+    var monthCells = d.months.map(function(amt,i){
+      monthTotals[i] += amt;
+      return '<td class="num">'+(amt>0?fmtMoney(amt):'–')+'</td>';
+    }).join('');
+    return '<tr><td>'+esc(v)+'</td>'+monthCells+'<td class="num" style="font-weight:700;">'+fmtMoney(d.total)+'</td></tr>';
   }).join('');
-  rows += '<tr class="grand"><td>รวมทั้งหมด</td><td class="num">'+grandCount+'</td><td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
+  var monthTotalCells = monthTotals.map(function(amt){ return '<td class="num">'+(amt>0?fmtMoney(amt):'–')+'</td>'; }).join('');
+  rows += '<tr class="grand"><td>รวมทั้งหมด</td>'+monthTotalCells+'<td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
+
+  var headerCells = THAI_MONTHS.map(function(m){ return '<th class="num">'+m+'</th>'; }).join('');
   return '<div class="card-label" style="margin-top:4px;">ยอดสั่งซื้อแยกตามผู้ขาย — ปี '+(parseInt(year)+543)+'</div>' +
-    '<table class="sum-table"><thead><tr><th>ผู้ขาย</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    '<div class="tbl-wrap" style="overflow-x:auto;">' +
+    '<table class="sum-table" style="min-width:900px;"><thead><tr><th>ผู้ขาย</th>'+headerCells+'<th class="num">รวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+    '</div>';
 }
 
 // ══════════════════════════════════════
