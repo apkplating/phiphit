@@ -1000,6 +1000,18 @@ async function fbSave() {
       }
     } catch(e) {}
   }
+  // เดียวกันนี้กับ "ทะเบียนราคา" (priceList) — เจอเคสราคาหายหลังเปิดหน้าใหม่ สาเหตุคือ fbSave() รอบก่อนหน้า
+  // ล้มเหลวเงียบๆ (ไม่ await ผลลัพธ์) แล้ว fbLoad() รอบถัดไปดึงข้อมูลเก่าจากคลาวด์มาทับ priceList ในเครื่องที่เพิ่งแก้ไป
+  if (priceList.length === 0) {
+    try {
+      var backupPL = JSON.parse(localStorage.getItem('job_price_list') || '[]');
+      if (backupPL.length > 0) {
+        console.warn('[Job Master] fbSave() ยกเลิก — priceList ว่างเปล่าผิดปกติ ทั้งที่ backup ในเครื่องมี ' + backupPL.length + ' รายการ (กันเขียนทับข้อมูลจริงหาย)');
+        setSyncErr();
+        return false;
+      }
+    } catch(e) {}
+  }
   try {
     var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
@@ -1034,7 +1046,12 @@ async function fbLoad() {
       }
       if (Array.isArray(data.customers)) customers = data.customers;
       if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
+      // รองรับกรณี Firebase เก็บ priceList เป็น object คีย์ตัวเลขแทน array ปกติ (เหมือน invoices)
       if (Array.isArray(data.priceList)) priceList = data.priceList;
+      else if (data.priceList && typeof data.priceList === 'object') {
+        var plArr = Object.values(data.priceList);
+        if (plArr.length) priceList = plArr;
+      }
       if (Array.isArray(data.hiddenCustomers)) hiddenCustomers = data.hiddenCustomers;
       saveLocal();
       setSyncOk();
@@ -1688,7 +1705,7 @@ function resetPriceForm() {
   document.getElementById('plNote').value = '';
 }
 
-function savePriceEntry() {
+async function savePriceEntry() {
   var id        = document.getElementById('plEditId').value;
   var partName  = document.getElementById('plPartName').value.trim();
   var customer  = document.getElementById('plCustomer').value.trim();
@@ -1716,11 +1733,25 @@ function savePriceEntry() {
     priceList.unshift({ id:'PL'+Date.now(), partName:partName, customer:customer, price:price, priceUnit:priceUnit, note:note });
   }
 
-  saveLocal(); fbSave();
-  showToast('pl','💾 บันทึกราคาแล้ว','ok');
+  saveLocal();
   resetPriceForm();
   renderPriceList();
   renderPriceFormHints();
+
+  // สำคัญ: ต้อง await ผลลัพธ์จริงของ fbSave() ก่อนบอกว่า "บันทึกแล้ว" — ถ้าไม่รอ อาจขึ้นข้อความสำเร็จทั้งที่
+  // ยังไม่ได้ขึ้นคลาวด์จริง แล้วรอบ fbLoad() ถัดไปจะดึงข้อมูลเก่ามาทับราคาที่เพิ่งบันทึกจนหายไปเงียบๆ
+  showToast('pl','💾 กำลังบันทึกราคา...','ok');
+  var ok = await fbSave();
+  if (!ok) {
+    // ลองซ้ำอีกครั้งหลังหน่วง 1.5 วิ เผื่อเป็นปัญหาเน็ตชั่วคราว/ยังซิงค์รอบแรกไม่เสร็จ
+    await new Promise(function(r){ setTimeout(r, 1500); });
+    ok = await fbSave();
+  }
+  if (ok) {
+    showToast('pl','✅ บันทึกราคาขึ้นคลาวด์แล้ว','ok');
+  } else {
+    showToast('pl','⚠️ บันทึกในเครื่องแล้ว แต่ยังซิงค์ขึ้นคลาวด์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองกด Sync อีกครั้ง (ไม่งั้นราคาอาจหายเมื่อเปิดเครื่องอื่น)','err');
+  }
 }
 
 function editPriceEntry(id) {
@@ -1735,14 +1766,20 @@ function editPriceEntry(id) {
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-function deletePriceEntry(id) {
+async function deletePriceEntry(id) {
   var p = priceList.find(function(x){ return x.id===id; });
   if (!p) return;
   if (!confirm('ลบราคา '+p.partName+' / '+p.customer+'?')) return;
   priceList = priceList.filter(function(x){ return x.id!==id; });
-  saveLocal(); fbSave();
-  showToast('pl','🗑️ ลบแล้ว','ok');
+  saveLocal();
   renderPriceList();
+  showToast('pl','🗑️ กำลังลบ...','ok');
+  var ok = await fbSave();
+  if (!ok) {
+    await new Promise(function(r){ setTimeout(r, 1500); });
+    ok = await fbSave();
+  }
+  showToast('pl', ok ? '✅ ลบและซิงค์ขึ้นคลาวด์แล้ว' : '⚠️ ลบในเครื่องแล้ว แต่ยังซิงค์ขึ้นคลาวด์ไม่สำเร็จ — ลองกด Sync อีกครั้ง', ok?'ok':'err');
 }
 
 function renderPriceList() {
