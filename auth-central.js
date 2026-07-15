@@ -108,7 +108,7 @@
       ]
     },
     {
-      key: 'chem_master', label: 'Chem Master', group: 'สำนักงาน & ทะเบียนกลาง',
+      key: 'chem_master', label: 'Chem Master', group: 'สำนักงาน & ทะเบียนกลาง', editInApprovable: true,
       tabs: [
         { id: 'stock', label: 'Stock Card' },
         { id: 'in',    label: 'รับเข้า' },
@@ -234,6 +234,11 @@
   // ถ้าไม่มีคีย์นี้ (undefined) = อนุมัติไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งอนุมัติได้เสมอ
   var MANUALDOSE_SUFFIX = '_manualdose';
 
+  // คีย์ boolean permission เสริม — สิทธิ์ "แก้ไขรายการรับเข้า" เฉพาะระบบที่ editInApprovable:true (ตอนนี้คือ chem_master)
+  // เก็บเป็น permissions[key + EDITIN_SUFFIX] = true — แยกอิสระจากสิทธิ์อื่นๆ ทำงานแบบเดียวกับ NOBILL_SUFFIX/MANUALDOSE_SUFFIX
+  // ถ้าไม่มีคีย์นี้ (undefined) = แก้ไขไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งแก้ไขได้เสมอ
+  var EDITIN_SUFFIX = '_editin';
+
   function systemDef(systemKey) {
     for (var i = 0; i < SYSTEM_LIST.length; i++) {
       if (SYSTEM_LIST[i].key === systemKey) return SYSTEM_LIST[i];
@@ -272,6 +277,15 @@
   function canApproveManualDose(systemKey, role, perms) {
     if (role === 'admin') return true;
     return !!(perms && perms[systemKey + MANUALDOSE_SUFFIX] === true);
+  }
+
+  // คืนค่า boolean ว่าสิทธิ์นี้แก้ไขรายการรับเข้าของระบบนี้ได้หรือไม่
+  //   - role === 'admin'                        → true เสมอ (แอดมินแก้ไขได้อยู่แล้วในตัว)
+  //   - perms[{systemKey}_editin] === true       → true (ติ๊กสิทธิ์เพิ่มให้จากหน้า auth_admin)
+  //   - อื่นๆ (ไม่มีคีย์นี้ หรือ role ต่ำกว่า)      → false
+  function canApproveEditIn(systemKey, role, perms) {
+    if (role === 'admin') return true;
+    return !!(perms && perms[systemKey + EDITIN_SUFFIX] === true);
   }
 
   // ── ดึงข้อมูลผู้ใช้ทั้งหมดจาก Firebase ──
@@ -335,6 +349,7 @@
         tabs: resolveTabs(systemKey, role, perms),
         nobillApprove: canApproveNobill(systemKey, role, perms),
         manualDoseApprove: canApproveManualDose(systemKey, role, perms),
+        editInApprove: canApproveEditIn(systemKey, role, perms),
         user: { pin: pin, name: user.name || '', permissions: perms, signature: user.signature || null }
       };
     });
@@ -359,13 +374,15 @@
     TABS_SUFFIX: TABS_SUFFIX,
     NOBILL_SUFFIX: NOBILL_SUFFIX,
     MANUALDOSE_SUFFIX: MANUALDOSE_SUFFIX,
+    EDITIN_SUFFIX: EDITIN_SUFFIX,
     fetchUsers: fetchUsers,
     saveUsers: saveUsers,
     login: login,
     isAuthAdmin: isAuthAdmin,
     resolveTabs: resolveTabs,
     canApproveNobill: canApproveNobill,
-    canApproveManualDose: canApproveManualDose
+    canApproveManualDose: canApproveManualDose,
+    canApproveEditIn: canApproveEditIn
   };
 
 })(window);

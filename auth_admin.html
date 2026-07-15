@@ -405,6 +405,7 @@ function renderTable() {
         tabsButtonHtml(pin, sys.key, role, perms) +
         nobillButtonHtml(pin, sys.key, role, perms) +
         manualDoseButtonHtml(pin, sys.key, role, perms) +
+        editInButtonHtml(pin, sys.key, role, perms) +
         '</div></td>';
     });
 
@@ -541,6 +542,25 @@ function manualDoseButtonHtml(pin, sysKey, role, perms) {
   '</label>';
 }
 
+// ══════════════════════════════════════
+//  สิทธิ์ "แก้ไขรายการรับเข้า" — เฉพาะระบบที่ editInApprovable:true (ตอนนี้คือ Chem Master)
+// ══════════════════════════════════════
+// ทำงานแบบเดียวกับ nobillButtonHtml/manualDoseButtonHtml ทุกประการ แต่เป็นสิทธิ์แยกอิสระของตัวเอง
+function editInButtonHtml(pin, sysKey, role, perms) {
+  var def = systemDef(sysKey);
+  if (!def || !def.editInApprovable) return '';
+  if (role === 'admin') {
+    return '<button class="tabs-btn" disabled title="แอดมินแก้ไขรับเข้าได้อยู่แล้วในตัว">✅ แก้ไขรับเข้าได้</button>';
+  }
+  if (role !== 'operator') return '';
+  var key = sysKey + CentralAuth.EDITIN_SUFFIX;
+  var can = perms[key] === true;
+  return '<label class="tabs-btn' + (can ? ' nobill-on' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;">' +
+    '<input type="checkbox" style="margin:0;" ' + (can?'checked':'') + ' onchange="onEditInToggle(\'' + pin + '\',\'' + sysKey + '\',this.checked)">' +
+    (can ? '✅ แก้ไขรับเข้า' : 'แก้ไขรับเข้า') +
+  '</label>';
+}
+
 var tabsModalState = null; // { pin, sysKey }
 
 function openTabsModal(pin, sysKey) {
@@ -648,6 +668,17 @@ function onManualDoseToggle(pin, sysKey, checked) {
   else delete users[pin].permissions[key];
   renderTable();
   persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์อนุมัติเติมมือ — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
+}
+
+// ── สิทธิ์ "แก้ไขรายการรับเข้า" ต่อระบบ (เก็บเป็น permissions[sysKey+'_editin'] = true/false) ──
+function onEditInToggle(pin, sysKey, checked) {
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  var key = sysKey + CentralAuth.EDITIN_SUFFIX;
+  if (checked) users[pin].permissions[key] = true;
+  else delete users[pin].permissions[key];
+  renderTable();
+  persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์แก้ไขรับเข้า — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
 }
 
 function labelForSystem(sysKey) {

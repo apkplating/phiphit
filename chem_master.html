@@ -174,7 +174,7 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
       <table class="sc-table">
         <thead>
           <tr>
-            <th colspan="4" class="in-col" style="border-right:2px solid rgba(255,255,255,0.2);">ส่วนจัดซื้อ (รับเข้า)</th>
+            <th colspan="5" class="in-col" style="border-right:2px solid rgba(255,255,255,0.2);">ส่วนจัดซื้อ (รับเข้า)</th>
             <th colspan="4" class="out-col" style="border-right:2px solid rgba(255,255,255,0.2);">ส่วนผลิต (เบิกใช้)</th>
             <th colspan="2" class="bal-col">คงเหลือ</th>
           </tr>
@@ -182,7 +182,8 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
             <th class="in-col td-l" style="text-align:left;">ว.ด.ป.</th>
             <th class="in-col td-l" style="text-align:left;">เลขที่ใบรับ</th>
             <th class="in-col">รับเข้า (ลิตร)</th>
-            <th class="in-col" style="border-right:2px solid rgba(255,255,255,0.15);">รับเข้า (ถัง)</th>
+            <th class="in-col">รับเข้า (ถัง)</th>
+            <th class="in-col" style="border-right:2px solid rgba(255,255,255,0.15);">จัดการ</th>
             <th class="out-col td-l" style="text-align:left;">ว.ด.ป.</th>
             <th class="out-col">ไลน์</th>
             <th class="out-col">เบิก (ลิตร)</th>
@@ -192,7 +193,7 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
           </tr>
         </thead>
         <tbody id="stockBody">
-          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
+          <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
         </tbody>
       </table>
     </div>
@@ -385,6 +386,59 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
   </div>
 </div>
 
+<!-- ══ Modal: แก้ไขรายการรับเข้า ══ -->
+<div id="editInModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;padding:18px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;color:var(--navy);">✏️ แก้ไขรายการรับเข้า</div>
+      <button onclick="closeEditInModal()" style="background:none;border:none;font-size:18px;color:var(--text-muted);cursor:pointer;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">วันที่รับ</label>
+        <input type="date" id="editInDate" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">เลขที่ใบรับ</label>
+        <input type="text" id="editInBill" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">รับเข้า (ลิตร)</label>
+        <input type="number" step="0.01" min="0" id="editInLiter" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">รับเข้า (ถัง)</label>
+        <input type="number" step="1" min="0" id="editInBucket" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">ราคา/หน่วย</label>
+        <input type="number" step="0.01" min="0" id="editInPrice" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-muted);">ผู้รับของ</label>
+        <input type="text" id="editInReceiver" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:10px;color:var(--text-muted);">หมายเหตุ</label>
+        <input type="text" id="editInNote" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:10px;color:var(--text-muted);">ผล QC</label>
+        <select id="editInQCResult" style="width:100%;padding:8px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;box-sizing:border-box;">
+          <option value="">— ไม่ระบุ —</option>
+          <option value="pass">✅ ผ่าน</option>
+          <option value="fail">❌ ไม่ผ่าน</option>
+        </select>
+      </div>
+    </div>
+    <div id="editInMsg" style="display:none;margin-top:10px;padding:8px;border-radius:8px;font-size:12px;text-align:center;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+      <button onclick="saveEditInRecord()" style="padding:11px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">💾 บันทึกการแก้ไข</button>
+      <button onclick="closeEditInModal()" style="padding:11px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
@@ -396,6 +450,8 @@ var SYSTEM_KEY = 'chem_master';
 var TAB_IDS = ['stock','in','items'];
 var currentRole = '';
 var currentTabs = null;
+var currentUserName = ''; // ชื่อผู้ล็อกอิน — ใช้แสดงในประวัติการแก้ไข
+var currentEditInApprove = false; // สิทธิ์ "แก้ไขรายการรับเข้า" — ตั้งจากหน้า auth_admin แยกจาก role หลัก (admin ได้ true เสมอ)
 var FIREBASE_CONFIG = {
   apiKey:"AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:"platingapp-92e21-c1346.firebaseapp.com",
@@ -433,6 +489,8 @@ function checkPin() {
     }
     currentRole = result.role;
     currentTabs = result.tabs;
+    currentUserName = (result.user && result.user.name) || '';
+    currentEditInApprove = !!result.editInApprove;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
     try { sessionStorage.setItem('chem_master_pin', pin); } catch(e){}
@@ -444,7 +502,7 @@ function checkPin() {
 function logoutCM() {
   try { sessionStorage.removeItem('chem_master_pin'); } catch(e){}
   if (_pollTimer) clearInterval(_pollTimer);
-  currentRole = ''; currentTabs = null;
+  currentRole = ''; currentTabs = null; currentUserName = ''; currentEditInApprove = false;
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('pinInput').value = '';
@@ -645,7 +703,7 @@ function renderStockCard() {
 
   if (!itemId) {
     summaryEl.style.display = 'none';
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
     document.getElementById('stockItemName').textContent = '';
     return;
   }
@@ -671,7 +729,7 @@ function renderStockCard() {
   summaryEl.style.display = 'block';
 
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีรายการ</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีรายการ</td></tr>';
     return;
   }
 
@@ -717,13 +775,19 @@ function renderStockCard() {
         ].filter(Boolean).join('') : '—') +
       '</td>' +
       '<td style="font-weight:700;color:var(--green);">'+(ir?ir.liter.toFixed(2):'')+'</td>' +
-      '<td style="border-right:2px solid var(--border);">'+(ir?(ir.bucket||'—'):'')+'</td>' +
+      '<td>'+(ir?(ir.bucket||'—'):'')+'</td>' +
+      '<td style="border-right:2px solid var(--border);white-space:nowrap;">' +
+        (ir ? (
+          '<button onclick="openEditInRecord(\''+ir.id+'\')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
+          '<button onclick="deleteRecord(\''+ir.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;">✕</button>'
+        ) : '') +
+      '</td>' +
       '<td class="td-l" style="color:var(--text-mid);font-size:10px;">'+(outDate||'')+'</td>' +
       '<td>'+lineLabel+'</td>' +
       '<td style="font-weight:700;color:var(--orange);">'+(or?or.liter.toFixed(2):'')+'</td>' +
       '<td style="font-size:10px;color:var(--text-muted);border-right:2px solid var(--border);">'+(or?(or.note||'—'):'')+'</td>' +
       '<td class="'+balClass+'">'+balStr+'</td>' +
-      '<td><button onclick="deleteRecord(\''+( or?or.id:(ir?ir.id:'') )+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;visibility:'+(ir||or?'visible':'hidden')+'">✕</button></td>' +
+      '<td><button onclick="deleteRecord(\''+(or?or.id:'')+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;visibility:'+(or?'visible':'hidden')+'">✕</button></td>' +
     '</tr>';
   }
   tbody.innerHTML = rows;
@@ -1131,6 +1195,126 @@ function deleteRecord(id){
   if (!id||!confirm('ลบรายการนี้?')) return;
   chemRecords=chemRecords.filter(function(r){return String(r.id)!==String(id);});
   saveLocal(); fbSave(); renderStockCard();
+}
+
+// ══ แก้ไขรายการรับเข้า (ฝั่งจัดซื้อ) — ต้องได้รับอนุมัติก่อนบันทึกทุกครั้ง (สิทธิ์ "แก้ไขรับเข้า" ตั้งจากหน้า auth_admin) ══
+var _editInRecordId = null;
+
+function openEditInRecord(id) {
+  if (currentRole==='viewer') return;
+  var rec = chemRecords.find(function(r){ return String(r.id)===String(id) && r.type==='in'; });
+  if (!rec) return;
+  _editInRecordId = id;
+  document.getElementById('editInDate').value     = rec.date || '';
+  document.getElementById('editInBill').value     = rec.bill || '';
+  document.getElementById('editInLiter').value    = rec.liter || '';
+  document.getElementById('editInBucket').value   = rec.bucket || '';
+  document.getElementById('editInPrice').value    = rec.price || '';
+  document.getElementById('editInReceiver').value = rec.receiver || '';
+  document.getElementById('editInNote').value     = rec.note || '';
+  document.getElementById('editInQCResult').value = rec.qcResult || '';
+  var msg = document.getElementById('editInMsg'); msg.style.display='none';
+  document.getElementById('editInModal').style.display = 'flex';
+}
+
+function closeEditInModal() {
+  document.getElementById('editInModal').style.display = 'none';
+  _editInRecordId = null;
+}
+
+function saveEditInRecord() {
+  if (!_editInRecordId) return;
+  var date     = document.getElementById('editInDate').value;
+  var bill     = document.getElementById('editInBill').value.trim();
+  var liter    = parseFloat(document.getElementById('editInLiter').value)||0;
+  var bucket   = parseInt(document.getElementById('editInBucket').value)||0;
+  var price    = parseFloat(document.getElementById('editInPrice').value)||0;
+  var receiver = document.getElementById('editInReceiver').value.trim();
+  var note     = document.getElementById('editInNote').value.trim();
+  var qcResult = document.getElementById('editInQCResult').value;
+  var msg = document.getElementById('editInMsg');
+
+  if (!date)  { msg.style.cssText='display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;'; msg.textContent='❌ กรุณาระบุวันที่'; return; }
+  if (!liter) { msg.style.cssText='display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;'; msg.textContent='❌ กรุณากรอกปริมาณ (ลิตร)'; return; }
+
+  var fields = { date:date, bill:bill, liter:liter, bucket:bucket, price:price, receiver:receiver, note:note, qcResult:qcResult };
+
+  // ยกเว้นถ้าคนที่ล็อกอินอยู่ตอนนี้มีสิทธิ์นี้อยู่แล้ว (currentEditInApprove — admin ได้สิทธิ์นี้เสมอ) ก็ถือว่าอนุมัติในตัว
+  if (currentEditInApprove === true) {
+    _commitEditInRecord(_editInRecordId, fields, { role: currentRole, name: currentUserName, by: 'self', at: new Date().toISOString() });
+    return;
+  }
+  requestEditInApproval(function(approved, approverInfo){
+    if (!approved) {
+      msg.style.cssText='display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
+      msg.textContent='🚫 ยกเลิก — ไม่ได้รับอนุมัติให้แก้ไขรายการรับเข้า';
+      return;
+    }
+    _commitEditInRecord(_editInRecordId, fields, approverInfo);
+  });
+}
+
+// ── ขออนุมัติจากผู้มีสิทธิ์ "แก้ไขรับเข้า" ก่อนบันทึกทุกครั้ง ──
+// สิทธิ์นี้มาจาก CentralAuth.login().editInApprove — ตั้งได้จากหน้า auth_admin แยกจาก role หลัก
+// (admin ได้สิทธิ์นี้เสมอโดยอัตโนมัติ, operator ต้องถูกติ๊กให้เพิ่มจึงจะอนุมัติได้)
+function requestEditInApproval(cb) {
+  var msg = document.getElementById('editInMsg');
+  var pin = prompt('⚠️ การแก้ไขรายการรับเข้า ต้องให้ผู้มีสิทธิ์อนุมัติ "แก้ไขรับเข้า" ใส่ PIN เพื่ออนุมัติก่อนบันทึก:');
+  if (pin === null) { cb(false); return; } // กดยกเลิก
+  pin = pin.trim();
+  if (!pin) { cb(false); return; }
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (result.ok && result.editInApprove) {
+      var approverName = (result.user && result.user.name) || '';
+      if (msg) {
+        msg.style.cssText='display:block;background:#e0f4ef;color:#0d6e56;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
+        msg.textContent='✅ อนุมัติแก้ไขโดย'+(approverName?' '+approverName:'ผู้มีสิทธิ์')+' แล้ว — กำลังบันทึก...';
+      }
+      cb(true, { role: result.role, name: approverName, by: 'pin', at: new Date().toISOString() });
+    } else {
+      if (msg) {
+        msg.style.cssText='display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
+        msg.textContent='🚫 PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์อนุมัติแก้ไขรับเข้า';
+      }
+      cb(false);
+    }
+  }).catch(function(){
+    if (msg) {
+      msg.style.cssText='display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
+      msg.textContent='🚫 เชื่อมต่อระบบสิทธิ์ไม่ได้ — ลองใหม่อีกครั้ง';
+    }
+    cb(false);
+  });
+}
+
+// ── บันทึกการแก้ไขจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async) ──
+function _commitEditInRecord(id, fields, approverInfo) {
+  var rec = chemRecords.find(function(r){ return String(r.id)===String(id) && r.type==='in'; });
+  if (!rec) return;
+  var approvedBy = approverInfo ? (approverInfo.name || (approverInfo.role + (approverInfo.by==='self' ? ' (self)' : ''))) : '';
+
+  // เก็บประวัติการแก้ไขไว้เพื่อตรวจสอบย้อนหลัง
+  if (!rec.editHistory) rec.editHistory = [];
+  rec.editHistory.push({
+    before: { date:rec.date, bill:rec.bill, liter:rec.liter, bucket:rec.bucket, price:rec.price, receiver:rec.receiver, note:rec.note, qcResult:rec.qcResult },
+    editedBy: approvedBy, editedAt: approverInfo ? approverInfo.at : new Date().toISOString()
+  });
+
+  rec.date     = fields.date;
+  rec.bill     = fields.bill;
+  rec.liter    = fields.liter;
+  rec.bucket   = fields.bucket;
+  rec.price    = fields.price;
+  rec.receiver = fields.receiver;
+  rec.note     = fields.note;
+  rec.qcResult = fields.qcResult;
+  rec.lastEditedBy = approvedBy;
+  rec.lastEditedAt = approverInfo ? approverInfo.at : new Date().toISOString();
+
+  saveLocal(); fbSave();
+  closeEditInModal();
+  renderStockCard();
+  showToast('in', '✅ แก้ไขรายการรับเข้าแล้ว' + (approvedBy ? ' — อนุมัติโดย '+approvedBy : ''), 'ok');
 }
 
 // ══ TOAST ══
