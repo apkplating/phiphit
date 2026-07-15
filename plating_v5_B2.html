@@ -4671,11 +4671,13 @@ function renderChemStockCard() {
     var itemBatches = item.batches && item.batches.length ? item.batches : [1,2];
     var ml = 0;
     var basisParts = [];
+    var ahVal = 0, moVal = 0;
     chemSettings.forEach(function(c) {
       var isGroupMatch = c.name && c.name.trim().toLowerCase() === nameLC;
       if (c.type === 'AH' && isGroupMatch) {
         ml += parseFloat(c.rateAH||0) * Number(day.ah||0);
         basisParts.push('AH ' + Number(day.ah||0));
+        ahVal += Number(day.ah||0);
       } else if (c.type === 'COLOR') {
         // กรองเฉพาะ rows ของ batch ที่เกี่ยวข้อง
         var dr = (day.rows||[]).filter(function(r){
@@ -4698,10 +4700,10 @@ function renderChemStockCard() {
           else if (color==='K') ml += rate*bK;
           else ml += rate*(bB+bC+bK);
         });
-        if (matchedAny) basisParts.push('โม่ ' + (bB+bC+bK) + ' (B'+bB+'/C'+bC+'/K'+bK+')');
+        if (matchedAny) { basisParts.push('โม่ ' + (bB+bC+bK) + ' (B'+bB+'/C'+bC+'/K'+bK+')'); moVal += (bB+bC+bK); }
       }
     });
-    return { liter: ml / 1000, basis: basisParts.join(', ') || '–' };
+    return { liter: ml / 1000, basis: basisParts.join(', ') || '–', ah: ahVal, mo: moVal };
   }
 
   // รับเข้า
@@ -4718,7 +4720,7 @@ function renderChemStockCard() {
     var used = calcResult.liter;
     if (used > 0) {
       rows.push({ date:day.date, bill:day.lotNo||'–', inLiter:0, inBucket:0, recorder:'',
-                  outLiter:used, outRecorder:day.recorder||'ระบบ', outType:'auto', basis:calcResult.basis, isIn:false });
+                  outLiter:used, outRecorder:day.recorder||'ระบบ', outType:'auto', basis:calcResult.basis, ah:calcResult.ah, mo:calcResult.mo, isIn:false });
     }
   });
 
@@ -4786,17 +4788,21 @@ function renderChemStockCard() {
     '</tr>';
   });
 
-  // ── แถวสรุปผลรวม Auto/Manual/รวม ของรายการที่แสดงอยู่ (ตามตัวกรองปัจจุบัน) ──
+  // ── แถวสรุปผลรวม AH/โม่/Auto/Manual/รวม ของรายการที่แสดงอยู่ (ตามตัวกรองปัจจุบัน) ──
   var outDisplayRows = displayRows.filter(function(r){ return !r.isIn; });
   if (outDisplayRows.length) {
-    var sumAuto = 0, sumManual = 0;
+    var sumAuto = 0, sumManual = 0, sumAh = 0, sumMo = 0;
     outDisplayRows.forEach(function(r){
       var l = Number(r.outLiter||0);
       if (r.outType === 'manual') sumManual += l; else sumAuto += l;
+      if (r.outType === 'auto') { sumAh += Number(r.ah||0); sumMo += Number(r.mo||0); }
     });
+    var basisSumParts = [];
+    if (sumAh > 0) basisSumParts.push('AH ' + sumAh.toLocaleString());
+    if (sumMo > 0) basisSumParts.push('โม่ ' + sumMo.toLocaleString());
     html += '<tr style="border-top:2px solid var(--navy);background:#f8fafc;">' +
       '<td colspan="7" style="padding:8px 6px;text-align:right;font-size:10px;font-weight:700;color:var(--navy);">รวม (ตามตัวกรองที่แสดง)</td>' +
-      '<td></td>' +
+      '<td style="padding:8px 4px;font-size:9px;font-weight:700;color:#1d4ed8;white-space:nowrap;">'+(basisSumParts.join(' / ')||'')+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#0d6e56;">'+sumAuto.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#b45309;">'+sumManual.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--navy);">'+(sumAuto+sumManual).toFixed(2)+'</td>' +

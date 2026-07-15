@@ -4568,16 +4568,18 @@ function renderChemStockCard() {
   // รวม rows จากทั้ง in (จัดซื้อ) และ auto-out (ผลิต)
   var rows = [];
 
-  // helper: คำนวณ ml ที่ใช้ต่อวัน จาก AH × rate หรือ โม่ × rate — คืนค่า liter พร้อม basis (AH หรือ จำนวนโม่ ที่ใช้คำนวณ) ไว้โชว์เช็คความผิดปกติ
+  // helper: คำนวณ ml ที่ใช้ต่อวัน จาก AH × rate หรือ โม่ × rate — คืนค่า liter พร้อม basis (AH หรือ จำนวนโม่ ที่ใช้คำนวณ) ไว้โชว์เช็คความผิดปกติ และรวมยอด
   function calcDayChemUsedLiter(day) {
     var nameLC = item.name.trim().toLowerCase();
     var ml = 0;
     var basisParts = [];
+    var ahVal = 0, moVal = 0;
     chemSettings.forEach(function(c) {
       var isGroupMatch = c.name && c.name.trim().toLowerCase() === nameLC;
       if (c.type === 'AH' && isGroupMatch) {
         ml += parseFloat(c.rateAH||0) * Number(day.ah||0);
         basisParts.push('AH ' + Number(day.ah||0));
+        ahVal += Number(day.ah||0);
       } else if (c.type === 'COLOR') {
         var dr = day.rows || [];
         var bB = dr.filter(function(r){ return r.color==='B'; }).length;
@@ -4595,10 +4597,10 @@ function renderChemStockCard() {
           else if (color==='K') ml += rate*bK;
           else ml += rate*(bB+bC+bK);
         });
-        if (matchedAny) basisParts.push('โม่ ' + (bB+bC+bK) + ' (B'+bB+'/C'+bC+'/K'+bK+')');
+        if (matchedAny) { basisParts.push('โม่ ' + (bB+bC+bK) + ' (B'+bB+'/C'+bC+'/K'+bK+')'); moVal += (bB+bC+bK); }
       }
     });
-    return { liter: ml / 1000, basis: basisParts.join(', ') || '–' };
+    return { liter: ml / 1000, basis: basisParts.join(', ') || '–', ah: ahVal, mo: moVal };
   }
 
   // ─── แยก 2 array อิสระ ───
@@ -4622,7 +4624,7 @@ function renderChemStockCard() {
     var calcResult = calcDayChemUsedLiter(day);
     var used = calcResult.liter;
     if (used > 0) {
-      outRows.push({ date:day.date, liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ', source:'auto', basis:calcResult.basis });
+      outRows.push({ date:day.date, liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ', source:'auto', basis:calcResult.basis, ah:calcResult.ah, mo:calcResult.mo });
     }
   });
   chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='out'; })
@@ -4689,15 +4691,19 @@ function renderChemStockCard() {
     '</tr>';
   }
 
-  // ── แถวสรุปผลรวม Auto/Manual/รวม ของรายการที่แสดงอยู่ (ตามตัวกรองปัจจุบัน) ──
+  // ── แถวสรุปผลรวม AH/โม่/Auto/Manual/รวม ของรายการที่แสดงอยู่ (ตามตัวกรองปัจจุบัน) ──
   if (filteredOutRows.length) {
-    var sumAuto = 0, sumManual = 0;
+    var sumAuto = 0, sumManual = 0, sumAh = 0, sumMo = 0;
     filteredOutRows.forEach(function(r){
       if (r.source === 'manual') sumManual += r.liter; else sumAuto += r.liter;
+      if (r.source === 'auto') { sumAh += Number(r.ah||0); sumMo += Number(r.mo||0); }
     });
+    var basisSumParts = [];
+    if (sumAh > 0) basisSumParts.push('AH ' + sumAh.toLocaleString());
+    if (sumMo > 0) basisSumParts.push('โม่ ' + sumMo.toLocaleString());
     html += '<tr style="border-top:2px solid var(--navy);background:#f8fafc;">' +
       '<td colspan="7" style="padding:8px 6px;text-align:right;font-size:10px;font-weight:700;color:var(--navy);">รวม (ตามตัวกรองที่แสดง)</td>' +
-      '<td></td>' +
+      '<td style="padding:8px 4px;font-size:9px;font-weight:700;color:#1d4ed8;white-space:nowrap;">'+(basisSumParts.join(' / ')||'')+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#0d6e56;">'+sumAuto.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#b45309;">'+sumManual.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--navy);">'+(sumAuto+sumManual).toFixed(2)+'</td>' +
