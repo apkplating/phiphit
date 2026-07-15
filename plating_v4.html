@@ -1415,6 +1415,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
 <script src="unit-convert.js"></script>
+<script src="wip-calc.js"></script>
 <script>
 // ═══════════════════════════════════════
 //  STATE
@@ -1624,10 +1625,11 @@ function addBarrel() {
   if (_billJobId && _billJobId !== 'NOBILL') {
     var _billJob = (jobMasterItems||[]).find(function(j){ return j.id===_billJobId; });
     if (_billJob) {
-      var _bal  = calcJobBal(_billJobId);
-      var _used = calcTodayUsed(_billJobId);
-      var _remainPcs = _bal.remain   - _used.used;
-      var _remainKg  = _bal.remainKg - _used.usedKg;
+      // ใช้ calcJobRemainToPlate() (wip-calc.js) — สูตรกลางที่ตรงกับ bl_stock.html แทน calcJobBal+calcTodayUsed
+      // ซึ่งพึ่ง jobMasterRecords "out" record ที่มีบั๊กสะสมหลายชั้น (ดูคอมเมนต์ที่ตัวฟังก์ชัน)
+      var _r = calcJobRemainToPlate(_billJobId);
+      var _remainPcs = _r.remainPcs;
+      var _remainKg  = _r.remainKg;
       var _isKgUnit  = _billJob.unit === 'kg';
       var _pcsChk = pcs;
       if (!_pcsChk && kg > 0 && !_isKgUnit) {
@@ -1704,6 +1706,9 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   todayBarrels.push(row);
   try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
+  // รีเฟรช WipCalc (wip-calc.js) หน่วงเวลาเล็กน้อยให้ livePush() ยิงขึ้น Firebase เสร็จก่อน (debounce 300ms + เวลาเน็ต)
+  // เพื่อให้ตัวเลข "เหลือให้ชุบ" ของบิลอื่นที่จะเลือกต่อในเซสชันเดียวกันอัปเดตทันความจริง ไม่ต้องรอ poll รอบถัดไป (~30 วิ)
+  if (typeof WipCalc !== 'undefined') setTimeout(function(){ WipCalc.load(); }, 900);
 
   // หมายเหตุ: การตัดสต็อค Job Master จะทำตอนกดบันทึกวัน (ดู autoJobOut)
 
@@ -2804,11 +2809,11 @@ function applyPreset(idx) {
   if (savedJobId) {
     var job = (jobMasterItems||[]).find(function(j){ return j.id===savedJobId; });
     if (job) {
-      var bal  = calcJobBal(savedJobId);
-      var used = calcTodayUsed(savedJobId);
-      var realRemainPcs = bal.remain   - used.used;
-      var realRemainKg  = bal.remainKg - used.usedKg;
-      var realRemain = realRemainKg > 0 ? realRemainKg : realRemainPcs;
+      // ใช้ calcJobRemainToPlate() (wip-calc.js) — สูตรกลางที่ตรงกับ bl_stock.html
+      var savedR = calcJobRemainToPlate(savedJobId);
+      var realRemainPcs = savedR.remainPcs;
+      var realRemainKg  = savedR.remainKg;
+      var realRemain = (job.unit==='kg') ? realRemainKg : realRemainPcs;
       if (realRemainPcs > 0 || realRemainKg > 0) {
         // บิลนี้ยังมีคงเหลือ → set ค่าทันที ข้าม step ②
         _barrelPartSelected = true;
@@ -2819,11 +2824,8 @@ function applyPreset(idx) {
 
         // เติม dropdown แล้วเลือก jobId นั้นทันที
         var active = (jobMasterItems||[]).filter(function(j){
-          var b = calcJobBal(j.id);
-          var u = calcTodayUsed(j.id);
-          var rPcs = b.remain   - u.used;
-          var rKg  = b.remainKg - u.usedKg;
-          if (rPcs <= 0 && rKg <= 0) return false;
+          var r = calcJobRemainToPlate(j.id);
+          if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
           return jobMatchesPartNo(j, partNo);
         });
         renderBillList(active, savedJobId);
@@ -2873,13 +2875,10 @@ function renderPresetChips() {
     var inPM   = pmSrc.some(function(pm){
       return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
     });
-    // ตรวจสต็อก — เช็คทั้ง pcs และ kg
+    // ตรวจสต็อก — เช็คทั้ง pcs และ kg (calcJobRemainToPlate — สูตรกลาง ตรงกับ bl_stock.html)
     var hasStock = (jobMasterItems||[]).some(function(j){
-      var b = calcJobBal(j.id);
-      var u = calcTodayUsed(j.id);
-      var rPcs = b.remain   - u.used;
-      var rKg  = b.remainKg - u.usedKg;
-      if (rPcs <= 0 && rKg <= 0) return false;
+      var r = calcJobRemainToPlate(j.id);
+      if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
       return jobMatchesPartNo(j, partNo);
     });
     // ถ้า pmSrc ยังโหลดไม่เสร็จ แต่มีสต็อกใน JM → ถือว่าผ่าน
@@ -6456,6 +6455,9 @@ var jobMasterRecords = [];
 
 async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
+  // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
+  // jobMasterRecords "out" record ซึ่งมีบั๊กสะสมหลายชั้น (ดูคอมเมนต์ในไฟล์ wip-calc.js)
+  if (typeof WipCalc !== 'undefined') WipCalc.load();
   try {
     var res = await fetch(FB_JOB_PATH + '.json');
     if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
@@ -6537,13 +6539,14 @@ function barrelPmAcShow() {
     var nm     = p.partName || p.name || '';
     var cust   = p.customer || '';
     var hasStock = (jobMasterItems||[]).some(function(j){
-      var bal = calcJobBal(j.id);
-      return (bal.remain > 0 || bal.remainKg > 0) && jobMatchesPartNo(j, partNo);
+      var r = calcJobRemainToPlate(j.id);
+      return (r.remainPcs > 0 || r.remainKg > 0) && jobMatchesPartNo(j, partNo);
     });
     // ── ข้อความอธิบายวิธีเช็คสต็อก (โชว์ตลอด ไม่ใช้ hover เพราะใช้งานบนแท็บเล็ตเป็นหลัก) ──
     // วิธีเช็คจริง: หา job ใน Job Master ที่ (1) จับคู่ชื่อกับ P/No นี้ได้ผ่าน jobMatchesPartNo()
-    // (ตัดอักขระคั่น เช่น จุด/ขีด/ช่องว่างทิ้งก่อนเทียบ) และ (2) มีคงเหลือ > 0 ไม่ว่าจะหน่วยชิ้นหรือกก.
-    // (calcJobBal → remain/remainKg) — ถ้าเจอแม้แต่บิลเดียวที่ผ่านทั้งสองเงื่อนไข ถือว่า "มีสต็อก"
+    // (ตัดอักขระคั่น เช่น จุด/ขีด/ช่องว่างทิ้งก่อนเทียบ) และ (2) มีคงเหลือ "ให้ชุบ" > 0 ไม่ว่าจะหน่วยชิ้นหรือกก.
+    // (calcJobRemainToPlate → remainPcs/remainKg, สูตรกลาง ตรงกับ bl_stock.html ผ่าน wip-calc.js)
+    // — ถ้าเจอแม้แต่บิลเดียวที่ผ่านทั้งสองเงื่อนไข ถือว่า "มีสต็อก"
     var stockTipHtml = '';
     if (!hasStock) {
       var _pnLoose = partKeyLoose_v4dbg(partNo);
@@ -6556,9 +6559,9 @@ function barrelPmAcShow() {
       } else {
         stockTipHtml = '<div style="font-size:9px;color:#94a3b8;margin-top:2px;line-height:1.5;">🔍 ' +
           _closeJobs.slice(0,2).map(function(j){
-            var b = calcJobBal(j.id);
+            var r = calcJobRemainToPlate(j.id);
             var m = jobMatchesPartNo(j, partNo);
-            return 'บิล '+(j.bill||'?')+' "'+(j.partName||'')+'" หน่วย='+(j.unit||'pcs')+' คงเหลือ='+(j.unit==='kg'?b.remainKg+'กก.':b.remain+'ชิ้น')+' จับคู่ชื่อ='+(m?'✅':'❌');
+            return 'บิล '+(j.bill||'?')+' "'+(j.partName||'')+'" หน่วย='+(j.unit||'pcs')+' คงเหลือให้ชุบ='+(j.unit==='kg'?r.remainKg+'กก.':r.remainPcs+'ชิ้น')+' จับคู่ชื่อ='+(m?'✅':'❌');
           }).join('<br>🔍 ') +
         '</div>';
       }
@@ -6613,14 +6616,10 @@ function barrelPmAcPick(idx) {
     return;
   }
 
-  // ตรวจว่ามีบิลมีคงเหลือไหม
+  // ตรวจว่ามีบิลมีคงเหลือไหม — ใช้ calcJobRemainToPlate() (wip-calc.js) สูตรกลาง ตรงกับ bl_stock.html
   var active  = (jobMasterItems||[]).filter(function(j){
-    var b = calcJobBal(j.id);
-    var u = calcTodayUsed(j.id);
-    // เช็คทั้ง pcs และ kg เพราะ unit อาจไม่ถูก set อย่างสม่ำเสมอ
-    var rPcs = b.remain   - u.used;
-    var rKg  = b.remainKg - u.usedKg;
-    if (rPcs <= 0 && rKg <= 0) return false;
+    var r = calcJobRemainToPlate(j.id);
+    if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
     return jobMatchesPartNo(j, partNo);
   });
 
@@ -6633,6 +6632,8 @@ function barrelPmAcPick(idx) {
     //      กับ P/No ที่ลงทะเบียนไว้จริงใน Part Master (partList) ก่อน
     //   2) ถ้าไม่เจอใน PM (partList ยังไม่โหลด/ถูกลบ) fallback ไปเทียบแบบ normalizePartKey()
     //      (ตัดแค่ whitespace + ตัวพิมพ์เล็ก-ใหญ่)
+    // สูตรคำนวณคงเหลือ: calcJobRemainToPlate() (wip-calc.js) = ยอดรับเข้า JM − ยอดชุบจริงจาก
+    //   B1+B2+R1 (ไม่พึ่ง jobMasterRecords "out"/autoJobOut/pullFromLines() เลย)
     // แผงนี้โชว์ raw data ของรายการที่ "ใกล้เคียง" (4 ตัวอักษรแรกตรงกัน) เพื่อดูว่าตัวไหนควรจะแมตช์
     // แต่แมตช์ไม่ติด จะได้รู้ว่าปัญหาอยู่ที่ตัวข้อมูล (partName/unit/qty สะกด/เก็บผิด) หรือที่สูตรจับคู่เอง
     var _dbgTyped = partKeyLoose_v4dbg(partNo);
@@ -6641,12 +6642,12 @@ function barrelPmAcPick(idx) {
       return jk && _dbgTyped && (jk.indexOf(_dbgTyped.slice(0,4))===0 || _dbgTyped.indexOf(jk.slice(0,4))===0);
     }).slice(0,5);
     var _dbgLines = _dbgClose.map(function(j){
-      var b = calcJobBal(j.id);
+      var r = calcJobRemainToPlate(j.id);
       var matched = jobMatchesPartNo(j, partNo);
-      return 'บิล '+(j.bill||'?')+' | partName="'+(j.partName||'')+'" | unit='+(j.unit||'pcs')+' | qty='+(j.qty||0)+' | qtyKg='+(j.qtyKg||0)+' | remain='+b.remain+' | remainKg='+b.remainKg+' | จับคู่ชื่อได้='+(matched?'✅':'❌ ไม่ตรง');
+      return 'บิล '+(j.bill||'?')+' | partName="'+(j.partName||'')+'" | unit='+(j.unit||'pcs')+' | qty='+(j.qty||0)+' | qtyKg='+(j.qtyKg||0)+' | เหลือให้ชุบ='+r.remainPcs+'ชิ้น/'+r.remainKg+'กก. | จับคู่ชื่อได้='+(matched?'✅':'❌ ไม่ตรง');
     });
     var _dbgHtml = '<div style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;font-family:monospace;font-size:10px;color:#475569;white-space:pre-wrap;">'
-      + '🔍 Debug — jobMasterItems โหลดแล้ว '+(jobMasterItems||[]).length+' รายการ | คีย์ที่ค้นหา (ตัดอักขระคั่นแล้ว) = "'+_dbgTyped+'"'
+      + '🔍 Debug — jobMasterItems โหลดแล้ว '+(jobMasterItems||[]).length+' รายการ | WipCalc โหลดแล้ว='+(typeof WipCalc!=='undefined'&&WipCalc.isLoaded()?'✅':'⏳ยัง') +' | คีย์ที่ค้นหา (ตัดอักขระคั่นแล้ว) = "'+_dbgTyped+'"'
       + (_dbgLines.length ? '\n' + _dbgLines.join('\n') : '\nไม่พบชื่อใกล้เคียงเลยแม้แต่ 4 ตัวอักษรแรก ('+(jobMasterItems||[]).length+' รายการที่โหลดมาไม่มีตัวไหนขึ้นต้นคล้ายกันเลย — เช็คว่า partName ใน Job Master พิมพ์ต่างจากนี้มากไหม)')
       + '</div>';
     statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือ — เลือก "ไม่ระบุบิล" เพื่อบันทึกต่อ (ไม่ตัดสต็อก)</span>' + _dbgHtml;
@@ -6678,13 +6679,16 @@ function renderBillList(active, selectedJobId) {
 
   // render HTML ทั้งหมดก่อน แล้วค่อย attach events ด้วย delegation
   listEl.innerHTML = active.map(function(j){
-    var b    = calcJobBal(j.id);
+    // calcJobRemainToPlate() (wip-calc.js) = สูตรกลาง ตรงกับ bl_stock.html สำหรับ "เหลือให้ชุบ"
+    // calcTodayUsed() ยังใช้แค่โชว์ข้อความ "(ใช้ ... วันนี้)" เฉยๆ ไม่ได้เอามาลบซ้ำกับ remain อีกแล้ว
+    // (WipCalc นับยอดวันนี้รวมไว้แล้วผ่าน live.json ถ้าลบซ้ำอีกชั้นจะกลายเป็นหักสองรอบ)
+    var r    = calcJobRemainToPlate(j.id);
     var u    = calcTodayUsed(j.id);
-    var rKg  = Math.max(0, b.remainKg - u.usedKg);
-    var rPcs = Math.max(0, b.remain   - u.used);
+    var rKg  = r.remainKg;
+    var rPcs = r.remainPcs;
     var isKgUnit = j.unit==='kg' || (rKg > 0 && rPcs === 0);
-    var r    = isKgUnit ? rKg : rPcs;
-    var remStr  = isKgUnit ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
+    var r2   = isKgUnit ? rKg : rPcs;
+    var remStr  = isKgUnit ? r2.toFixed(2)+' กก.' : r2.toLocaleString()+' ชิ้น';
     var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น')+' วันนี้)' : '';
     var weightWarn = u.weightMissing
       ? '<div style="font-size:9px;color:#dc2626;margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master — แปลงหน่วยไม่ได้ ยอด "ใช้วันนี้" อาจไม่ครบ</div>'
@@ -6829,7 +6833,7 @@ function populateBarrelJobPick() {
   var sel = document.getElementById('bJobPick');
   if (!sel) return;
   var cur = sel.value;
-  var items = (jobMasterItems || []).filter(function(j){ return calcJobBal(j.id).remain > 0; });
+  var items = (jobMasterItems || []).filter(function(j){ var r=calcJobRemainToPlate(j.id); return r.remainPcs > 0 || r.remainKg > 0; });
   // เรียง P/No ตามตัวอักษร แล้วตามเลขที่บิล
   items = items.slice().sort(function(a,b){
     var pn = (a.partName||'').localeCompare(b.partName||'');
@@ -6838,10 +6842,11 @@ function populateBarrelJobPick() {
   });
   sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
     items.map(function(j){
-      var bal = calcJobBal(j.id);
+      var r = calcJobRemainToPlate(j.id);
       var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
+      var remVal = (j.unit==='kg') ? r.remainKg.toFixed(2) : r.remainPcs.toLocaleString();
       var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
-        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+bal.remain.toLocaleString()+unitLabel;
+        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+remVal+unitLabel;
       return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
     }).join('');
   if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;
@@ -6858,9 +6863,8 @@ function onBarrelJobPick() {
   document.getElementById('bPartName').value = job.partName || '';
   if (job.customer) document.getElementById('bCustomer').value = job.customer;
   if (infoEl) {
-    var bal = calcJobBal(jobId);
-    var u   = calcTodayUsed(jobId);
-    var r   = (job.unit==='kg') ? Math.max(0, bal.remainKg - u.usedKg) : Math.max(0, bal.remain - u.used);
+    var rr  = calcJobRemainToPlate(jobId);
+    var r   = (job.unit==='kg') ? rr.remainKg : rr.remainPcs;
     var remStr = (job.unit==='kg') ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น';
     infoEl.innerHTML =
       '<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:8px;padding:8px 12px;margin-top:4px;">' +
@@ -6890,6 +6894,34 @@ function calcJobBal(jobId) {
   return {
     totalIn:totalIn, totalOut:totalOut, remain: unit==='kg' ? remainKg : remain,
     totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit
+  };
+}
+
+// ══════════════════════════════════════════════════
+//  ยอดคงเหลือ "ให้ชุบ" ของบิลหนึ่งๆ — สูตรกลาง ตรงกับ bl_stock.html ทุกประการ ผ่าน wip-calc.js
+// ══════════════════════════════════════════════════
+// = ยอดรับเข้า (Job Master: job.qty/job.qtyKg) − ยอดที่ชุบไปแล้วจริงจากทั้ง 3 สาย (B1+B2+R1)
+// ไม่เกี่ยวกับ jobMasterRecords "out"/autoJobOut()/pullFromLines() เลยแม้แต่นิดเดียว เพราะจุดนั้นมี
+// บั๊กสะสมหลายชั้น (ตัดสต็อกให้ทั้งที่กด "ไม่ระบุบิล", นับซ้ำข้าม 2 กลไก ฯลฯ) — ใช้แทน calcJobBal()
+// เฉพาะจุดที่ต้องเช็ค "บิลนี้มีคงเหลือให้เลือกไหม" ในหน้ากรอกรายรอบเท่านั้น (calcJobBal ยังใช้ที่อื่น
+// ตามเดิม ไม่ได้ลบทิ้ง เผื่อจุดอื่นในระบบยังอ้างอิงอยู่)
+// ถ้า wip-calc.js ยังโหลดไม่เสร็จ (isLoaded()===false) → fallback ไปใช้ calcJobBal() แบบเดิมไปก่อน
+// กันเคสหน้าเพิ่งเปิด ยังโหลดไม่ทัน แล้วขึ้น "ไม่มีสต็อก" หลอกๆ ทั้งที่จริงมีของ
+function calcJobRemainToPlate(jobId) {
+  var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
+  if (!job) return { remainPcs: 0, remainKg: 0, unit: 'pcs' };
+  if (typeof WipCalc === 'undefined' || !WipCalc.isLoaded()) {
+    var fb = calcJobBal(jobId);
+    return { remainPcs: fb.remain, remainKg: fb.remainKg, unit: fb.unit };
+  }
+  var jobInPcs = Number(job.qty   || job.pcs || 0);
+  var jobInKg  = Number(job.qtyKg || job.kg  || 0);
+  var weightG  = getWeightGForPO(job.partName || '');
+  var plated   = WipCalc.getPlatedForJob(jobId, weightG);
+  return {
+    remainPcs: Math.max(0, jobInPcs - plated.pcs),
+    remainKg:  Math.max(0, jobInKg  - plated.kg),
+    unit: job.unit || 'pcs'
   };
 }
 
@@ -8286,7 +8318,7 @@ function qcPopulateJobPick() {
   var sel = document.getElementById('qcJobPick');
   if (!sel) return;
   var cur = sel.value;
-  var items = (jobMasterItems || []).filter(function(j){ return calcJobBal(j.id).remain > 0; });
+  var items = (jobMasterItems || []).filter(function(j){ var r=calcJobRemainToPlate(j.id); return r.remainPcs > 0 || r.remainKg > 0; });
   items = items.slice().sort(function(a,b){
     var pn = (a.partName||'').localeCompare(b.partName||'');
     if (pn !== 0) return pn;
@@ -8294,10 +8326,11 @@ function qcPopulateJobPick() {
   });
   sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
     items.map(function(j){
-      var bal = calcJobBal(j.id);
+      var r = calcJobRemainToPlate(j.id);
       var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
+      var remVal = (j.unit==='kg') ? r.remainKg.toFixed(2) : r.remainPcs.toLocaleString();
       var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
-        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+bal.remain.toLocaleString()+unitLabel;
+        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+remVal+unitLabel;
       return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
     }).join('');
   if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;
@@ -8537,12 +8570,10 @@ function openAddBillModal(dayId, rowIdx) {
   var curJob   = (jobMasterItems||[]).find(function(j){ return j.id === row.jobId; });
   var curLabel = curJob ? curJob.bill : (row.manualBill || '');
 
-  // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ)
+  // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ) — calcJobRemainToPlate() สูตรกลาง ตรงกับ bl_stock.html
   var active = (jobMasterItems||[]).filter(function(j){
-    var b = calcJobBal(j.id);
-    var rPcs = b.remain   - 0;
-    var rKg  = b.remainKg - 0;
-    if (rPcs <= 0 && rKg <= 0) return false;
+    var r = calcJobRemainToPlate(j.id);
+    if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
     return jobMatchesPartNo(j, partNo);
   });
 
@@ -8558,14 +8589,14 @@ function openAddBillModal(dayId, rowIdx) {
   if (existing) existing.remove();
 
   var opts = active.map(function(j){
-    var b = calcJobBal(j.id);
-    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    var r = calcJobRemainToPlate(j.id);
+    var rem = j.unit==='kg' ? r.remainKg.toFixed(2)+' กก.' : r.remainPcs.toLocaleString()+' ชิ้น';
     return '<option value="'+j.id+'"'+(j.id===row.jobId?' selected':'')+'>['+( j.bill||'?')+'] เหลือ '+rem+'</option>';
   }).join('');
 
   var dlOpts = allBills.map(function(j){
-    var b = calcJobBal(j.id);
-    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+'กก.' : b.remain.toLocaleString()+'ชิ้น';
+    var r = calcJobRemainToPlate(j.id);
+    var rem = j.unit==='kg' ? r.remainKg.toFixed(2)+'กก.' : r.remainPcs.toLocaleString()+'ชิ้น';
     return '<option value="'+esc2(j.bill)+'">เหลือ '+rem+(j.customer?' · '+esc2(j.customer):'')+'</option>';
   }).join('');
 
