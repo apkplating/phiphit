@@ -1910,10 +1910,17 @@ async function autoJobOut(rec) {
       var pickedJob = jobMasterItems.find(function(j){ return j.id === barrel.jobId; });
       // ใช้ได้เฉพาะถ้า job ยังมีอยู่จริงและ P/No ตรงกัน (กันกรณีถูกลบ/แก้ไปแล้ว)
       targetJobs = (pickedJob && jobMatchesPartNo(pickedJob, bRawPartName)) ? [pickedJob] : null;
-    }
-    // fallback: ไม่ได้เลือกจาก dropdown หรือ job ที่เลือกหายไปแล้ว → จับคู่ตาม P/No ทุกบิล
-    if (!targetJobs) {
-      targetJobs = jobMasterItems.filter(function(j){ return jobMatchesPartNo(j, bRawPartName); });
+      // ถ้าบิลที่เคยเลือกไว้หายไปแล้ว/ชื่อไม่ตรงแล้ว (ถูกลบ/แก้ไขภายหลัง) → ยัง fallback หาบิลอื่นที่ชื่อตรงแทนได้
+      // (ต่างจากเคส "ไม่ระบุบิล" ด้านล่าง ที่ผู้ใช้ตั้งใจไม่ผูกบิลตั้งแต่แรก ต้องไม่ fallback เด็ดขาด)
+      if (!targetJobs) {
+        targetJobs = jobMasterItems.filter(function(j){ return jobMatchesPartNo(j, bRawPartName); });
+      }
+    } else {
+      // ── ไม่ได้เลือกบิล ("— ไม่ระบุบิล (บันทึกได้แต่ไม่ตัดสต็อก) —") → ต้องไม่ตัดสต็อกเด็ดขาด ──
+      // ก่อนหน้านี้ตรงนี้เคย fallback ไปหาบิลด้วยชื่อแล้วตัดสต็อกให้อยู่ดี ทั้งที่ UI สัญญาไว้ชัดเจนว่าจะไม่ตัด
+      // ทำให้บิลที่ไม่เกี่ยวข้องโดนตัดยอดผิดไปโดยไม่มีใครรู้ตัว (พบเคสจริง: บิล SO2607008 ยอดหายไปทั้งที่
+      // ไม่เคยมีใครเลือกผูกกับบิลนี้เลยสักครั้ง — เกิดจากรอบชุบอื่นๆ ที่กด "ไม่ระบุบิล" แล้วชื่อ P/No บังเอิญตรงกัน)
+      targetJobs = [];
     }
 
     targetJobs.forEach(function(job) {
