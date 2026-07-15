@@ -1119,8 +1119,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้บันทึก</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">ว.ด.ป.</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">เลขที่ใบสั่งผลิต</th>
-              <th style="padding:7px 4px;text-align:center;font-size:9px;font-weight:600;color:#6ee7b7;">ประเภท</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">เบิก<br>(ลิตร)</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">⚙️ Auto<br>(ลิตร)</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#fcd34d;">✍️ Manual<br>(ลิตร)</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">คงเหลือ</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;">ผู้เบิก</th>
             </tr>
@@ -4715,9 +4715,8 @@ function renderChemStockCard() {
     if (r.isIn) running += inLiter; else running -= outLiter;
     var dateStr = r.date ? r.date.split('-').reverse().join('/') : '–';
     var rowBg = r.isIn ? '' : 'background:#f0fff4;';
-    var typeBadge = (!r.isIn) ? (r.outType==='manual'
-        ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:5px;">✍️ Manual</span>'
-        : '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:5px;">⚙️ Auto</span>') : '';
+    var isAutoOut   = (!r.isIn) && r.outType!=='manual';
+    var isManualOut = (!r.isIn) && r.outType==='manual';
     html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
       // จัดซื้อ
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?dateStr:'')+'</td>' +
@@ -4728,8 +4727,8 @@ function renderChemStockCard() {
       // ผลิต
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?'':dateStr)+'</td>' +
       '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?'':r.bill)+'</td>' +
-      '<td style="padding:7px 4px;text-align:center;">'+typeBadge+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(r.isIn?'':outLiter.toFixed(2))+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(isAutoOut?outLiter.toFixed(2):'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#b45309;">'+(isManualOut?outLiter.toFixed(2):'')+'</td>' +
       '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(running<0?'#c0392b':'var(--navy)')+';">'+(running.toFixed(2))+'</td>' +
       '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(r.isIn?'':r.outRecorder)+'</td>' +
     '</tr>';
@@ -4744,7 +4743,7 @@ function exportChemCSV() {
   if (!_selChemId) return;
   var item = chemItems.find(function(c){ return c.id===_selChemId; });
   if (!item) return;
-  var rows = [['ว.ด.ป.(รับ)','เลขใบรับงาน','รับเข้า(ลิตร)','รับเข้า(ถัง)','ผู้บันทึก','ว.ด.ป.(เบิก)','เลขใบสั่งผลิต','ประเภท','เบิก(ลิตร)','คงเหลือ','ผู้เบิก']];
+  var rows = [['ว.ด.ป.(รับ)','เลขใบรับงาน','รับเข้า(ลิตร)','รับเข้า(ถัง)','ผู้บันทึก','ว.ด.ป.(เบิก)','เลขใบสั่งผลิต','เบิก Auto(ลิตร)','เบิก Manual(ลิตร)','คงเหลือ','ผู้เบิก']];
   // ดึง rows เหมือน renderChemStockCard
   var allRows = [];
   chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='in'; }).forEach(function(r){
@@ -4779,9 +4778,10 @@ function exportChemCSV() {
   allRows.forEach(function(r){
     var inL=Number(r.inLiter||0), outL=Number(r.outLiter||0);
     if(r.isIn) running+=inL; else running-=outL;
+    var isManualCsv = r.outType==='Manual';
     rows.push(r.isIn
       ? [r.date,r.bill,inL,r.inBucket,r.recorder,'','','','',running.toFixed(2),'']
-      : ['','','','','',r.date,r.bill,r.outType,outL.toFixed(2),running.toFixed(2),r.outRecorder]);
+      : ['','','','','',r.date,r.bill,(isManualCsv?'':outL.toFixed(2)),(isManualCsv?outL.toFixed(2):''),running.toFixed(2),r.outRecorder]);
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a=document.createElement('a');
