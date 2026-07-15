@@ -381,21 +381,32 @@ body.viewer-mode .hide-viewer{display:none !important;}
 <div id="v-summary" class="view">
 
   <div class="card">
-    <div class="card-label">สรุปยอดสั่งซื้อรายเดือน/รายปี</div>
+    <div class="card-label">สรุปยอดสั่งซื้อ — เลือกช่วงเวลา</div>
     <div class="grid2">
       <div class="field" style="margin-bottom:0;">
-        <label>มุมมอง</label>
-        <select id="sumViewMode" onchange="renderSummary()">
-          <option value="month">รายเดือน</option>
-          <option value="year">รายปี</option>
-        </select>
+        <label>จากวันที่</label>
+        <input type="date" id="sumFrom" onchange="renderSummary()">
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>ปี (พ.ศ.)</label>
-        <select id="sumYear" onchange="renderSummary()"></select>
+        <label>ถึงวันที่</label>
+        <input type="date" id="sumTo" onchange="renderSummary()">
       </div>
     </div>
-    <div id="sumTotalsWrap"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+      <button class="btn btn-outline" style="width:auto;font-size:11px;padding:6px 12px;" onclick="setSumRangeBillCycle(0)">🧾 รอบบิลนี้ (25-25)</button>
+      <button class="btn btn-outline" style="width:auto;font-size:11px;padding:6px 12px;" onclick="setSumRangeBillCycle(-1)">🧾 รอบบิลก่อนหน้า</button>
+      <button class="btn btn-outline" style="width:auto;font-size:11px;padding:6px 12px;" onclick="clearSumRange()">ล้างช่วงเวลา</button>
+    </div>
+    <div id="sumTotalsWrap" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">ยอดสั่งซื้อแยกตามผู้ขายรายเดือน</div>
+    <div class="field" style="margin-bottom:0;">
+      <label>ปี (พ.ศ.)</label>
+      <select id="vendorYear" onchange="renderVendorBreakdownTab()"></select>
+    </div>
+    <div id="vendorBreakdownWrap" style="margin-top:10px;"></div>
   </div>
 
   <div class="card">
@@ -578,7 +589,7 @@ function tab(t) {
   if (t==='list')    renderPoList();
   if (t==='vendors') renderVendorList();
   if (t==='new')     { renderVendorDatalist(); renderItemRegistryDatalist(); }
-  if (t==='summary') { populateSummaryYears(); populateItemHistFilters(); renderSummary(); renderItemHistory(); }
+  if (t==='summary') { populateSummaryYears(); populateItemHistFilters(); renderSummary(); renderVendorBreakdownTab(); renderItemHistory(); }
 }
 
 // ══════════════════════════════════════
@@ -1404,7 +1415,8 @@ function openVendorDetail(id){
 var THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 function populateSummaryYears(){
-  var sel = document.getElementById('sumYear');
+  var sel = document.getElementById('vendorYear');
+  if (!sel) return;
   var years = {};
   poList.forEach(function(po){
     if (po.date) years[po.date.slice(0,4)] = true;
@@ -1437,54 +1449,73 @@ function clearItemHistFilter(){
   renderItemHistory();
 }
 
+// ── สรุปยอดสั่งซื้อตามช่วงเวลาที่กำหนดเอง (แทนแบบเดือน/ปีตายตัว เพราะรอบตัดบิลจริงคือ 25-25) ──
 function renderSummary(){
   var wrap = document.getElementById('sumTotalsWrap');
-  var mode = document.getElementById('sumViewMode').value;
-  var year = document.getElementById('sumYear').value;
+  var fromEl = document.getElementById('sumFrom');
+  var toEl   = document.getElementById('sumTo');
+  var fromDate = fromEl ? fromEl.value : '';
+  var toDate   = toEl ? toEl.value : '';
 
-  if (mode === 'month') {
-    var byMonth = {}; // 0-11 -> {count, total}
-    for (var i=0;i<12;i++) byMonth[i] = {count:0,total:0};
-    poList.forEach(function(po){
-      if (!po.date || po.date.slice(0,4) !== year) return;
-      if (po.status === 'cancelled') return;
-      var m = parseInt(po.date.slice(5,7),10)-1;
-      byMonth[m].count += 1;
-      byMonth[m].total += (po.grandTotal||0);
-    });
-    var grandTotal = 0, grandCount = 0;
-    var rows = '';
-    for (var m=0; m<12; m++) {
-      grandTotal += byMonth[m].total;
-      grandCount += byMonth[m].count;
-      rows += '<tr><td>'+THAI_MONTHS[m]+'</td><td class="num">'+byMonth[m].count+'</td><td class="num">'+fmtMoney(byMonth[m].total)+'</td></tr>';
-    }
-    rows += '<tr class="grand"><td>รวมทั้งปี</td><td class="num">'+grandCount+'</td><td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
-    wrap.innerHTML = '<table class="sum-table"><thead><tr><th>เดือน</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows+'</tbody></table>' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;margin-bottom:10px;">* ไม่รวมรายการที่ถูกยกเลิก</div>' +
-      renderVendorBreakdown(year);
-  } else {
-    var byYear = {};
-    poList.forEach(function(po){
-      if (!po.date) return;
-      if (po.status === 'cancelled') return;
-      var y = po.date.slice(0,4);
-      if (!byYear[y]) byYear[y] = {count:0,total:0};
-      byYear[y].count += 1;
-      byYear[y].total += (po.grandTotal||0);
-    });
-    var sortedYears = Object.keys(byYear).sort().reverse();
-    if (sortedYears.length === 0) {
-      wrap.innerHTML = '<div class="empty-note">ยังไม่มีข้อมูล PO</div>';
-      return;
-    }
-    var rows2 = sortedYears.map(function(y){
-      return '<tr><td>'+(parseInt(y)+543)+'</td><td class="num">'+byYear[y].count+'</td><td class="num">'+fmtMoney(byYear[y].total)+'</td></tr>';
-    }).join('');
-    wrap.innerHTML = '<table class="sum-table"><thead><tr><th>ปี (พ.ศ.)</th><th class="num">จำนวน PO</th><th class="num">ยอดรวม (฿)</th></tr></thead><tbody>'+rows2+'</tbody></table>' +
-      '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;margin-bottom:10px;">* ไม่รวมรายการที่ถูกยกเลิก</div>' +
-      renderVendorBreakdown(year);
+  var matched = poList.filter(function(po){
+    if (!po.date) return false;
+    if (po.status === 'cancelled') return false;
+    if (fromDate && po.date < fromDate) return false;
+    if (toDate   && po.date > toDate)   return false;
+    return true;
+  }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  var rangeLabel = (fromDate||toDate) ? (fmtD(fromDate)+' — '+fmtD(toDate)) : 'ทุกช่วงเวลา (ยังไม่ได้เลือกช่วง)';
+
+  if (matched.length === 0) {
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">'+rangeLabel+'</div>' +
+      '<div class="empty-note">ไม่พบ PO ในช่วงที่เลือก</div>';
+    return;
   }
+
+  var totalAmt = 0;
+  var rows = matched.map(function(po){
+    totalAmt += (po.grandTotal||0);
+    return '<tr><td>'+esc(po.poNo)+'</td><td>'+fmtD(po.date)+'</td><td>'+esc(po.vendorName||'–')+'</td><td class="num">'+fmtMoney(po.grandTotal||0)+'</td></tr>';
+  }).join('');
+
+  wrap.innerHTML =
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">'+rangeLabel+'</div>' +
+    '<div class="sum-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
+      '<div class="card" style="margin-bottom:0;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--navy);">'+matched.length+'</div><div style="font-size:10px;color:var(--text-muted);">จำนวน PO</div></div>' +
+      '<div class="card" style="margin-bottom:0;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--navy);">'+fmtMoney(totalAmt)+'</div><div style="font-size:10px;color:var(--text-muted);">ยอดรวม (฿)</div></div>' +
+    '</div>' +
+    '<table class="sum-table"><thead><tr><th>เลขที่ PO</th><th>วันที่</th><th>ผู้ขาย</th><th class="num">ยอดรวม</th></tr></thead><tbody>'+rows+'</tbody></table>' +
+    '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;">* ไม่รวมรายการที่ถูกยกเลิก</div>';
+}
+
+// ── ตั้งช่วงวันที่เป็นรอบตัดบิล 25-25 อัตโนมัติ ──
+// offset: 0 = รอบปัจจุบัน (รอบที่วันนี้อยู่ใน), -1 = รอบก่อนหน้า, -2 = ย้อนไปอีกรอบ ฯลฯ
+function setSumRangeBillCycle(offset){
+  var today = new Date();
+  // หา "จุดเริ่มรอบ" ของวันนี้ก่อน: ถ้าวันที่ >= 25 รอบเริ่มวันที่ 25 ของเดือนนี้ ถ้าน้อยกว่า 25 รอบเริ่มวันที่ 25 ของเดือนก่อน
+  var cycleStart = new Date(today.getFullYear(), today.getMonth() + (today.getDate()>=25?0:-1), 25);
+  cycleStart.setMonth(cycleStart.getMonth() + offset);
+  var cycleEnd = new Date(cycleStart.getFullYear(), cycleStart.getMonth()+1, 25);
+
+  var toISO = function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  document.getElementById('sumFrom').value = toISO(cycleStart);
+  document.getElementById('sumTo').value   = toISO(cycleEnd);
+  renderSummary();
+}
+
+function clearSumRange(){
+  document.getElementById('sumFrom').value = '';
+  document.getElementById('sumTo').value = '';
+  renderSummary();
+}
+
+// ── แสดงตาราง pivot ผู้ขาย × เดือน ในการ์ดของตัวเอง (แยกจากสรุปช่วงเวลา) ──
+function renderVendorBreakdownTab(){
+  var wrap = document.getElementById('vendorBreakdownWrap');
+  var yearSel = document.getElementById('vendorYear');
+  if (!wrap || !yearSel) return;
+  wrap.innerHTML = renderVendorBreakdown(yearSel.value);
 }
 
 // ── สรุปยอดซื้อแยกตามผู้ขาย (เฉพาะปีที่เลือก, ไม่รวมยกเลิก) ──
