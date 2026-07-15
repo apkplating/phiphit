@@ -473,6 +473,34 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
   </div>
 </div>
 
+<!-- MODAL: แก้ไขเวลาเข้า-ออกงาน -->
+<div class="modal-ov" id="attEditModal">
+  <div class="modal-box" style="width:90%;max-width:440px;">
+    <h3 id="attEditModalTitle" style="color:#1a2236;margin-bottom:6px;">✏️ แก้ไขเวลา</h3>
+    <p style="font-size:0.8em;color:#6b7280;margin-bottom:16px;">แก้ไขแล้วจะไม่ถูกข้อมูลจากเครื่องสแกนทับ (ป้องกันไว้ให้อัตโนมัติ) ระบบจะคำนวณสาย/OT/เงินใหม่ให้ทันที</p>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเข้างาน</label>
+        <input type="time" id="aeCheckIn" step="1" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาออกงาน (เว้นว่างได้ถ้ายังไม่ออก)</label>
+        <input type="time" id="aeCheckOut" step="1" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">หมายเหตุ (ไม่บังคับ)</label>
+        <input type="text" id="aeNote" placeholder="เช่น ลืมสแกนออก, สแกนผิดคน" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      </div>
+      <div id="aeOriginalInfo" style="font-size:0.78em;color:#9ca3af;"></div>
+    </div>
+    <div class="modal-footer" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveAttCorrection()" style="flex:1;">💾 บันทึก</button>
+      <button class="btn btn-danger" onclick="resetAttCorrection()" style="flex:1;" id="aeResetBtn">↩️ คืนค่าเดิม</button>
+      <button class="btn btn-secondary" onclick="closeAttEditModal()" style="flex:1;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: รายการหักเงินเดือน -->
 <div class="modal-ov" id="deductModal">
   <div class="modal-box" style="width:90%;max-width:440px;">
@@ -527,7 +555,6 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
   </div>
 </div>
 
-<script src="fb-auth.js"></script>
 <script>
 // ========== CENTRAL AUTH (inline) ==========
 (function(global){'use strict';
@@ -610,6 +637,8 @@ let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
 let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750};
 let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15,qcBreakMin:60};
 let companyHolidays=JSON.parse(localStorage.getItem('apk_companyholidays')||'{}'); // key: "2569_7" -> [5,6,...]
+let attCorrections=JSON.parse(localStorage.getItem('apk_att_corrections')||'{}'); // key: "20260714_23" -> {checkIn,checkOut,note,editedAt,editedBy}
+function corrKey(dateKey,empId){return dateKey+'_'+empId;}
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
 
@@ -690,18 +719,22 @@ function normalizeZKRecord(dateKey,empKey,raw){
   const empId=raw.empId?String(raw.empId):empKey.replace(/^emp_/,'');
   const emp=EMPLOYEES.find(e=>e.id===empId);
   if(!emp)return null; // ไม่พบรหัสนี้ในทะเบียนพนักงาน — ไปโชว์ที่หน้า "นำเข้า ZKTeco" แทน
-  let ciISO=timeToISO(dateKey,raw.checkIn);
+  // ถ้ามีการแก้ไขเวลามือไว้ (attCorrections) ให้ใช้เวลานั้นแทนเวลาจากเครื่องสแกน — กัน zk_sync sync ทับข้อมูลที่แก้ไว้
+  const corr=attCorrections[corrKey(dateKey,empId)];
+  const rawCheckIn=(corr&&corr.checkIn)?corr.checkIn:raw.checkIn;
+  const rawCheckOut=(corr&&corr.hasOwnProperty('checkOut'))?corr.checkOut:raw.checkOut;
+  let ciISO=timeToISO(dateKey,rawCheckIn);
   if(!ciISO)return null; // ยังไม่มีเวลาเข้างาน ข้ามไปก่อน
-  let coISO=timeToISO(dateKey,raw.checkOut);
+  let coISO=rawCheckOut?timeToISO(dateKey,rawCheckOut):null;
   if(coISO){
     // กะดึก (21:00-05:00): ถ้าเวลาออก "น้อยกว่า" เวลาเข้า แปลว่าออกงานข้ามวันถัดไป
-    const ciH=parseInt(raw.checkIn.slice(0,2),10),coH=parseInt(raw.checkOut.slice(0,2),10);
+    const ciH=parseInt(rawCheckIn.slice(0,2),10),coH=parseInt(rawCheckOut.slice(0,2),10);
     if(coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
   }
   const ciDate=new Date(ciISO);
   const calc=computeAttendanceCalc(emp,ciDate,coISO?new Date(coISO):ciDate);
   const shift=calc.shift;
-  const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true,isLate:calc.isLate,lateMin:calc.lateMin};
+  const rec={id:'zk_'+dateKey+'_'+empId,empId,empName:emp.name,shift,shiftName:SHIFTS[shift].name,checkIn:ciISO,checkOut:coISO||null,source:'ZKTeco',importedFromZK:true,synced:true,isLate:calc.isLate,lateMin:calc.lateMin,dateKey,corrected:!!corr,rawScanCheckIn:raw.checkIn||null,rawScanCheckOut:raw.checkOut||null};
   if(coISO){
     const coDate=new Date(coISO);
     const wh=(coDate-ciDate)/3600000;
@@ -714,13 +747,14 @@ function normalizeZKRecord(dateKey,empKey,raw){
 
 // โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections')]);
   // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
   if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
   if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
   if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
   if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
   if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
+  if(fbCorr){attCorrections=fbCorr;localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));}
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -911,20 +945,82 @@ async function saveAtt(){
 }
 function getTodayRec(){const s=new Date();s.setHours(0,0,0,0);const e=new Date(s.getTime()+86400000);return attendance.filter(r=>new Date(r.checkIn)>=s&&new Date(r.checkIn)<e);}
 
+function attDateKeyOf(r){
+  if(r.dateKey)return r.dateKey;
+  const d=new Date(r.checkIn);
+  return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+}
 function buildAttTable(recs){
-  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะ</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินรวม</th></tr></thead><tbody>`;
+  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะ</th><th>เวลาเข้า</th><th>เวลาออก</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินรวม</th><th></th></tr></thead><tbody>`;
   recs.forEach(r=>{
     const s=SHIFTS[r.shift]||SHIFTS[1];
     const emp=EMPLOYEES.find(e=>e.id===r.empId);
     const co=r.checkOut?new Date(r.checkOut).toLocaleTimeString('th-TH'):`<span class="badge badge-working">กำลังทำงาน</span>`;
     const lateBadge=r.isLate?`<br><span style="color:#ef4444;font-size:0.74em;font-weight:700;">🔴 สาย ${r.lateMin} นาที</span>`:'';
     const offBadge=r.workingOnDayOff?`<br><span style="color:#8b5cf6;font-size:0.74em;font-weight:700;">🏖️ วันหยุด (OT เต็ม)</span>`:'';
-    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}">${s.emoji} ${s.name}</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td></tr>`;
+    const corrBadge=r.corrected?`<br><span style="color:#f59e0b;font-size:0.74em;font-weight:700;">✏️ แก้ไขเวลาแล้ว</span>`:'';
+    const dk=attDateKeyOf(r);
+    const editBtn=`<button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openAttEditModal('${dk}','${r.empId}')">✏️ แก้ไข</button>`;
+    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}">${s.emoji} ${s.name}</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}${corrBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td><td>${editBtn}</td></tr>`;
   });
   return h+'</tbody></table>';
 }
 
 function renderTodayTable(){const recs=getTodayRec();document.getElementById('todayTable').innerHTML=recs.length?buildAttTable(recs):'<p style="color:#9ca3af;padding:16px;text-align:center;">ยังไม่มีการลงเวลาวันนี้</p>';}
+
+// ========== แก้ไขเวลาเข้า-ออกงานด้วยมือ (correction) ==========
+let curAttEditKey=null;
+function timeStrFromISO(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+}
+function openAttEditModal(dateKey,empId){
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  const rec=attendance.find(r=>attDateKeyOf(r)===dateKey&&r.empId===empId);
+  if(!emp||!rec)return;
+  curAttEditKey=corrKey(dateKey,empId);
+  const dObj=new Date(dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8));
+  document.getElementById('attEditModalTitle').textContent=`✏️ แก้ไขเวลา — ${emp.name} (${dObj.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})})`;
+  document.getElementById('aeCheckIn').value=timeStrFromISO(rec.checkIn);
+  document.getElementById('aeCheckOut').value=timeStrFromISO(rec.checkOut);
+  const corr=attCorrections[curAttEditKey];
+  document.getElementById('aeNote').value=corr&&corr.note?corr.note:'';
+  const origIn=rec.rawScanCheckIn||'-',origOut=rec.rawScanCheckOut||'-';
+  document.getElementById('aeOriginalInfo').textContent=`เวลาจากเครื่องสแกนจริง: ${origIn} – ${origOut}`;
+  document.getElementById('aeResetBtn').style.display=corr?'':'none';
+  document.getElementById('attEditModal').classList.add('show');
+}
+function closeAttEditModal(){document.getElementById('attEditModal').classList.remove('show');curAttEditKey=null;}
+function saveAttCorrection(){
+  if(!curAttEditKey)return;
+  const ciVal=document.getElementById('aeCheckIn').value;
+  if(!ciVal){alert('กรุณากรอกเวลาเข้างาน');return;}
+  const coVal=document.getElementById('aeCheckOut').value;
+  attCorrections[curAttEditKey]={
+    checkIn: ciVal+':00',
+    checkOut: coVal?coVal+':00':null,
+    note: document.getElementById('aeNote').value.trim(),
+    editedAt: new Date().toISOString()
+  };
+  localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));
+  fbPut('/hr/attCorrections',attCorrections);
+  closeAttEditModal();
+  showToast('✅ แก้ไขเวลาแล้ว กำลังคำนวณใหม่...');
+  loadFromFirebase();
+}
+function resetAttCorrection(){
+  if(!curAttEditKey)return;
+  if(!confirm('คืนค่ากลับเป็นเวลาที่สแกนจริงจากเครื่อง? การแก้ไขที่ตั้งไว้จะถูกลบ'))return;
+  delete attCorrections[curAttEditKey];
+  localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));
+  fbPut('/hr/attCorrections',attCorrections);
+  closeAttEditModal();
+  showToast('↩️ คืนค่าเวลาเดิมจากเครื่องสแกนแล้ว');
+  loadFromFirebase();
+}
+document.getElementById('attEditModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
+
 
 // ========== DASHBOARD ==========
 function renderDashboard(){
