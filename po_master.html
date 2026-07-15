@@ -401,23 +401,22 @@ body.viewer-mode .hide-viewer{display:none !important;}
   <div class="card">
     <div class="card-label">ประวัติการสั่งซื้อรายรายการ</div>
     <div class="field" style="margin-bottom:0;">
-      <label>ค้นหารายการ</label>
-      <input type="text" id="itemHistSearch" placeholder="พิมพ์ชื่อรายการเพื่อค้นหา..." oninput="renderItemHistory()">
+      <label>เลือกรายการ</label>
+      <select id="itemHistSelect" onchange="renderItemHistory()">
+        <option value="">— ทุกรายการ —</option>
+      </select>
     </div>
     <div class="grid2" style="margin-top:8px;">
       <div class="field" style="margin-bottom:0;">
-        <label>เดือน</label>
-        <select id="itemHistMonth" onchange="renderItemHistory()">
-          <option value="all">ทุกเดือน</option>
-        </select>
+        <label>จากวันที่</label>
+        <input type="date" id="itemHistFrom" onchange="renderItemHistory()">
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>ปี (พ.ศ.)</label>
-        <select id="itemHistYear" onchange="renderItemHistory()">
-          <option value="all">ทุกปี</option>
-        </select>
+        <label>ถึงวันที่</label>
+        <input type="date" id="itemHistTo" onchange="renderItemHistory()">
       </div>
     </div>
+    <button class="btn btn-outline" style="width:auto;margin-top:8px;font-size:11px;padding:6px 12px;" onclick="clearItemHistFilter()">ล้างตัวกรอง</button>
     <div id="itemHistWrap" style="margin-top:10px;"></div>
   </div>
 
@@ -1421,24 +1420,21 @@ function populateSummaryYears(){
   else sel.value = thisYear;
 }
 
-// ── ตัวกรอง "เดือน/ปี" สำหรับประวัติการสั่งซื้อรายรายการ ──
+// ── ตัวกรอง "รายการ + ช่วงวันที่" สำหรับประวัติการสั่งซื้อรายรายการ ──
 function populateItemHistFilters(){
-  var monthSel = document.getElementById('itemHistMonth');
-  var yearSel  = document.getElementById('itemHistYear');
-  if (!monthSel || !yearSel) return;
+  var sel = document.getElementById('itemHistSelect');
+  if (!sel) return;
+  var curVal = sel.value;
+  sel.innerHTML = '<option value="">— ทุกรายการ —</option>' +
+    itemRegistry.map(function(it){ return '<option value="'+esc(it.key)+'">'+esc(it.desc)+'</option>'; }).join('');
+  if (itemRegistry.some(function(it){ return it.key===curVal; })) sel.value = curVal;
+}
 
-  var curMonth = monthSel.value;
-  monthSel.innerHTML = '<option value="all">ทุกเดือน</option>' +
-    THAI_MONTHS.map(function(m,i){ return '<option value="'+(i+1)+'">'+m+'</option>'; }).join('');
-  if (curMonth) monthSel.value = curMonth;
-
-  var years = {};
-  poList.forEach(function(po){ if (po.date) years[po.date.slice(0,4)] = true; });
-  var sortedYears = Object.keys(years).sort().reverse();
-  var curYear = yearSel.value;
-  yearSel.innerHTML = '<option value="all">ทุกปี</option>' +
-    sortedYears.map(function(y){ return '<option value="'+y+'">'+(parseInt(y)+543)+'</option>'; }).join('');
-  if (sortedYears.indexOf(curYear) !== -1) yearSel.value = curYear;
+function clearItemHistFilter(){
+  var sel = document.getElementById('itemHistSelect'); if (sel) sel.value = '';
+  var from = document.getElementById('itemHistFrom'); if (from) from.value = '';
+  var to   = document.getElementById('itemHistTo');   if (to)   to.value = '';
+  renderItemHistory();
 }
 
 function renderSummary(){
@@ -1524,21 +1520,22 @@ function renderVendorBreakdown(year){
 // ══════════════════════════════════════
 function renderItemHistory(){
   var wrap = document.getElementById('itemHistWrap');
-  var q = document.getElementById('itemHistSearch').value.trim().toLowerCase();
-  var monthEl = document.getElementById('itemHistMonth');
-  var yearEl  = document.getElementById('itemHistYear');
-  var monthFilter = monthEl ? monthEl.value : 'all'; // 'all' หรือ '1'-'12'
-  var yearFilter  = yearEl  ? yearEl.value  : 'all'; // 'all' หรือ ค.ศ. เช่น '2026'
-  var hasDateFilter = monthFilter !== 'all' || yearFilter !== 'all';
+  var selEl = document.getElementById('itemHistSelect');
+  var fromEl = document.getElementById('itemHistFrom');
+  var toEl   = document.getElementById('itemHistTo');
+  var selKey  = selEl ? selEl.value : '';
+  var fromDate = fromEl ? fromEl.value : ''; // yyyy-mm-dd
+  var toDate   = toEl ? toEl.value : '';
+  var hasDateFilter = !!(fromDate || toDate);
 
-  // กรองตามชื่อรายการก่อน แล้วค่อยกรองประวัติแต่ละรายการตามเดือน/ปีที่เลือก
+  // กรองตามรายการที่เลือกก่อน แล้วค่อยกรองประวัติแต่ละรายการตามช่วงวันที่
   var filtered = itemRegistry
-    .filter(function(it){ return !q || it.desc.toLowerCase().includes(q); })
+    .filter(function(it){ return !selKey || it.key === selKey; })
     .map(function(it){
       var histFiltered = it.history.filter(function(h){
         if (!h.date) return false;
-        if (yearFilter  !== 'all' && h.date.slice(0,4) !== yearFilter) return false;
-        if (monthFilter !== 'all' && parseInt(h.date.slice(5,7),10) !== parseInt(monthFilter,10)) return false;
+        if (fromDate && h.date < fromDate) return false;
+        if (toDate   && h.date > toDate)   return false;
         return true;
       });
       return { it: it, hist: hasDateFilter ? histFiltered : it.history };
@@ -1547,7 +1544,7 @@ function renderItemHistory(){
 
   if (filtered.length === 0) {
     var emptyMsg = itemRegistry.length===0 ? 'ยังไม่มีประวัติการสั่งซื้อ'
-      : (hasDateFilter ? 'ไม่พบรายการสั่งซื้อในช่วงที่เลือก' : 'ไม่พบรายการที่ค้นหา');
+      : (hasDateFilter ? 'ไม่พบรายการสั่งซื้อในช่วงที่เลือก' : 'ไม่พบรายการที่เลือก');
     wrap.innerHTML = '<div class="empty-note">'+emptyMsg+'</div>';
     return;
   }
@@ -1559,7 +1556,7 @@ function renderItemHistory(){
       return '<tr><td>'+esc(h.poNo)+'</td><td>'+fmtD(h.date)+'</td><td>'+esc(h.vendorName)+'</td>' +
         '<td class="num">'+h.qty+' '+esc(h.unit)+'</td><td class="num">'+fmtMoney(h.price)+'</td></tr>';
     }).join('');
-    // เมื่อกรองตามเดือน/ปี ให้คำนวณสรุป (จำนวนครั้ง/รวมจำนวน/ราคาล่าสุด) เฉพาะในช่วงที่กรอง แทนยอดสะสมทั้งหมด
+    // เมื่อกรองตามช่วงวันที่ ให้คำนวณสรุป (จำนวนครั้ง/รวมจำนวน/ราคาล่าสุด) เฉพาะในช่วงที่กรอง แทนยอดสะสมทั้งหมด
     var summaryCount, summaryQty, summaryPriceLabel;
     if (hasDateFilter) {
       summaryCount = x.hist.length;
@@ -1571,7 +1568,7 @@ function renderItemHistory(){
       summaryQty = it.totalQty;
       summaryPriceLabel = fmtMoney(it.lastPrice)+' ฿/'+esc(it.unit);
     }
-    return '<details style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;">' +
+    return '<details style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;" '+(selKey?'open':'')+'>' +
       '<summary style="cursor:pointer;font-weight:600;">' +
         esc(it.desc) +
         '<span style="float:right;font-size:11px;color:var(--text-mid);">สั่งแล้ว '+summaryCount+' ครั้ง · รวม '+summaryQty+' '+esc(it.unit)+' · ล่าสุด '+summaryPriceLabel+'</span>' +
