@@ -1179,8 +1179,7 @@ function copyPrevMonth(){const pm=calMonth===0?11:calMonth-1,py=calMonth===0?cal
 function prevMonth(){if(calMonth===0){calMonth=11;calYear--;}else calMonth--;renderCal();}
 function nextMonth(){if(calMonth===11){calMonth=0;calYear++;}else calMonth++;renderCal();}
 
-const ef=document.getElementById('empFilter');
-EMPLOYEES.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=`${e.id} - ${e.name}`;ef.appendChild(o);});
+refreshEmpFilterDropdown();
 
 // ========== ATTENDANCE HISTORY ==========
 function setHistToday(){document.getElementById('histDate').valueAsDate=new Date();}
@@ -1525,8 +1524,19 @@ async function loadEmployeeCloudData(){
   }
   applyOverrides();
   applyDeleted();
+  refreshEmpFilterDropdown();
   const settingsPage=document.getElementById('page-settings');
   if(settingsPage && settingsPage.classList.contains('active')) renderSettings();
+}
+// สร้าง/รีเฟรช dropdown เลือกพนักงานในหน้า "ตารางกะ" ใหม่ ให้รวมพนักงานที่เพิ่งเพิ่ม/ลบไปด้วย (คงค่าที่เลือกอยู่ไว้ถ้ายังมีอยู่จริง)
+function refreshEmpFilterDropdown(){
+  const ef=document.getElementById('empFilter');
+  if(!ef)return;
+  const cur=ef.value;
+  ef.innerHTML='';
+  const allOpt=document.createElement('option');allOpt.value='all';allOpt.textContent='พนักงานทั้งหมด';ef.appendChild(allOpt);
+  EMPLOYEES.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=`${e.id} - ${e.name}`;ef.appendChild(o);});
+  if(cur && EMPLOYEES.find(e=>e.id===cur)) ef.value=cur; else ef.value='all';
 }
 loadEmployeeCloudData();
 
@@ -1659,8 +1669,7 @@ document.getElementById('deductModal').addEventListener('click',e=>{if(e.target=
 initSalaryMonths();
 setHistToday();
 
-// Populate empFilter
-const efOpt=document.createElement('option');efOpt.value='all';efOpt.textContent='พนักงานทั้งหมด';document.getElementById('empFilter').insertBefore(efOpt,document.getElementById('empFilter').firstChild);
+// (empFilter dropdown ถูกสร้างผ่าน refreshEmpFilterDropdown() แล้ว ทั้งตอนโหลดหน้าครั้งแรกและหลังข้อมูลจาก Firebase มาถึง)
 </script>
 </body>
 </html>
