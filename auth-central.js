@@ -41,6 +41,13 @@
         - role === 'admin' จะได้ nobillApprove === true เสมอ (อนุมัติได้อยู่แล้วในตัว)
         - เก็บใน permissions[systemKey + '_nobill'] = true (ไม่มีคีย์นี้ = false)
 
+     7. (ใหม่) สิทธิ์อนุมัติ "เติมเคมีด้วยมือ" — result.manualDoseApprove:
+        - ใช้เฉพาะระบบที่ manualDoseApprovable:true ใน SYSTEM_LIST (plating_v4/v5_b2/v6_r1)
+        - ทำงานแบบเดียวกับข้อ 6 ทุกประการ แต่แยกอิสระเป็นสิทธิ์ของตัวเอง
+          (ไม่ผูกกับ nobillApprove — ตั้งให้แยกกันได้ เช่น อนุมัติ NOBILL ได้แต่เติมมือไม่ได้ หรือกลับกัน)
+        - role === 'admin' จะได้ manualDoseApprove === true เสมอ
+        - เก็บใน permissions[systemKey + '_manualdose'] = true (ไม่มีคีย์นี้ = false)
+
    หมายเหตุสำคัญ:
      - ถ้าเชื่อมต่อ Firebase ไม่ได้ (ออฟไลน์/error) ระบบจะ "ปฏิเสธ login"
        เสมอ ไม่มี fallback ไปใช้ค่าที่ cache ไว้ — เพื่อความปลอดภัย
@@ -148,7 +155,7 @@
       ]
     },
     {
-      key: 'plating_v4', label: 'B1 — Barrel 1', group: 'สายการผลิต', nobillApprovable: true,
+      key: 'plating_v4', label: 'B1 — Barrel 1', group: 'สายการผลิต', nobillApprovable: true, manualDoseApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -164,7 +171,7 @@
       ]
     },
     {
-      key: 'plating_v5_b2', label: 'B2 — Barrel 2', group: 'สายการผลิต', nobillApprovable: true,
+      key: 'plating_v5_b2', label: 'B2 — Barrel 2', group: 'สายการผลิต', nobillApprovable: true, manualDoseApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -180,7 +187,7 @@
       ]
     },
     {
-      key: 'plating_v6_r1', label: 'R1 — Rack 1', group: 'สายการผลิต', nobillApprovable: true,
+      key: 'plating_v6_r1', label: 'R1 — Rack 1', group: 'สายการผลิต', nobillApprovable: true, manualDoseApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -221,6 +228,12 @@
   // ถ้าไม่มีคีย์นี้ (undefined) = อนุมัติไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งอนุมัติได้เสมอ
   var NOBILL_SUFFIX = '_nobill';
 
+  // คีย์ boolean permission เสริม — สิทธิ์ "อนุมัติเติมเคมีด้วยมือ" เฉพาะระบบที่ manualDoseApprovable:true
+  // (ตอนนี้คือ plating_v4/plating_v5_b2/plating_v6_r1) เก็บเป็น permissions[key + MANUALDOSE_SUFFIX] = true
+  // แยกอิสระจาก NOBILL_SUFFIX — ตั้งแยกกันได้ตามหน้างานจริงของแต่ละคน
+  // ถ้าไม่มีคีย์นี้ (undefined) = อนุมัติไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งอนุมัติได้เสมอ
+  var MANUALDOSE_SUFFIX = '_manualdose';
+
   function systemDef(systemKey) {
     for (var i = 0; i < SYSTEM_LIST.length; i++) {
       if (SYSTEM_LIST[i].key === systemKey) return SYSTEM_LIST[i];
@@ -250,6 +263,15 @@
   function canApproveNobill(systemKey, role, perms) {
     if (role === 'admin') return true;
     return !!(perms && perms[systemKey + NOBILL_SUFFIX] === true);
+  }
+
+  // คืนค่า boolean ว่าสิทธิ์นี้อนุมัติ "เติมเคมีด้วยมือ" ของระบบนี้ได้หรือไม่
+  //   - role === 'admin'                            → true เสมอ (แอดมินอนุมัติได้อยู่แล้วในตัว)
+  //   - perms[{systemKey}_manualdose] === true       → true (ติ๊กสิทธิ์เพิ่มให้จากหน้า auth_admin)
+  //   - อื่นๆ (ไม่มีคีย์นี้ หรือ role ต่ำกว่า)          → false
+  function canApproveManualDose(systemKey, role, perms) {
+    if (role === 'admin') return true;
+    return !!(perms && perms[systemKey + MANUALDOSE_SUFFIX] === true);
   }
 
   // ── ดึงข้อมูลผู้ใช้ทั้งหมดจาก Firebase ──
@@ -312,6 +334,7 @@
         role: role,
         tabs: resolveTabs(systemKey, role, perms),
         nobillApprove: canApproveNobill(systemKey, role, perms),
+        manualDoseApprove: canApproveManualDose(systemKey, role, perms),
         user: { pin: pin, name: user.name || '', permissions: perms, signature: user.signature || null }
       };
     });
@@ -335,12 +358,14 @@
     ROLE_LEVELS: ROLE_LEVELS,
     TABS_SUFFIX: TABS_SUFFIX,
     NOBILL_SUFFIX: NOBILL_SUFFIX,
+    MANUALDOSE_SUFFIX: MANUALDOSE_SUFFIX,
     fetchUsers: fetchUsers,
     saveUsers: saveUsers,
     login: login,
     isAuthAdmin: isAuthAdmin,
     resolveTabs: resolveTabs,
-    canApproveNobill: canApproveNobill
+    canApproveNobill: canApproveNobill,
+    canApproveManualDose: canApproveManualDose
   };
 
 })(window);

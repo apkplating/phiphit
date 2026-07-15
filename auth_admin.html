@@ -404,6 +404,7 @@ function renderTable() {
         roleSelectHtml(pin, sys.key, role) +
         tabsButtonHtml(pin, sys.key, role, perms) +
         nobillButtonHtml(pin, sys.key, role, perms) +
+        manualDoseButtonHtml(pin, sys.key, role, perms) +
         '</div></td>';
     });
 
@@ -521,6 +522,25 @@ function nobillButtonHtml(pin, sysKey, role, perms) {
   '</label>';
 }
 
+// ══════════════════════════════════════
+//  สิทธิ์อนุมัติ "เติมเคมีด้วยมือ" — เฉพาะระบบที่ manualDoseApprovable:true (B1/B2/R1)
+// ══════════════════════════════════════
+// ทำงานแบบเดียวกับ nobillButtonHtml ทุกประการ แต่เป็นสิทธิ์แยกอิสระของตัวเอง
+function manualDoseButtonHtml(pin, sysKey, role, perms) {
+  var def = systemDef(sysKey);
+  if (!def || !def.manualDoseApprovable) return '';
+  if (role === 'admin') {
+    return '<button class="tabs-btn" disabled title="แอดมินอนุมัติเติมมือได้อยู่แล้วในตัว">✅ อนุมัติเติมมือได้</button>';
+  }
+  if (role !== 'operator') return '';
+  var key = sysKey + CentralAuth.MANUALDOSE_SUFFIX;
+  var can = perms[key] === true;
+  return '<label class="tabs-btn' + (can ? ' nobill-on' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;">' +
+    '<input type="checkbox" style="margin:0;" ' + (can?'checked':'') + ' onchange="onManualDoseToggle(\'' + pin + '\',\'' + sysKey + '\',this.checked)">' +
+    (can ? '✅ อนุมัติเติมมือ' : 'อนุมัติเติมมือ') +
+  '</label>';
+}
+
 var tabsModalState = null; // { pin, sysKey }
 
 function openTabsModal(pin, sysKey) {
@@ -617,6 +637,17 @@ function onNobillToggle(pin, sysKey, checked) {
   else delete users[pin].permissions[key];
   renderTable();
   persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์อนุมัติ NOBILL — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
+}
+
+// ── สิทธิ์อนุมัติ "เติมเคมีด้วยมือ" ต่อระบบ (เก็บเป็น permissions[sysKey+'_manualdose'] = true/false) ──
+function onManualDoseToggle(pin, sysKey, checked) {
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  var key = sysKey + CentralAuth.MANUALDOSE_SUFFIX;
+  if (checked) users[pin].permissions[key] = true;
+  else delete users[pin].permissions[key];
+  renderTable();
+  persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์อนุมัติเติมมือ — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
 }
 
 function labelForSystem(sysKey) {
