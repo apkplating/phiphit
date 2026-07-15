@@ -146,6 +146,7 @@ select.role-select.role-admin{ color:var(--green); border-color:#bbf7d0; backgro
 }
 .tabs-btn:hover{ border-color:var(--steel-2); }
 .tabs-btn.restricted{ color:var(--amber); border-color:#fde68a; background:#fffbeb; }
+.tabs-btn.nobill-on{ color:#16a34a; border-color:#86efac; background:#f0fdf4; }
 .tabs-btn:disabled{ opacity:.4; cursor:not-allowed; }
 
 /* ── Tabs picker modal ── */
@@ -402,6 +403,7 @@ function renderTable() {
       cells += '<td class="sys-col"><div class="sys-cell">' +
         roleSelectHtml(pin, sys.key, role) +
         tabsButtonHtml(pin, sys.key, role, perms) +
+        nobillButtonHtml(pin, sys.key, role, perms) +
         '</div></td>';
     });
 
@@ -498,6 +500,27 @@ function systemDef(sysKey) {
   return CentralAuth.SYSTEM_LIST.find(function(s){ return s.key === sysKey; }) || null;
 }
 
+// ══════════════════════════════════════
+//  สิทธิ์อนุมัติ "บันทึกแบบไม่ระบุบิล" — เฉพาะระบบที่ nobillApprovable:true (B1/B2/R1)
+// ══════════════════════════════════════
+// ปุ่มเล็กๆ ใต้ dropdown role (ต่อจากปุ่มแท็บ) — ติ๊กให้สิทธิ์อนุมัติ NOBILL แยกจาก role หลัก
+// แสดงเฉพาะ role === 'operator' — admin อนุมัติได้อยู่แล้วในตัว (แสดงป้ายเฉยๆ ไม่ต้องติ๊ก),
+// viewer/none เข้าหน้ากรอกรายรอบไม่ได้อยู่แล้วจึงไม่ต้องมีตัวเลือกนี้
+function nobillButtonHtml(pin, sysKey, role, perms) {
+  var def = systemDef(sysKey);
+  if (!def || !def.nobillApprovable) return '';
+  if (role === 'admin') {
+    return '<button class="tabs-btn" disabled title="แอดมินอนุมัติ NOBILL ได้อยู่แล้วในตัว">✅ อนุมัติ NOBILL ได้</button>';
+  }
+  if (role !== 'operator') return '';
+  var key = sysKey + CentralAuth.NOBILL_SUFFIX;
+  var can = perms[key] === true;
+  return '<label class="tabs-btn' + (can ? ' nobill-on' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;">' +
+    '<input type="checkbox" style="margin:0;" ' + (can?'checked':'') + ' onchange="onNobillToggle(\'' + pin + '\',\'' + sysKey + '\',this.checked)">' +
+    (can ? '✅ อนุมัติ NOBILL' : 'อนุมัติ NOBILL') +
+  '</label>';
+}
+
 var tabsModalState = null; // { pin, sysKey }
 
 function openTabsModal(pin, sysKey) {
@@ -583,6 +606,17 @@ function onAuthAdminToggle(pin, checked) {
   users[pin].permissions.auth_admin = checked ? 'admin' : 'none';
   persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์จัดการผู้ใช้ — ' + (users[pin].name || pin));
   renderTable();
+}
+
+// ── สิทธิ์อนุมัติ "บันทึกแบบไม่ระบุบิล" ต่อระบบ (เก็บเป็น permissions[sysKey+'_nobill'] = true/false) ──
+function onNobillToggle(pin, sysKey, checked) {
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  var key = sysKey + CentralAuth.NOBILL_SUFFIX;
+  if (checked) users[pin].permissions[key] = true;
+  else delete users[pin].permissions[key];
+  renderTable();
+  persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์อนุมัติ NOBILL — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
 }
 
 function labelForSystem(sysKey) {

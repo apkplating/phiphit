@@ -13,6 +13,7 @@
             var role = result.role; // 'admin' | 'operator' | 'viewer' | 'none'
             var tabs = result.tabs; // null = เห็นทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
             var user = result.user; // {pin, name, permissions:{...}}
+            var nobillApprove = result.nobillApprove; // (ใหม่) true = อนุมัติ "บันทึกแบบไม่ระบุบิล" ได้ (ดูข้อ 6)
             // เก็บไว้ใช้กับ applyRole() ที่มีอยู่เดิมของระบบนั้นๆ
           });
      4. role ที่ได้กลับมาจะตรงกับ role เดิมที่ระบบใช้อยู่แล้ว
@@ -31,6 +32,14 @@
             var tabId = TAB_IDS[i]; // เรียงตามลำดับปุ่มในหน้า
             if (tabs && tabs.indexOf(tabId) === -1) btn.style.display = 'none';
           });
+
+     6. (ใหม่) สิทธิ์อนุมัติ "บันทึกแบบไม่ระบุบิล" — result.nobillApprove:
+        - ใช้เฉพาะระบบที่ nobillApprovable:true ใน SYSTEM_LIST (plating_v4/v5_b2/v6_r1)
+        - เป็น boolean แยกอิสระจาก role หลัก — ตั้งค่าได้จากหน้า auth_admin โดยไม่ต้อง
+          ยกสิทธิ์ "แอดมิน" เต็มระบบให้ (เหมาะกับหัวหน้าไลน์ที่ต้องอนุมัติแต่ไม่ควรมีสิทธิ์
+          ลบประวัติ/เข้าตั้งค่า)
+        - role === 'admin' จะได้ nobillApprove === true เสมอ (อนุมัติได้อยู่แล้วในตัว)
+        - เก็บใน permissions[systemKey + '_nobill'] = true (ไม่มีคีย์นี้ = false)
 
    หมายเหตุสำคัญ:
      - ถ้าเชื่อมต่อ Firebase ไม่ได้ (ออฟไลน์/error) ระบบจะ "ปฏิเสธ login"
@@ -139,7 +148,7 @@
       ]
     },
     {
-      key: 'plating_v4', label: 'B1 — Barrel 1', group: 'สายการผลิต',
+      key: 'plating_v4', label: 'B1 — Barrel 1', group: 'สายการผลิต', nobillApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -155,7 +164,7 @@
       ]
     },
     {
-      key: 'plating_v5_b2', label: 'B2 — Barrel 2', group: 'สายการผลิต',
+      key: 'plating_v5_b2', label: 'B2 — Barrel 2', group: 'สายการผลิต', nobillApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -171,7 +180,7 @@
       ]
     },
     {
-      key: 'plating_v6_r1', label: 'R1 — Rack 1', group: 'สายการผลิต',
+      key: 'plating_v6_r1', label: 'R1 — Rack 1', group: 'สายการผลิต', nobillApprovable: true,
       tabs: [
         { id: 'entry',    label: 'กรอกรายรอบ' },
         { id: 'summary',  label: 'สรุปวันนี้' },
@@ -206,6 +215,12 @@
   // ถ้าไม่มีคีย์นี้ (undefined) = เห็นทุกแท็บ (ไม่จำกัด, ค่า default เดิม)
   var TABS_SUFFIX = '_tabs';
 
+  // คีย์ boolean permission เสริม — สิทธิ์ "อนุมัติบันทึกแบบไม่ระบุบิล" เฉพาะระบบที่ nobillApprovable:true
+  // (ตอนนี้คือ plating_v4/plating_v5_b2/plating_v6_r1) เก็บเป็น permissions[key + NOBILL_SUFFIX] = true
+  // แยกจาก role หลัก เพื่อให้ตั้งสิทธิ์นี้ให้หัวหน้าไลน์ได้ โดยไม่ต้องยกสิทธิ์ "แอดมิน" เต็มระบบให้
+  // ถ้าไม่มีคีย์นี้ (undefined) = อนุมัติไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งอนุมัติได้เสมอ
+  var NOBILL_SUFFIX = '_nobill';
+
   function systemDef(systemKey) {
     for (var i = 0; i < SYSTEM_LIST.length; i++) {
       if (SYSTEM_LIST[i].key === systemKey) return SYSTEM_LIST[i];
@@ -226,6 +241,15 @@
     var validIds = def.tabs.map(function (t) { return t.id; });
     var filtered = allowed.filter(function (id) { return validIds.indexOf(id) !== -1; });
     return filtered;
+  }
+
+  // คืนค่า boolean ว่าสิทธิ์นี้อนุมัติ "บันทึกแบบไม่ระบุบิล" ของระบบนี้ได้หรือไม่
+  //   - role === 'admin'                        → true เสมอ (แอดมินอนุมัติได้อยู่แล้วในตัว)
+  //   - perms[{systemKey}_nobill] === true       → true (ติ๊กสิทธิ์เพิ่มให้จากหน้า auth_admin)
+  //   - อื่นๆ (ไม่มีคีย์นี้ หรือ role ต่ำกว่า)      → false
+  function canApproveNobill(systemKey, role, perms) {
+    if (role === 'admin') return true;
+    return !!(perms && perms[systemKey + NOBILL_SUFFIX] === true);
   }
 
   // ── ดึงข้อมูลผู้ใช้ทั้งหมดจาก Firebase ──
@@ -287,6 +311,7 @@
         ok: true,
         role: role,
         tabs: resolveTabs(systemKey, role, perms),
+        nobillApprove: canApproveNobill(systemKey, role, perms),
         user: { pin: pin, name: user.name || '', permissions: perms, signature: user.signature || null }
       };
     });
@@ -309,11 +334,13 @@
     SYSTEM_LIST: SYSTEM_LIST,
     ROLE_LEVELS: ROLE_LEVELS,
     TABS_SUFFIX: TABS_SUFFIX,
+    NOBILL_SUFFIX: NOBILL_SUFFIX,
     fetchUsers: fetchUsers,
     saveUsers: saveUsers,
     login: login,
     isAuthAdmin: isAuthAdmin,
-    resolveTabs: resolveTabs
+    resolveTabs: resolveTabs,
+    canApproveNobill: canApproveNobill
   };
 
 })(window);
