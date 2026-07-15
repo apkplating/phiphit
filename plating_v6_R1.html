@@ -2883,16 +2883,13 @@ function applyPreset(idx) {
           '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cu?' · '+cu:'')+'</span>';
 
         // เติม dropdown แล้วเลือก jobId นั้นทันที
-        var normSel = normalizePartKey(partNo);
         var active = (jobMasterItems||[]).filter(function(j){
           var b = calcJobBal(j.id);
           var u = calcTodayUsed(j.id);
           var rPcs = b.remain   - u.used;
           var rKg  = b.remainKg - u.usedKg;
           if (rPcs <= 0 && rKg <= 0) return false;
-          return normalizePartKey(j.partName) === normSel
-              || partNoFromName(j.partName||'') === normSel
-              || normalizePartKey(j.partName).startsWith(normSel);
+          return jobMatchesPartNo(j, partNo);
         });
         renderBillList(active, savedJobId);
         var sel = document.getElementById('bJobPick');
@@ -2942,16 +2939,12 @@ function renderPresetChips() {
       return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
     });
     // ตรวจสต็อก — ใช้ partNoFromName เพื่อ handle partName ยาว
-    var normSel = normalizePartKey(partNo);
     var hasStock = (jobMasterItems||[]).some(function(j){
       var b = calcJobBal(j.id);
       var u = calcTodayUsed(j.id);
       var r = (j.unit==='kg') ? b.remainKg - u.usedKg : b.remain - u.used;
       if (r <= 0) return false;
-      var jNorm = normalizePartKey(j.partName||'');
-      return jNorm === normSel
-          || partNoFromName(j.partName||'') === normSel
-          || jNorm.startsWith(normSel);
+      return jobMatchesPartNo(j, partNo);
     });
     // ถ้า pmSrc ยังโหลดไม่เสร็จ แต่มีสต็อกใน JM → ถือว่าผ่าน
     var reallyInPM = inPM || (pmSrc.length === 0 && hasStock);
@@ -5098,6 +5091,22 @@ function normalizePartKey(s) {
   return (s||'').trim().toLowerCase().replace(/\s+/g,' ');
 }
 
+// ── จับคู่ P/No แบบเข้มงวดน้อยลง — ตัดอักขระคั่นทุกแบบทิ้ง (จุด/ขีด/ช่องว่าง) ก่อนเทียบ ──
+// กันเคสบิลมีคงเหลือจริงใน Job Master แต่ไม่ขึ้นให้เลือกในหน้านี้ เพราะตัวคั่นเขียนไม่ตรงกันเป๊ะๆ
+// เช่น P/No ที่พิมพ์ "4X32.8X8X2" แต่ job.partName เก็บเป็น "4X32-8X8X2" หรือมีช่องว่างคั่น
+// (ก่อนหน้านี้ normalizePartKey() ตัดแค่ whitespace อย่างเดียว ไม่ตัดจุด/ขีด ทำให้พลาดจับคู่ได้)
+function partKeyLoose(s) {
+  return (s||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
+}
+function jobMatchesPartNo(job, partNo) {
+  var looseSel = partKeyLoose(partNo);
+  var looseJob = partKeyLoose(job && job.partName || '');
+  if (looseSel && looseJob && (looseJob === looseSel || looseJob.indexOf(looseSel) === 0)) return true;
+  var normSel = normalizePartKey(partNo);
+  var jNorm   = normalizePartKey(job && job.partName || '');
+  return jNorm === normSel || jNorm.startsWith(normSel) || partNoFromName(job && job.partName || '') === normSel;
+}
+
 function partNoFromName(fullName) {
   if (!fullName) return '';
   var n = normalizePartKey(fullName);
@@ -6542,14 +6551,10 @@ function barrelPmAcShow() {
     var partNo = p.partNo || '';
     var nm     = p.partName || p.name || '';
     var cust   = p.customer || '';
-    var _pnNorm = normalizePartKey(partNo);
     var hasStock = (jobMasterItems||[]).some(function(j){
       var b = calcJobBal(j.id);
       if (b.remain <= 0 && b.remainKg <= 0) return false;
-      var jNorm = normalizePartKey(j.partName||'');
-      return jNorm === _pnNorm
-          || partNoFromName(j.partName||'') === _pnNorm
-          || jNorm.startsWith(_pnNorm);
+      return jobMatchesPartNo(j, partNo);
     });
     return '<div style="padding:9px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;" '+
       'onmousedown="barrelPmAcPick('+i+')">' +
@@ -6599,8 +6604,7 @@ function barrelPmAcPick(idx) {
     return;
   }
 
-  // ตรวจว่ามีบิลมีคงเหลือไหม (ใช้ partNoFromName เพื่อ handle กรณี partName มีชื่อยาว)
-  var normSel = normalizePartKey(partNo);
+  // ตรวจว่ามีบิลมีคงเหลือไหม (ใช้ jobMatchesPartNo เพื่อ handle กรณี partName มีชื่อยาว/ตัวคั่นไม่ตรงกัน)
   var active  = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
     var u = calcTodayUsed(j.id);
@@ -6608,10 +6612,7 @@ function barrelPmAcPick(idx) {
     var rPcs = b.remain   - u.used;
     var rKg  = b.remainKg - u.usedKg;
     if (rPcs <= 0 && rKg <= 0) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel
-        || partNoFromName(j.partName||'') === normSel
-        || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // ถ้าไม่มีสต็อก → ยังให้ทำงานต่อได้ แต่ dropdown มีแค่ "ไม่ระบุบิล"
@@ -8501,22 +8502,19 @@ function openAddBillModal(dayId, rowIdx) {
   var curLabel = curJob ? curJob.bill : (row.manualBill || '');
 
   // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ)
-  var normSel = normalizePartKey(partNo);
   var active = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
     var rPcs = b.remain   - 0;
     var rKg  = b.remainKg - 0;
     if (rPcs <= 0 && rKg <= 0) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // รายชื่อบิลของ "ชิ้นงานเดียวกัน" เท่านั้น (รวมบิลที่หมดสต็อกแล้วด้วย) ไว้ให้เลือก/พิมพ์เอง
   // ไม่โชว์บิลทั้งระบบ เพราะจะเยอะเกินไปจนกวนตา — ถ้าจะพิมพ์บิลที่ไม่เกี่ยวกับชิ้นงานนี้เลย (เช่น บิลเก่าก่อนมีระบบ) พิมพ์เองได้อยู่แล้วโดยไม่ต้องพึ่ง datalist
   var allBills = (jobMasterItems||[]).filter(function(j){
     if (!String(j.bill||'').trim()) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // สร้าง modal
@@ -8618,10 +8616,10 @@ function saveBillToRow(dayId, rowIdx) {
 
   if (!jobId && manualText) {
     // ค้นหาบิลจากเลขที่พิมพ์เอง — ถ้ามีหลายรายการเลขบิลซ้ำกัน (คนละชิ้นงาน) ให้เลือกอันที่ตรงชิ้นงานแถวนี้ก่อน
-    var normSel0 = normalizePartKey((row.partName||'').trim());
+    var rowPartNo = (row.partName||'').trim();
     var matches = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim() === manualText; });
-    if (matches.length > 1 && normSel0) {
-      var pref = matches.find(function(j){ return normalizePartKey(j.partName||'')===normSel0; });
+    if (matches.length > 1 && rowPartNo) {
+      var pref = matches.find(function(j){ return jobMatchesPartNo(j, rowPartNo); });
       if (pref) matches = [pref];
     }
     if (matches.length) {
