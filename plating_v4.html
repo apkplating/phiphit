@@ -478,9 +478,18 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         </button>
       </div>
 
-      <!-- ── Step 2: เลือกบิล (ซ่อนถ้ายังไม่เลือก P/No) ── -->
+      <!-- ── Step 2: ประเภทงาน N / R (เลือกก่อน — ถ้าเป็น R ไม่ต้องเลือกบิล) ── -->
+      <div style="margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;color:var(--text-mid);display:block;margin-bottom:4px;">② ประเภทงาน</label>
+        <div class="type-row">
+          <button class="type-btn sel-N" id="type-N" onclick="selType('N')">N — งานใหม่</button>
+          <button class="type-btn" id="type-R" onclick="selType('R')">R — งานซ่อม (ไม่ต้องเลือกบิล)</button>
+        </div>
+      </div>
+
+      <!-- ── Step 3: เลือกบิล (เฉพาะงานใหม่ N — ซ่อนถ้ายังไม่เลือก P/No หรือเลือกงานซ่อม R) ── -->
       <div id="bBillSelWrap" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
-        <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:6px;">② เลือกบิล (คงเหลือ)</div>
+        <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:6px;">③ เลือกบิล (คงเหลือ)</div>
         <!-- hidden select ยังคงไว้เพื่อ backward compat กับ code ที่อ่าน bJobPick.value -->
         <select id="bJobPick" onchange="onBarrelJobPick()" style="display:none;">
           <option value="">— เลือกบิลที่ต้องการ —</option>
@@ -505,15 +514,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         style="font-size:13px;border-color:#f59e0b;background:#fffbeb;"
         oninput="this.style.borderColor=this.value?'var(--border)':'#f59e0b';this.style.background=this.value?'':'#fffbeb';">
       <div style="font-size:10px;color:#b45309;margin-top:3px;">💡 ต้องตรงกับ LOT ที่กรอกในหน้า "รับงานเข้า" ถึงจะตัดสต็อคได้</div>
-    </div>
-
-    <!-- ประเภทงาน N / R -->
-    <div style="margin-bottom:6px;">
-      <label style="font-size:11px;font-weight:500;color:var(--text-mid);display:block;margin-bottom:4px;">ประเภทงาน</label>
-      <div class="type-row">
-        <button class="type-btn sel-N" id="type-N" onclick="selType('N')">N — งานใหม่</button>
-        <button class="type-btn" id="type-R" onclick="selType('R')">R — งานซ่อม</button>
-      </div>
     </div>
 
     <!-- สีที่ชุบ B / C / K -->
@@ -1533,11 +1533,29 @@ function syncAH(el) {
 //  TYPE / COLOR SELECT
 // ═══════════════════════════════════════
 function selType(t) {
+  var prevType = selTypeVal;
   selTypeVal = t;
   ['N','R'].forEach(function(k) {
     var btn = document.getElementById('type-'+k);
     btn.className = 'type-btn' + (k===t ? ' sel-'+k : '');
   });
+  if (prevType === t) return; // ไม่มีการเปลี่ยนจริง ไม่ต้องยุ่งกับ step เลือกบิล
+
+  var bbsw = document.getElementById('bBillSelWrap');
+  if (t === 'R') {
+    // งานซ่อม (R) ไม่ต้องผูกบิล — ซ่อน step เลือกบิล + เคลียร์ค่าที่เลือกไว้ (ถ้าสลับมาจาก N)
+    if (bbsw) bbsw.style.display = 'none';
+    var sel = document.getElementById('bJobPick'); if (sel) sel.value = '';
+    var bbi = document.getElementById('bBillInfo'); if (bbi) bbi.innerHTML = '';
+  } else if (_barrelPartSelected) {
+    // สลับจาก R กลับมา N หลังเลือก P/No ไว้แล้ว (ตอนเป็น R) → ให้เลือก P/No ใหม่อีกครั้งเพื่อโชว์รายชื่อบิล
+    _barrelPartSelected = false;
+    var bps = document.getElementById('bPartSearch');
+    var pn = bps ? bps.value.trim() : '';
+    if (bps) bps.value = '';
+    var stEl = document.getElementById('bPartSearchStatus'); if (stEl) stEl.textContent = '';
+    if (pn) showToast('entry', 'สลับเป็นงานใหม่ (N) — กรุณาเลือก P/No "'+pn+'" อีกครั้งเพื่อเลือกบิล', 'ok');
+  }
 }
 function selColor(c) {
   selColorVal = c;
@@ -1594,11 +1612,95 @@ function addBarrel() {
   }
   if (!kg && !pcs) { showToast('entry','กรุณากรอก Kgs หรือ Pcs','err'); return; }
 
+  var _billJobId = document.getElementById('bJobPick').value || '';
+
+  // ── งานซ่อม (R) ไม่ต้องผูกบิล — ปล่อยผ่านได้เลย ไม่ต้องเช็คยอดเกิน ไม่ต้องขออนุมัติ NOBILL ──
+  if (selTypeVal === 'R') {
+    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, null);
+    return;
+  }
+
+  // ── กรณีมีบิลจริง (เฉพาะงานใหม่ N): กันชุบเกินจำนวนคงเหลือของบิล ──
+  if (_billJobId && _billJobId !== 'NOBILL') {
+    var _billJob = (jobMasterItems||[]).find(function(j){ return j.id===_billJobId; });
+    if (_billJob) {
+      var _bal  = calcJobBal(_billJobId);
+      var _used = calcTodayUsed(_billJobId);
+      var _remainPcs = _bal.remain   - _used.used;
+      var _remainKg  = _bal.remainKg - _used.usedKg;
+      var _isKgUnit  = _billJob.unit === 'kg';
+      var _pcsChk = pcs;
+      if (!_pcsChk && kg > 0 && !_isKgUnit) {
+        var _wG = getWeightGForPO(_billJob.partName || _billJob.partNo || '');
+        if (_wG > 0) _pcsChk = Math.round((kg*1000)/_wG);
+      }
+      var _overAmt = 0, _remainStr = '';
+      if (_isKgUnit) {
+        if (kg > _remainKg + 0.001) { _overAmt = kg - _remainKg; _remainStr = Math.max(0,_remainKg).toFixed(2)+' กก.'; }
+      } else {
+        if (_pcsChk > _remainPcs) { _overAmt = _pcsChk - _remainPcs; _remainStr = Math.max(0,_remainPcs).toLocaleString()+' ชิ้น'; }
+      }
+      if (_overAmt > 0) {
+        var _overStr = _isKgUnit ? _overAmt.toFixed(2)+' กก.' : _overAmt.toLocaleString()+' ชิ้น';
+        showToast('entry', '🚫 บันทึกไม่ได้ — บิล '+(_billJob.bill||'?')+' คงเหลือ '+_remainStr+' แต่กำลังลงจำนวนเกินไป '+_overStr+' กรุณาตรวจสอบยอดค้างจากบิล', 'err');
+        return;
+      }
+    }
+    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, null);
+    return;
+  }
+
+  // ── กรณี "ไม่ระบุบิล" (ไม่เลือกบิล หรือไม่มีบิลให้เลือก) ──
+  // ต้องให้ผู้มีสิทธิ์อนุมัติ NOBILL (ตั้งจากหน้า auth_admin) ใส่ PIN ก่อนบันทึกทุกครั้ง เพื่อดักจับเคสระบบจับคู่บิลผิดพลาด
+  // (เช่น P/No ไม่ตรงกัน) ก่อนที่ยอดจะหลุดไปเป็น "ไม่ระบุบิล" โดยไม่มีใครตรวจสอบ
+  // ยกเว้นถ้าคนที่ล็อกอินอยู่ตอนนี้มีสิทธิ์นี้อยู่แล้ว (currentNobillApprove — admin ได้สิทธิ์นี้เสมอ) ก็ถือว่าอนุมัติในตัว
+  if (currentNobillApprove === true) {
+    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, { role: currentRole, name: currentUserName, by: 'self', at: new Date().toISOString() });
+    return;
+  }
+  requestNobillApproval(function(approved, approverInfo){
+    if (!approved) {
+      showToast('entry', '🚫 ยกเลิก — ไม่ได้รับอนุมัติให้บันทึกแบบไม่ระบุบิล', 'err');
+      return;
+    }
+    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, approverInfo);
+  });
+}
+
+// ── ขออนุมัติจากผู้มีสิทธิ์อนุมัติ NOBILL ก่อนบันทึกรายรอบแบบ "ไม่ระบุบิล" ──
+// สิทธิ์นี้มาจาก CentralAuth.login().nobillApprove — ตั้งได้จากหน้า auth_admin แยกจาก role หลัก
+// (admin ได้สิทธิ์นี้เสมอโดยอัตโนมัติ, operator ต้องถูกติ๊กให้เพิ่มจึงจะอนุมัติได้)
+function requestNobillApproval(cb) {
+  var pin = prompt('⚠️ รายการนี้ "ไม่ระบุบิล" (จะไม่ตัดสต็อกจากบิลใด ๆ)\nต้องให้ผู้มีสิทธิ์อนุมัติ NOBILL ใส่ PIN เพื่ออนุมัติก่อนบันทึก:');
+  if (pin === null) { cb(false); return; } // กดยกเลิก
+  pin = pin.trim();
+  if (!pin) { cb(false); return; }
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (result.ok && result.nobillApprove) {
+      var approverName = (result.user && result.user.name) || '';
+      showToast('entry', '✅ อนุมัติ "ไม่ระบุบิล" โดย' + (approverName ? ' ' + approverName : 'ผู้มีสิทธิ์') + ' แล้ว', 'ok');
+      cb(true, { role: result.role, name: approverName, by: 'pin', at: new Date().toISOString() });
+    } else {
+      showToast('entry', '🚫 PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์อนุมัติ NOBILL', 'err');
+      cb(false);
+    }
+  }).catch(function(){
+    showToast('entry', '🚫 เชื่อมต่อระบบสิทธิ์ไม่ได้ — ลองใหม่อีกครั้ง', 'err');
+    cb(false);
+  });
+}
+
+// ── บันทึกรายรอบจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async ของกรณี "ไม่ระบุบิล") ──
+function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
-              jobId: document.getElementById('bJobPick').value || '',
+              jobId: jobId,
               lotNo: lotNo };
+  if (approverInfo) {
+    row.nobillApprovedBy = approverInfo.name || (approverInfo.role + (approverInfo.by==='self' ? ' (self)' : ''));
+    row.nobillApprovedAt = approverInfo.at;
+  }
   todayBarrels.push(row);
   try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
@@ -1631,7 +1733,7 @@ function addBarrel() {
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
 
   renderBarrels();
-  showToast('entry','เพิ่มรอบชุบแล้ว ✓ (LOT: '+lotNo+')','ok');
+  showToast('entry','เพิ่มรอบชุบแล้ว ✓ (LOT: '+lotNo+')'+(approverInfo?' · ✅ อนุมัติไม่ระบุบิลแล้ว':''),'ok');
 }
 
 function delBarrel(id) {
@@ -1785,34 +1887,33 @@ async function autoJobOut(rec) {
   var qtyMap = {}; // jobId -> {pcs, kg}
 
   (rec.rows || []).forEach(function(barrel) {
-    var bPartKey = partNoFromName(barrel.partName || '');
-    if (!bPartKey) return;
+    var bRawPartName = (barrel.partName || '').trim();
+    if (!bRawPartName) return;
 
     var bKg = Number(barrel.kg || 0);
 
     // คำนวณ pcs (ถ้ามี pcs ตรงๆ ใช้เลย, ไม่งั้นแปลงจาก kg ผ่าน weightG)
     var bPcs = Number(barrel.pcs || 0);
     if (!bPcs && bKg > 0) {
-      var mp = partList.find(function(p) {
-        var pk = normalizePartKey(p.partNo);
-        return pk === bPartKey
-            || normalizePartKey(p.partNo + (p.partName ? ' '+p.partName : '')) === bPartKey;
-      });
+      var canonPn = pmCanonicalPartNo(bRawPartName);
+      var mp = partList.find(function(p) { return p.partNo === canonPn; });
       var wg = mp ? Number(mp.weightG || 0) : 0;
       if (wg > 0) bPcs = Math.round(bKg * 1000 / wg);
     }
     if (!bPcs && !bKg) return;
 
     // ── ถ้าผู้ใช้เลือก P/No (บิล) จาก dropdown ไว้ → ตัดจากบิลนั้นโดยตรง ──
+    // ใช้ jobMatchesPartNo() สูตรเดียวกับตอนแสดงผลหน้ากรอกรายรอบ (ตัดอักขระคั่นทิ้งก่อนเทียบ)
+    // กันเคสตัดสต็อกผิดบิล/ไม่ตัดเลย เพราะ partName สะกดตัวคั่นไม่ตรงกันเป๊ะๆ (เช่น "4X32.8X8X2")
     var targetJobs;
     if (barrel.jobId) {
       var pickedJob = jobMasterItems.find(function(j){ return j.id === barrel.jobId; });
       // ใช้ได้เฉพาะถ้า job ยังมีอยู่จริงและ P/No ตรงกัน (กันกรณีถูกลบ/แก้ไปแล้ว)
-      targetJobs = (pickedJob && partNoFromName(pickedJob.partName||'')===bPartKey) ? [pickedJob] : null;
+      targetJobs = (pickedJob && jobMatchesPartNo(pickedJob, bRawPartName)) ? [pickedJob] : null;
     }
     // fallback: ไม่ได้เลือกจาก dropdown หรือ job ที่เลือกหายไปแล้ว → จับคู่ตาม P/No ทุกบิล
     if (!targetJobs) {
-      targetJobs = jobMasterItems.filter(function(j){ return partNoFromName(j.partName||'')===bPartKey; });
+      targetJobs = jobMasterItems.filter(function(j){ return jobMatchesPartNo(j, bRawPartName); });
     }
 
     targetJobs.forEach(function(job) {
@@ -2065,7 +2166,8 @@ function renderHistory() {
         var badgeTitle = linked ? 'ผูกกับ Job Master — กดเพื่อแก้ไข' : 'บิลอ้างอิง (ไม่พบใน Job Master — ไม่ผูกสต็อก) — กดเพื่อแก้ไข';
         billCell = '<span onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" title="'+badgeTitle+'" style="cursor:pointer;font-family:monospace;font-size:10px;'+badgeStyle+'padding:1px 6px;border-radius:6px;">'+billLabel+(linked?'':' ⚠️')+'</span>';
       } else {
-        billCell = '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>';
+        billCell = '<button onclick="event.stopPropagation();openAddBillModal('+r.id+','+i+')" style="font-size:10px;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:1px 7px;cursor:pointer;color:#92400e;">✏️ เพิ่มบิล</button>'
+          + (b.nobillApprovedBy ? '<div style="font-size:9px;color:#16a34a;margin-top:2px;white-space:nowrap;">✅ อนุมัติโดย ' + esc2(b.nobillApprovedBy) + '</div>' : '');
       }
       return '<tr>' +
         '<td>' + (i+1) + '. ' + b.time + '</td>' +
@@ -2684,6 +2786,13 @@ function applyPreset(idx) {
   searchEl.value = partNo;
   _barrelPmMatches = pmMatch;
 
+  // ── งานซ่อม (R) ไม่ต้องผูกบิล — ข้าม jobId ที่บันทึกไว้ใน preset ไปเลย ──
+  if (selTypeVal === 'R') {
+    barrelPmAcPick(0);
+    showToast('entry', '⭐ Preset "'+partNo+'" (งานซ่อม R — ไม่ต้องเลือกบิล)', 'ok');
+    return;
+  }
+
   // ถ้ามี jobId ที่บันทึกไว้ และบิลนั้นยังมีคงเหลือ → ข้าม step ② เลย
   if (savedJobId) {
     var job = (jobMasterItems||[]).find(function(j){ return j.id===savedJobId; });
@@ -2702,16 +2811,13 @@ function applyPreset(idx) {
           '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cu?' · '+cu:'')+'</span>';
 
         // เติม dropdown แล้วเลือก jobId นั้นทันที
-        var normSel = normalizePartKey(partNo);
         var active = (jobMasterItems||[]).filter(function(j){
           var b = calcJobBal(j.id);
           var u = calcTodayUsed(j.id);
           var rPcs = b.remain   - u.used;
           var rKg  = b.remainKg - u.usedKg;
           if (rPcs <= 0 && rKg <= 0) return false;
-          return normalizePartKey(j.partName) === normSel
-              || partNoFromName(j.partName||'') === normSel
-              || normalizePartKey(j.partName).startsWith(normSel);
+          return jobMatchesPartNo(j, partNo);
         });
         renderBillList(active, savedJobId);
         var sel = document.getElementById('bJobPick');
@@ -2761,17 +2867,13 @@ function renderPresetChips() {
       return (pm.partNo||'').toUpperCase().replace(/[\s\-]+/g,'') === normQ;
     });
     // ตรวจสต็อก — เช็คทั้ง pcs และ kg
-    var normSel = normalizePartKey(partNo);
     var hasStock = (jobMasterItems||[]).some(function(j){
       var b = calcJobBal(j.id);
       var u = calcTodayUsed(j.id);
       var rPcs = b.remain   - u.used;
       var rKg  = b.remainKg - u.usedKg;
       if (rPcs <= 0 && rKg <= 0) return false;
-      var jNorm = normalizePartKey(j.partName||'');
-      return jNorm === normSel
-          || partNoFromName(j.partName||'') === normSel
-          || jNorm.startsWith(normSel);
+      return jobMatchesPartNo(j, partNo);
     });
     // ถ้า pmSrc ยังโหลดไม่เสร็จ แต่มีสต็อกใน JM → ถือว่าผ่าน
     var reallyInPM = inPM || (pmSrc.length === 0 && hasStock);
@@ -4585,6 +4687,25 @@ function pmDisplayName(text) {
   return hit.partNo + (hit.partName ? ' ' + hit.partName : '');
 }
 
+// ── จับคู่ P/No ที่พิมพ์/เลือก กับ job.partName ของ Job Master ──
+// ใช้ pmCanonicalPartNo() เป็นหลัก (ตัดอักขระคั่นทุกแบบทิ้ง เช่น จุด/ขีด/ช่องว่าง — ทนต่อการพิมพ์
+// "4X32.8X8X2" vs "4X32-8X8X2" vs "4X32 8X8X2" ว่าเป็นชิ้นงานเดียวกัน) ก่อนหน้านี้ใช้แค่ normalizePartKey()
+// (ตัด whitespace อย่างเดียว) ทำให้บิลที่มีคงเหลือจริงใน JM ไม่ขึ้นมาให้เลือกถ้าตัวคั่นเขียนไม่ตรงกันเป๊ะๆ
+// ฟังก์ชันนี้ "เพิ่ม" เงื่อนไขจับคู่ ไม่ได้แทนที่ของเดิม — ของเดิมยังจับคู่ได้เหมือนเดิมทุกกรณี แค่จับคู่ได้กว้างขึ้น
+// ── DEBUG helper เท่านั้น (ใช้ในแผง debug ของ barrelPmAcPick) — ตัดอักขระคั่นแบบเดียวกับ pmCanonicalPartNo
+// แต่ไม่ต้องพึ่ง Part Master lookup เพื่อให้โชว์ผลได้แม้ partList ยังโหลดไม่เสร็จ
+function partKeyLoose_v4dbg(s) {
+  return (s||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
+}
+function jobMatchesPartNo(job, partNo) {
+  var canonSel = pmCanonicalPartNo(partNo);
+  var canonJob = pmCanonicalPartNo(job && job.partName || '');
+  if (canonSel && canonJob && canonSel === canonJob) return true;
+  var normSel = normalizePartKey(partNo);
+  var jNorm   = normalizePartKey(job && job.partName || '');
+  return jNorm === normSel || jNorm.startsWith(normSel) || partNoFromName(job && job.partName || '') === normSel;
+}
+
 function plSelColor(c) {
   _plColor = c;
   ['B','C','K'].forEach(function(k){
@@ -5748,6 +5869,8 @@ var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','qc
 
 var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
+var currentUserName = ''; // ชื่อผู้ล็อกอิน — ใช้แสดงในประวัติเวลาอนุมัติ "ไม่ระบุบิล"
+var currentNobillApprove = false; // สิทธิ์อนุมัติ "บันทึกแบบไม่ระบุบิล" — ตั้งจากหน้า auth_admin แยกจาก role หลัก (admin ได้ true เสมอ)
 
 function checkPin() {
   var input = document.getElementById('pinInput').value.trim();
@@ -5769,6 +5892,8 @@ function checkPin() {
     }
     currentRole = result.role;
     currentTabs = result.tabs;
+    currentUserName = (result.user && result.user.name) || '';
+    currentNobillApprove = !!result.nobillApprove;
     try { sessionStorage.setItem('plating_v4_pin', input); } catch(e){}
     showApp(currentRole);
     showPOPopup('B1');
@@ -6406,14 +6531,38 @@ function barrelPmAcShow() {
     var cust   = p.customer || '';
     var hasStock = (jobMasterItems||[]).some(function(j){
       var bal = calcJobBal(j.id);
-      return bal.remain > 0 && normalizePartKey(j.partName) === normalizePartKey(partNo);
+      return (bal.remain > 0 || bal.remainKg > 0) && jobMatchesPartNo(j, partNo);
     });
+    // ── ข้อความอธิบายวิธีเช็คสต็อก (โชว์ตลอด ไม่ใช้ hover เพราะใช้งานบนแท็บเล็ตเป็นหลัก) ──
+    // วิธีเช็คจริง: หา job ใน Job Master ที่ (1) จับคู่ชื่อกับ P/No นี้ได้ผ่าน jobMatchesPartNo()
+    // (ตัดอักขระคั่น เช่น จุด/ขีด/ช่องว่างทิ้งก่อนเทียบ) และ (2) มีคงเหลือ > 0 ไม่ว่าจะหน่วยชิ้นหรือกก.
+    // (calcJobBal → remain/remainKg) — ถ้าเจอแม้แต่บิลเดียวที่ผ่านทั้งสองเงื่อนไข ถือว่า "มีสต็อก"
+    var stockTipHtml = '';
+    if (!hasStock) {
+      var _pnLoose = partKeyLoose_v4dbg(partNo);
+      var _closeJobs = (jobMasterItems||[]).filter(function(j){
+        var jk = partKeyLoose_v4dbg(j.partName||'');
+        return jk && _pnLoose && (jk.indexOf(_pnLoose.slice(0,4))===0 || _pnLoose.indexOf(jk.slice(0,4))===0);
+      });
+      if (!_closeJobs.length) {
+        stockTipHtml = '<div style="font-size:9px;color:#94a3b8;margin-top:2px;">🔍 หาใน JM ('+(jobMasterItems||[]).length+' รายการ) ไม่พบชื่อใกล้เคียงเลย</div>';
+      } else {
+        stockTipHtml = '<div style="font-size:9px;color:#94a3b8;margin-top:2px;line-height:1.5;">🔍 ' +
+          _closeJobs.slice(0,2).map(function(j){
+            var b = calcJobBal(j.id);
+            var m = jobMatchesPartNo(j, partNo);
+            return 'บิล '+(j.bill||'?')+' "'+(j.partName||'')+'" หน่วย='+(j.unit||'pcs')+' คงเหลือ='+(j.unit==='kg'?b.remainKg+'กก.':b.remain+'ชิ้น')+' จับคู่ชื่อ='+(m?'✅':'❌');
+          }).join('<br>🔍 ') +
+        '</div>';
+      }
+    }
     return '<div style="padding:9px 14px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;" '+
       'onmousedown="barrelPmAcPick('+i+')">' +
       '<div>' +
         '<span style="font-weight:700;color:#0f172a;">'+partNo+'</span>' +
         (nm   ? '<span style="color:#64748b;font-size:11px;margin-left:6px;">'+nm+'</span>' : '') +
         (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '') +
+        stockTipHtml +
       '</div>' +
       '<span style="font-size:11px;white-space:nowrap;margin-left:8px;">'+(hasStock
         ? '<span style="color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;">✅ มีสต็อก</span>'
@@ -6440,6 +6589,16 @@ function barrelPmAcPick(idx) {
 
   var statusEl = document.getElementById('bPartSearchStatus');
 
+  // ── งานซ่อม (R) ไม่ต้องผูกบิล — ข้ามการค้นหา/แสดงรายชื่อบิลไปเลย ──
+  if (selTypeVal === 'R') {
+    _barrelPartSelected = true;
+    statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span> <span style="color:#94a3b8;">(งานซ่อม R — ไม่ต้องเลือกบิล)</span>';
+    var bbswR = document.getElementById('bBillSelWrap'); if (bbswR) bbswR.style.display = 'none';
+    var selR = document.getElementById('bJobPick'); if (selR) selR.value = '';
+    var bbiR = document.getElementById('bBillInfo'); if (bbiR) bbiR.innerHTML = '';
+    return;
+  }
+
   // ── ป้องกัน: ถ้า Job Master ยังโหลดไม่เสร็จ (ว่างเปล่า) อย่าฟันธงว่า "ไม่มีสต็อก" ──
   if (!jobMasterItems || !jobMasterItems.length) {
     statusEl.innerHTML = '<span style="color:#d97706;">⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่</span>';
@@ -6448,7 +6607,6 @@ function barrelPmAcPick(idx) {
   }
 
   // ตรวจว่ามีบิลมีคงเหลือไหม
-  var normSel = normalizePartKey(partNo);
   var active  = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
     var u = calcTodayUsed(j.id);
@@ -6456,16 +6614,35 @@ function barrelPmAcPick(idx) {
     var rPcs = b.remain   - u.used;
     var rKg  = b.remainKg - u.usedKg;
     if (rPcs <= 0 && rKg <= 0) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel
-        || partNoFromName(j.partName||'') === normSel
-        || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // ถ้าไม่มีสต็อก → ยังให้ทำงานต่อได้ แต่ dropdown มีแค่ "ไม่ระบุบิล"
   _barrelPartSelected = true;
   if (!active.length) {
-    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือ — เลือก "ไม่ระบุบิล" เพื่อบันทึกต่อ (ไม่ตัดสต็อก)</span>';
+    // ═══ DEBUG PANEL ═══ (ชั่วคราว — ช่วยไล่บั๊กเรื่องบิลไม่ขึ้นทั้งที่ Job Master มีคงเหลือ)
+    // สูตรที่ใช้จับคู่ตอนนี้ (jobMatchesPartNo, นิยามใกล้บรรทัด pmDisplayName ด้านบน):
+    //   1) เทียบผ่าน pmCanonicalPartNo() — ตัดอักขระคั่นทุกแบบทิ้ง (จุด/ขีด/ช่องว่าง) แล้วเทียบ
+    //      กับ P/No ที่ลงทะเบียนไว้จริงใน Part Master (partList) ก่อน
+    //   2) ถ้าไม่เจอใน PM (partList ยังไม่โหลด/ถูกลบ) fallback ไปเทียบแบบ normalizePartKey()
+    //      (ตัดแค่ whitespace + ตัวพิมพ์เล็ก-ใหญ่)
+    // แผงนี้โชว์ raw data ของรายการที่ "ใกล้เคียง" (4 ตัวอักษรแรกตรงกัน) เพื่อดูว่าตัวไหนควรจะแมตช์
+    // แต่แมตช์ไม่ติด จะได้รู้ว่าปัญหาอยู่ที่ตัวข้อมูล (partName/unit/qty สะกด/เก็บผิด) หรือที่สูตรจับคู่เอง
+    var _dbgTyped = partKeyLoose_v4dbg(partNo);
+    var _dbgClose = (jobMasterItems||[]).filter(function(j){
+      var jk = partKeyLoose_v4dbg(j.partName||'');
+      return jk && _dbgTyped && (jk.indexOf(_dbgTyped.slice(0,4))===0 || _dbgTyped.indexOf(jk.slice(0,4))===0);
+    }).slice(0,5);
+    var _dbgLines = _dbgClose.map(function(j){
+      var b = calcJobBal(j.id);
+      var matched = jobMatchesPartNo(j, partNo);
+      return 'บิล '+(j.bill||'?')+' | partName="'+(j.partName||'')+'" | unit='+(j.unit||'pcs')+' | qty='+(j.qty||0)+' | qtyKg='+(j.qtyKg||0)+' | remain='+b.remain+' | remainKg='+b.remainKg+' | จับคู่ชื่อได้='+(matched?'✅':'❌ ไม่ตรง');
+    });
+    var _dbgHtml = '<div style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;font-family:monospace;font-size:10px;color:#475569;white-space:pre-wrap;">'
+      + '🔍 Debug — jobMasterItems โหลดแล้ว '+(jobMasterItems||[]).length+' รายการ | คีย์ที่ค้นหา (ตัดอักขระคั่นแล้ว) = "'+_dbgTyped+'"'
+      + (_dbgLines.length ? '\n' + _dbgLines.join('\n') : '\nไม่พบชื่อใกล้เคียงเลยแม้แต่ 4 ตัวอักษรแรก ('+(jobMasterItems||[]).length+' รายการที่โหลดมาไม่มีตัวไหนขึ้นต้นคล้ายกันเลย — เช็คว่า partName ใน Job Master พิมพ์ต่างจากนี้มากไหม)')
+      + '</div>';
+    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือ — เลือก "ไม่ระบุบิล" เพื่อบันทึกต่อ (ไม่ตัดสต็อก)</span>' + _dbgHtml;
     renderBillList([], '');
     document.getElementById('bBillSelWrap').style.display = 'block';
     return;
@@ -8354,22 +8531,19 @@ function openAddBillModal(dayId, rowIdx) {
   var curLabel = curJob ? curJob.bill : (row.manualBill || '');
 
   // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ)
-  var normSel = normalizePartKey(partNo);
   var active = (jobMasterItems||[]).filter(function(j){
     var b = calcJobBal(j.id);
     var rPcs = b.remain   - 0;
     var rKg  = b.remainKg - 0;
     if (rPcs <= 0 && rKg <= 0) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // รายชื่อบิลของ "ชิ้นงานเดียวกัน" เท่านั้น (รวมบิลที่หมดสต็อกแล้วด้วย) ไว้ให้เลือก/พิมพ์เอง
   // ไม่โชว์บิลทั้งระบบ เพราะจะเยอะเกินไปจนกวนตา — ถ้าจะพิมพ์บิลที่ไม่เกี่ยวกับชิ้นงานนี้เลย (เช่น บิลเก่าก่อนมีระบบ) พิมพ์เองได้อยู่แล้วโดยไม่ต้องพึ่ง datalist
   var allBills = (jobMasterItems||[]).filter(function(j){
     if (!String(j.bill||'').trim()) return false;
-    var jNorm = normalizePartKey(j.partName||'');
-    return jNorm === normSel || partNoFromName(j.partName||'') === normSel || jNorm.startsWith(normSel);
+    return jobMatchesPartNo(j, partNo);
   });
 
   // สร้าง modal
@@ -8471,10 +8645,10 @@ function saveBillToRow(dayId, rowIdx) {
 
   if (!jobId && manualText) {
     // ค้นหาบิลจากเลขที่พิมพ์เอง — ถ้ามีหลายรายการเลขบิลซ้ำกัน (คนละชิ้นงาน) ให้เลือกอันที่ตรงชิ้นงานแถวนี้ก่อน
-    var normSel0 = normalizePartKey((row.partName||'').trim());
+    var rowPartNo = (row.partName||'').trim();
     var matches = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim() === manualText; });
-    if (matches.length > 1 && normSel0) {
-      var pref = matches.find(function(j){ return normalizePartKey(j.partName||'')===normSel0; });
+    if (matches.length > 1 && rowPartNo) {
+      var pref = matches.find(function(j){ return jobMatchesPartNo(j, rowPartNo); });
       if (pref) matches = [pref];
     }
     if (matches.length) {
