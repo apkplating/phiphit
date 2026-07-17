@@ -306,7 +306,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="date" id="invDate" onchange="onInvDateChange()">
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="invCustomerHeaderStep">
       <label>ชื่อลูกค้า / ที่อยู่ <span style="color:var(--red);">*</span></label>
       <div style="display:flex;gap:6px;margin-bottom:4px;">
         <select id="invCustomerSel" onchange="onInvCustomerSelect()" style="flex:1;">
@@ -336,7 +336,11 @@ input:focus,select:focus{border-color:var(--blue2);}
         </div>
       </details>
     </div>
-    <div class="grid2">
+    <!-- โหมดเคลม: บอกว่าใช้ลูกค้าจากขั้น ① ด้านล่างแล้ว ไม่ต้องเลือกซ้ำ -->
+    <div id="invClaimCustomerNote" style="display:none;font-size:11px;color:var(--text-muted);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+      👤 ใช้ลูกค้าที่เลือกใน "① เลือกลูกค้า" ด้านล่างโดยอัตโนมัติ ไม่ต้องเลือกซ้ำตรงนี้
+    </div>
+    <div class="grid2" id="invPoTermWrap">
       <div class="field" style="margin:0;">
         <label>เลขที่ใบสั่งซื้อ (PO)</label>
         <input type="text" id="invPO" placeholder="เช่น PO708289">
@@ -431,7 +435,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02">
       </div>
     </div>
-    <button class="btn btn-outline" onclick="addInvLine()">➕ เพิ่มลงในบิล INV</button>
+    <button class="btn btn-outline" id="invAddLineBtn" onclick="addInvLine()">➕ เพิ่มลงในบิล INV</button>
     <div id="toast-invline" class="toast"></div>
   </div>
 
@@ -1578,6 +1582,10 @@ function onInvClaimCustomerSelect() {
   document.getElementById('invLineRemainInfo').style.display = 'none';
   invSelectedPartName = ''; // โหมดนี้ไม่ได้ผูกกับ P/No เดียว — เคลียร์กันสับสนกับ selectInvPart
 
+  // เติมชื่อลูกค้าลง invCustomer (ช่องหัวบิลที่ซ่อนไว้ในโหมดนี้) ให้เองจากที่เลือกไว้ ① — ไม่ต้องเลือกซ้ำสองรอบ
+  var custEl = document.getElementById('invCustomer');
+  if (custEl) custEl.value = chosen;
+
   if (!chosen) { wrapEl.style.display = 'none'; return; }
 
   var active = jobItems.filter(function(j) {
@@ -1648,17 +1656,24 @@ function onInvLineJobSelect() {
     qtyLabelEl.innerHTML = (invDocType==='claim' ? ('จำนวน ('+unitTH+')') : 'จำนวน') + ' <span style="color:var(--red);">*</span>';
   }
 
-  // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
+  // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก (โหมดขาย — โหมดเคลมเติมจาก ① ไปแล้วใน onInvClaimCustomerSelect)
   var custEl = document.getElementById('invCustomer');
-  if (custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
+  if (invDocType!=='claim' && custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
 
-  // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
-  var found = getPriceForPart(job.partName, job.customer);
-  if (found) {
-    var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
-    infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+' ('+esc(found.source)+')';
-    priceInput.value = found.price;
-    if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
+  if (invDocType==='claim') {
+    // งานเคลมไม่มีราคา — ไม่ต้องดึง/โชว์ราคาจากทะเบียนราคาให้สับสน
+    // เติม "อ้างอิงใบเคลม" ให้อัตโนมัติจากเลขที่บิลที่เลือก (แก้ไขเองทับได้ถ้าอยากใส่เลขใบเคลมของลูกค้าแทน)
+    var lotEl = document.getElementById('invLineLot');
+    if (lotEl && !lotEl.value.trim() && job.bill) lotEl.value = job.bill;
+  } else {
+    // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
+    var found = getPriceForPart(job.partName, job.customer);
+    if (found) {
+      var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
+      infoText += '<br>💡 ราคา: <b>'+found.price.toFixed(2)+'</b> บาท/'+foundUnitTH+' ('+esc(found.source)+')';
+      priceInput.value = found.price;
+      if (priceUnitInput && found.priceUnit) priceUnitInput.value = found.priceUnit;
+    }
   }
 
   if (!pmKg) {
@@ -1721,12 +1736,13 @@ function onInvLineQtyOrWeightChange() {
   var amount = priceUnit === 'kg' ? (totalKg * price) : (totalPcs * price);
   var prevEl = document.getElementById('invLineAmountPreview');
   if (prevEl) {
-    if (!jobId && (qty || price) && jobSelEl) {
-      // ยังไม่ได้คลิกเลือกบิลจากลิสต์ ② ด้านบน — กดเพิ่มลงในบิล INV ตอนนี้จะไม่สำเร็จ
+    if (!jobId && qty && jobSelEl) {
+      // ยังไม่ได้คลิกเลือกบิลจากลิสต์ ② ด้านบน — กดเพิ่มลงในบิล INV ตอนนี้จะไม่สำเร็จ (คำเตือนนี้ใช้ได้ทั้ง 2 โหมด)
       prevEl.innerHTML = '⚠️ กรุณาคลิกเลือก <b>"② เลือกบิล"</b> ด้านบนก่อน ระบบยังไม่ได้ผูกรายการนี้กับบิลไหน';
       prevEl.style.color = 'var(--red)';
       prevEl.style.display = 'block';
-    } else if (qty && price) {
+    } else if (invDocType!=='claim' && qty && price) {
+      // งานเคลมไม่มีมูลค่า — ไม่ต้องโชว์ประมาณการเงิน
       prevEl.innerHTML = '💰 จำนวนเงินโดยประมาณ: <b>' +
         amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</b> บาท';
       prevEl.style.color = 'var(--green)';
@@ -2074,6 +2090,21 @@ function onInvDocTypeChange() {
     var el = document.getElementById(id);
     if (el) el.style.display = isClaim ? 'none' : '';
   });
+  // ซ่อนช่องเลือกลูกค้าที่หัวบิล (ซ้ำกับขั้น ① ด้านล่างในโหมดเคลม) + PO/กำหนดชำระเงิน (ไม่เกี่ยวกับงานเคลม)
+  ['invCustomerHeaderStep','invPoTermWrap'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaim ? 'none' : '';
+  });
+  var claimNoteEl = document.getElementById('invClaimCustomerNote');
+  if (claimNoteEl) claimNoteEl.style.display = isClaim ? 'block' : 'none';
+  if (isClaim) {
+    var poElC = document.getElementById('invPO'); if (poElC) poElC.value = '';
+    var termElC = document.getElementById('invTerm'); if (termElC) termElC.value = '';
+  } else {
+    var termElS = document.getElementById('invTerm'); if (termElS && !termElS.value) termElS.value = '30 วัน';
+  }
+  var addLineBtnEl = document.getElementById('invAddLineBtn');
+  if (addLineBtnEl) addLineBtnEl.textContent = isClaim ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
   ['invThPrice','invThAmount'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaim ? 'none' : '';
@@ -2130,6 +2161,14 @@ function initInvTab() {
     var el = document.getElementById(id);
     if (el) el.style.display = isClaimInit ? 'none' : '';
   });
+  ['invCustomerHeaderStep','invPoTermWrap'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaimInit ? 'none' : '';
+  });
+  var claimNoteInitEl = document.getElementById('invClaimCustomerNote');
+  if (claimNoteInitEl) claimNoteInitEl.style.display = isClaimInit ? 'block' : 'none';
+  var addLineBtnInitEl = document.getElementById('invAddLineBtn');
+  if (addLineBtnInitEl) addLineBtnInitEl.textContent = isClaimInit ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
   var formBtnInitEl = document.getElementById('invFormPrintBtn');
   if (formBtnInitEl) formBtnInitEl.style.display = isClaimInit?'none':'';
@@ -3044,6 +3083,14 @@ function editInvoice(invId) {
     var el = document.getElementById(id);
     if (el) el.style.display = isClaimEdit ? 'none' : '';
   });
+  ['invCustomerHeaderStep','invPoTermWrap'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaimEdit ? 'none' : '';
+  });
+  var claimNoteEditEl = document.getElementById('invClaimCustomerNote');
+  if (claimNoteEditEl) claimNoteEditEl.style.display = isClaimEdit ? 'block' : 'none';
+  var addLineBtnEditEl = document.getElementById('invAddLineBtn');
+  if (addLineBtnEditEl) addLineBtnEditEl.textContent = isClaimEdit ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
   var formBtnEl = document.getElementById('invFormPrintBtn');
   if (formBtnEl) formBtnEl.style.display = isClaimEdit?'none':'';
@@ -3053,7 +3100,12 @@ function editInvoice(invId) {
   if (claimCustStepEditEl) claimCustStepEditEl.style.display = isClaimEdit ? '' : 'none';
   var billLabelEditEl = document.getElementById('invBillSelLabel');
   if (billLabelEditEl) billLabelEditEl.textContent = isClaimEdit ? '② เลือกใบเคลม (บิล)' : '② เลือกบิล (คงเหลือ)';
-  if (isClaimEdit) renderInvClaimCustomerSelect();
+  if (isClaimEdit) {
+    renderInvClaimCustomerSelect();
+    var claimCustSelEditEl = document.getElementById('invClaimCustomerSel');
+    var editCustFirstLine = (inv.customer||'').split('\n')[0].trim();
+    if (claimCustSelEditEl && editCustFirstLine) claimCustSelEditEl.value = editCustFirstLine;
+  }
   renderInvLineSelect();
   renderInvLines();
   showToast('out','✏️ กำลังแก้ไข'+(isClaimEdit?'ใบส่งคืนงานเคลม':'INV')+' '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง','ok');
