@@ -6712,7 +6712,7 @@ function renderBillList(active, selectedJobId) {
     // บิลหน่วยชิ้น แต่ผู้ชุบมักกรอกเป็น กก. — วงเล็บน้ำหนักโดยประมาณกำกับไว้ด้วย กันเผลอกรอกเกินเพราะไม่รู้ว่า
     // "เหลือ X ชิ้น" เทียบเป็นกี่ กก. (ใช้ getWeightGForPO — น้ำหนัก/ชิ้น หน่วยกรัม จาก Part Master)
     var weightG = isKgUnit ? 0 : getWeightGForPO(j.partName || '');
-    var kgHint  = (weightG > 0) ? ' (≈'+((r2*weightG)/1000).toFixed(2)+' กก.)' : '';
+    var kgHint  = (weightG > 0) ? ' (≈'+((r2*weightG)/1000).toFixed(2)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
     var remStr  = isKgUnit ? r2.toFixed(2)+' กก.' : r2.toLocaleString()+' ชิ้น'+kgHint;
     var usedKgHint = (weightG > 0 && u.used) ? ' (≈'+((u.used*weightG)/1000).toFixed(2)+' กก.)' : '';
     var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น'+usedKgHint)+' วันนี้)' : '';
@@ -6893,7 +6893,7 @@ function onBarrelJobPick() {
     var isKgUnit = job.unit==='kg';
     var r   = isKgUnit ? rr.remainKg : rr.remainPcs;
     var weightG = isKgUnit ? 0 : getWeightGForPO(job.partName || '');
-    var kgHint  = (weightG > 0) ? ' (≈'+((r*weightG)/1000).toFixed(2)+' กก.)' : '';
+    var kgHint  = (weightG > 0) ? ' (≈'+((r*weightG)/1000).toFixed(2)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
     var remStr = isKgUnit ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น'+kgHint;
     infoEl.innerHTML =
       '<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:8px;padding:8px 12px;margin-top:4px;">' +
