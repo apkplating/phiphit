@@ -1020,8 +1020,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div style="font-size:10px;color:var(--blue-light);">ลิตร</div>
         </div>
       </div>
-      <!-- สรุป 4 ตัวเลข -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:10px;">
+      <!-- สรุป 3 ตัวเลข -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;">
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
           <div style="font-size:9px;color:var(--blue-light);">รับเข้ารวม (ลิตร)</div>
           <div id="chemCardTotalIn" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#fff;margin-top:2px;">0</div>
@@ -1031,12 +1031,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <div id="chemCardTotalOut" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#fff;margin-top:2px;">0</div>
         </div>
         <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
-          <div style="font-size:9px;color:var(--blue-light);">⚙️ Auto Dosing</div>
+          <div style="font-size:9px;color:var(--blue-light);">เบิกจากระบบ</div>
           <div id="chemCardAutoOut" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#6ee7b7;margin-top:2px;">0</div>
-        </div>
-        <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:7px 4px;text-align:center;">
-          <div style="font-size:9px;color:var(--blue-light);">✍️ Manual</div>
-          <div id="chemCardManualOut" style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#fcd34d;margin-top:2px;">0</div>
         </div>
       </div>
     </div>
@@ -1100,34 +1096,16 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
     <!-- ── ตาราง Stock Card ── -->
     <div class="card" style="padding:0;overflow:hidden;">
-      <div style="background:var(--navy);padding:10px 12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="font-size:12px;font-weight:600;color:#fff;">📋 รายการเคลื่อนไหว</div>
-          <button onclick="exportChemCSV()" style="padding:5px 10px;border-radius:7px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">⬇ CSV</button>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <label style="font-size:10px;color:#93c5fd;">ประเภทเบิกใช้</label>
-          <select id="chemOutTypeFilter" onchange="renderChemStockCard()"
-            style="padding:6px 8px;border-radius:7px;border:none;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">
-            <option value="all">ทั้งหมด</option>
-            <option value="auto">⚙️ Auto Dosing เท่านั้น</option>
-            <option value="manual">✍️ Manual เท่านั้น</option>
-          </select>
-          <label style="font-size:10px;color:#93c5fd;margin-left:6px;">จาก</label>
-          <input type="date" id="chemOutFrom" onchange="renderChemStockCard()"
-            style="padding:6px 8px;border-radius:7px;border:none;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">
-          <label style="font-size:10px;color:#93c5fd;">ถึง</label>
-          <input type="date" id="chemOutTo" onchange="renderChemStockCard()"
-            style="padding:6px 8px;border-radius:7px;border:none;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;">
-          <button onclick="clearChemOutFilter()" class="btn btn-outline btn-sm" style="background:transparent;color:#93c5fd;border-color:#93c5fd;width:auto;padding:6px 10px;">ล้างตัวกรอง</button>
-        </div>
+      <div style="background:var(--navy);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;font-weight:600;color:#fff;">📋 รายการเคลื่อนไหว</div>
+        <button onclick="exportChemCSV()" style="padding:5px 10px;border-radius:7px;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">⬇ CSV</button>
       </div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:660px;">
           <thead>
             <tr style="background:var(--navy);">
               <th colspan="5" style="padding:6px 8px;text-align:center;color:var(--blue-light);font-size:9px;border-right:2px solid rgba(255,255,255,.2);">จัดซื้อ (รับเข้า)</th>
-              <th colspan="8" style="padding:6px 8px;text-align:center;color:#6ee7b7;font-size:9px;">ผลิต (เบิกใช้)</th>
+              <th colspan="5" style="padding:6px 8px;text-align:center;color:#6ee7b7;font-size:9px;">ผลิต (เบิกใช้)</th>
             </tr>
             <tr style="background:#1e3a5f;">
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);white-space:nowrap;">ว.ด.ป.</th>
@@ -1137,16 +1115,13 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้บันทึก</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">ว.ด.ป.</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">เลขที่ใบสั่งผลิต</th>
-              <th style="padding:7px 4px;text-align:left;font-size:9px;font-weight:600;color:#93c5fd;white-space:nowrap;">AH / โม่</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">⚙️ Auto<br>(ลิตร)</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#fcd34d;">✍️ Manual<br>(ลิตร)</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#e2e8f0;">รวมเบิกใช้<br>(ลิตร)</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">เบิก<br>(ลิตร)</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">คงเหลือ</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;">ผู้เบิก</th>
             </tr>
           </thead>
           <tbody id="chemStockTbody">
-            <tr><td colspan="13" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>
+            <tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>
           </tbody>
         </table>
       </div>
@@ -1802,41 +1777,6 @@ function requestNobillApproval(cb) {
   });
 }
 
-// ── ขออนุมัติจากผู้มีสิทธิ์อนุมัติ "เติมเคมีด้วยมือ" ก่อนบันทึกทุกครั้ง ──
-// สิทธิ์นี้มาจาก CentralAuth.login().manualDoseApprove — แยกอิสระจาก nobillApprove ตั้งได้จากหน้า auth_admin
-// (admin ได้สิทธิ์นี้เสมอโดยอัตโนมัติ, operator ต้องถูกติ๊กให้เพิ่มจึงจะอนุมัติได้)
-function requestManualDoseApproval(cb) {
-  var msg = document.getElementById('manualDosingMsg');
-  var pin = prompt('⚠️ การเติมเคมีด้วยมือ ต้องให้ผู้มีสิทธิ์อนุมัติ "เติมเคมีด้วยมือ" ใส่ PIN เพื่ออนุมัติก่อนบันทึก:');
-  if (pin === null) { cb(false); return; } // กดยกเลิก
-  pin = pin.trim();
-  if (!pin) { cb(false); return; }
-  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
-    if (result.ok && result.manualDoseApprove) {
-      var approverName = (result.user && result.user.name) || '';
-      if (msg) {
-        msg.style.cssText = 'display:block;background:#e0f4ef;color:#0d6e56;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
-        msg.textContent = '✅ อนุมัติเติมเคมีด้วยมือโดย' + (approverName ? ' ' + approverName : 'ผู้มีสิทธิ์') + ' แล้ว — กำลังบันทึก...';
-      }
-      cb(true, { role: result.role, name: approverName, by: 'pin', at: new Date().toISOString() });
-    } else {
-      if (msg) {
-        msg.style.cssText = 'display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
-        msg.textContent = '🚫 PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์อนุมัติเติมเคมีด้วยมือ';
-        setTimeout(function(){ msg.style.display='none'; }, 2500);
-      }
-      cb(false);
-    }
-  }).catch(function(){
-    if (msg) {
-      msg.style.cssText = 'display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
-      msg.textContent = '🚫 เชื่อมต่อระบบสิทธิ์ไม่ได้ — ลองใหม่อีกครั้ง';
-      setTimeout(function(){ msg.style.display='none'; }, 2500);
-    }
-    cb(false);
-  });
-}
-
 // ── บันทึกรายรอบจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async ของกรณี "ไม่ระบุบิล") ──
 function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
@@ -2113,8 +2053,12 @@ async function autoJobOut(rec) {
 
   newOuts.forEach(function(o) { jobMasterRecords.unshift(o); });
   try {
+    // ⚠️ ใช้ PATCH ไม่ใช่ PUT — PUT จะเขียนทับข้อมูลทั้งก้อนที่ path นี้ ลบ invoices/customers/
+    // billStatements/priceList/hiddenCustomers ที่ job_master.html เก็บแยกไว้ที่ path เดียวกันทิ้งหมด
+    // (เคยเกิดจริง — INV หายทุกครั้งที่มีคนกด "บันทึกสรุปวันนี้" ฝั่งชุบ) PATCH จะอัปเดตแค่ items/records/
+    // savedAt ตามที่ระบุ ไม่แตะ field พี่น้องอื่นๆ ที่ไม่ได้ส่งมาด้วย
     await fetch(FB_JOB_PATH + '.json', {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() })
     });
@@ -4230,33 +4174,12 @@ function addManualDosing() {
     setTimeout(function(){ msg.style.display='none'; }, 2500); return;
   }
 
-  // ── เติมเคมีด้วยมือ ต้องได้รับอนุมัติก่อนบันทึกทุกครั้ง (สิทธิ์ "อนุมัติเติมมือ" แยกอิสระจาก NOBILL — ตั้งจากหน้า auth_admin) ──
-  // ยกเว้นถ้าคนที่ล็อกอินอยู่ตอนนี้มีสิทธิ์นี้อยู่แล้ว (currentManualDoseApprove — admin ได้สิทธิ์นี้เสมอ) ก็ถือว่าอนุมัติในตัว
-  if (currentManualDoseApprove === true) {
-    _commitManualDosing(chemId, ml, note, { role: currentRole, name: currentUserName, by: 'self', at: new Date().toISOString() });
-    return;
-  }
-  requestManualDoseApproval(function(approved, approverInfo){
-    if (!approved) {
-      msg.style.cssText = 'display:block;background:#fdf0f0;color:#9b2c2c;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
-      msg.textContent = '🚫 ยกเลิก — ไม่ได้รับอนุมัติให้บันทึกการเติมเคมีด้วยมือ';
-      setTimeout(function(){ msg.style.display='none'; }, 2500);
-      return;
-    }
-    _commitManualDosing(chemId, ml, note, approverInfo);
-  });
-}
-
-// ── บันทึกการเติมเคมีด้วยมือจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async) ──
-function _commitManualDosing(chemId, ml, note, approverInfo) {
-  var msg = document.getElementById('manualDosingMsg');
   var item = chemItems.find(function(ci){ return ci.id === chemId; });
   var liter = ml / 1000;
   var recorder = (document.getElementById('recorder')||{}).value || '–';
   var date = document.getElementById('repDate').value || new Date().toISOString().slice(0,10);
   var now = new Date();
   var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-  var approvedBy = approverInfo ? (approverInfo.name || (approverInfo.role + (approverInfo.by==='self' ? ' (self)' : ''))) : '';
 
   manualDosings.push({
     id: 'MD' + Date.now(),
@@ -4268,9 +4191,7 @@ function _commitManualDosing(chemId, ml, note, approverInfo) {
     note: note,
     recorder: recorder,
     date: date,
-    time: timeStr,
-    approvedBy: approvedBy,
-    approvedAt: approverInfo ? approverInfo.at : ''
+    time: timeStr
   });
 
   // บันทึกลง chemRecords เพื่อตัดสต็อคทันที
@@ -4280,8 +4201,7 @@ function _commitManualDosing(chemId, ml, note, approverInfo) {
     type: 'out', date: date,
     bill: proLotNo + ' [Manual]',
     liter: liter, bucket: 0,
-    recorder: recorder, note: note, isManual: true,
-    approvedBy: approvedBy, approvedAt: approverInfo ? approverInfo.at : ''
+    recorder: recorder, note: note, isManual: true
   });
   saveChemData();
   saveManualDosings();
@@ -4293,7 +4213,7 @@ function _commitManualDosing(chemId, ml, note, approverInfo) {
   document.getElementById('manualChemNote').value = '';
 
   msg.style.cssText = 'display:block;background:#e0f4ef;color:#0d6e56;padding:8px;border-radius:8px;font-size:12px;text-align:center;';
-  msg.textContent = '✅ บันทึกและตัดสต็อค ' + (item?item.name:'') + ' ' + ml + ' ml (' + liter.toFixed(4) + ' ล.)' + (approvedBy ? ' — อนุมัติโดย ' + approvedBy : '') + ' แล้ว';
+  msg.textContent = '✅ บันทึกและตัดสต็อค ' + (item?item.name:'') + ' ' + ml + ' ml (' + liter.toFixed(4) + ' ล.) แล้ว';
   setTimeout(function(){ msg.style.display='none'; }, 3000);
 
   renderManualDosingList();
@@ -4334,7 +4254,6 @@ function renderManualDosingList() {
       '<div style="flex:1;">' +
         '<div style="font-size:12px;font-weight:600;color:var(--navy);">🧪 '+m.chemName+'</div>' +
         '<div style="font-size:10px;color:var(--text-muted);">'+m.time+' | '+m.ml+' ml ('+m.liter.toFixed(4)+' ล.)' + (m.note?' | '+m.note:'') + '</div>' +
-        (m.approvedBy ? '<div style="font-size:9px;color:#16a34a;margin-top:2px;">✅ อนุมัติโดย '+m.approvedBy+'</div>' : '') +
       '</div>' +
       '<button onclick="deleteManualDosing(\''+m.id+'\')" style="background:#fdf0f0;border:none;color:#9b2c2c;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;flex-shrink:0;">🗑</button>' +
     '</div>';
@@ -4654,7 +4573,6 @@ function renderChemStockCard() {
   setTxt('chemCardTotalIn', fmt2(bal.totalIn));
   setTxt('chemCardTotalOut', fmt2(bal.autoOut+bal.manualOut));
   setTxt('chemCardAutoOut', fmt2(bal.autoOut));
-  setTxt('chemCardManualOut', fmt2(bal.manualOut));
 
   // สีตัวเลขคงเหลือ
   var remEl = document.getElementById('chemCardRemain');
@@ -4670,14 +4588,10 @@ function renderChemStockCard() {
     // หา batches ของ chemItem นี้
     var itemBatches = item.batches && item.batches.length ? item.batches : [1,2];
     var ml = 0;
-    var basisParts = [];
-    var ahVal = 0, moVal = 0;
     chemSettings.forEach(function(c) {
       var isGroupMatch = c.name && c.name.trim().toLowerCase() === nameLC;
       if (c.type === 'AH' && isGroupMatch) {
         ml += parseFloat(c.rateAH||0) * Number(day.ah||0);
-        basisParts.push('AH ' + Number(day.ah||0));
-        ahVal += Number(day.ah||0);
       } else if (c.type === 'COLOR') {
         // กรองเฉพาะ rows ของ batch ที่เกี่ยวข้อง
         var dr = (day.rows||[]).filter(function(r){
@@ -4688,11 +4602,9 @@ function renderChemStockCard() {
         var bB = dr.filter(function(r){ return r.color==='B'; }).length;
         var bC = dr.filter(function(r){ return r.color==='C'; }).length;
         var bK = dr.filter(function(r){ return r.color==='K'; }).length;
-        var matchedAny = false;
         (c.chemicals||[]).forEach(function(ch) {
           var chMatch = ch.name && ch.name.trim().toLowerCase() === nameLC;
           if (!isGroupMatch && !chMatch) return;
-          matchedAny = true;
           var rate = parseFloat(ch.rate||0);
           var color = (ch.color||'').toUpperCase();
           if (color==='B') ml += rate*bB;
@@ -4700,10 +4612,9 @@ function renderChemStockCard() {
           else if (color==='K') ml += rate*bK;
           else ml += rate*(bB+bC+bK);
         });
-        if (matchedAny) { basisParts.push('โม่ ' + (bB+bC+bK) + ' (B'+bB+'/C'+bC+'/K'+bK+')'); moVal += (bB+bC+bK); }
       }
     });
-    return { liter: ml / 1000, basis: basisParts.join(', ') || '–', ah: ahVal, mo: moVal };
+    return ml / 1000;
   }
 
   // รับเข้า
@@ -4716,59 +4627,25 @@ function renderChemStockCard() {
 
   // auto-out จาก dayRecords — อ้างอิง Pro Lot No (day.lotNo) เป็น bill
   dayRecords.forEach(function(day){
-    var calcResult = calcDayChemUsedLiter(day);
-    var used = calcResult.liter;
+    var used = calcDayChemUsedLiter(day);
     if (used > 0) {
       rows.push({ date:day.date, bill:day.lotNo||'–', inLiter:0, inBucket:0, recorder:'',
-                  outLiter:used, outRecorder:day.recorder||'ระบบ', outType:'auto', basis:calcResult.basis, ah:calcResult.ah, mo:calcResult.mo, isIn:false });
+                  outLiter:used, outRecorder:day.recorder||'ระบบ', isIn:false });
     }
   });
-
-  // manual-out จาก chemRecords (เบิกด้วยมือ)
-  chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='out'; })
-    .forEach(function(r){
-      rows.push({ date:r.date, bill:r.bill||'–', inLiter:0, inBucket:0, recorder:'',
-                  outLiter:Number(r.liter||0), outRecorder:r.recorder||'–', outType:'manual', isIn:false });
-    });
 
   // sort by date
   rows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
-  // คำนวณ running balance จากข้อมูลทั้งหมดก่อนกรอง เพื่อให้ยอดคงเหลือถูกต้องเสมอ ไม่ว่าจะกรองอะไรอยู่
+  // คำนวณ running balance
   var running = 0;
+  var html = '';
   rows.forEach(function(r){
     var inLiter  = Number(r.inLiter||0);
     var outLiter = Number(r.outLiter||0);
     if (r.isIn) running += inLiter; else running -= outLiter;
-    r.runningBalance = running;
-  });
-
-  // ── ตัวกรอง: ประเภท (auto/manual) + ช่วงวันที่ — กรองเฉพาะฝั่ง "ผลิต (เบิกใช้)" เพื่อแสดงผล ──
-  // (ฝั่ง "จัดซื้อ (รับเข้า)" ไม่ถูกกรอง และยอดคงเหลือใช้ค่าที่คำนวณไว้ล่วงหน้าข้างบน จึงถูกต้องเสมอ)
-  var typeFilterEl = document.getElementById('chemOutTypeFilter');
-  var typeFilter = typeFilterEl ? typeFilterEl.value : 'all';
-  var fromEl = document.getElementById('chemOutFrom');
-  var toEl   = document.getElementById('chemOutTo');
-  var fromDate = fromEl ? fromEl.value : '';
-  var toDate   = toEl ? toEl.value : '';
-  var displayRows = rows.filter(function(r){
-    if (r.isIn) return true;
-    if (typeFilter === 'auto'   && r.outType !== 'auto')   return false;
-    if (typeFilter === 'manual' && r.outType !== 'manual') return false;
-    if (fromDate && r.date < fromDate) return false;
-    if (toDate   && r.date > toDate)   return false;
-    return true;
-  });
-
-  var html = '';
-  displayRows.forEach(function(r){
-    var inLiter  = Number(r.inLiter||0);
-    var outLiter = Number(r.outLiter||0);
-    var running = r.runningBalance;
     var dateStr = r.date ? r.date.split('-').reverse().join('/') : '–';
     var rowBg = r.isIn ? '' : 'background:#f0fff4;';
-    var isAutoOut   = (!r.isIn) && r.outType!=='manual';
-    var isManualOut = (!r.isIn) && r.outType==='manual';
     html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
       // จัดซื้อ
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?dateStr:'')+'</td>' +
@@ -4779,55 +4656,22 @@ function renderChemStockCard() {
       // ผลิต
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(r.isIn?'':dateStr)+'</td>' +
       '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(r.isIn?'':r.bill)+'</td>' +
-      '<td style="padding:7px 4px;font-size:10px;color:var(--text-muted);white-space:nowrap;">'+(isAutoOut?(r.basis||'–'):'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(isAutoOut?outLiter.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#b45309;">'+(isManualOut?outLiter.toFixed(2):'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;font-weight:700;color:var(--navy);">'+(r.isIn?'':outLiter.toFixed(2))+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(r.isIn?'':outLiter.toFixed(2))+'</td>' +
       '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(running<0?'#c0392b':'var(--navy)')+';">'+(running.toFixed(2))+'</td>' +
       '<td style="padding:7px 6px;font-size:10px;color:var(--text-muted);">'+(r.isIn?'':r.outRecorder)+'</td>' +
     '</tr>';
   });
 
-  // ── แถวสรุปผลรวม AH/โม่/Auto/Manual/รวม ของรายการที่แสดงอยู่ (ตามตัวกรองปัจจุบัน) ──
-  var outDisplayRows = displayRows.filter(function(r){ return !r.isIn; });
-  if (outDisplayRows.length) {
-    var sumAuto = 0, sumManual = 0, sumAh = 0, sumMo = 0;
-    outDisplayRows.forEach(function(r){
-      var l = Number(r.outLiter||0);
-      if (r.outType === 'manual') sumManual += l; else sumAuto += l;
-      if (r.outType === 'auto') { sumAh += Number(r.ah||0); sumMo += Number(r.mo||0); }
-    });
-    var basisSumParts = [];
-    if (sumAh > 0) basisSumParts.push('AH ' + sumAh.toLocaleString());
-    if (sumMo > 0) basisSumParts.push('โม่ ' + sumMo.toLocaleString());
-    html += '<tr style="border-top:2px solid var(--navy);background:#f8fafc;">' +
-      '<td colspan="7" style="padding:8px 6px;text-align:right;font-size:10px;font-weight:700;color:var(--navy);">รวม (ตามตัวกรองที่แสดง)</td>' +
-      '<td style="padding:8px 4px;font-size:9px;font-weight:700;color:#1d4ed8;white-space:nowrap;">'+(basisSumParts.join(' / ')||'')+'</td>' +
-      '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#0d6e56;">'+sumAuto.toFixed(2)+'</td>' +
-      '<td style="padding:8px 4px;text-align:right;font-weight:800;color:#b45309;">'+sumManual.toFixed(2)+'</td>' +
-      '<td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--navy);">'+(sumAuto+sumManual).toFixed(2)+'</td>' +
-      '<td></td>' +
-      '<td style="padding:8px 6px;font-size:9px;color:var(--text-muted);">ลิตรรวม</td>' +
-    '</tr>';
-  }
-
   var tbody = document.getElementById('chemStockTbody');
-  if (tbody) tbody.innerHTML = html || '<tr><td colspan="13" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
+  if (tbody) tbody.innerHTML = html || '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
 }
 
 // ── Export CSV ────────────────────────────────────────────────
-function clearChemOutFilter() {
-  var t = document.getElementById('chemOutTypeFilter'); if (t) t.value = 'all';
-  var f = document.getElementById('chemOutFrom'); if (f) f.value = '';
-  var to = document.getElementById('chemOutTo'); if (to) to.value = '';
-  renderChemStockCard();
-}
-
 function exportChemCSV() {
   if (!_selChemId) return;
   var item = chemItems.find(function(c){ return c.id===_selChemId; });
   if (!item) return;
-  var rows = [['ว.ด.ป.(รับ)','เลขใบรับงาน','รับเข้า(ลิตร)','รับเข้า(ถัง)','ผู้บันทึก','ว.ด.ป.(เบิก)','เลขใบสั่งผลิต','เบิก Auto(ลิตร)','เบิก Manual(ลิตร)','รวมเบิกใช้(ลิตร)','คงเหลือ','ผู้เบิก']];
+  var rows = [['ว.ด.ป.(รับ)','เลขใบรับงาน','รับเข้า(ลิตร)','รับเข้า(ถัง)','ผู้บันทึก','ว.ด.ป.(เบิก)','เลขใบสั่งผลิต','เบิก(ลิตร)','คงเหลือ','ผู้เบิก']];
   // ดึง rows เหมือน renderChemStockCard
   var allRows = [];
   chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='in'; }).forEach(function(r){
@@ -4851,21 +4695,16 @@ function exportChemCSV() {
       }
     }
     var used = ml/1000;
-    if (used>0) allRows.push({ date:day.date, bill:day.lotNo||'', inLiter:0, inBucket:0, recorder:'', outLiter:used, outRecorder:day.recorder||'ระบบ', outType:'Auto Dosing', isIn:false });
-  });
-  // เบิกด้วยมือ (Manual)
-  chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='out'; }).forEach(function(r){
-    allRows.push({ date:r.date, bill:r.bill||'', inLiter:0, inBucket:0, recorder:'', outLiter:Number(r.liter||0), outRecorder:r.recorder||'', outType:'Manual', isIn:false });
+    if (used>0) allRows.push({ date:day.date, bill:day.lotNo||'', inLiter:0, inBucket:0, recorder:'', outLiter:used, outRecorder:day.recorder||'ระบบ', isIn:false });
   });
   allRows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
   var running=0;
   allRows.forEach(function(r){
     var inL=Number(r.inLiter||0), outL=Number(r.outLiter||0);
     if(r.isIn) running+=inL; else running-=outL;
-    var isManualCsv = r.outType==='Manual';
     rows.push(r.isIn
-      ? [r.date,r.bill,inL,r.inBucket,r.recorder,'','','','','',running.toFixed(2),'']
-      : ['','','','','',r.date,r.bill,(isManualCsv?'':outL.toFixed(2)),(isManualCsv?outL.toFixed(2):''),outL.toFixed(2),running.toFixed(2),r.outRecorder]);
+      ? [r.date,r.bill,inL,r.inBucket,r.recorder,'','','',running.toFixed(2),'']
+      : ['','','','','',r.date,r.bill,outL.toFixed(2),running.toFixed(2),r.outRecorder]);
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a=document.createElement('a');
@@ -6096,7 +5935,6 @@ var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
 var currentUserName = ''; // ชื่อผู้ล็อกอิน — ใช้แสดงในประวัติเวลาอนุมัติ "ไม่ระบุบิล"
 var currentNobillApprove = false; // สิทธิ์อนุมัติ "บันทึกแบบไม่ระบุบิล" — ตั้งจากหน้า auth_admin แยกจาก role หลัก (admin ได้ true เสมอ)
-var currentManualDoseApprove = false; // สิทธิ์อนุมัติ "เติมเคมีด้วยมือ" — แยกอิสระจาก NOBILL ตั้งจากหน้า auth_admin (admin ได้ true เสมอ)
 
 function checkPin() {
   var input = document.getElementById('pinInput').value.trim();
@@ -6120,7 +5958,6 @@ function checkPin() {
     currentTabs = result.tabs;
     currentUserName = (result.user && result.user.name) || '';
     currentNobillApprove = !!result.nobillApprove;
-    currentManualDoseApprove = !!result.manualDoseApprove;
     try { sessionStorage.setItem('plating_v5_b2_pin', input); } catch(e){}
     showApp(currentRole);
     showPOPopup('B2');
@@ -7224,8 +7061,9 @@ async function confirmJobOut() {
   jobMasterRecords.unshift(rec);
 
   try {
+    // ⚠️ ใช้ PATCH ไม่ใช่ PUT — เหตุผลเดียวกับใน autoJobOut() (กันเขียนทับ invoices/customers/ฯลฯ ทิ้ง)
     await fetch(FB_JOB_PATH + '.json', {
-      method:'PUT', headers:{'Content-Type':'application/json'},
+      method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ items:jobMasterItems, records:jobMasterRecords, savedAt:new Date().toISOString() })
     });
     showToast('job','✅ เบิกสำเร็จ — '+qty+' ชิ้น','ok');
