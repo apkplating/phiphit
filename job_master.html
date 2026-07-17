@@ -284,14 +284,25 @@ input:focus,select:focus{border-color:var(--blue2);}
 
   <!-- ── หัวบิล INV ── -->
   <div class="card">
-    <div class="card-label">📤 ออก INV ขาย (ใบส่งสินค้า)</div>
+    <div class="card-label" id="invCardTitle">📤 ออก INV ขาย (ใบส่งสินค้า)</div>
+    <div class="field">
+      <label>ประเภทเอกสาร</label>
+      <div style="display:flex;gap:16px;font-size:13px;">
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="invDocType" value="sale" checked onchange="onInvDocTypeChange()" style="width:auto;"> 🧾 ขาย (มีราคา/VAT)
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;cursor:pointer;">
+          <input type="radio" name="invDocType" value="claim" onchange="onInvDocTypeChange()" style="width:auto;"> 🔧 งานเคลม (ไม่มีมูลค่า)
+        </label>
+      </div>
+    </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label>เลขที่ INV <span style="color:var(--red);">*</span></label>
+        <label id="invNoLabel">เลขที่ INV <span style="color:var(--red);">*</span></label>
         <input type="text" id="invNo" placeholder="เช่น IV2606031">
       </div>
       <div class="field" style="margin:0;">
-        <label>วันที่ออก INV <span style="color:var(--red);">*</span></label>
+        <label id="invDateLabel">วันที่ออก INV <span style="color:var(--red);">*</span></label>
         <input type="date" id="invDate" onchange="onInvDateChange()">
       </div>
     </div>
@@ -392,7 +403,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="text" id="invLineTotalWeight" placeholder="0.00" readonly style="background:#f8fafc;color:var(--text-mid);">
       </div>
     </div>
-    <div class="grid2">
+    <div id="invPriceFieldsWrap" class="grid2">
       <div class="field" style="margin:0;">
         <label>ราคา/หน่วย (บาท) <span style="color:var(--red);">*</span></label>
         <input type="number" id="invLinePrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal" oninput="onInvLineQtyOrWeightChange()">
@@ -425,8 +436,8 @@ input:focus,select:focus{border-color:var(--blue2);}
           <th class="td-l" style="min-width:140px;">รายการ / P.No</th>
           <th>จำนวน</th>
           <th>น้ำหนัก</th>
-          <th>ราคา/หน่วย</th>
-          <th>จำนวนเงิน</th>
+          <th id="invThPrice">ราคา/หน่วย</th>
+          <th id="invThAmount">จำนวนเงิน</th>
           <th style="width:30px;"></th>
         </tr></thead>
         <tbody id="invLineBody">
@@ -437,7 +448,7 @@ input:focus,select:focus{border-color:var(--blue2);}
   </div>
 
   <!-- ── ยอดรวม ── -->
-  <div class="card">
+  <div class="card" id="invTotalsCard">
     <div class="sum-row" style="grid-template-columns:1fr 1fr 1fr;">
       <div class="sum-chip" style="background:#f0f9ff;">
         <div class="sum-chip-label">GRAND TOTAL</div>
@@ -460,7 +471,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       <button class="btn btn-outline" onclick="saveInvoice(false)">💾 บันทึก (ไม่พิมพ์)</button>
       <button class="btn btn-primary" onclick="saveInvoice(true)">🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)</button>
     </div>
-    <button class="btn btn-green" style="margin-top:8px;" onclick="saveInvoice('form')">🖨️ บันทึก + พิมพ์ลงฟอร์มสำเร็จรูป</button>
+    <button class="btn btn-green" id="invFormPrintBtn" style="margin-top:8px;" onclick="saveInvoice('form')">🖨️ บันทึก + พิมพ์ลงฟอร์มสำเร็จรูป</button>
     <div id="toast-out" class="toast"></div>
   </div>
 
@@ -850,6 +861,9 @@ function isRealInvRef(r) {
   return !!_realInvNoSet[r.inv];
 }
 var invDraft   = [];   // รายการสินค้าในบิล INV ที่กำลังสร้าง (ยังไม่บันทึก)
+// 'sale' = ขาย (มีราคา/VAT) | 'claim' = งานเคลม (ไม่มีมูลค่า, เลขเอกสารรันแยก prefix CL)
+// จำโหมดล่าสุดที่เลือกไว้ใน localStorage ของเครื่องนี้ — เปิดหน้าใหม่/รีเฟรชแล้วยังอยู่โหมดเดิม ไม่ต้องกดสลับทุกครั้ง
+var invDocType = (function(){ try { return localStorage.getItem('job_last_doc_type')==='claim' ? 'claim' : 'sale'; } catch(e){ return 'sale'; } })();
 var customers  = [];   // ทะเบียนลูกค้า {id, name, addressText}
 var billStatements = []; // ใบวางบิลที่ออกแล้ว {id, billNo, date, customer, invoiceIds, total}
 var priceList  = [];   // ทะเบียนราคา {id, partName, customer, price, weight, note}
@@ -1000,18 +1014,6 @@ async function fbSave() {
       }
     } catch(e) {}
   }
-  // เดียวกันนี้กับ "ทะเบียนราคา" (priceList) — เจอเคสราคาหายหลังเปิดหน้าใหม่ สาเหตุคือ fbSave() รอบก่อนหน้า
-  // ล้มเหลวเงียบๆ (ไม่ await ผลลัพธ์) แล้ว fbLoad() รอบถัดไปดึงข้อมูลเก่าจากคลาวด์มาทับ priceList ในเครื่องที่เพิ่งแก้ไป
-  if (priceList.length === 0) {
-    try {
-      var backupPL = JSON.parse(localStorage.getItem('job_price_list') || '[]');
-      if (backupPL.length > 0) {
-        console.warn('[Job Master] fbSave() ยกเลิก — priceList ว่างเปล่าผิดปกติ ทั้งที่ backup ในเครื่องมี ' + backupPL.length + ' รายการ (กันเขียนทับข้อมูลจริงหาย)');
-        setSyncErr();
-        return false;
-      }
-    } catch(e) {}
-  }
   try {
     var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
@@ -1046,12 +1048,7 @@ async function fbLoad() {
       }
       if (Array.isArray(data.customers)) customers = data.customers;
       if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
-      // รองรับกรณี Firebase เก็บ priceList เป็น object คีย์ตัวเลขแทน array ปกติ (เหมือน invoices)
       if (Array.isArray(data.priceList)) priceList = data.priceList;
-      else if (data.priceList && typeof data.priceList === 'object') {
-        var plArr = Object.values(data.priceList);
-        if (plArr.length) priceList = plArr;
-      }
       if (Array.isArray(data.hiddenCustomers)) hiddenCustomers = data.hiddenCustomers;
       saveLocal();
       setSyncOk();
@@ -1705,7 +1702,7 @@ function resetPriceForm() {
   document.getElementById('plNote').value = '';
 }
 
-async function savePriceEntry() {
+function savePriceEntry() {
   var id        = document.getElementById('plEditId').value;
   var partName  = document.getElementById('plPartName').value.trim();
   var customer  = document.getElementById('plCustomer').value.trim();
@@ -1733,25 +1730,11 @@ async function savePriceEntry() {
     priceList.unshift({ id:'PL'+Date.now(), partName:partName, customer:customer, price:price, priceUnit:priceUnit, note:note });
   }
 
-  saveLocal();
+  saveLocal(); fbSave();
+  showToast('pl','💾 บันทึกราคาแล้ว','ok');
   resetPriceForm();
   renderPriceList();
   renderPriceFormHints();
-
-  // สำคัญ: ต้อง await ผลลัพธ์จริงของ fbSave() ก่อนบอกว่า "บันทึกแล้ว" — ถ้าไม่รอ อาจขึ้นข้อความสำเร็จทั้งที่
-  // ยังไม่ได้ขึ้นคลาวด์จริง แล้วรอบ fbLoad() ถัดไปจะดึงข้อมูลเก่ามาทับราคาที่เพิ่งบันทึกจนหายไปเงียบๆ
-  showToast('pl','💾 กำลังบันทึกราคา...','ok');
-  var ok = await fbSave();
-  if (!ok) {
-    // ลองซ้ำอีกครั้งหลังหน่วง 1.5 วิ เผื่อเป็นปัญหาเน็ตชั่วคราว/ยังซิงค์รอบแรกไม่เสร็จ
-    await new Promise(function(r){ setTimeout(r, 1500); });
-    ok = await fbSave();
-  }
-  if (ok) {
-    showToast('pl','✅ บันทึกราคาขึ้นคลาวด์แล้ว','ok');
-  } else {
-    showToast('pl','⚠️ บันทึกในเครื่องแล้ว แต่ยังซิงค์ขึ้นคลาวด์ไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองกด Sync อีกครั้ง (ไม่งั้นราคาอาจหายเมื่อเปิดเครื่องอื่น)','err');
-  }
 }
 
 function editPriceEntry(id) {
@@ -1766,20 +1749,14 @@ function editPriceEntry(id) {
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-async function deletePriceEntry(id) {
+function deletePriceEntry(id) {
   var p = priceList.find(function(x){ return x.id===id; });
   if (!p) return;
   if (!confirm('ลบราคา '+p.partName+' / '+p.customer+'?')) return;
   priceList = priceList.filter(function(x){ return x.id!==id; });
-  saveLocal();
+  saveLocal(); fbSave();
+  showToast('pl','🗑️ ลบแล้ว','ok');
   renderPriceList();
-  showToast('pl','🗑️ กำลังลบ...','ok');
-  var ok = await fbSave();
-  if (!ok) {
-    await new Promise(function(r){ setTimeout(r, 1500); });
-    ok = await fbSave();
-  }
-  showToast('pl', ok ? '✅ ลบและซิงค์ขึ้นคลาวด์แล้ว' : '⚠️ ลบในเครื่องแล้ว แต่ยังซิงค์ขึ้นคลาวด์ไม่สำเร็จ — ลองกด Sync อีกครั้ง', ok?'ok':'err');
 }
 
 function renderPriceList() {
@@ -1821,13 +1798,15 @@ function addInvLine() {
   var qtyUnitEl = document.getElementById('invLineQtyUnit');
   var qtyUnit   = qtyUnitEl ? qtyUnitEl.value : 'pcs';
   var wPerUnit  = parseFloat(document.getElementById('invLineWeight').value)||0;
-  var price     = parseFloat(document.getElementById('invLinePrice').value)||0;
-  var priceUnit = (document.getElementById('invLinePriceUnit') && document.getElementById('invLinePriceUnit').value) || 'pcs';
+  var isClaim   = (invDocType === 'claim');
+  // งานเคลม: ไม่มีราคา/มูลค่า — ข้ามการกรอกและ validation ราคาทั้งหมด (priceUnit ใช้ตามหน่วยจำนวนไปเลย กันเงื่อนไขราคาที่ไม่เกี่ยวมาบล็อก)
+  var price     = isClaim ? 0 : (parseFloat(document.getElementById('invLinePrice').value)||0);
+  var priceUnit = isClaim ? qtyUnit : ((document.getElementById('invLinePriceUnit') && document.getElementById('invLinePriceUnit').value) || 'pcs');
   var lot       = document.getElementById('invLineLot').value.trim();
 
   if (!jobId) { showToast('invline','กรุณาเลือกบิล/P.No','err'); return; }
   if (!qty)   { showToast('invline','กรุณากรอกจำนวน','err'); return; }
-  if (!price) { showToast('invline','กรุณากรอกราคา/หน่วย','err'); return; }
+  if (!price && !isClaim) { showToast('invline','กรุณากรอกราคา/หน่วย','err'); return; }
 
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { showToast('invline','ไม่พบรายการบิลนี้','err'); return; }
@@ -1843,11 +1822,11 @@ function addInvLine() {
     showToast('invline','⚠️ กรุณากรอก "น้ำหนัก/หน่วย" ก่อน เพื่อแปลงจำนวนให้ตรงกับบิลรับเข้า ('+(isKg?'กก.':'ชิ้น')+')','err');
     return;
   }
-  if (priceUnit==='kg' && !totalKg) {
+  if (!isClaim && priceUnit==='kg' && !totalKg) {
     showToast('invline','⚠️ ราคาต่อกิโลกรัม ต้องทราบน้ำหนักรวม — กรุณากรอก "น้ำหนัก/หน่วย" (ระบบจะดึงจาก Part Master ให้อัตโนมัติถ้ามีข้อมูล)','err');
     return;
   }
-  if (priceUnit==='pcs' && qtyUnit==='kg' && !totalPcs) {
+  if (!isClaim && priceUnit==='pcs' && qtyUnit==='kg' && !totalPcs) {
     showToast('invline','⚠️ ราคาต่อชิ้น ต้องทราบ "น้ำหนัก/หน่วย" เพื่อแปลงจาก กก. เป็นจำนวนชิ้น','err');
     return;
   }
@@ -1865,8 +1844,8 @@ function addInvLine() {
     return;
   }
 
-  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ
-  var amount = (priceUnit==='kg') ? (totalKg * price) : (totalPcs * price);
+  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ (งานเคลม = 0 เสมอ)
+  var amount = isClaim ? 0 : ((priceUnit==='kg') ? (totalKg * price) : (totalPcs * price));
 
   invDraft.push({
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
@@ -1913,8 +1892,10 @@ function removeInvLine(idx) {
 // แสดงตารางรายการในบิล INV + คำนวณยอดรวม
 function renderInvLines() {
   var tbody = document.getElementById('invLineBody');
+  var isClaim = (invDocType === 'claim');
+  var colCount = isClaim ? 4 : 6;
   if (!invDraft.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีรายการ — เพิ่มจากด้านบน</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="'+colCount+'" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีรายการ — เพิ่มจากด้านบน</td></tr>';
   } else {
     tbody.innerHTML = invDraft.map(function(l,idx){
       var qU = l.qtyUnit || l.unit || 'pcs';
@@ -1925,12 +1906,14 @@ function renderInvLines() {
       var puTH   = (l.priceUnit==='kg') ? '/กก.' : '/ชิ้น';
       var pmPartL = pmLookup(l.partName);
       var pmNameL = pmPartL ? (pmPartL.name||'') : '';
+      var priceCells = isClaim ? '' :
+        '<td>'+l.price.toFixed(2)+'<span style="font-size:9px;color:var(--text-muted);">'+puTH+'</span></td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+l.amount.toFixed(2)+'</td>';
       return '<tr>'+
         '<td class="td-l">'+esc(l.partName)+(pmNameL?' <span style="color:var(--text-muted);font-weight:400;">'+esc(pmNameL)+'</span>':'')+(l.lot?'<br><span style="font-size:9px;color:var(--text-muted);">'+esc(l.lot)+'</span>':'')+'</td>'+
         '<td>'+qtyStr+'</td>'+
         '<td>'+wStr+pcsHint+'</td>'+
-        '<td>'+l.price.toFixed(2)+'<span style="font-size:9px;color:var(--text-muted);">'+puTH+'</span></td>'+
-        '<td style="font-weight:700;color:var(--blue);">'+l.amount.toFixed(2)+'</td>'+
+        priceCells+
         '<td><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button></td>'+
       '</tr>';
     }).join('');
@@ -1947,15 +1930,15 @@ function recalcInvTotals() {
   document.getElementById('invNetTotal').textContent   = net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
-// สร้างเลขที่ INV อัตโนมัติ รูปแบบ IV{YY}{MM}{seq 3 หลัก}
-function genInvNo(dateStr) {
+// สร้างเลขที่ INV อัตโนมัติ รูปแบบ IV{YY}{MM}{seq 3 หลัก} (หรือ CL{YY}{MM}{seq} สำหรับงานเคลม — รันแยกเลขกันคนละชุด)
+function genInvNo(dateStr, docType) {
   var d = dateStr ? new Date(dateStr+'T00:00:00') : new Date();
   var yy = String(d.getFullYear()+543-2500).padStart(2,'0'); // ปี พ.ศ. 2 หลักท้าย (เช่น 2569 → 69... แต่ตัวอย่างใช้ ค.ศ. 26)
   // จากตัวอย่างจริง IV2606031 = ปี 2026 (ค.ศ.) เดือน 06 → ใช้ ค.ศ. 2 หลักท้าย
   yy = String(d.getFullYear()).slice(-2);
   var mm = String(d.getMonth()+1).padStart(2,'0');
-  var prefix = 'IV' + yy + mm;
-  // หา running number สูงสุดของเดือนนี้ จาก invoices ที่มีอยู่
+  var prefix = ((docType||invDocType)==='claim' ? 'CL' : 'IV') + yy + mm;
+  // หา running number สูงสุดของเดือนนี้ จาก invoices ที่มีอยู่ (เช็คเฉพาะ prefix เดียวกัน — IV กับ CL รันคนละชุดไม่ชนกัน)
   var maxSeq = 0;
   invoices.forEach(function(inv){
     if (inv.invNo && inv.invNo.indexOf(prefix)===0) {
@@ -1968,11 +1951,67 @@ function genInvNo(dateStr) {
   return prefix + next;
 }
 
+// สลับโหมด "ขาย" ↔ "งานเคลม" — ซ่อนช่องราคา/VAT, เปลี่ยนเลขที่เอกสารเป็นชุด CL, เปลี่ยน label ให้ตรงบริบท
+function onInvDocTypeChange() {
+  var sel = document.querySelector('input[name="invDocType"]:checked');
+  var newType = sel ? sel.value : 'sale';
+
+  // กันสลับโหมดกลางคันถ้ามีรายการค้างอยู่แล้ว (ราคาที่กรอกไว้จะไม่ตรงกับโหมดใหม่) — ให้ล้างบิลก่อน
+  if (invDraft.length && newType !== invDocType) {
+    showToast('out','⚠️ มีรายการค้างอยู่ในบิล ('+invDraft.length+' รายการ) — กรุณาลบรายการทั้งหมดก่อนสลับประเภทเอกสาร','err');
+    var revertEl = document.querySelector('input[name="invDocType"][value="'+invDocType+'"]');
+    if (revertEl) revertEl.checked = true;
+    return;
+  }
+
+  invDocType = newType;
+  try { localStorage.setItem('job_last_doc_type', invDocType); } catch(e){}
+  var isClaim = (invDocType === 'claim');
+
+  var title = document.getElementById('invCardTitle');
+  if (title) title.textContent = isClaim ? '🔧 ออกใบส่งคืนงานเคลม' : '📤 ออก INV ขาย (ใบส่งสินค้า)';
+  var noLabel = document.getElementById('invNoLabel');
+  if (noLabel) noLabel.innerHTML = (isClaim ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
+
+  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaim ? 'none' : '';
+  });
+  ['invThPrice','invThAmount'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaim ? 'none' : '';
+  });
+  var formBtn = document.getElementById('invFormPrintBtn');
+  if (formBtn) formBtn.style.display = isClaim ? 'none' : ''; // ฟอร์มสำเร็จรูปใช้เฉพาะ Tax Invoice จริง ไม่ใช่ใบเคลม
+
+  // เลขที่เอกสารเปลี่ยนชุดตามโหมด — regen ให้ใหม่เฉพาะตอนยังไม่มีการพิมพ์เองแก้ไข (ตรวจแบบเดียวกับ onInvDateChange)
+  var invNoEl = document.getElementById('invNo');
+  var dateEl  = document.getElementById('invDate');
+  if (invNoEl) {
+    var auto = /^(IV|CL)\d{7}$/.test(invNoEl.value);
+    if (auto || !invNoEl.value.trim()) invNoEl.value = genInvNo(dateEl ? dateEl.value : null);
+  }
+  renderInvLines(); // ปรับตารางร่างให้ซ่อน/แสดงคอลัมน์ราคาตามโหมดใหม่
+}
+
 function initInvTab() {
+  // sync radio + UI (ซ่อน/แสดงราคา ฯลฯ) ให้ตรงกับโหมดที่จำไว้ล่าสุด (localStorage) ทุกครั้งที่เข้าแท็บนี้
+  var docTypeRadio = document.querySelector('input[name="invDocType"][value="'+invDocType+'"]');
+  if (docTypeRadio) docTypeRadio.checked = true;
+  var isClaimInit = (invDocType === 'claim');
+  var titleInitEl = document.getElementById('invCardTitle');
+  if (titleInitEl) titleInitEl.textContent = isClaimInit ? '🔧 ออกใบส่งคืนงานเคลม' : '📤 ออก INV ขาย (ใบส่งสินค้า)';
+  var noLabelInitEl = document.getElementById('invNoLabel');
+  if (noLabelInitEl) noLabelInitEl.innerHTML = (isClaimInit ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
+  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
+  ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
+  var formBtnInitEl = document.getElementById('invFormPrintBtn');
+  if (formBtnInitEl) formBtnInitEl.style.display = isClaimInit?'none':'';
+
   var dateEl = document.getElementById('invDate');
   if (dateEl && !dateEl.value) dateEl.value = isoToday();
   var invNoEl = document.getElementById('invNo');
-  if (invNoEl && !invNoEl.value) invNoEl.value = genInvNo(dateEl ? dateEl.value : null);
+  if (invNoEl && !invNoEl.value) invNoEl.value = genInvNo(dateEl ? dateEl.value : null, invDocType);
   renderInvLineSelect();
   renderInvLines();
   loadFormOffsetUI();
@@ -2160,9 +2199,9 @@ function onInvDateChange() {
   var invNoEl = document.getElementById('invNo');
   var dateEl  = document.getElementById('invDate');
   if (!invNoEl || !dateEl) return;
-  // ถ้า invNo ยังเป็นรูปแบบ auto-gen เดิม (IV+YYMM+seq) ให้ gen ใหม่ตามวันที่ใหม่
-  var auto = /^IV\d{7}$/.test(invNoEl.value);
-  if (auto || !invNoEl.value.trim()) invNoEl.value = genInvNo(dateEl.value);
+  // ถ้า invNo ยังเป็นรูปแบบ auto-gen เดิม (IV/CL+YYMM+seq) ให้ gen ใหม่ตามวันที่ใหม่
+  var auto = /^(IV|CL)\d{7}$/.test(invNoEl.value);
+  if (auto || !invNoEl.value.trim()) invNoEl.value = genInvNo(dateEl.value, invDocType);
 }
 
 // บันทึก INV — สร้าง jobRecords (type:out) ทุกรายการ + เก็บ invoice + เลือกพิมพ์
@@ -2173,9 +2212,10 @@ function saveInvoice(doPrint) {
   var po      = document.getElementById('invPO').value.trim();
   var term    = document.getElementById('invTerm').value.trim();
   var note    = document.getElementById('invNote').value.trim();
+  var isClaim = (invDocType === 'claim');
 
-  if (!invNo)    { showToast('out','กรุณากรอกเลขที่ INV','err'); return; }
-  if (!date)     { showToast('out','กรุณาระบุวันที่ออก INV','err'); return; }
+  if (!invNo)    { showToast('out','กรุณากรอกเลขที่'+(isClaim?'ใบส่งคืนงานเคลม':' INV'),'err'); return; }
+  if (!date)     { showToast('out','กรุณาระบุวันที่','err'); return; }
   if (!customer) { showToast('out','กรุณากรอกชื่อลูกค้า','err'); return; }
   if (!invDraft.length) { showToast('out','กรุณาเพิ่มรายการสินค้าก่อนบันทึก','err'); return; }
 
@@ -2190,7 +2230,12 @@ function saveInvoice(doPrint) {
     }
   }
 
-  // สร้าง jobRecords (type:out) — ตัดสต็อกทุกรายการ ผูกเลขที่ INV เดียวกัน
+  // งานเคลม: บังคับราคา/มูลค่า = 0 เสมอ (กันเผื่อรายการหลงเหลือราคาจากตอนสลับโหมด) — ไม่มีผลกับสต็อกที่ตัด
+  if (isClaim) {
+    invDraft.forEach(function(l){ l.price = 0; l.amount = 0; });
+  }
+
+  // สร้าง jobRecords (type:out) — ตัดสต็อกทุกรายการ ผูกเลขที่ INV/ใบเคลมเดียวกัน
   invDraft.forEach(function(l){
     var isKg = l.unit==='kg';
     jobRecords.unshift({
@@ -2198,14 +2243,15 @@ function saveInvoice(doPrint) {
       jobId: l.jobId, type:'out', date: date,
       qty: isKg?0:l.qty, qtyKg: isKg?l.qty:0, unit: l.unit,
       inv: invNo, by:'', note: note,
-      price: l.price, weight: l.weight, lot: l.lot
+      price: l.price, weight: l.weight, lot: l.lot,
+      docType: invDocType
     });
   });
 
   // เก็บ invoice
   var invObj = {
     id: 'INV'+Date.now(), invNo: invNo, date: date, customer: customer,
-    po: po, term: term, note: note, printed: !!doPrint,
+    po: po, term: term, note: note, printed: !!doPrint, docType: invDocType,
     items: invDraft.slice(),
     grandTotal: invDraft.reduce(function(s,l){return s+l.amount;},0),
   };
@@ -2216,17 +2262,19 @@ function saveInvoice(doPrint) {
 
   saveLocal(); fbSave();
 
-  showToast('out','✅ บันทึก INV '+invNo+' สำเร็จ','ok');
+  showToast('out','✅ บันทึก'+(isClaim?'ใบส่งคืนงานเคลม':'INV')+' '+invNo+' สำเร็จ','ok');
 
-  if (doPrint==='form') {
+  if (isClaim) {
+    if (doPrint) printClaimNote(invObj);
+  } else if (doPrint==='form') {
     printInvoiceOnForm(invObj);
   } else if (doPrint) {
     printInvoice(invObj);
   }
 
-  // reset draft form สำหรับ INV ใหม่
+  // reset draft form สำหรับ INV ใหม่ (คงโหมดขาย/เคลมเดิมไว้ ไม่รีเซ็ตกลับเป็นขายอัตโนมัติ)
   invDraft = [];
-  document.getElementById('invNo').value = genInvNo();
+  document.getElementById('invNo').value = genInvNo(null, invDocType);
   document.getElementById('invCustomer').value = '';
   document.getElementById('invPO').value = '';
   document.getElementById('invNote').value = '';
@@ -2307,6 +2355,79 @@ function printInvoice(inv) {
       '<div>ผู้รับของ<br>RECEIVER<br>วันที่.../.../...</div>'+
       '<div>ผู้นำส่ง<br>DELIVERER<br>วันที่.../.../...</div>'+
       '<div>ผู้รับเงิน<br>COLLECTOR<br>วันที่.../.../...</div>'+
+    '</div>'+
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function(){ w.focus(); w.print(); };
+}
+
+// สร้าง HTML "ใบส่งคืนงานเคลม" แล้วเปิดหน้าต่างพิมพ์ — ตามฟอร์ม Excel เดิมที่ใช้กันอยู่ (ไม่มีราคา/VAT)
+// คอลัมน์ "เลขที่ใบเคลม" ใช้ช่อง LOT/อ้างอิง ที่กรอกตอนเพิ่มรายการ (เผื่อพิพิธอยากใส่เลขอ้างอิงของลูกค้าแยกแต่ละบรรทัด)
+function printClaimNote(inv) {
+  var d = new Date(inv.date+'T00:00:00');
+  var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
+
+  var rowsHtml = inv.items.map(function(l,i){
+    var qtyStr = invLineQtyDisplay(l);
+    var pmPart = pmLookup(l.partName);
+    var pmName = pmPart ? (pmPart.name||'') : '';
+    return '<tr>'+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+(i+1)+'</td>'+
+      '<td style="border:1px solid #64748b;padding:7px;">'+esc(l.partName)+
+        (pmName?' <span style="color:#475569;">'+esc(pmName)+'</span>':'')+'</td>'+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+qtyStr+'</td>'+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+(l.lot?esc(l.lot):'-')+'</td>'+
+    '</tr>';
+  }).join('');
+  // เติมแถวว่างให้ครบอย่างน้อย 6 แถว ให้หน้าตาเหมือนฟอร์ม Excel เดิม (มีที่เขียนเพิ่มด้วยมือได้)
+  var blankRows = Math.max(0, 6 - inv.items.length);
+  for (var i=0;i<blankRows;i++) {
+    rowsHtml += '<tr><td style="border:1px solid #64748b;padding:14px;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td></tr>';
+  }
+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>ใบส่งคืนงานเคลม '+esc(inv.invNo)+'</title>'+
+    '<style>'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    'th{background:#f1f5f9;border:1px solid #64748b;padding:7px;font-size:12px;}'+
+    '.hdr{text-align:center;margin-bottom:4px;}'+
+    '.hdr .co{font-weight:700;font-size:15px;}'+
+    '.title{text-align:center;font-weight:700;font-size:18px;margin:14px 0;}'+
+    '.meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:6px;font-size:13px;}'+
+    '.meta .line{flex:1;border-bottom:1px dotted #475569;padding-bottom:2px;}'+
+    '.sign{display:flex;justify-content:space-around;margin-top:70px;text-align:center;font-size:12px;}'+
+    '.sign div{width:38%;}'+
+    '.sign .ul{border-top:1px solid #64748b;margin-top:44px;padding-top:4px;}'+
+    '.ftr{text-align:center;font-size:11px;color:#334155;margin-top:50px;border-top:1px solid #cbd5e1;padding-top:8px;}'+
+    '.docno{text-align:right;font-size:11px;color:#64748b;margin-top:-6px;}'+
+    '@media print{ body{padding:0;} }'+
+    '</style></head><body>'+
+    '<div class="hdr"><div class="co">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div></div>'+
+    '<div class="title">ใบส่งคืนงานเคลม</div>'+
+    '<div class="docno">เลขที่เอกสาร '+esc(inv.invNo)+'</div>'+
+    '<div class="meta">'+
+      '<div class="line"><b>ชื่อลูกค้า</b> '+esc((inv.customer||'').split('\n')[0])+'</div>'+
+      '<div style="flex:0 0 200px;" class="line"><b>วันที่</b> '+dateStr+'</div>'+
+    '</div>'+
+    '<table><thead><tr>'+
+      '<th style="width:40px;">ลำดับ</th>'+
+      '<th>รายการ</th>'+
+      '<th style="width:90px;">จำนวน</th>'+
+      '<th style="width:120px;">เลขที่ใบเคลม</th>'+
+    '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
+    (inv.note ? '<div style="margin-top:8px;font-size:12px;"><b>หมายเหตุ:</b> '+esc(inv.note)+'</div>' : '')+
+    '<div class="sign">'+
+      '<div><div class="ul">ผู้ส่งของ</div>วันที่.../.../...</div>'+
+      '<div><div class="ul">ผู้รับของ</div>วันที่.../.../...</div>'+
+    '</div>'+
+    '<div class="ftr">'+
+      'บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)<br>'+
+      '774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540'+
     '</div>'+
     '</body></html>';
 
@@ -2540,20 +2661,23 @@ function renderSales() {
   if (curMonth!=='all' && !months[curMonth]) curMonth='all';
 
   // ── filter invoices ──
+  // list = ทุกเอกสาร (ขาย+เคลม) ใช้กับตาราง "รายการ INV" เพื่อค้นหา/พิมพ์ซ้ำได้ครบ
+  // saleList = เฉพาะเอกสารขายจริง (ไม่รวมงานเคลม) ใช้กับยอดสรุป/รายลูกค้า/รายเดือน ไม่ให้งานเคลม (มูลค่า 0) มาปนสถิติยอดขาย
   var list = invoices.filter(function(inv){
     return curMonth==='all' || (inv.date && inv.date.slice(0,7)===curMonth);
   });
+  var saleList = list.filter(function(inv){ return inv.docType!=='claim'; });
 
   // ── summary ──
   var sumNet=0, sumGrand=0;
-  list.forEach(function(inv){ sumNet += Number(inv.netTotal||0); sumGrand += Number(inv.grandTotal||0); });
+  saleList.forEach(function(inv){ sumNet += Number(inv.netTotal||0); sumGrand += Number(inv.grandTotal||0); });
   document.getElementById('salesSumNet').textContent   = sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('salesSumGrand').textContent = sumGrand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('salesSumCount').textContent = list.length;
+  document.getElementById('salesSumCount').textContent = saleList.length;
 
   // ── สรุปตามลูกค้า ──
   var byCustomer = {};
-  list.forEach(function(inv){
+  saleList.forEach(function(inv){
     var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
     if (!byCustomer[cust]) byCustomer[cust] = { count:0, net:0 };
     byCustomer[cust].count++;
@@ -2585,9 +2709,9 @@ function renderSales() {
     }).join('');
   }
 
-  // ── สรุปตามเดือน (ใช้ invoices ทั้งหมด ไม่ filter ตามเดือนที่เลือก เพื่อดูแนวโน้ม) ──
+  // ── สรุปตามเดือน (ใช้ invoices ทั้งหมด ไม่ filter ตามเดือนที่เลือก เพื่อดูแนวโน้ม — ไม่รวมงานเคลม) ──
   var byMonth = {};
-  invoices.forEach(function(inv){
+  invoices.filter(function(inv){ return inv.docType!=='claim'; }).forEach(function(inv){
     if (!inv.date) return;
     var ym = inv.date.slice(0,7);
     if (!byMonth[ym]) byMonth[ym] = { count:0, net:0 };
@@ -2637,19 +2761,25 @@ function renderSales() {
       var d = inv.date ? new Date(inv.date+'T00:00:00') : null;
       var dStr = d ? (d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()) : '-';
       var billed = !!inv.billNo;
+      var isClaimRow = (inv.docType==='claim');
       var editDelBtns = billed
         ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ลบไม่ได้">🔒 วางบิลแล้ว</span>'
         : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
           '<button class="icon-btn" title="ลบ INV" onclick="deleteInvoice(\''+inv.id+'\')">🗑️</button>';
+      var formBtnHtml = isClaimRow ? '' : '<button class="icon-btn" title="พิมพ์ซ้ำ (ฟอร์มสำเร็จรูป)" onclick="reprintInvoiceOnForm(\''+inv.id+'\')">📄</button>';
+      var claimBadge = isClaimRow ? ' <span style="background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;">🔧 เคลม</span>' : '';
+      var netCell = isClaimRow
+        ? '<span style="color:var(--text-muted);font-weight:400;">ไม่มีมูลค่า</span>'
+        : Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
       return '<tr>'+
-        '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
+        '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+claimBadge+'</td>'+
         '<td class="td-l">'+dStr+'</td>'+
         '<td class="td-l">'+esc(cust)+'</td>'+
         '<td>'+(inv.items?inv.items.length:0)+'</td>'+
-        '<td style="font-weight:700;color:var(--green);text-align:right;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td style="font-weight:700;color:var(--green);text-align:right;">'+netCell+'</td>'+
         '<td class="td-l" style="white-space:nowrap;">'+
           '<button class="icon-btn" title="พิมพ์ซ้ำ (กระดาษเปล่า)" onclick="reprintInvoice(\''+inv.id+'\')">🖨️</button>'+
-          '<button class="icon-btn" title="พิมพ์ซ้ำ (ฟอร์มสำเร็จรูป)" onclick="reprintInvoiceOnForm(\''+inv.id+'\')">📄</button>'+
+          formBtnHtml+
           editDelBtns+
         '</td>'+
       '</tr>';
@@ -2665,6 +2795,7 @@ function renderSales() {
 function reprintInvoice(invId) {
   var inv = invoices.find(function(i){ return i.id===invId; });
   if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  if (inv.docType==='claim') { printClaimNote(inv); return; }
   printInvoice(inv);
 }
 
@@ -2693,15 +2824,28 @@ function editInvoice(invId) {
   // โหลดข้อมูลกลับเข้าฟอร์ม
   invDraft = inv.items.slice();
   tab('out');
+  invDocType = inv.docType==='claim' ? 'claim' : 'sale';
+  var docTypeRadio = document.querySelector('input[name="invDocType"][value="'+invDocType+'"]');
+  if (docTypeRadio) docTypeRadio.checked = true;
   document.getElementById('invNo').value       = inv.invNo;
   document.getElementById('invDate').value     = inv.date;
   document.getElementById('invCustomer').value = inv.customer||'';
   document.getElementById('invPO').value       = inv.po||'';
   document.getElementById('invTerm').value     = inv.term||'';
   document.getElementById('invNote').value     = inv.note||'';
+  // sync UI (ซ่อน/แสดงคอลัมน์ราคา ฯลฯ) ให้ตรงกับโหมดของ INV ที่กำลังแก้ไข — ไม่เรียก onInvDocTypeChange() เพราะจะ regen เลขที่ทับของเดิม
+  var isClaimEdit = (invDocType==='claim');
+  var titleEl = document.getElementById('invCardTitle');
+  if (titleEl) titleEl.textContent = isClaimEdit ? '🔧 ออกใบส่งคืนงานเคลม' : '📤 ออก INV ขาย (ใบส่งสินค้า)';
+  var noLabelEl = document.getElementById('invNoLabel');
+  if (noLabelEl) noLabelEl.innerHTML = (isClaimEdit ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
+  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
+  ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
+  var formBtnEl = document.getElementById('invFormPrintBtn');
+  if (formBtnEl) formBtnEl.style.display = isClaimEdit?'none':'';
   renderInvLineSelect();
   renderInvLines();
-  showToast('out','✏️ กำลังแก้ไข INV '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง','ok');
+  showToast('out','✏️ กำลังแก้ไข'+(isClaimEdit?'ใบส่งคืนงานเคลม':'INV')+' '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง','ok');
 }
 
 // ลบ INV: คืนสต็อกของรายการที่ตัดไป แล้วลบ invoice ออก
@@ -3093,7 +3237,9 @@ function renderHistory() {
       ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับ</span>'
       : isAuto
         ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">⚙️ ชุบ</span>'
-        : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
+        : r.docType==='claim'
+          ? '<span style="background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">🔧 เคลม</span>'
+          : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
     return '<tr>' +
       '<td class="td-l" style="font-size:10px;white-space:nowrap;">'+fmtDate(r.date)+'</td>' +
       '<td>'+typeBadge+'</td>' +
