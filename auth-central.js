@@ -48,6 +48,13 @@
         - role === 'admin' จะได้ manualDoseApprove === true เสมอ
         - เก็บใน permissions[systemKey + '_manualdose'] = true (ไม่มีคีย์นี้ = false)
 
+     8. (ใหม่) สิทธิ์ "ข้ามตรวจสอบคงเหลือ" (โหมดแก้ไขสต๊อกเก่า) — result.stockOverrideApprove:
+        - ใช้เฉพาะระบบที่ stockOverrideApprovable:true ใน SYSTEM_LIST (ตอนนี้คือ job_master)
+        - ทำงานแบบเดียวกับข้อ 6/7 ทุกประการ — ตั้งได้ที่หน้า auth_admin โดยไม่ต้องยกสิทธิ์แอดมินเต็มระบบ
+          เหมาะกับเคสเคลียร์/ปรับยอดสต๊อกเก่าให้ตรงของจริง โดยยังไม่อยากให้เข้าถึงฟังก์ชันแอดมินอื่นๆ
+        - role === 'admin' จะได้ stockOverrideApprove === true เสมอ
+        - เก็บใน permissions[systemKey + '_stockoverride'] = true (ไม่มีคีย์นี้ = false)
+
    หมายเหตุสำคัญ:
      - ถ้าเชื่อมต่อ Firebase ไม่ได้ (ออฟไลน์/error) ระบบจะ "ปฏิเสธ login"
        เสมอ ไม่มี fallback ไปใช้ค่าที่ cache ไว้ — เพื่อความปลอดภัย
@@ -81,14 +88,15 @@
       ]
     },
     {
-      key: 'job_master', label: 'Job Master', group: 'สำนักงาน & ทะเบียนกลาง',
+      key: 'job_master', label: 'Job Master', group: 'สำนักงาน & ทะเบียนกลาง', stockOverrideApprovable: true,
       tabs: [
         { id: 'board',     label: 'ภาพรวม' },
         { id: 'in',        label: 'รับงานเข้า' },
         { id: 'out',       label: 'ออก INV ขาย' },
         { id: 'history',   label: 'ประวัติ' },
         { id: 'sales',     label: 'ยอดขาย' },
-        { id: 'pricelist', label: 'ทะเบียนราคา' }
+        { id: 'pricelist', label: 'ทะเบียนราคา' },
+        { id: 'customers', label: 'ทะเบียนลูกค้า' }
       ]
     },
     {
@@ -239,6 +247,12 @@
   // ถ้าไม่มีคีย์นี้ (undefined) = แก้ไขไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งแก้ไขได้เสมอ
   var EDITIN_SUFFIX = '_editin';
 
+  // คีย์ boolean permission เสริม — สิทธิ์ "ข้ามตรวจสอบคงเหลือ" เฉพาะระบบที่ stockOverrideApprovable:true (ตอนนี้คือ job_master)
+  // ใช้ตอนแก้ไข/เคลียร์ยอดสต๊อกเก่าให้ตรงกับของจริง โดยไม่ต้องยกสิทธิ์ "แอดมิน" เต็มระบบให้
+  // เก็บเป็น permissions[key + STOCKOVERRIDE_SUFFIX] = true — ทำงานแบบเดียวกับ NOBILL_SUFFIX ทุกประการ
+  // ถ้าไม่มีคีย์นี้ (undefined) = ข้ามตรวจสอบไม่ได้ (ค่า default) — ยกเว้น role เป็น admin ซึ่งข้ามได้เสมอ
+  var STOCKOVERRIDE_SUFFIX = '_stockoverride';
+
   function systemDef(systemKey) {
     for (var i = 0; i < SYSTEM_LIST.length; i++) {
       if (SYSTEM_LIST[i].key === systemKey) return SYSTEM_LIST[i];
@@ -286,6 +300,15 @@
   function canApproveEditIn(systemKey, role, perms) {
     if (role === 'admin') return true;
     return !!(perms && perms[systemKey + EDITIN_SUFFIX] === true);
+  }
+
+  // คืนค่า boolean ว่าสิทธิ์นี้ "ข้ามตรวจสอบคงเหลือ" (โหมดแก้ไขสต๊อกเก่า) ของระบบนี้ได้หรือไม่
+  //   - role === 'admin'                              → true เสมอ (แอดมินข้ามได้อยู่แล้วในตัว)
+  //   - perms[{systemKey}_stockoverride] === true      → true (ติ๊กสิทธิ์เพิ่มให้จากหน้า auth_admin)
+  //   - อื่นๆ (ไม่มีคีย์นี้ หรือ role ต่ำกว่า)            → false
+  function canApproveStockOverride(systemKey, role, perms) {
+    if (role === 'admin') return true;
+    return !!(perms && perms[systemKey + STOCKOVERRIDE_SUFFIX] === true);
   }
 
   // ── ดึงข้อมูลผู้ใช้ทั้งหมดจาก Firebase ──
@@ -350,6 +373,7 @@
         nobillApprove: canApproveNobill(systemKey, role, perms),
         manualDoseApprove: canApproveManualDose(systemKey, role, perms),
         editInApprove: canApproveEditIn(systemKey, role, perms),
+        stockOverrideApprove: canApproveStockOverride(systemKey, role, perms),
         user: { pin: pin, name: user.name || '', permissions: perms, signature: user.signature || null }
       };
     });
@@ -375,6 +399,7 @@
     NOBILL_SUFFIX: NOBILL_SUFFIX,
     MANUALDOSE_SUFFIX: MANUALDOSE_SUFFIX,
     EDITIN_SUFFIX: EDITIN_SUFFIX,
+    STOCKOVERRIDE_SUFFIX: STOCKOVERRIDE_SUFFIX,
     fetchUsers: fetchUsers,
     saveUsers: saveUsers,
     login: login,
@@ -382,7 +407,8 @@
     resolveTabs: resolveTabs,
     canApproveNobill: canApproveNobill,
     canApproveManualDose: canApproveManualDose,
-    canApproveEditIn: canApproveEditIn
+    canApproveEditIn: canApproveEditIn,
+    canApproveStockOverride: canApproveStockOverride
   };
 
 })(window);

@@ -133,6 +133,7 @@ input:focus,select:focus{border-color:var(--blue2);}
   <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
   <button class="tab-btn" onclick="tab('sales')">📊 ยอดขาย</button>
   <button class="tab-btn" onclick="tab('pricelist')">💲 ทะเบียนราคา</button>
+  <button class="tab-btn" onclick="tab('customers')">👤 ทะเบียนลูกค้า</button>
 </div>
 
 <div class="main">
@@ -316,25 +317,7 @@ input:focus,select:focus{border-color:var(--blue2);}
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">เลือกจาก dropdown เพื่อ auto-fill ชื่อ/ที่อยู่ด้านล่าง — หรือพิมพ์/แก้ไขในช่องด้านล่างได้เลย</div>
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
-
-      <!-- ── จัดการทะเบียนลูกค้า (แก้ไข/ลบ) ── -->
-      <details id="custRegDetails" style="margin-top:8px;">
-        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--navy);">
-          👤 จัดการลูกค้าที่บันทึกไว้ (<span id="custRegCount">0</span>)
-        </summary>
-        <div style="margin-top:6px;overflow-x:auto;">
-          <table class="jt" style="min-width:300px;">
-            <thead><tr>
-              <th class="td-l">ชื่อย่อ</th>
-              <th class="td-l">ที่อยู่ (บรรทัดแรก)</th>
-              <th style="width:60px;">จัดการ</th>
-            </tr></thead>
-            <tbody id="custRegBody">
-              <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px;">ยังไม่มีลูกค้าที่บันทึกไว้</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
+      <button type="button" onclick="tab('customers')" style="background:none;border:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:6px 0 0;">👤 จัดการทะเบียนลูกค้าทั้งหมด (แก้ไข/ลบ/เพิ่ม) →</button>
     </div>
     <!-- โหมดเคลม: บอกว่าใช้ลูกค้าจากขั้น ① ด้านล่างแล้ว ไม่ต้องเลือกซ้ำ -->
     <div id="invClaimCustomerNote" style="display:none;font-size:11px;color:var(--text-muted);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
@@ -355,6 +338,13 @@ input:focus,select:focus{border-color:var(--blue2);}
   <!-- ── เพิ่มรายการสินค้า ── -->
   <div class="card">
     <div class="card-label">➕ เพิ่มรายการสินค้า (P/No)</div>
+
+    <!-- โหมดแก้ไขสต๊อกเก่า: แสดงเฉพาะคนที่มีสิทธิ์ (role admin หรือได้รับสิทธิ์ "ข้ามตรวจสอบคงเหลือ" จากหน้า auth_admin) —
+         ตั้งสิทธิ์ครั้งเดียวที่ auth_admin แล้วใช้ได้ตลอด session ไม่ต้องขอ PIN ทุกครั้งที่ใช้งาน -->
+    <label id="invStockOverrideBox" style="display:none;align-items:flex-start;gap:8px;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;padding:8px 10px;margin-bottom:12px;cursor:pointer;font-size:11px;color:#991b1b;font-weight:600;">
+      <input type="checkbox" id="invStockOverride" style="width:auto;margin-top:2px;">
+      <span>⚠️ โหมดแก้ไขสต๊อกเก่า — ข้ามการตรวจสอบ "เกินคงเหลือ" ชั่วคราว ใช้เฉพาะตอนเคลียร์/ปรับยอดสต๊อกเก่าให้ตรงกับของจริงเท่านั้น (คุณมีสิทธิ์นี้จากการตั้งค่าที่ auth_admin — ระบบจะบันทึกหมายเหตุกำกับไว้ในรายการที่ข้ามการตรวจสอบให้อัตโนมัติ)</span>
+    </label>
 
     <!-- ขั้นที่ 1 (โหมดขาย): เลือก P/No จาก PM -->
     <div class="field" id="invPartSearchStep">
@@ -805,6 +795,78 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 </div>
 
+<!-- ══════════════════════════════════════
+     ทะเบียนลูกค้า (แยกออกมาจากฟอร์ม INV — จัดการชื่อ/ที่อยู่/เงื่อนไขชำระเงินแบบเต็มที่นี่ที่เดียว)
+     ══════════════════════════════════════ -->
+<div id="v-customers" class="view">
+
+  <!-- ── เพิ่ม/แก้ไขลูกค้า ── -->
+  <div class="card">
+    <div class="card-label" id="custFormTitle">➕ เพิ่มลูกค้าใหม่</div>
+    <input type="hidden" id="custFormEditId">
+    <div class="field" style="margin:0;">
+      <label>ชื่อย่อ <span style="font-size:10px;color:var(--text-muted);">— สำหรับเลือกครั้งถัดไป (ไม่ใส่จะใช้บรรทัดแรกของที่อยู่แทน)</span></label>
+      <input type="text" id="custFormName" placeholder="เช่น บริษัท เอบีซี จำกัด">
+    </div>
+    <div class="field">
+      <label>ชื่อเต็ม / ที่อยู่ <span style="color:var(--red);">*</span></label>
+      <textarea id="custFormAddress" rows="3" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
+    </div>
+    <div class="field" style="margin:0;">
+      <label>เงื่อนไขชำระเงิน (ค่าเริ่มต้น)</label>
+      <input type="text" id="custFormTerm" placeholder="เช่น 30 วัน">
+    </div>
+    <div class="grid2" style="margin-top:12px;margin-bottom:0;">
+      <button class="btn btn-outline" onclick="clearCustomerForm()">✕ ล้างฟอร์ม / ยกเลิกแก้ไข</button>
+      <button class="btn btn-primary" onclick="saveCustomerForm()">💾 บันทึกลูกค้า</button>
+    </div>
+    <div id="toast-customers" class="toast"></div>
+  </div>
+
+  <!-- ── ทะเบียนลูกค้าทั้งหมด ── -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">👤 ทะเบียนลูกค้าทั้งหมด (<span id="custRegPageCount">0</span>)</div>
+    <div style="padding:0 12px 10px;">
+      <input type="text" id="custRegSearch" placeholder="🔍 ค้นหาชื่อลูกค้า..." autocomplete="off" oninput="renderCustomerRegistryPage()"
+        style="width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;box-sizing:border-box;">
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:480px;">
+        <thead><tr>
+          <th class="td-l">ชื่อย่อ</th>
+          <th class="td-l">ที่อยู่ (บรรทัดแรก)</th>
+          <th class="td-l">เงื่อนไขชำระเงิน</th>
+          <th style="width:70px;">จัดการ</th>
+        </tr></thead>
+        <tbody id="custRegPageBody">
+          <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีลูกค้าในทะเบียน</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ลูกค้าที่พบจากประวัติ INV แต่ยังไม่ได้ลงทะเบียนแบบเต็ม ── -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">🕘 พบจากประวัติ INV (ยังไม่ลงทะเบียนแบบเต็ม)</div>
+    <div style="padding:0 12px 10px;font-size:11px;color:var(--text-muted);">
+      รายการเหล่านี้เป็นแค่ชื่อที่เคยพิมพ์ไว้ตอนออก INV (ไม่มีที่อยู่เต็ม) ไม่ใช่ทะเบียนจริง — กด "เพิ่มเข้าทะเบียน" เพื่อกรอกที่อยู่ให้ครบ หรือ "ซ่อน" ถ้าไม่ต้องการให้ขึ้นในรายการเลือกลูกค้าอีก
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:400px;">
+        <thead><tr>
+          <th class="td-l">ชื่อที่พบ</th>
+          <th class="td-l">สถานะ</th>
+          <th style="width:110px;">จัดการ</th>
+        </tr></thead>
+        <tbody id="custHistPageBody">
+          <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่มีรายการ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
@@ -875,7 +937,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 //  CONFIG
 // ══════════════════════════════════════
 var SYSTEM_KEY = 'job_master';
-var TAB_IDS = ['board','in','out','history','sales','pricelist'];
+var TAB_IDS = ['board','in','out','history','sales','pricelist','customers'];
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
@@ -915,6 +977,7 @@ var hiddenCustomers = []; // คีย์ (บรรทัดแรกของ�
 var _pollTimer = null, _pollCount = 0;
 var currentRole = '';
 var currentTabs = null;
+var currentStockOverrideApprove = false; // สิทธิ์ "ข้ามตรวจสอบคงเหลือ" — ตั้งจากหน้า auth_admin (permissions.job_master_stockoverride) หรือ role admin ได้เสมอ
 
 // ══════════════════════════════════════
 //  LOGIN
@@ -922,7 +985,7 @@ var currentTabs = null;
 function logoutJM() {
   try { sessionStorage.removeItem('job_master_pin'); } catch(e){}
   if (_pollTimer) clearInterval(_pollTimer);
-  currentRole = ''; currentTabs = null;
+  currentRole = ''; currentTabs = null; currentStockOverrideApprove = false;
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('pinInput').value = '';
@@ -948,6 +1011,7 @@ function checkPin() {
     }
     currentRole = result.role;
     currentTabs = result.tabs;
+    currentStockOverrideApprove = !!result.stockOverrideApprove;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
     try { sessionStorage.setItem('job_master_pin', pin); } catch(e){}
@@ -978,13 +1042,30 @@ function applyRole() {
     });
     if (firstVisible) tab(firstVisible);
   }
+  applyStockOverridePermission();
+}
+
+// ══════════════════════════════════════
+//  โหมดแก้ไขสต๊อกเก่า — สิทธิ์ตั้งไว้ล่วงหน้าที่หน้า auth_admin (permissions.job_master_stockoverride)
+//  คนที่มีสิทธิ์ (หรือ role admin) จะเห็นช่องติ๊กนี้ตลอด session ไม่ต้องขอ PIN ทีละครั้ง —
+//  ส่วนคนที่ไม่มีสิทธิ์จะไม่เห็นช่องนี้เลย (ล็อคปกติ ต้องให้ Admin ไปตั้งสิทธิ์ให้ที่ auth_admin ก่อน)
+// ══════════════════════════════════════
+function applyStockOverridePermission() {
+  var boxEl = document.getElementById('invStockOverrideBox');
+  if (!boxEl) return;
+  var allowed = (currentRole === 'admin') || currentStockOverrideApprove;
+  boxEl.style.display = allowed ? 'flex' : 'none';
+  if (!allowed) {
+    var cb = document.getElementById('invStockOverride');
+    if (cb) cb.checked = false; // ไม่มีสิทธิ์ = ปิดไว้เสมอ กันค่าค้างจาก session ก่อนหน้า
+  }
 }
 
 // ══════════════════════════════════════
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['board','in','out','history','sales','pricelist'].forEach(function(n, i) {
+  ['board','in','out','history','sales','pricelist','customers'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -996,6 +1077,7 @@ function tab(t) {
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
   if (t==='pricelist') { renderPriceList(); renderPriceFormHints(); }
+  if (t==='customers') { clearCustomerForm(); renderCustomerRegistryPage(); }
 }
 
 // ══════════════════════════════════════
@@ -1961,13 +2043,16 @@ function addInvLine() {
 
   // จำนวนที่ใช้ตัดสต็อก ต้องอยู่ในหน่วยเดียวกับบิลรับเข้า (job.unit) เสมอ
   var stockQty = isKg ? totalKg : totalPcs;
+  var overrideEl = document.getElementById('invStockOverride');
+  var stockOverride = !!(overrideEl && overrideEl.checked);
 
   // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย) — เทียบตามหน่วยของ "บิลผลิต" (ชิ้น/กก.) เสมอ
+  // ข้ามการตรวจสอบนี้ได้ถ้าติ๊ก "โหมดแก้ไขสต๊อกเก่า" ไว้ (ใช้ตอนเคลียร์ยอดสต๊อกเก่าให้ตรงของจริงเท่านั้น)
   var alreadyInDraft = invDraft
     .filter(function(l){ return l.jobId===jobId; })
     .reduce(function(s,l){ return s + l.qty; }, 0);
   var remain = isKg ? b.remainKg : b.remain;
-  if (stockQty + alreadyInDraft > remain + 0.0001) {
+  if (!stockOverride && stockQty + alreadyInDraft > remain + 0.0001) {
     showToast('invline','⚠️ เกินคงเหลือ ('+(remain-alreadyInDraft)+(isKg?' กก.':' ชิ้น')+')','err');
     return;
   }
@@ -1980,8 +2065,13 @@ function addInvLine() {
     unit: job.unit||'pcs', qty: stockQty,
     qtyEntered: qty, qtyUnit: qtyUnit, weightPerUnit: wPerUnit,
     weight: parseFloat(totalKg.toFixed(3)), pcs: totalPcs, price: price, priceUnit: priceUnit, lot: lot,
-    amount: amount
+    amount: amount,
+    stockOverride: stockOverride
   });
+
+  if (stockOverride && (stockQty + alreadyInDraft > remain + 0.0001)) {
+    showToast('invline','✅ เพิ่มแล้ว (ข้ามตรวจสอบคงเหลือ — เกินยอดระบบ '+(stockQty+alreadyInDraft-remain).toFixed(2)+(isKg?' กก.':' ชิ้น')+')','ok');
+  }
 
   // clear inputs + reset search
   ['invLineQty','invLineWeight','invLinePrice','invLineLot'].forEach(function(id){
@@ -2171,6 +2261,7 @@ function onInvDocTypeChange() {
 }
 
 function initInvTab() {
+  applyStockOverridePermission();
   // sync radio + UI (ซ่อน/แสดงราคา ฯลฯ) ให้ตรงกับโหมดที่จำไว้ล่าสุด (localStorage) ทุกครั้งที่เข้าแท็บนี้
   var docTypeRadio = document.querySelector('input[name="invDocType"][value="'+invDocType+'"]');
   if (docTypeRadio) docTypeRadio.checked = true;
@@ -2226,7 +2317,6 @@ function initInvTab() {
   renderInvLines();
   loadFormOffsetUI();
   renderCustomerSelect();
-  renderCustomerRegistryTable();
 }
 
 // ── ทะเบียนลูกค้า (ไม่ต้องคีย์ที่อยู่ซ้ำทุกครั้ง) ──
@@ -2277,7 +2367,7 @@ function onInvCustomerSelect() {
   }
 }
 
-// บันทึกชื่อ/ที่อยู่ลูกค้าปัจจุบันเป็น preset (ไม่ต้องคีย์ใหม่ครั้งหน้า)
+// บันทึกชื่อ/ที่อยู่ลูกค้าปัจจุบันเป็น preset (ไม่ต้องคีย์ใหม่ครั้งหน้า) — ใช้จากฟอร์ม INV โดยตรง (quick-save)
 function saveCustomerPreset() {
   var text = document.getElementById('invCustomer').value.trim();
   if (!text) { showToast('out','กรุณากรอกชื่อ/ที่อยู่ลูกค้าก่อนบันทึก','err'); return; }
@@ -2306,85 +2396,140 @@ function saveCustomerPreset() {
   // เลือก preset ที่บันทึกล่าสุดให้ทันที
   var sel = document.getElementById('invCustomerSel');
   sel.value = 'reg:' + (existing ? existing.id : customers[0].id);
-  renderCustomerRegistryTable();
-  // เปิดตารางจัดการลูกค้าให้เห็นทันที เพื่อแก้ไข/ลบได้ในตัว
-  var det = document.getElementById('custRegDetails');
-  if (det) det.open = true;
-  showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว','ok');
+  showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว — ดู/แก้ไขเพิ่มเติมได้ที่แท็บ "ทะเบียนลูกค้า"','ok');
 }
 
-// แก้ไขรายการลูกค้าในทะเบียน — โหลดเข้าช่องชื่อ/ที่อยู่เพื่อแก้ แล้วกด "บันทึกลูกค้านี้" อีกครั้งเพื่ออัปเดตทับ
-function editCustomerEntry(id) {
+// ══════════════════════════════════════
+//  ทะเบียนลูกค้า (แท็บแยก) — CRUD เต็มรูปแบบ
+// ══════════════════════════════════════
+function clearCustomerForm() {
+  document.getElementById('custFormEditId').value = '';
+  document.getElementById('custFormName').value = '';
+  document.getElementById('custFormAddress').value = '';
+  document.getElementById('custFormTerm').value = '';
+  var titleEl = document.getElementById('custFormTitle');
+  if (titleEl) titleEl.textContent = '➕ เพิ่มลูกค้าใหม่';
+}
+
+function saveCustomerForm() {
+  var editId = document.getElementById('custFormEditId').value;
+  var name   = document.getElementById('custFormName').value.trim();
+  var addr   = document.getElementById('custFormAddress').value.trim();
+  var term   = document.getElementById('custFormTerm').value.trim();
+  if (!addr) { showToast('customers','กรุณากรอกชื่อเต็ม/ที่อยู่ของลูกค้าก่อนบันทึก','err'); return; }
+  if (!name) name = addr.split('\n')[0].trim() || 'ลูกค้าใหม่';
+
+  if (editId) {
+    var c = customers.find(function(x){ return x.id===editId; });
+    if (c) { c.name = name; c.addressText = addr; c.term = term; }
+  } else {
+    customers.unshift({ id:'C'+Date.now(), name:name, addressText:addr, term:term });
+  }
+  saveLocal(); fbSave();
+  clearCustomerForm();
+  renderCustomerRegistryPage();
+  renderCustomerSelect(); // sync dropdown ในฟอร์ม INV ด้วย
+  showToast('customers','💾 บันทึกลูกค้า "'+name+'" แล้ว','ok');
+}
+
+// โหลดรายการลูกค้าเข้าฟอร์มเพื่อแก้ไข
+function editCustomerFormEntry(id) {
   var c = customers.find(function(x){ return x.id===id; });
   if (!c) return;
-  document.getElementById('invCustomerSel').value = 'reg:'+id;
-  document.getElementById('invCustomer').value = c.addressText;
-  if (c.term) document.getElementById('invTerm').value = c.term;
-  document.getElementById('invCustomer').focus();
-  showToast('out','📝 แก้ไขข้อมูลด้านบนแล้วกด "บันทึกลูกค้านี้" เพื่ออัปเดต','ok');
+  document.getElementById('custFormEditId').value = c.id;
+  document.getElementById('custFormName').value = c.name;
+  document.getElementById('custFormAddress').value = c.addressText;
+  document.getElementById('custFormTerm').value = c.term||'';
+  var titleEl = document.getElementById('custFormTitle');
+  if (titleEl) titleEl.textContent = '✏️ แก้ไขลูกค้า: '+c.name;
+  document.getElementById('custFormAddress').focus();
 }
 
 // ลบรายการลูกค้าออกจากทะเบียน
-function deleteCustomerEntry(id) {
+function deleteCustomerFormEntry(id) {
   var c = customers.find(function(x){ return x.id===id; });
   if (!c) return;
   if (!confirm('ลบลูกค้า "'+c.name+'" ออกจากทะเบียน?')) return;
   customers = customers.filter(function(x){ return x.id!==id; });
-  // ถ้า select กำลังเลือกรายการนี้อยู่ ให้เคลียร์
   var sel = document.getElementById('invCustomerSel');
-  if (sel.value === 'reg:'+id) sel.value = '';
+  if (sel && sel.value === 'reg:'+id) sel.value = '';
   saveLocal(); fbSave();
   renderCustomerSelect();
-  renderCustomerRegistryTable();
-  showToast('out','🗑️ ลบลูกค้า "'+c.name+'" แล้ว','ok');
+  renderCustomerRegistryPage();
+  showToast('customers','🗑️ ลบลูกค้า "'+c.name+'" แล้ว','ok');
 }
 
-// แสดงตารางทะเบียนลูกค้าที่บันทึกไว้ (แก้ไข/ลบได้)
-function renderCustomerRegistryTable() {
-  var body = document.getElementById('custRegBody');
-  var countEl = document.getElementById('custRegCount');
+// เอารายการที่พบจากประวัติ INV (แค่ชื่อสั้นๆ ไม่มีที่อยู่) มาเติมลงฟอร์มเพื่อกรอกที่อยู่ให้ครบแล้วลงทะเบียนจริง
+function promoteHistCustomer(key) {
+  document.getElementById('custFormEditId').value = '';
+  document.getElementById('custFormName').value = key;
+  document.getElementById('custFormAddress').value = key;
+  document.getElementById('custFormTerm').value = '';
+  var titleEl = document.getElementById('custFormTitle');
+  if (titleEl) titleEl.textContent = '➕ เพิ่ม "'+key+'" เข้าทะเบียน (กรอกที่อยู่ให้ครบ)';
+  document.getElementById('custFormAddress').focus();
+  showToast('customers','กรอกที่อยู่ให้ครบแล้วกด "บันทึกลูกค้า" เพื่อเพิ่มเข้าทะเบียนจริง','ok');
+}
+
+// แสดงหน้าทะเบียนลูกค้า (แท็บแยก) — ทะเบียนจริง (แก้ไข/ลบได้) + รายการจากประวัติ INV ที่ยังไม่ลงทะเบียน (ซ่อน/เพิ่มเข้าทะเบียนได้)
+function renderCustomerRegistryPage() {
+  var body = document.getElementById('custRegPageBody');
+  var countEl = document.getElementById('custRegPageCount');
   if (!body) return;
+  var canEdit = currentRole !== 'viewer';
+  var q = (document.getElementById('custRegSearch')||{}).value || '';
+  q = q.trim().toLowerCase();
 
-  // รายการจากทะเบียน (มีที่อยู่เต็ม แก้ไข/ลบได้)
-  var regKeys = {};
-  var regRows = customers.map(function(c){
-    var firstLine = (c.addressText||'').split('\n')[0].trim();
-    regKeys[firstLine] = true;
-    return '<tr>'+
-      '<td class="td-l" style="font-weight:700;">'+esc(c.name)+'</td>'+
-      '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+esc(firstLine)+'</td>'+
-      '<td class="td-l" style="white-space:nowrap;">'+
-        '<button class="icon-btn" title="แก้ไข" onclick="editCustomerEntry(\''+c.id+'\')">✏️</button>'+
-        '<button class="icon-btn" title="ลบ" onclick="deleteCustomerEntry(\''+c.id+'\')">🗑️</button>'+
-      '</td>'+
-    '</tr>';
-  });
+  var list = customers.filter(function(c){
+    if (!q) return true;
+    return (c.name||'').toLowerCase().indexOf(q)!==-1 || (c.addressText||'').toLowerCase().indexOf(q)!==-1;
+  }).sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','th'); });
 
-  // รายการจากประวัติ INV ที่ยังไม่อยู่ในทะเบียน (ไม่มีที่อยู่เต็ม) — ซ่อน/แสดงได้
-  var seen = {}; var histRows = [];
-  invoices.forEach(function(inv){
-    var key = (inv.customer||'').split('\n')[0].trim();
-    if (!key || seen[key] || regKeys[key]) return;
-    seen[key] = true;
-    var hidden = hiddenCustomers.indexOf(key)>=0;
-    histRows.push('<tr style="opacity:'+(hidden?'0.5':'1')+';">'+
-      '<td class="td-l">'+esc(key)+'</td>'+
-      '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+(hidden?'(ซ่อนจากรายการเลือก)':'จากประวัติ INV — ไม่มีที่อยู่')+'</td>'+
-      '<td class="td-l" style="white-space:nowrap;">'+
-        (hidden
-          ? '<button class="icon-btn" title="แสดงในรายการเลือก" onclick="unhideCustomer(\''+esc(key).replace(/'/g,"\\'")+'\')">👁️</button>'
-          : '<button class="icon-btn" title="ซ่อนจากรายการเลือก" onclick="hideHistCustomer(\''+esc(key).replace(/'/g,"\\'")+'\')">🚫</button>')+
-      '</td>'+
-    '</tr>');
-  });
-
-  var allRows = regRows.concat(histRows);
-  if (countEl) countEl.textContent = allRows.length;
-  if (!allRows.length) {
-    body.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:12px;">ยังไม่มีลูกค้าที่บันทึกไว้</td></tr>';
-    return;
+  if (countEl) countEl.textContent = customers.length;
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">'+(q?'ไม่พบลูกค้าที่ตรงกับคำค้นหา':'ยังไม่มีลูกค้าในทะเบียน')+'</td></tr>';
+  } else {
+    body.innerHTML = list.map(function(c){
+      var firstLine = (c.addressText||'').split('\n')[0].trim();
+      var mgmtBtns = canEdit
+        ? '<button class="icon-btn" title="แก้ไข" onclick="editCustomerFormEntry(\''+c.id+'\')">✏️</button>'+
+          '<button class="icon-btn" title="ลบ" onclick="deleteCustomerFormEntry(\''+c.id+'\')">🗑️</button>'
+        : '<span style="font-size:9px;color:var(--text-muted);">อ่านอย่างเดียว</span>';
+      return '<tr>'+
+        '<td class="td-l" style="font-weight:700;">'+esc(c.name)+'</td>'+
+        '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+esc(firstLine)+'</td>'+
+        '<td class="td-l">'+esc(c.term||'-')+'</td>'+
+        '<td class="td-l" style="white-space:nowrap;">'+mgmtBtns+'</td>'+
+      '</tr>';
+    }).join('');
   }
-  body.innerHTML = allRows.join('');
+
+  // ── รายการจากประวัติ INV ที่ยังไม่อยู่ในทะเบียนจริง ──
+  var histBody = document.getElementById('custHistPageBody');
+  if (histBody) {
+    var regKeys = {};
+    customers.forEach(function(c){ var k=(c.addressText||'').split('\n')[0].trim(); if (k) regKeys[k]=true; });
+    var seen = {}; var histRows = [];
+    invoices.forEach(function(inv){
+      var key = (inv.customer||'').split('\n')[0].trim();
+      if (!key || seen[key] || regKeys[key]) return;
+      seen[key] = true;
+      var hidden = hiddenCustomers.indexOf(key)>=0;
+      var keyEsc = esc(key).replace(/'/g,"\\'");
+      histRows.push('<tr style="opacity:'+(hidden?'0.5':'1')+';">'+
+        '<td class="td-l">'+esc(key)+'</td>'+
+        '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+(hidden?'ซ่อนจากรายการเลือกแล้ว':'ยังไม่ลงทะเบียน — ไม่มีที่อยู่เต็ม')+'</td>'+
+        '<td class="td-l" style="white-space:nowrap;">'+
+          (canEdit ? '<button class="icon-btn" title="เพิ่มเข้าทะเบียน" onclick="promoteHistCustomer(\''+keyEsc+'\')">➕</button>' : '')+
+          (canEdit ? (hidden
+            ? '<button class="icon-btn" title="แสดงในรายการเลือก" onclick="unhideCustomer(\''+keyEsc+'\')">👁️</button>'
+            : '<button class="icon-btn" title="ซ่อนจากรายการเลือก" onclick="hideHistCustomer(\''+keyEsc+'\')">🚫</button>') : '')+
+        '</td>'+
+      '</tr>');
+    });
+    histBody.innerHTML = histRows.length ? histRows.join('') :
+      '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่มีรายการ</td></tr>';
+  }
 }
 
 // ซ่อนลูกค้าจากประวัติ INV ออกจาก dropdown เลือกลูกค้า (เช่น "CASH" รุ่นเก่าที่ไม่มีที่อยู่)
@@ -2392,16 +2537,16 @@ function hideHistCustomer(key) {
   if (hiddenCustomers.indexOf(key)<0) hiddenCustomers.push(key);
   saveLocal(); fbSave();
   renderCustomerSelect();
-  renderCustomerRegistryTable();
-  showToast('out','🚫 ซ่อน "'+key+'" จากรายการเลือกลูกค้าแล้ว','ok');
+  renderCustomerRegistryPage();
+  showToast('customers','🚫 ซ่อน "'+key+'" จากรายการเลือกลูกค้าแล้ว','ok');
 }
 // เลิกซ่อน
 function unhideCustomer(key) {
   hiddenCustomers = hiddenCustomers.filter(function(k){ return k!==key; });
   saveLocal(); fbSave();
   renderCustomerSelect();
-  renderCustomerRegistryTable();
-  showToast('out','👁️ แสดง "'+key+'" ในรายการเลือกลูกค้าอีกครั้ง','ok');
+  renderCustomerRegistryPage();
+  showToast('customers','👁️ แสดง "'+key+'" ในรายการเลือกลูกค้าอีกครั้ง','ok');
 }
 
 // อัปเดตเลขที่ INV อัตโนมัติเมื่อเปลี่ยนวันที่ (เฉพาะถ้ายังไม่ได้แก้เอง)
@@ -2429,9 +2574,10 @@ function saveInvoice(doPrint) {
   if (!customer) { showToast('out','กรุณากรอกชื่อลูกค้า','err'); return; }
   if (!invDraft.length) { showToast('out','กรุณาเพิ่มรายการสินค้าก่อนบันทึก','err'); return; }
 
-  // ตรวจ remain อีกครั้งก่อนบันทึกจริง (ป้องกัน race condition)
+  // ตรวจ remain อีกครั้งก่อนบันทึกจริง (ป้องกัน race condition) — ยกเว้นรายการที่ติ๊ก "โหมดแก้ไขสต๊อกเก่า" ไว้ตอนเพิ่ม
   for (var i=0;i<invDraft.length;i++) {
     var l = invDraft[i];
+    if (l.stockOverride) continue;
     var b = calcJob(l.jobId);
     var remain = l.unit==='kg' ? b.remainKg : b.remain;
     var sameJobQty = invDraft.filter(function(x){return x.jobId===l.jobId;}).reduce(function(s,x){return s+x.qty;},0);
@@ -2448,13 +2594,14 @@ function saveInvoice(doPrint) {
   // สร้าง jobRecords (type:out) — ตัดสต็อกทุกรายการ ผูกเลขที่ INV/ใบเคลมเดียวกัน
   invDraft.forEach(function(l){
     var isKg = l.unit==='kg';
+    var lineNote = note + (l.stockOverride ? (note?' | ':'') + '⚠️ ข้ามตรวจสอบคงเหลือ (โหมดแก้ไขสต๊อกเก่า)' : '');
     jobRecords.unshift({
       id: 'R'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
       jobId: l.jobId, type:'out', date: date,
       qty: isKg?0:l.qty, qtyKg: isKg?l.qty:0, unit: l.unit,
-      inv: invNo, by:'', note: note,
+      inv: invNo, by:'', note: lineNote,
       price: l.price, weight: l.weight, lot: l.lot,
-      docType: invDocType
+      docType: invDocType, stockOverride: !!l.stockOverride
     });
   });
 
@@ -2489,6 +2636,8 @@ function saveInvoice(doPrint) {
   document.getElementById('invCustomer').value = '';
   document.getElementById('invPO').value = '';
   document.getElementById('invNote').value = '';
+  var overrideResetEl = document.getElementById('invStockOverride');
+  if (overrideResetEl) overrideResetEl.checked = false; // เคลียร์ติ๊กหลังบันทึกทุกครั้ง (กันติ๊กค้างไปกระทบ INV ปกติถัดไป) — สิทธิ์เข้าถึงยังอยู่ตลอด session ไม่ต้องขอใหม่
   renderInvLines();
   renderInvLineSelect();
 }
