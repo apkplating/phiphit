@@ -309,15 +309,11 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="field" id="invCustomerHeaderStep">
       <label>ชื่อลูกค้า / ที่อยู่ <span style="color:var(--red);">*</span></label>
-      <div style="display:flex;gap:6px;margin-bottom:4px;">
-        <select id="invCustomerSel" onchange="onInvCustomerSelect()" style="flex:1;">
-          <option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>
-        </select>
-        <button type="button" class="btn btn-outline btn-sm" style="white-space:nowrap;" onclick="saveCustomerPreset()">💾 บันทึกลูกค้านี้</button>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">เลือกจาก dropdown เพื่อ auto-fill ชื่อ/ที่อยู่ด้านล่าง — หรือพิมพ์/แก้ไขในช่องด้านล่างได้เลย</div>
+      <select id="invCustomerSel" onchange="onInvCustomerSelect()" style="margin-bottom:4px;">
+        <option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>
+      </select>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">เลือกจาก dropdown เพื่อ auto-fill ชื่อ/ที่อยู่ด้านล่าง (ดึงจากทะเบียนลูกค้าเท่านั้น) — หรือพิมพ์/แก้ไขในช่องด้านล่างเองแบบครั้งเดียวได้ ถ้าอยากเพิ่มลูกค้าใหม่เข้าทะเบียนถาวร ไปที่แท็บ "ทะเบียนลูกค้า" ด้านบน</div>
       <textarea id="invCustomer" rows="2" placeholder="เช่น บริษัท เอบีซี จำกัด&#10;123/4 หมู่ 5 ต.บางนา อ.บางนา จ.สมุทรปราการ 10540&#10;เลขประจำตัวผู้เสียภาษี 0xxxxxxxxxxxx"></textarea>
-      <button type="button" onclick="tab('customers')" style="background:none;border:none;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;padding:6px 0 0;">👤 จัดการทะเบียนลูกค้าทั้งหมด (แก้ไข/ลบ/เพิ่ม) →</button>
     </div>
     <!-- โหมดเคลม: บอกว่าใช้ลูกค้าจากขั้น ① ด้านล่างแล้ว ไม่ต้องเลือกซ้ำ -->
     <div id="invClaimCustomerNote" style="display:none;font-size:11px;color:var(--text-muted);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
@@ -2319,29 +2315,15 @@ function initInvTab() {
   renderCustomerSelect();
 }
 
-// ── ทะเบียนลูกค้า (ไม่ต้องคีย์ที่อยู่ซ้ำทุกครั้ง) ──
+// ── ทะเบียนลูกค้า (ไม่ต้องคีย์ที่อยู่ซ้ำทุกครั้ง) — ดึงจากทะเบียนจริง (customers[]) เท่านั้น
+// ไม่ผสมชื่อที่ดึงจากประวัติ INV เก่าอีกต่อไป (ย้ายไปให้จัดการ/โปรโมทที่แท็บ "ทะเบียนลูกค้า" แทน กันสับสนว่า "ลงทะเบียน" จริงหรือแค่เคยพิมพ์ไว้)
 function renderCustomerSelect() {
   var sel = document.getElementById('invCustomerSel');
   if (!sel) return;
   var cur = sel.value;
 
-  var seen = {}; var opts = [];
-  // 1) จากทะเบียนลูกค้าที่บันทึกไว้ (มีที่อยู่/เลขผู้เสียภาษีครบ)
-  customers.forEach(function(c){
-    var key = (c.addressText||'').split('\n')[0].trim();
-    if (!key || seen[key]) return;
-    seen[key] = true;
-    opts.push({ value:'reg:'+c.id, label:c.name });
-  });
-  // 2) จากประวัติ INV ที่เคยออก — ลูกค้าที่ยังไม่ได้บันทึกในทะเบียน และไม่ถูกซ่อนไว้
-  invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
-    .forEach(function(inv){
-      var key = (inv.customer||'').split('\n')[0].trim();
-      if (!key || seen[key] || hiddenCustomers.indexOf(key)>=0) return;
-      seen[key] = true;
-      opts.push({ value:'hist:'+key, label:key });
-    });
-  opts.sort(function(a,b){ return a.label.localeCompare(b.label,'th'); });
+  var opts = customers.slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','th'); })
+    .map(function(c){ return { value:'reg:'+c.id, label:c.name }; });
 
   sel.innerHTML = '<option value="">— เลือกลูกค้าที่บันทึกไว้ —</option>' +
     opts.map(function(o){
@@ -2351,52 +2333,11 @@ function renderCustomerSelect() {
 
 function onInvCustomerSelect() {
   var val = document.getElementById('invCustomerSel').value;
-  if (!val) return;
-  if (val.indexOf('reg:')===0) {
-    var c = customers.find(function(x){ return x.id===val.slice(4); });
-    if (!c) return;
-    document.getElementById('invCustomer').value = c.addressText;
-    if (c.term) document.getElementById('invTerm').value = c.term;
-  } else if (val.indexOf('hist:')===0) {
-    var key = val.slice(5);
-    var src = invoices.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); })
-      .find(function(i){ return (i.customer||'').split('\n')[0].trim()===key; });
-    if (!src) return;
-    document.getElementById('invCustomer').value = src.customer||'';
-    if (src.term) document.getElementById('invTerm').value = src.term;
-  }
-}
-
-// บันทึกชื่อ/ที่อยู่ลูกค้าปัจจุบันเป็น preset (ไม่ต้องคีย์ใหม่ครั้งหน้า) — ใช้จากฟอร์ม INV โดยตรง (quick-save)
-function saveCustomerPreset() {
-  var text = document.getElementById('invCustomer').value.trim();
-  if (!text) { showToast('out','กรุณากรอกชื่อ/ที่อยู่ลูกค้าก่อนบันทึก','err'); return; }
-  var firstLine = text.split('\n')[0].trim() || 'ลูกค้าใหม่';
-
-  var selId = document.getElementById('invCustomerSel').value;
-  var existing = (selId && selId.indexOf('reg:')===0)
-    ? customers.find(function(c){ return c.id===selId.slice(4); })
-    : null;
-
-  var name = prompt('ชื่อย่อสำหรับเรียกลูกค้านี้ (สำหรับเลือกครั้งถัดไป):', existing ? existing.name : firstLine);
-  if (name===null) return; // cancel
-  name = name.trim() || firstLine;
-
-  var term = document.getElementById('invTerm').value.trim();
-
-  if (existing) {
-    existing.name = name;
-    existing.addressText = text;
-    existing.term = term;
-  } else {
-    customers.unshift({ id:'C'+Date.now(), name:name, addressText:text, term:term });
-  }
-  saveLocal(); fbSave();
-  renderCustomerSelect();
-  // เลือก preset ที่บันทึกล่าสุดให้ทันที
-  var sel = document.getElementById('invCustomerSel');
-  sel.value = 'reg:' + (existing ? existing.id : customers[0].id);
-  showToast('out','💾 บันทึกลูกค้า "'+name+'" แล้ว — ดู/แก้ไขเพิ่มเติมได้ที่แท็บ "ทะเบียนลูกค้า"','ok');
+  if (!val || val.indexOf('reg:')!==0) return;
+  var c = customers.find(function(x){ return x.id===val.slice(4); });
+  if (!c) return;
+  document.getElementById('invCustomer').value = c.addressText;
+  if (c.term) document.getElementById('invTerm').value = c.term;
 }
 
 // ══════════════════════════════════════
