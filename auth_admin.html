@@ -405,6 +405,7 @@ function renderTable() {
         tabsButtonHtml(pin, sys.key, role, perms) +
         nobillButtonHtml(pin, sys.key, role, perms) +
         manualDoseButtonHtml(pin, sys.key, role, perms) +
+        stockOverrideButtonHtml(pin, sys.key, role, perms) +
         '</div></td>';
     });
 
@@ -541,6 +542,25 @@ function manualDoseButtonHtml(pin, sysKey, role, perms) {
   '</label>';
 }
 
+// ══════════════════════════════════════
+//  สิทธิ์ "ข้ามตรวจสอบคงเหลือ" (โหมดแก้ไขสต๊อกเก่า) — เฉพาะระบบที่ stockOverrideApprovable:true (job_master)
+// ══════════════════════════════════════
+// ทำงานแบบเดียวกับ nobillButtonHtml/manualDoseButtonHtml ทุกประการ แต่เป็นสิทธิ์แยกอิสระของตัวเอง
+function stockOverrideButtonHtml(pin, sysKey, role, perms) {
+  var def = systemDef(sysKey);
+  if (!def || !def.stockOverrideApprovable) return '';
+  if (role === 'admin') {
+    return '<button class="tabs-btn" disabled title="แอดมินข้ามตรวจสอบคงเหลือได้อยู่แล้วในตัว">✅ ข้ามคงเหลือได้</button>';
+  }
+  if (role !== 'operator') return '';
+  var key = sysKey + CentralAuth.STOCKOVERRIDE_SUFFIX;
+  var can = perms[key] === true;
+  return '<label class="tabs-btn' + (can ? ' nobill-on' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;">' +
+    '<input type="checkbox" style="margin:0;" ' + (can?'checked':'') + ' onchange="onStockOverrideToggle(\'' + pin + '\',\'' + sysKey + '\',this.checked)">' +
+    (can ? '✅ ข้ามคงเหลือ' : 'ข้ามคงเหลือ') +
+  '</label>';
+}
+
 var tabsModalState = null; // { pin, sysKey }
 
 function openTabsModal(pin, sysKey) {
@@ -648,6 +668,17 @@ function onManualDoseToggle(pin, sysKey, checked) {
   else delete users[pin].permissions[key];
   renderTable();
   persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์อนุมัติเติมมือ — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
+}
+
+// ── สิทธิ์ "ข้ามตรวจสอบคงเหลือ" ต่อระบบ (เก็บเป็น permissions[sysKey+'_stockoverride'] = true/false) ──
+function onStockOverrideToggle(pin, sysKey, checked) {
+  if (!users[pin]) users[pin] = { name:'', permissions:{} };
+  if (!users[pin].permissions) users[pin].permissions = {};
+  var key = sysKey + CentralAuth.STOCKOVERRIDE_SUFFIX;
+  if (checked) users[pin].permissions[key] = true;
+  else delete users[pin].permissions[key];
+  renderTable();
+  persistUsers((checked ? 'เพิ่ม' : 'ถอน') + 'สิทธิ์ข้ามตรวจสอบคงเหลือ — ' + (users[pin].name || pin) + ' · ' + labelForSystem(sysKey));
 }
 
 function labelForSystem(sysKey) {
