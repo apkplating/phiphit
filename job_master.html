@@ -628,6 +628,18 @@ input:focus,select:focus{border-color:var(--blue2);}
   <!-- รายการ INV -->
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="padding:10px 12px 6px;" class="card-label">🧾 รายการ INV</div>
+    <div id="invReturnStatusBar" style="padding:0 12px 8px;"></div>
+    <div style="padding:0 12px 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+      <div class="field" style="margin:0;">
+        <label>จากวันที่</label>
+        <input type="date" id="invListDateFrom" onchange="renderSales()" style="font-size:12px;">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ถึงวันที่</label>
+        <input type="date" id="invListDateTo" onchange="renderSales()" style="font-size:12px;">
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="clearInvListDateRange()">✕ ล้างช่วงเวลา</button>
+    </div>
     <div style="padding:0 12px 10px;">
       <input type="text" id="salesInvSearch" placeholder="🔍 ค้นหา เลข INV / ลูกค้า / P.No..."
         autocomplete="off" oninput="renderSales()"
@@ -649,7 +661,6 @@ input:focus,select:focus{border-color:var(--blue2);}
         </tbody>
       </table>
     </div>
-    <div id="invReturnStatusBar" style="padding:10px 12px;border-top:1px solid var(--border);"></div>
   </div>
 
   <!-- ── ใบวางบิล (Statement) ── -->
@@ -2838,10 +2849,24 @@ function renderSales() {
     }).join('');
   }
 
-  // ── รายการ INV (รองรับค้นหา เลข INV / ลูกค้า / P.No) ──
+  // ── รายการ INV (รองรับค้นหา เลข INV / ลูกค้า / P.No + เลือกช่วงวันที่เอง) ──
+  // ถ้ากำหนดช่วงวันที่เอง จะยึดช่วงนั้นแทนตัวกรอง "สรุปตามเดือน" ด้านบน (ละเอียดกว่า ไม่ต้องรอทั้งเดือน)
+  var dFromEl = document.getElementById('invListDateFrom');
+  var dToEl   = document.getElementById('invListDateTo');
+  var dFrom = dFromEl ? dFromEl.value : '';
+  var dTo   = dToEl ? dToEl.value : '';
+  var invListSource = list;
+  if (dFrom || dTo) {
+    invListSource = invoices.filter(function(inv){
+      if (dFrom && (!inv.date || inv.date < dFrom)) return false;
+      if (dTo   && (!inv.date || inv.date > dTo))   return false;
+      return true;
+    });
+  }
+
   var invSearchEl = document.getElementById('salesInvSearch');
   var invSearchQ  = invSearchEl ? invSearchEl.value.trim().toLowerCase() : '';
-  var invSorted = list.filter(function(inv){
+  var invSorted = invListSource.filter(function(inv){
     if (!invSearchQ) return true;
     var parts = (inv.items||[]).map(function(it){ return it.partName||''; }).join(' ');
     var hay = ((inv.invNo||'')+' '+(inv.customer||'')+' '+(inv.po||'')+' '+parts).toLowerCase();
@@ -2887,13 +2912,13 @@ function renderSales() {
     }).join('');
   }
 
-  // ── แถบสถานะรับคืน (จำนวน INV ทั้งหมด / จำนวนที่รับคืนแล้ว) — นับตามช่วงเดือนที่กรองไว้ ไม่ขึ้นกับคำค้นหา ──
+  // ── แถบสถานะรับคืน (จำนวน INV ทั้งหมด / จำนวนที่รับคืนแล้ว) — ตามช่วงวันที่ที่เลือก (หรือช่วงเดือน ถ้ายังไม่ได้กำหนดวันที่เอง) ไม่ขึ้นกับคำค้นหา ──
   var retBar = document.getElementById('invReturnStatusBar');
   if (retBar) {
-    var retTotal = list.length;
-    var retDone  = list.filter(function(inv){ return !!inv.returned; }).length;
+    var retTotal = invListSource.length;
+    var retDone  = invListSource.filter(function(inv){ return !!inv.returned; }).length;
     var retPct   = retTotal>0 ? Math.round(retDone/retTotal*100) : 0;
-    retBar.innerHTML = !retTotal ? '' :
+    retBar.innerHTML = !retTotal ? '<div style="font-size:12px;color:var(--text-muted);">📋 ไม่มี INV ในช่วงที่เลือก</div>' :
       '<div style="display:flex;align-items:center;gap:10px;font-size:12px;">'+
         '<span style="font-weight:700;color:var(--navy);white-space:nowrap;">📋 สถานะรับคืนบิล</span>'+
         '<div style="flex:1;background:#e2e8f0;border-radius:8px;height:10px;overflow:hidden;">'+
@@ -2913,6 +2938,15 @@ function setInvReturned(invId, val) {
   inv.returned = (val==='1' || val===1 || val===true);
   inv.returnedAt = inv.returned ? isoToday() : '';
   saveLocal(); fbSave();
+  renderSales();
+}
+
+// ล้างช่วงวันที่ที่กำหนดเองใน "รายการ INV" — กลับไปใช้ตัวกรอง "สรุปตามเดือน" ด้านบนตามปกติ
+function clearInvListDateRange() {
+  var f = document.getElementById('invListDateFrom');
+  var t = document.getElementById('invListDateTo');
+  if (f) f.value = '';
+  if (t) t.value = '';
   renderSales();
 }
 
