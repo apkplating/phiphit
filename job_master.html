@@ -392,7 +392,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <label id="invLineQtyLabel">จำนวน <span style="color:var(--red);">*</span></label>
         <input type="number" id="invLineQty" placeholder="0" min="0" step="1" inputmode="numeric" oninput="onInvLineQtyOrWeightChange()">
       </div>
-      <div class="field" style="margin:0;">
+      <div class="field" style="margin:0;" id="invLineQtyUnitWrap">
         <label>หน่วยจำนวน <span style="color:var(--red);">*</span></label>
         <select id="invLineQtyUnit" onchange="onInvLineQtyUnitChange()">
           <option value="pcs">ชิ้น (Pcs)</option>
@@ -401,9 +401,9 @@ input:focus,select:focus{border-color:var(--blue2);}
       </div>
     </div>
     <div id="invLineQtyConvert" style="display:none;font-size:11px;color:var(--blue);margin:-6px 0 8px;font-weight:600;"></div>
-    <div class="grid2">
+    <div class="grid2" id="invWeightFieldsWrap">
       <div class="field" style="margin:0;">
-        <label>น้ำหนัก/หน่วย (กก. ต่อ 1 ชิ้น) <span style="font-size:10px;color:var(--text-muted);">(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)</span> <span id="invLineWeightAutoBadge" style="font-size:10px;color:var(--green);"></span></label>
+        <label>น้ำหนัก/หน่วย (กก. ต่อ 1 ชิ้น) <span id="invLineWeightHint" style="font-size:10px;color:var(--text-muted);">(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)</span> <span id="invLineWeightAutoBadge" style="font-size:10px;color:var(--green);"></span></label>
         <input type="number" id="invLineWeight" placeholder="0.00" min="0" step="0.0001" inputmode="decimal" oninput="onInvLineQtyOrWeightChange()">
       </div>
       <div class="field" style="margin:0;">
@@ -427,7 +427,7 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div id="invLineAmountPreview" style="display:none;font-size:12px;color:var(--green);font-weight:600;margin:-4px 0 10px;"></div>
     <div class="grid2">
       <div class="field" style="margin:0;">
-        <label>เลขที่ LOT / อ้างอิง</label>
+        <label id="invLineLotLabel">เลขที่ LOT / อ้างอิง</label>
         <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02">
       </div>
     </div>
@@ -457,7 +457,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 
   <!-- ── ยอดรวม ── -->
   <div class="card" id="invTotalsCard">
-    <div class="sum-row" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="sum-row" id="invTotalsSumRow" style="grid-template-columns:1fr 1fr 1fr;">
       <div class="sum-chip" style="background:#f0f9ff;">
         <div class="sum-chip-label">GRAND TOTAL</div>
         <div class="sum-chip-val" style="color:var(--blue);" id="invGrandTotal">0.00</div>
@@ -477,7 +477,7 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
     <div class="grid2" style="margin-bottom:0;">
       <button class="btn btn-outline" onclick="saveInvoice(false)">💾 บันทึก (ไม่พิมพ์)</button>
-      <button class="btn btn-primary" onclick="saveInvoice(true)">🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)</button>
+      <button class="btn btn-primary" onclick="saveInvoice(true)" id="invSavePrintBtn">🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)</button>
     </div>
     <button class="btn btn-green" id="invFormPrintBtn" style="margin-top:8px;" onclick="saveInvoice('form')">🖨️ บันทึก + พิมพ์ลงฟอร์มสำเร็จรูป</button>
     <div id="toast-out" class="toast"></div>
@@ -1641,6 +1641,12 @@ function onInvLineJobSelect() {
   if (qtyUnitSel) qtyUnitSel.value = defaultUnit;
   qtyInput.step = defaultUnit==='kg' ? '0.01' : '1';
   qtyInput.placeholder = defaultUnit==='kg' ? '0.00' : '0';
+  // โหมดเคลม: ซ่อนตัวเลือกหน่วยไปแล้ว — เติมหน่วยกำกับไว้ที่ label "จำนวน" แทน กันสับสนว่ากรอกเป็นหน่วยไหน
+  var qtyLabelEl = document.getElementById('invLineQtyLabel');
+  if (qtyLabelEl) {
+    var unitTH = defaultUnit==='kg' ? 'กก.' : 'ชิ้น';
+    qtyLabelEl.innerHTML = (invDocType==='claim' ? ('จำนวน ('+unitTH+')') : 'จำนวน') + ' <span style="color:var(--red);">*</span>';
+  }
 
   // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก
   var custEl = document.getElementById('invCustomer');
@@ -2051,7 +2057,20 @@ function onInvDocTypeChange() {
   var noLabel = document.getElementById('invNoLabel');
   if (noLabel) noLabel.innerHTML = (isClaim ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
 
-  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){
+  ['invPriceFieldsWrap','invTotalsSumRow'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaim ? 'none' : '';
+  });
+  var savePrintBtn = document.getElementById('invSavePrintBtn');
+  if (savePrintBtn) savePrintBtn.innerHTML = isClaim ? '🖨️ บันทึก + พิมพ์ใบส่งคืนงานเคลม' : '🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)';
+  var weightHintEl = document.getElementById('invLineWeightHint');
+  if (weightHintEl) weightHintEl.textContent = isClaim ? '(ไม่บังคับ ถ้าดึงจาก Part Master ได้อัตโนมัติ)' : '(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)';
+  var dateLabelEl = document.getElementById('invDateLabel');
+  if (dateLabelEl) dateLabelEl.innerHTML = (isClaim ? 'วันที่ส่งคืน' : 'วันที่ออก INV') + ' <span style="color:var(--red);">*</span>';
+  var lotLabelEl = document.getElementById('invLineLotLabel');
+  if (lotLabelEl) lotLabelEl.textContent = isClaim ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
+  // โหมดเคลม: เอาไว้แค่ วันที่/รายการที่จะส่งคืน/จำนวน/อ้างอิงใบเคลม — ซ่อนหน่วยจำนวน+น้ำหนัก (ใช้หน่วยของบิลเดิมเงียบๆ พอ ไม่ต้องให้เลือก)
+  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaim ? 'none' : '';
   });
@@ -2098,7 +2117,19 @@ function initInvTab() {
   if (titleInitEl) titleInitEl.textContent = isClaimInit ? '🔧 ออกใบส่งคืนงานเคลม' : '📤 ออก INV ขาย (ใบส่งสินค้า)';
   var noLabelInitEl = document.getElementById('invNoLabel');
   if (noLabelInitEl) noLabelInitEl.innerHTML = (isClaimInit ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
-  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
+  ['invPriceFieldsWrap','invTotalsSumRow'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
+  var savePrintBtnInitEl = document.getElementById('invSavePrintBtn');
+  if (savePrintBtnInitEl) savePrintBtnInitEl.innerHTML = isClaimInit ? '🖨️ บันทึก + พิมพ์ใบส่งคืนงานเคลม' : '🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)';
+  var weightHintInitEl = document.getElementById('invLineWeightHint');
+  if (weightHintInitEl) weightHintInitEl.textContent = isClaimInit ? '(ไม่บังคับ ถ้าดึงจาก Part Master ได้อัตโนมัติ)' : '(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)';
+  var dateLabelInitEl = document.getElementById('invDateLabel');
+  if (dateLabelInitEl) dateLabelInitEl.innerHTML = (isClaimInit ? 'วันที่ส่งคืน' : 'วันที่ออก INV') + ' <span style="color:var(--red);">*</span>';
+  var lotLabelInitEl = document.getElementById('invLineLotLabel');
+  if (lotLabelInitEl) lotLabelInitEl.textContent = isClaimInit ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
+  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaimInit ? 'none' : '';
+  });
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
   var formBtnInitEl = document.getElementById('invFormPrintBtn');
   if (formBtnInitEl) formBtnInitEl.style.display = isClaimInit?'none':'';
@@ -3000,7 +3031,19 @@ function editInvoice(invId) {
   if (titleEl) titleEl.textContent = isClaimEdit ? '🔧 ออกใบส่งคืนงานเคลม' : '📤 ออก INV ขาย (ใบส่งสินค้า)';
   var noLabelEl = document.getElementById('invNoLabel');
   if (noLabelEl) noLabelEl.innerHTML = (isClaimEdit ? 'เลขที่ใบส่งคืนงานเคลม' : 'เลขที่ INV') + ' <span style="color:var(--red);">*</span>';
-  ['invPriceFieldsWrap','invTotalsCard'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
+  ['invPriceFieldsWrap','invTotalsSumRow'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
+  var savePrintBtnEditEl = document.getElementById('invSavePrintBtn');
+  if (savePrintBtnEditEl) savePrintBtnEditEl.innerHTML = isClaimEdit ? '🖨️ บันทึก + พิมพ์ใบส่งคืนงานเคลม' : '🖨️ บันทึก + พิมพ์ (กระดาษเปล่า)';
+  var weightHintEditEl = document.getElementById('invLineWeightHint');
+  if (weightHintEditEl) weightHintEditEl.textContent = isClaimEdit ? '(ไม่บังคับ ถ้าดึงจาก Part Master ได้อัตโนมัติ)' : '(ไม่บังคับถ้าราคา/หน่วยเป็นชิ้น)';
+  var dateLabelEditEl = document.getElementById('invDateLabel');
+  if (dateLabelEditEl) dateLabelEditEl.innerHTML = (isClaimEdit ? 'วันที่ส่งคืน' : 'วันที่ออก INV') + ' <span style="color:var(--red);">*</span>';
+  var lotLabelEditEl = document.getElementById('invLineLotLabel');
+  if (lotLabelEditEl) lotLabelEditEl.textContent = isClaimEdit ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
+  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = isClaimEdit ? 'none' : '';
+  });
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
   var formBtnEl = document.getElementById('invFormPrintBtn');
   if (formBtnEl) formBtnEl.style.display = isClaimEdit?'none':'';
