@@ -487,6 +487,25 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div id="toast-out" class="toast"></div>
   </div>
 
+  <!-- ── ประวัติใบส่งคืนงานเคลม (โชว์เฉพาะโหมดเคลม) ── -->
+  <div class="card" id="invClaimHistoryCard" style="display:none;padding:0;overflow:hidden;">
+    <div style="padding:10px 12px 6px;" class="card-label">🔧 ใบส่งคืนงานเคลมล่าสุด</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:480px;">
+        <thead><tr>
+          <th class="td-l">เลขที่เอกสาร</th>
+          <th class="td-l">วันที่</th>
+          <th class="td-l">ลูกค้า</th>
+          <th>รายการ</th>
+          <th style="width:70px;">พิมพ์ซ้ำ</th>
+        </tr></thead>
+        <tbody id="invClaimHistoryBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีใบส่งคืนงานเคลม</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ── ตั้งค่าตำแหน่งพิมพ์ฟอร์มสำเร็จรูป ── -->
   <div class="card">
     <div class="card-label" style="cursor:pointer;" onclick="toggleFormCalib()">
@@ -1644,12 +1663,17 @@ function onInvLineJobSelect() {
     if (badgeEl) badgeEl.textContent = '✓ ดึงจาก Part Master อัตโนมัติ';
   }
 
-  // ตั้งหน่วยจำนวนเริ่มต้น = หน่วยของบิลรับเข้า (กรอกตรงกับที่ชั่ง/นับจริง) — เปลี่ยนเป็นชิ้น/กก. เองได้ภายหลัง
-  var defaultUnit = isKg ? 'kg' : 'pcs';
+  // ตั้งหน่วยจำนวนเริ่มต้น:
+  // - โหมดขาย: ตามหน่วยของบิลรับเข้า (กรอกตรงกับที่ชั่ง/นับจริง)
+  // - โหมดเคลม: เริ่มที่ "ชิ้น" เสมอ เพราะลูกค้าเคลมมักนับเป็นชิ้น (ถ้ามีน้ำหนัก/หน่วยจาก PM ระบบแปลงเป็น กก. ให้เองอัตโนมัติ)
+  //   ยกเว้นไม่มีข้อมูลน้ำหนักเลยและบิลรับเข้าเป็น กก. ก็ต้องเริ่มที่ กก. ไปก่อน (แปลงไม่ได้ถ้าไม่รู้น้ำหนัก/ชิ้น)
+  var defaultUnit = (invDocType==='claim')
+    ? (isKg && !pmKg ? 'kg' : 'pcs')
+    : (isKg ? 'kg' : 'pcs');
   if (qtyUnitSel) qtyUnitSel.value = defaultUnit;
   qtyInput.step = defaultUnit==='kg' ? '0.01' : '1';
   qtyInput.placeholder = defaultUnit==='kg' ? '0.00' : '0';
-  // โหมดเคลม: ซ่อนตัวเลือกหน่วยไปแล้ว — เติมหน่วยกำกับไว้ที่ label "จำนวน" แทน กันสับสนว่ากรอกเป็นหน่วยไหน
+  // เติมหน่วยกำกับไว้ที่ label "จำนวน" ด้วย (นอกเหนือจากดรอปดาวน์) กันสับสนว่ากรอกเป็นหน่วยไหนอยู่
   var qtyLabelEl = document.getElementById('invLineQtyLabel');
   if (qtyLabelEl) {
     var unitTH = defaultUnit==='kg' ? 'กก.' : 'ชิ้น';
@@ -1692,6 +1716,10 @@ function onInvLineQtyUnitChange() {
   var isKg = qtyUnitSel && qtyUnitSel.value === 'kg';
   qtyInput.step = isKg ? '0.01' : '1';
   qtyInput.placeholder = isKg ? '0.00' : '0';
+  var qtyLabelChangeEl = document.getElementById('invLineQtyLabel');
+  if (qtyLabelChangeEl) {
+    qtyLabelChangeEl.innerHTML = (invDocType==='claim' ? ('จำนวน ('+(isKg?'กก.':'ชิ้น')+')') : 'จำนวน') + ' <span style="color:var(--red);">*</span>';
+  }
   onInvLineQtyOrWeightChange();
 }
 
@@ -2086,7 +2114,7 @@ function onInvDocTypeChange() {
   var lotLabelEl = document.getElementById('invLineLotLabel');
   if (lotLabelEl) lotLabelEl.textContent = isClaim ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
   // โหมดเคลม: เอาไว้แค่ วันที่/รายการที่จะส่งคืน/จำนวน/อ้างอิงใบเคลม — ซ่อนหน่วยจำนวน+น้ำหนัก (ใช้หน่วยของบิลเดิมเงียบๆ พอ ไม่ต้องให้เลือก)
-  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
+  ['invWeightFieldsWrap'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaim ? 'none' : '';
   });
@@ -2105,6 +2133,9 @@ function onInvDocTypeChange() {
   }
   var addLineBtnEl = document.getElementById('invAddLineBtn');
   if (addLineBtnEl) addLineBtnEl.textContent = isClaim ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
+  var claimHistCardEl = document.getElementById('invClaimHistoryCard');
+  if (claimHistCardEl) claimHistCardEl.style.display = isClaim ? '' : 'none';
+  if (isClaim) renderInvClaimHistory();
   ['invThPrice','invThAmount'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaim ? 'none' : '';
@@ -2157,7 +2188,7 @@ function initInvTab() {
   if (dateLabelInitEl) dateLabelInitEl.innerHTML = (isClaimInit ? 'วันที่ส่งคืน' : 'วันที่ออก INV') + ' <span style="color:var(--red);">*</span>';
   var lotLabelInitEl = document.getElementById('invLineLotLabel');
   if (lotLabelInitEl) lotLabelInitEl.textContent = isClaimInit ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
-  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
+  ['invWeightFieldsWrap'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaimInit ? 'none' : '';
   });
@@ -2169,6 +2200,9 @@ function initInvTab() {
   if (claimNoteInitEl) claimNoteInitEl.style.display = isClaimInit ? 'block' : 'none';
   var addLineBtnInitEl = document.getElementById('invAddLineBtn');
   if (addLineBtnInitEl) addLineBtnInitEl.textContent = isClaimInit ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
+  var claimHistCardInitEl = document.getElementById('invClaimHistoryCard');
+  if (claimHistCardInitEl) claimHistCardInitEl.style.display = isClaimInit ? '' : 'none';
+  if (isClaimInit) renderInvClaimHistory();
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimInit?'none':''; });
   var formBtnInitEl = document.getElementById('invFormPrintBtn');
   if (formBtnInitEl) formBtnInitEl.style.display = isClaimInit?'none':'';
@@ -2442,6 +2476,7 @@ function saveInvoice(doPrint) {
 
   if (isClaim) {
     if (doPrint) printClaimNote(invObj);
+    renderInvClaimHistory(); // อัปเดตลิสต์ "ใบส่งคืนงานเคลมล่าสุด" ในหน้าเดียวกันทันที ไม่ต้องรีโหลด
   } else if (doPrint==='form') {
     printInvoiceOnForm(invObj);
   } else if (doPrint) {
@@ -2543,6 +2578,31 @@ function printInvoice(inv) {
 
 // สร้าง HTML "ใบส่งคืนงานเคลม" แล้วเปิดหน้าต่างพิมพ์ — ตามฟอร์ม Excel เดิมที่ใช้กันอยู่ (ไม่มีราคา/VAT)
 // คอลัมน์ "เลขที่ใบเคลม" ใช้ช่อง LOT/อ้างอิง ที่กรอกตอนเพิ่มรายการ (เผื่อพิพิธอยากใส่เลขอ้างอิงของลูกค้าแยกแต่ละบรรทัด)
+// แสดงประวัติ "ใบส่งคืนงานเคลม" ล่าสุดไว้ในหน้าเดียวกัน (ไม่ต้องสลับไปแท็บยอดขายเพื่อหา) — โชว์เฉพาะโหมดเคลม
+function renderInvClaimHistory() {
+  var body = document.getElementById('invClaimHistoryBody');
+  if (!body) return;
+  var claims = invoices.filter(function(i){ return i.docType==='claim'; })
+    .sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); })
+    .slice(0, 15);
+  if (!claims.length) {
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีใบส่งคืนงานเคลม</td></tr>';
+    return;
+  }
+  body.innerHTML = claims.map(function(inv){
+    var cust = (inv.customer||'-').split('\n')[0].trim() || '(ไม่ระบุ)';
+    var d = inv.date ? new Date(inv.date+'T00:00:00') : null;
+    var dStr = d ? (d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()) : '-';
+    return '<tr>'+
+      '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
+      '<td class="td-l">'+dStr+'</td>'+
+      '<td class="td-l">'+esc(cust)+'</td>'+
+      '<td>'+(inv.items?inv.items.length:0)+'</td>'+
+      '<td><button class="icon-btn" title="พิมพ์ซ้ำ" onclick="printClaimNote(invoices.find(function(i){return i.id===\''+inv.id+'\';}))">🖨️</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
 function printClaimNote(inv) {
   var d = new Date(inv.date+'T00:00:00');
   var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
@@ -2571,19 +2631,23 @@ function printClaimNote(inv) {
     'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
     'th{background:#f1f5f9;border:1px solid #64748b;padding:7px;font-size:12px;}'+
-    '.hdr{text-align:center;margin-bottom:4px;}'+
-    '.hdr .co{font-weight:700;font-size:15px;}'+
+    '.hdr{text-align:center;border-bottom:2px solid #1e40af;padding-bottom:10px;margin-bottom:10px;}'+
+    '.hdr .co{font-weight:700;font-size:16px;}'+
+    '.hdr .addr{font-size:12px;color:#334155;margin-top:2px;}'+
     '.title{text-align:center;font-weight:700;font-size:18px;margin:14px 0;}'+
     '.meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:6px;font-size:13px;}'+
     '.meta .line{flex:1;border-bottom:1px dotted #475569;padding-bottom:2px;}'+
     '.sign{display:flex;justify-content:space-around;margin-top:70px;text-align:center;font-size:12px;}'+
     '.sign div{width:38%;}'+
     '.sign .ul{border-top:1px solid #64748b;margin-top:44px;padding-top:4px;}'+
-    '.ftr{text-align:center;font-size:11px;color:#334155;margin-top:50px;border-top:1px solid #cbd5e1;padding-top:8px;}'+
     '.docno{text-align:right;font-size:11px;color:#64748b;margin-top:-6px;}'+
     '@media print{ body{padding:0;} }'+
     '</style></head><body>'+
-    '<div class="hdr"><div class="co">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div></div>'+
+    '<div class="hdr">'+
+      '<div class="co">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+      '<div class="addr">774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
+      '<div class="addr">โทรศัพท์ : 086-0711616 E-mail : apk.plating@gmail.com</div>'+
+    '</div>'+
     '<div class="title">ใบส่งคืนงานเคลม</div>'+
     '<div class="docno">เลขที่เอกสาร '+esc(inv.invNo)+'</div>'+
     '<div class="meta">'+
@@ -2600,10 +2664,6 @@ function printClaimNote(inv) {
     '<div class="sign">'+
       '<div><div class="ul">ผู้ส่งของ</div>วันที่.../.../...</div>'+
       '<div><div class="ul">ผู้รับของ</div>วันที่.../.../...</div>'+
-    '</div>'+
-    '<div class="ftr">'+
-      'บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)<br>'+
-      '774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540'+
     '</div>'+
     '</body></html>';
 
@@ -3079,7 +3139,7 @@ function editInvoice(invId) {
   if (dateLabelEditEl) dateLabelEditEl.innerHTML = (isClaimEdit ? 'วันที่ส่งคืน' : 'วันที่ออก INV') + ' <span style="color:var(--red);">*</span>';
   var lotLabelEditEl = document.getElementById('invLineLotLabel');
   if (lotLabelEditEl) lotLabelEditEl.textContent = isClaimEdit ? 'อ้างอิงใบเคลม (เลขที่ใบเคลม)' : 'เลขที่ LOT / อ้างอิง';
-  ['invLineQtyUnitWrap','invWeightFieldsWrap'].forEach(function(id){
+  ['invWeightFieldsWrap'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = isClaimEdit ? 'none' : '';
   });
@@ -3091,6 +3151,9 @@ function editInvoice(invId) {
   if (claimNoteEditEl) claimNoteEditEl.style.display = isClaimEdit ? 'block' : 'none';
   var addLineBtnEditEl = document.getElementById('invAddLineBtn');
   if (addLineBtnEditEl) addLineBtnEditEl.textContent = isClaimEdit ? '➕ เพิ่มลงในใบส่งคืนงานเคลม' : '➕ เพิ่มลงในบิล INV';
+  var claimHistCardEditEl = document.getElementById('invClaimHistoryCard');
+  if (claimHistCardEditEl) claimHistCardEditEl.style.display = isClaimEdit ? '' : 'none';
+  if (isClaimEdit) renderInvClaimHistory();
   ['invThPrice','invThAmount'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display = isClaimEdit?'none':''; });
   var formBtnEl = document.getElementById('invFormPrintBtn');
   if (formBtnEl) formBtnEl.style.display = isClaimEdit?'none':'';
