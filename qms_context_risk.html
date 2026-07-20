@@ -172,7 +172,7 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 .user-badge{font-size:11.5px;color:var(--steel-300);}
 #appRoot{display:none;}
 
-.print-watermark,.print-info-bar{display:none;}
+.print-watermark{display:none;}
 .print-only{display:none;}
 .print-header{display:none;}
 .doc-footer-bar{display:none;}
@@ -190,15 +190,17 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
   .ph-code .val{border-bottom:1px solid #000;padding:0 4px;}
 
   .doc-footer-bar{
-    display:flex;justify-content:space-between;position:fixed;bottom:6px;left:24px;right:24px;
-    font-size:9px;color:#000;z-index:998;border-top:1px solid #000;padding-top:3px;
+    display:flex;justify-content:space-between;margin-top:16px;
+    font-size:9px;color:#000;border-top:1px solid #000;padding-top:3px;
   }
 }
 @media print{
   header.top .year-controls, nav.tabs, .toolbar, .filter-bar, .del-btn, .rm-mini, .add-mini, .add-block-btn{display:none!important;}
   body{background:#fff;}
-  .view{display:block!important;page-break-after:always;}
+  .view{display:block!important;}
   #view-overview{display:none!important;}
+  #view-stakeholders, #view-risk{page-break-before:always;}
+  #externalContextBlock{page-break-before:always;}
   input,textarea,select{border:none!important;background:transparent!important;color:#000!important;padding:1px 0!important;}
 
   /* Hide the interactive on-screen editing UI when printing, show plain Excel-style tables instead */
@@ -221,10 +223,6 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
   }
   .wm-row{white-space:nowrap;font-size:12.5px;font-weight:600;color:rgba(220,38,38,.26);line-height:50px;}
   .wm-row span{margin-right:46px;}
-  .print-info-bar{
-    display:block;position:fixed;bottom:20px;left:0;right:0;text-align:center;
-    font-size:9.5px;color:#64748b;z-index:999;
-  }
 }
 </style>
 </head>
@@ -232,7 +230,6 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 
 <div class="loading-screen" id="loadingScreen">กำลังโหลดข้อมูลจาก Firebase...</div>
 <div class="print-watermark" id="printWatermark"><div class="print-watermark-inner" id="printWatermarkInner"></div></div>
-<div class="print-info-bar" id="printInfoText"></div>
 
 <div class="login-screen" id="loginScreen">
   <div class="login-card">
@@ -326,11 +323,6 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <div class="ph-title"><span class="th">บริบทขององค์กร</span> <span class="en">Context of the Organization</span></div>
       <div class="ph-code"><span class="lbl">วันที่จัดทำ</span><span class="val" id="phDateContext">-</span></div>
     </div>
-    <div class="doc-footer-bar">
-      <span id="phCodeContext">APK-FR-MR-009</span>
-      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
-      <span>Rev.00 : 02-04-18</span>
-    </div>
     <div class="section-title">
       <h2>บริบทขององค์กร</h2>
       <span class="en">Context of the Organization</span>
@@ -340,12 +332,30 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('internal')">+ เพิ่มหมวดหมู่ภายใน</button></div>
     <div id="internalContext"></div>
     <div class="print-only" id="printTableInternal"></div>
+    <div class="print-only" id="printSignContextInternal"></div>
+    <div class="doc-footer-bar">
+      <span id="phCodeContext">APK-FR-MR-009</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
+    </div>
 
-    <h3 style="color:var(--navy-800);font-size:15px;margin:26px 0 8px;">🌐 ประเด็นภายนอก (External Issues) — โอกาส / อุปสรรค</h3>
-    <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('external')">+ เพิ่มหมวดหมู่ภายนอก</button></div>
-    <div id="externalContext"></div>
-    <div class="print-only" id="printTableExternal"></div>
-    <div class="print-only" id="printSignContext"></div>
+    <div id="externalContextBlock">
+      <div class="print-header">
+        <div class="ph-logo"><img src="logo.png" alt="APK Plating logo"></div>
+        <div class="ph-title"><span class="th">บริบทขององค์กร</span> <span class="en">Context of the Organization</span></div>
+        <div class="ph-code"><span class="lbl">วันที่จัดทำ</span><span class="val" id="phDateContextExt">-</span></div>
+      </div>
+      <h3 style="color:var(--navy-800);font-size:15px;margin:26px 0 8px;">🌐 ประเด็นภายนอก (External Issues) — โอกาส / อุปสรรค</h3>
+      <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('external')">+ เพิ่มหมวดหมู่ภายนอก</button></div>
+      <div id="externalContext"></div>
+      <div class="print-only" id="printTableExternal"></div>
+      <div class="print-only" id="printSignContextExternal"></div>
+      <div class="doc-footer-bar">
+        <span id="phCodeContextExt">APK-FR-MR-009</span>
+        <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+        <span>Rev.00 : 02-04-18</span>
+      </div>
+    </div>
   </section>
 
   <!-- STAKEHOLDERS -->
@@ -355,11 +365,6 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <div class="ph-title"><span class="th">ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</span> <span class="en">( Interested Parties ) <span id="phYearStakeholders"></span></span></div>
       <div class="ph-code"><span class="lbl">วันที่จัดทำ</span><span class="val" id="phDateStakeholders">-</span></div>
     </div>
-    <div class="doc-footer-bar">
-      <span id="phCodeStakeholders">APK-FR-MR-010</span>
-      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
-      <span>Rev.00 : 02-04-18</span>
-    </div>
     <div class="section-title">
       <h2>ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</h2>
       <span class="en">Interested Parties &amp; Expectations</span>
@@ -368,6 +373,11 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     <div class="stake-grid" id="stakeGrid"></div>
     <div class="print-only" id="printTableStakeholders"></div>
     <div class="print-only" id="printSignStakeholders"></div>
+    <div class="doc-footer-bar">
+      <span id="phCodeStakeholders">APK-FR-MR-010</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
+    </div>
   </section>
 
   <!-- RISK -->
@@ -376,11 +386,6 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <div class="ph-logo"><img src="logo.png" alt="APK Plating logo"></div>
       <div class="ph-title"><span class="th">มาตราการจัดการความเสี่ยงและโอกาส</span></div>
       <div class="ph-code"><span class="lbl">ประจำปี</span><span class="val" id="phDateRisk">-</span></div>
-    </div>
-    <div class="doc-footer-bar">
-      <span id="phCodeRisk">APK-FR-MR-011</span>
-      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
-      <span>Rev.00 : 02-04-18</span>
     </div>
     <div class="section-title">
       <h2>มาตรการจัดการความเสี่ยงและโอกาส</h2>
@@ -404,6 +409,7 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
         <option value="pending">รอดำเนินการ</option>
       </select>
       <button class="add-block-btn" onclick="addRisk()">+ เพิ่มประเด็นความเสี่ยง</button>
+      <button class="add-block-btn" style="background:var(--gold);" onclick="syncRisksFromSources(true)">🔄 ดึงประเด็นจากบริบท/ผู้มีส่วนได้ส่วนเสีย</button>
     </div>
 
     <div class="table-wrap">
@@ -427,6 +433,11 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     </div>
     <div class="print-only" id="printTableRisk"></div>
     <div class="print-only" id="printSignRisk"></div>
+    <div class="doc-footer-bar">
+      <span id="phCodeRisk">APK-FR-MR-011</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
+    </div>
   </section>
 
   <footer class="sign">
@@ -682,7 +693,11 @@ async function ensureYear(targetYear){
   // reset risk statuses for fresh annual review, keep everything else as a draft starting point
   (clone.risks || []).forEach(r => { r.status = ''; });
   clone.meta = clone.meta || {};
-  clone.meta.docDate = '';
+  {
+    const today = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    clone.meta.docDate = today.getFullYear() + '-' + pad(today.getMonth()+1) + '-' + pad(today.getDate());
+  }
   await dbPut(ROOT + '/' + targetYear, clone);
   YEARS.push(targetYear); YEARS.sort();
   renderYearSelector();
@@ -718,8 +733,84 @@ async function loadYear(y){
   DATA.stakeholders = DATA.stakeholders || [];
   DATA.risks = DATA.risks || [];
   document.getElementById('yearBadge').textContent = 'ปี ' + y;
+  if(y === '2026'){ await applyMarket2026Update(); }
   renderAll();
   loadPrintLog();
+}
+
+/* ============================================================
+   One-time data migration — 2026 market/context update
+   (labor law status, PRTR draft law, zinc price surge, local
+   competition). Runs automatically once per Firebase record —
+   guarded by a flag so it never duplicates data on later visits.
+   ============================================================ */
+async function applyMarket2026Update(){
+  const already = await dbGet(ROOT + '/2026/_migrations/marketUpdate2026');
+  if(already) return;
+
+  function ensureItem(arr, text){
+    if(!arr.some(t => t === text)) arr.push(text);
+  }
+
+  // -- External context updates --
+  const ext = DATA.context.external || [];
+  const findCat = name => ext.find(c => c.cat === name);
+
+  const legal = findCat('กฎหมาย');
+  if(legal){
+    legal.t = legal.t || [];
+    legal.o = legal.o || [];
+    ensureItem(legal.t, 'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569 แต่ยังเป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง');
+    ensureItem(legal.t, 'ร่างกฎหมาย PRTR (รายงานการปล่อย/เคลื่อนย้ายสารมลพิษ) และร่างแก้ พ.ร.บ.โรงงาน อยู่ระหว่างการพิจารณาของรัฐสภาปี 2569 อาจเพิ่มภาระการรายงานข้อมูลมลพิษต่อสาธารณะ');
+    ensureItem(legal.o, 'กรมโรงงานอุตสาหกรรมออกเกณฑ์คุณสมบัติ/การขึ้นทะเบียนผู้ควบคุมระบบบำบัดมลพิษฉบับใหม่ (ม.ค. 2569) เป็นโอกาสยกระดับมาตรฐานบุคลากรสิ่งแวดล้อมของโรงงาน');
+  }
+
+  const econ = findCat('เศรษฐกิจแวดล้อม');
+  if(econ){
+    econ.t = econ.t || [];
+    ensureItem(econ.t, 'ราคาสังกะสีตลาดโลกพุ่งสูงสุดในรอบหลายปี (แตะ 3,430 ดอลลาร์/ตัน เม.ย. 2569) จากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ');
+  }
+
+  const compete = findCat('คู่แข่ง/สภาพการแข่งขัน');
+  if(compete){
+    compete.t = compete.t || [];
+    ensureItem(compete.t, 'มีผู้ประกอบการโรงชุบซิงค์ในพื้นที่สมุทรปราการ/บางพลี/บางเสาธงเพิ่มขึ้นต่อเนื่อง ให้บริการใกล้เคียงกัน (ชุบซิงค์ครบสี ทั้งไลน์กลิ้ง/แขวน) เพิ่มการแข่งขันด้านราคา');
+  }
+
+  // -- Internal context updates --
+  const intl = DATA.context.internal || [];
+  const findCatI = name => intl.find(c => c.cat === name);
+
+  const knowledge = findCatI('ความรู้');
+  if(knowledge){
+    knowledge.s = knowledge.s || [];
+    ensureItem(knowledge.s, 'มีระบบดิจิทัลบริหารจัดการครบวงจร (สต๊อก บิล ทรัพยากรบุคคล เอกสารคุณภาพ ตัวชี้วัด) ที่พัฒนาขึ้นเองภายในองค์กร ช่วยลดความผิดพลาดจากการทำงานแบบเอกสาร/มือ');
+  }
+
+  const tools = findCatI('เครื่องมือ/อุปกรณ์');
+  if(tools){
+    tools.s = tools.s || [];
+    ensureItem(tools.s, 'มีระบบติดตามของเสียและงานระหว่างผลิต (WIP) แบบเรียลไทม์ ช่วยตรวจพบความผิดปกติในกระบวนการผลิตได้รวดเร็วขึ้น');
+  }
+
+  // -- New risk register entries (impact × likelihood analyzed) --
+  const riskGroup = 'บริบทขององค์กร (ประเด็นภายนอก)';
+  const newRisks = [
+    { group:riskGroup, risk:'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวในระดับสูง (380 บาท/วัน) เป็นภาระต้นทุนแรงงานต่อเนื่อง', crit:'เชิงปริมาณ', i:2, l:3, plan:'N/A', resp:'-', status:'na' },
+    { group:riskGroup, risk:'ร่างกฎหมาย PRTR และร่างแก้ พ.ร.บ.โรงงาน อาจเพิ่มภาระการรายงานข้อมูลการปล่อยมลพิษต่อสาธารณะ', crit:'เชิงคุณภาพ', i:3, l:2, plan:'ติดตามความคืบหน้าร่างกฎหมาย และเตรียมระบบบันทึกข้อมูลการปล่อยมลพิษ/น้ำเสียให้พร้อมรายงาน', resp:'พิพิธ / ติดตามต่อเนื่อง', status:'pending' },
+    { group:riskGroup, risk:'ราคาสังกะสีตลาดโลกปรับตัวสูงขึ้นมากจากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ทำให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้น', crit:'เชิงปริมาณ', i:3, l:4, plan:'ทบทวนโครงสร้างราคาขาย/เจรจาสัญญาซื้อเคมีภัณฑ์ระยะยาวกับซัพพลายเออร์ เพื่อลดผลกระทบจากความผันผวนราคาวัตถุดิบ', resp:'พิพิธ / ดำเนินการต่อเนื่อง', status:'pending' },
+    { group:riskGroup, risk:'มีผู้ประกอบการโรงชุบซิงค์ในพื้นที่สมุทรปราการเพิ่มขึ้นต่อเนื่อง ให้บริการใกล้เคียงกัน เพิ่มการแข่งขันด้านราคา', crit:'เชิงปริมาณ', i:3, l:3, plan:'สร้างความแตกต่างด้านบริการ (งานด่วน 24 ชม., คุณภาพ, ระบบติดตามงานออนไลน์) แทนการแข่งขันด้านราคาอย่างเดียว', resp:'พิพิธ / ดำเนินการต่อเนื่อง', status:'pending' },
+  ];
+  DATA.risks = DATA.risks || [];
+  newRisks.forEach(nr=>{
+    if(!DATA.risks.some(r => r.risk === nr.risk)) DATA.risks.push(nr);
+  });
+
+  // Persist, then set the flag so this migration never re-applies or duplicates
+  await dbPut(ROOT + '/2026/context/internal', DATA.context.internal);
+  await dbPut(ROOT + '/2026/context/external', DATA.context.external);
+  await dbPut(ROOT + '/2026/risks', DATA.risks);
+  await dbPut(ROOT + '/2026/_migrations/marketUpdate2026', true);
 }
 
 /* ============================================================
@@ -746,6 +837,14 @@ async function printDocument(){
   const now = new Date();
   const displayDate = now.toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
 
+  // Ensure the document date is always a real date (never a bare year)
+  if(!DATA.meta.docDate){
+    const pad = n => String(n).padStart(2,'0');
+    DATA.meta.docDate = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+    await dbPut(ROOT + '/' + YEAR + '/meta', DATA.meta);
+    document.getElementById('metaDocDate').value = DATA.meta.docDate;
+  }
+
   showSaving();
   await dbPost(ROOT + '/' + YEAR + '/printLog', {
     name: name,
@@ -760,12 +859,12 @@ async function printDocument(){
   document.getElementById('printWatermarkInner').innerHTML = buildWatermarkTiles(
     `ไม่ควบคุม (Uncontrolled Copy) · ผู้พิมพ์: ${name} · ${displayDate}`
   );
-  document.getElementById('printInfoText').textContent =
-    `เอกสาร QMS บริบทองค์กร/ผู้มีส่วนได้ส่วนเสีย/ความเสี่ยงฯ ปี ${YEAR} — เอกสารอิเล็กทรอนิกส์คือฉบับควบคุม`;
 
-  const docDateLabel = (DATA.meta.docDate ? DATA.meta.docDate.split('-').reverse().join('/') : YEAR);
+  const docDateLabel = DATA.meta.docDate.split('-').reverse().join('/');
   document.getElementById('phCodeContext').textContent = DATA.meta.codeContext || 'APK-FR-MR-009';
   document.getElementById('phDateContext').textContent = docDateLabel;
+  document.getElementById('phCodeContextExt').textContent = DATA.meta.codeContext || 'APK-FR-MR-009';
+  document.getElementById('phDateContextExt').textContent = docDateLabel;
   document.getElementById('phCodeStakeholders').textContent = DATA.meta.codeStakeholders || 'APK-FR-MR-010';
   document.getElementById('phDateStakeholders').textContent = docDateLabel;
   document.getElementById('phYearStakeholders').textContent = YEAR;
@@ -778,7 +877,8 @@ async function printDocument(){
   document.getElementById('printTableRisk').innerHTML = buildRiskPrintTable();
 
   const signHtml = buildSignBlockHTML(docDateLabel);
-  document.getElementById('printSignContext').innerHTML = signHtml;
+  document.getElementById('printSignContextInternal').innerHTML = signHtml;
+  document.getElementById('printSignContextExternal').innerHTML = signHtml;
   document.getElementById('printSignStakeholders').innerHTML = signHtml;
   document.getElementById('printSignRisk').innerHTML = signHtml;
 
@@ -941,6 +1041,9 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view === 'risk' && typeof YEAR !== 'undefined' && YEAR){
+      syncRisksFromSources(false);
+    }
   });
 });
 
@@ -1135,6 +1238,50 @@ function removeStakeItem(idx, i){
 /* ============================================================
    Risk table — editable
    ============================================================ */
+/* ============================================================
+   Sync risk register from Context + Stakeholders — the source
+   text for most risk/opportunity rows is the same wording used
+   in the context (S/W/O/T) and stakeholder expectation lists,
+   matching how the original paper forms were filled out.
+   ============================================================ */
+function collectSourceIssues(){
+  const issues = [];
+  (DATA.context.internal||[]).forEach(cat=>{
+    (cat.s||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายใน)', risk:text}); });
+    (cat.w||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายใน)', risk:text}); });
+  });
+  (DATA.context.external||[]).forEach(cat=>{
+    (cat.o||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:text}); });
+    (cat.t||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:text}); });
+  });
+  (DATA.stakeholders||[]).forEach(s=>{
+    (s.items||[]).forEach(it=>{
+      if(it.expect) issues.push({group:`ผู้มีส่วนได้ส่วนเสีย (${s.th})`, risk:it.expect});
+    });
+  });
+  return issues;
+}
+
+async function syncRisksFromSources(showAlert){
+  const issues = collectSourceIssues();
+  let added = 0;
+  issues.forEach(iss=>{
+    const exists = DATA.risks.some(r => r.risk === iss.risk && r.group === iss.group);
+    if(!exists){
+      DATA.risks.push({ group: iss.group, risk: iss.risk, crit:'', i:1, l:1, plan:'', resp:'', status:'' });
+      added++;
+    }
+  });
+  if(added > 0){
+    renderRiskTable();
+    await saveRisks();
+  }
+  if(showAlert){
+    alert(added > 0 ? `ดึงประเด็นใหม่เข้าตารางความเสี่ยงฯ แล้ว ${added} รายการ (กรอกเกณฑ์/ความรุนแรง/โอกาสเกิดเพิ่มได้เลย)` : 'ไม่มีประเด็นใหม่ที่ยังไม่อยู่ในตาราง — ข้อมูลครบแล้ว');
+  }
+  return added;
+}
+
 function renderRiskTable(){
   const search = (document.getElementById('riskSearch').value||'').trim().toLowerCase();
   const levelF = document.getElementById('riskLevelFilter').value;
@@ -1164,7 +1311,13 @@ function renderRiskTable(){
     rows += `<tr>
       <td><input type="text" value="${esc(r.group)}" onchange="updateRisk(${idx},'group',this.value)"></td>
       <td><textarea onchange="updateRisk(${idx},'risk',this.value)">${esc(r.risk)}</textarea></td>
-      <td><input type="text" value="${esc(r.crit)}" list="critList" onchange="updateRisk(${idx},'crit',this.value)"></td>
+      <td>
+        <select onchange="updateRisk(${idx},'crit',this.value)">
+          <option value="" ${!r.crit?'selected':''}>— เลือก —</option>
+          <option value="เชิงปริมาณ" ${r.crit==='เชิงปริมาณ'?'selected':''}>เชิงปริมาณ</option>
+          <option value="เชิงคุณภาพ" ${r.crit==='เชิงคุณภาพ'?'selected':''}>เชิงคุณภาพ</option>
+        </select>
+      </td>
       <td><select onchange="updateRiskNum(${idx},'i',this.value)">${[1,2,3,4].map(n=>`<option value="${n}" ${n==r.i?'selected':''}>${n}</option>`).join('')}</select></td>
       <td><select onchange="updateRiskNum(${idx},'l',this.value)">${[1,2,3,4].map(n=>`<option value="${n}" ${n==r.l?'selected':''}>${n}</option>`).join('')}</select></td>
       <td><span class="badge ${b.cls}">${level}</span><br><span style="font-size:10.5px;color:var(--steel-500);">${b.label}</span></td>
@@ -1182,13 +1335,6 @@ function renderRiskTable(){
     </tr>`;
   });
   document.getElementById('riskTableBody').innerHTML = rows || `<tr><td colspan="10" style="text-align:center;color:var(--steel-500);padding:24px;">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</td></tr>`;
-
-  if(!document.getElementById('critList')){
-    const dl = document.createElement('datalist');
-    dl.id = 'critList';
-    dl.innerHTML = '<option value="เชิงปริมาณ"><option value="เชิงคุณภาพ"><option value="เชิงคุณภาพ/ปริมาณ">';
-    document.body.appendChild(dl);
-  }
 }
 
 async function saveRisks(){
