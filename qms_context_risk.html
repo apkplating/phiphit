@@ -1249,7 +1249,7 @@ function removeStakeItem(idx, i){
 function collectSourceIssues(){
   const issues = [];
   (DATA.context.internal||[]).forEach(cat=>{
-    (cat.s||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายใน)', risk:text}); });
+    // Strengths are not risk/opportunity items in the original forms — only weaknesses are pulled in
     (cat.w||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายใน)', risk:text}); });
   });
   (DATA.context.external||[]).forEach(cat=>{
@@ -1266,6 +1266,25 @@ function collectSourceIssues(){
 
 async function syncRisksFromSources(showAlert){
   const issues = collectSourceIssues();
+  const currentSourceKeys = new Set(issues.map(iss => iss.group + '|' + iss.risk));
+
+  const strengthTexts = new Set();
+  (DATA.context.internal||[]).forEach(cat=>{ (cat.s||[]).forEach(t=>{ if(t) strengthTexts.add(t); }); });
+
+  const isAutoGroup = g => g === 'บริบทขององค์กร (ประเด็นภายใน)' || g === 'บริบทขององค์กร (ประเด็นภายนอก)' || (g||'').indexOf('ผู้มีส่วนได้ส่วนเสีย (') === 0;
+
+  // Reconcile: drop rows that no longer match a current source item — but only
+  // if still blank/untouched, so nothing already evaluated gets deleted.
+  const beforeLen = DATA.risks.length;
+  DATA.risks = DATA.risks.filter(r=>{
+    const untouched = !r.plan && !r.resp && !r.status && !r.crit;
+    if(!untouched) return true;
+    if(r.group === 'บริบทขององค์กร (ประเด็นภายใน)' && strengthTexts.has(r.risk)) return false; // strengths never wanted
+    if(isAutoGroup(r.group) && !currentSourceKeys.has(r.group + '|' + r.risk)) return false; // orphaned — source item was edited/removed
+    return true;
+  });
+  const removed = beforeLen - DATA.risks.length;
+
   let added = 0;
   issues.forEach(iss=>{
     const exists = DATA.risks.some(r => r.risk === iss.risk && r.group === iss.group);
@@ -1274,14 +1293,30 @@ async function syncRisksFromSources(showAlert){
       added++;
     }
   });
-  if(added > 0){
+  if(added > 0 || removed > 0){
     renderRiskTable();
     await saveRisks();
   }
   if(showAlert){
-    alert(added > 0 ? `ดึงประเด็นใหม่เข้าตารางความเสี่ยงฯ แล้ว ${added} รายการ (กรอกเกณฑ์/ความรุนแรง/โอกาสเกิดเพิ่มได้เลย)` : 'ไม่มีประเด็นใหม่ที่ยังไม่อยู่ในตาราง — ข้อมูลครบแล้ว');
+    const parts = [];
+    if(added > 0) parts.push(`เพิ่มใหม่ ${added} รายการ`);
+    if(removed > 0) parts.push(`ลบรายการที่ไม่ตรงกับต้นทางแล้วออก ${removed} รายการ`);
+    alert(parts.length ? parts.join(' · ') : 'ข้อมูลตรงกับต้นทางครบแล้ว ไม่มีอะไรต้องอัปเดต');
   }
   return added;
+}
+
+function groupSortedRows(rowsWithIdx){
+  const order = [];
+  const buckets = {};
+  rowsWithIdx.forEach(item=>{
+    const g = item.r.group || '(ไม่ระบุกลุ่ม)';
+    if(!buckets[g]){ buckets[g] = []; order.push(g); }
+    buckets[g].push(item);
+  });
+  const result = [];
+  order.forEach(g=> result.push(...buckets[g]));
+  return result;
 }
 
 function renderRiskTable(){
@@ -1303,7 +1338,8 @@ function renderRiskTable(){
 
   let lastGroup = null;
   let rows = '';
-  filtered.forEach(({r, idx})=>{
+  const sorted = groupSortedRows(filtered);
+  sorted.forEach(({r, idx})=>{
     if(r.group !== lastGroup){
       rows += `<tr class="group-row"><td colspan="10">${esc(r.group)||'(ไม่ระบุกลุ่ม)'}</td></tr>`;
       lastGroup = r.group;
