@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QMS บริบทองค์กร &amp; ความเสี่ยงและโอกาส | APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="fb-auth.js"></script>
+<style>
+:root{
+  --navy-950:#0a1929; --navy-900:#0f2942; --navy-800:#15395c; --navy-700:#1e3a5f;
+  --navy-600:#2c5480; --steel-500:#64748b; --steel-300:#cbd5e1; --steel-100:#f1f5f9;
+  --paper:#f7f8fa; --card:#ffffff; --border:#e2e8f0;
+  --green:#16a34a; --green-bg:#dcfce7; --amber:#d97706; --amber-bg:#fef3c7;
+  --orange:#ea580c; --orange-bg:#ffedd5; --red:#dc2626; --red-bg:#fee2e2;
+  --gold:#b8860b;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--paper);color:var(--navy-950);line-height:1.6;}
+header.top{background:linear-gradient(135deg,var(--navy-900),var(--navy-700));color:#fff;padding:18px 28px;box-shadow:0 2px 12px rgba(15,41,66,.25);position:sticky;top:0;z-index:50;}
+.top-inner{max-width:1280px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.brand{display:flex;align-items:center;gap:14px;}
+.brand-mark{width:46px;height:46px;border-radius:10px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;border:1px solid rgba(255,255,255,.25);}
+.brand h1{font-size:18px;font-weight:600;letter-spacing:.2px;}
+.brand p{font-size:12px;color:var(--steel-300);margin-top:2px;}
+.year-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.year-controls select{
+  font-family:inherit;font-size:14px;font-weight:600;padding:7px 12px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;
+}
+.year-controls select option{color:#000;}
+.btn{
+  font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:8px;
+  border:none;cursor:pointer;transition:.15s;
+}
+.btn-gold{background:var(--gold);color:#fff;}
+.btn-gold:hover{background:#9c6f09;}
+.btn-outline{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.3);}
+.btn-outline:hover{background:rgba(255,255,255,.2);}
+.save-indicator{font-size:11px;color:var(--steel-300);min-width:90px;text-align:right;}
+.save-indicator.saving{color:var(--gold);}
+.save-indicator.saved{color:#7fd99a;}
+
+nav.tabs{max-width:1280px;margin:0 auto;padding:0 28px;display:flex;gap:4px;background:var(--navy-800);border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;}
+nav.tabs button{background:none;border:none;color:var(--steel-300);padding:13px 18px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;transition:.15s;}
+nav.tabs button:hover{color:#fff;}
+nav.tabs button.active{color:#fff;border-bottom-color:var(--gold);}
+
+main{max-width:1280px;margin:0 auto;padding:28px;}
+.view{display:none;animation:fade .25s ease;}
+.view.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.section-title{display:flex;align-items:baseline;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.section-title h2{font-size:20px;color:var(--navy-900);font-weight:600;}
+.section-title .en{font-size:13px;color:var(--steel-500);}
+.section-title .doc-code{margin-left:auto;font-size:11.5px;color:var(--navy-700);background:var(--steel-100);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:500;}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;border-top:3px solid var(--navy-700);}
+.stat-card .n{font-size:26px;font-weight:700;color:var(--navy-900);}
+.stat-card .l{font-size:12.5px;color:var(--steel-500);margin-top:2px;}
+.stat-card.ok{border-top-color:var(--green);} .stat-card.ok .n{color:var(--green);}
+.stat-card.watch{border-top-color:var(--amber);} .stat-card.watch .n{color:var(--amber);}
+.stat-card.high{border-top-color:var(--red);} .stat-card.high .n{color:var(--red);}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+.card h3{font-size:15px;color:var(--navy-800);margin-bottom:10px;font-weight:600;display:flex;align-items:center;gap:8px;}
+
+.matrix-wrap{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;}
+.matrix{display:grid;grid-template-columns:70px repeat(4,64px);grid-template-rows:24px repeat(4,64px);gap:4px;}
+.matrix .axis-label{font-size:11px;color:var(--steel-500);display:flex;align-items:center;justify-content:center;text-align:center;}
+.matrix .hdr{font-size:12px;font-weight:600;color:var(--navy-800);display:flex;align-items:center;justify-content:center;}
+.matrix .cell{border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;position:relative;}
+.matrix .cell small{font-size:9.5px;font-weight:400;opacity:.85;}
+.matrix-side{font-size:12px;color:var(--steel-500);writing-mode:vertical-rl;text-align:center;transform:rotate(180deg);}
+.legend{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+.legend .row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--navy-800);}
+.legend .sw{width:14px;height:14px;border-radius:4px;flex-shrink:0;}
+
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:11.5px;color:var(--steel-500);font-weight:500;}
+input[type=text],input[type=date],textarea,select{
+  font-family:inherit;font-size:13.5px;padding:7px 10px;border:1px solid var(--border);
+  border-radius:8px;background:#fff;color:var(--navy-950);width:100%;
+}
+textarea{resize:vertical;min-height:38px;}
+
+/* context */
+.toolbar{display:flex;justify-content:flex-end;margin-bottom:10px;}
+.context-block{border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;background:var(--card);position:relative;}
+.context-block .cat-inputs{display:flex;gap:10px;margin-bottom:12px;}
+.context-block .cat-inputs input{font-weight:600;}
+.del-btn{background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;font-size:11px;padding:3px 8px;cursor:pointer;}
+.del-btn:hover{background:var(--red-bg);}
+.swot-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:760px){.swot-grid{grid-template-columns:1fr;}}
+.swot-col h4{font-size:13px;font-weight:600;padding:8px 12px;border-radius:8px 8px 0 0;color:#fff;display:flex;justify-content:space-between;align-items:center;}
+.swot-col.s h4,.swot-col.o h4{background:var(--green);}
+.swot-col.w h4,.swot-col.t h4{background:var(--red);}
+.swot-list{border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:10px 14px;}
+.swot-item{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;}
+.swot-item textarea{flex:1;}
+.add-mini{background:var(--steel-100);border:1px dashed var(--steel-500);color:var(--navy-700);border-radius:6px;font-size:11.5px;padding:5px 10px;cursor:pointer;width:100%;margin-top:4px;}
+.add-mini:hover{background:var(--steel-300);}
+.rm-mini{background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;line-height:1;padding:4px;}
+
+.add-block-btn{background:var(--navy-800);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;}
+.add-block-btn:hover{background:var(--navy-700);}
+
+/* stakeholders */
+.stake-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;}
+.stake-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:relative;}
+.stake-head{background:linear-gradient(135deg,var(--navy-800),var(--navy-600));padding:12px 18px;display:flex;gap:8px;}
+.stake-head input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;}
+.stake-head input::placeholder{color:rgba(255,255,255,.6);}
+.stake-body{padding:14px 18px;}
+.stake-row{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;}
+.stake-row .grid3{display:grid;grid-template-columns:1fr 1fr 110px 28px;gap:6px;align-items:start;}
+.stake-row label{font-size:10px;color:var(--steel-500);}
+
+/* risk table */
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.filter-bar select,.filter-bar input{font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--navy-900);}
+.filter-bar input{flex:1;min-width:180px;}
+.table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;}
+table.risk{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1150px;}
+table.risk th{background:var(--navy-900);color:#fff;text-align:left;padding:9px 10px;font-weight:500;font-size:11.5px;white-space:nowrap;position:sticky;top:0;}
+table.risk td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+table.risk tbody tr:hover{background:var(--steel-100);}
+table.risk textarea,table.risk input,table.risk select{font-size:12.5px;padding:5px 7px;}
+.group-row td{background:var(--navy-950);color:#fff;font-weight:600;font-size:12px;padding:7px 10px;}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:3px 8px;border-radius:20px;font-weight:700;font-size:12px;color:#fff;}
+.badge.low{background:var(--green);} .badge.med{background:var(--amber);}
+.badge.high{background:var(--orange);} .badge.crit{background:var(--red);}
+
+footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-300);display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--navy-800);}
+.sign-block{text-align:center;min-width:220px;}
+.sign-line{border-top:1px solid var(--steel-500);margin-top:36px;padding-top:6px;}
+.sign-block .role{font-size:11.5px;color:var(--steel-500);}
+
+.loading-screen{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:200;font-size:14px;color:var(--steel-500);}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">กำลังโหลดข้อมูลจาก Firebase...</div>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="brand-mark">APK</div>
+      <div>
+        <h1>APK Plating Service Co., Ltd.</h1>
+        <p>ระบบบริหารคุณภาพ (QMS) — บริบทองค์กร / ผู้มีส่วนได้ส่วนเสีย / ความเสี่ยงและโอกาส</p>
+      </div>
+    </div>
+    <div class="year-controls">
+      <select id="yearSelect" onchange="switchYear(this.value)"></select>
+      <button class="btn btn-gold" onclick="startNewYear()">+ เริ่มปีใหม่</button>
+      <span class="save-indicator" id="saveIndicator"></span>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="active" data-view="overview">ภาพรวม</button>
+    <button data-view="context">บริบทขององค์กร</button>
+    <button data-view="stakeholders">ผู้มีส่วนได้ส่วนเสีย</button>
+    <button data-view="risk">ความเสี่ยงและโอกาส</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- OVERVIEW -->
+  <section class="view active" id="view-overview">
+    <div class="section-title">
+      <h2>ภาพรวมระบบบริหารความเสี่ยงและโอกาส</h2>
+      <span class="en">QMS Overview</span>
+      <span class="doc-code" id="yearBadge"></span>
+    </div>
+
+    <div class="card">
+      <h3>ข้อมูลเอกสาร</h3>
+      <div class="meta-grid">
+        <div class="field"><label>ผู้จัดทำ (ตัวแทนฝ่ายบริหาร)</label><input type="text" id="metaPreparedBy" onchange="saveMeta()"></div>
+        <div class="field"><label>ผู้อนุมัติ (กรรมการผู้จัดการ)</label><input type="text" id="metaApprovedBy" onchange="saveMeta()"></div>
+        <div class="field"><label>วันที่จัดทำ</label><input type="date" id="metaDocDate" onchange="saveMeta()"></div>
+      </div>
+    </div>
+
+    <div class="stat-grid" id="statGrid"></div>
+
+    <div class="card">
+      <h3>เมทริกซ์ความเสี่ยง (Risk Matrix) <span class="tag">Impact × Likelihood</span></h3>
+      <div class="matrix-wrap">
+        <div style="display:flex;gap:6px;">
+          <div class="matrix-side">โอกาสในการเกิด (Likelihood)</div>
+          <div class="matrix" id="riskMatrix"></div>
+        </div>
+        <div class="legend" id="matrixLegend"></div>
+      </div>
+      <div style="text-align:center;font-size:11.5px;color:var(--steel-500);margin-top:6px;">ความรุนแรง (Impact) →</div>
+    </div>
+
+    <div class="card">
+      <h3>สรุปประเด็นตามกลุ่ม</h3>
+      <div id="groupSummary" style="font-size:13.5px;"></div>
+    </div>
+  </section>
+
+  <!-- CONTEXT -->
+  <section class="view" id="view-context">
+    <div class="section-title">
+      <h2>บริบทขององค์กร</h2>
+      <span class="en">Context of the Organization</span>
+    </div>
+
+    <h3 style="color:var(--navy-800);font-size:15px;margin-bottom:8px;">🏠 ประเด็นภายใน (Internal Issues) — จุดแข็ง / จุดอ่อน</h3>
+    <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('internal')">+ เพิ่มหมวดหมู่ภายใน</button></div>
+    <div id="internalContext"></div>
+
+    <h3 style="color:var(--navy-800);font-size:15px;margin:26px 0 8px;">🌐 ประเด็นภายนอก (External Issues) — โอกาส / อุปสรรค</h3>
+    <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('external')">+ เพิ่มหมวดหมู่ภายนอก</button></div>
+    <div id="externalContext"></div>
+  </section>
+
+  <!-- STAKEHOLDERS -->
+  <section class="view" id="view-stakeholders">
+    <div class="section-title">
+      <h2>ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</h2>
+      <span class="en">Interested Parties &amp; Expectations</span>
+    </div>
+    <div class="toolbar"><button class="add-block-btn" onclick="addStakeholder()">+ เพิ่มกลุ่มผู้มีส่วนได้ส่วนเสีย</button></div>
+    <div class="stake-grid" id="stakeGrid"></div>
+  </section>
+
+  <!-- RISK -->
+  <section class="view" id="view-risk">
+    <div class="section-title">
+      <h2>มาตรการจัดการความเสี่ยงและโอกาส</h2>
+      <span class="en">Risk &amp; Opportunity Management</span>
+      <span class="doc-code">FM-QMR-22</span>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="riskSearch" placeholder="🔍 ค้นหาประเด็นความเสี่ยง / แผนการลดความเสี่ยง...">
+      <select id="riskLevelFilter">
+        <option value="">ทุกระดับความเสี่ยง</option>
+        <option value="low">ต่ำ (1–4)</option>
+        <option value="med">ปานกลาง (5–8)</option>
+        <option value="high">สูง (9–12)</option>
+        <option value="crit">วิกฤต (13–16)</option>
+      </select>
+      <select id="riskStatusFilter">
+        <option value="">ทุกสถานะ</option>
+        <option value="ok">ดำเนินการแล้ว (OK)</option>
+        <option value="na">ไม่ต้องดำเนินการ (N/A)</option>
+        <option value="pending">รอดำเนินการ</option>
+      </select>
+      <button class="add-block-btn" onclick="addRisk()">+ เพิ่มประเด็นความเสี่ยง</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="risk">
+        <thead>
+          <tr>
+            <th style="width:150px;">กลุ่ม</th>
+            <th style="width:220px;">ประเด็นความเสี่ยง / โอกาส</th>
+            <th style="width:110px;">เกณฑ์</th>
+            <th style="width:60px;">รุนแรง</th>
+            <th style="width:60px;">โอกาส</th>
+            <th style="width:80px;">ระดับ</th>
+            <th style="width:220px;">แผนการลดความเสี่ยง</th>
+            <th style="width:140px;">ผู้รับผิดชอบ / กำหนดเสร็จ</th>
+            <th style="width:110px;">ผล</th>
+            <th style="width:30px;"></th>
+          </tr>
+        </thead>
+        <tbody id="riskTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="sign">
+    <div class="sign-block"><div class="sign-line" id="signPrepared">&nbsp;</div><div class="role">ผู้จัดทำ (ตัวแทนฝ่ายบริหาร)</div></div>
+    <div class="sign-block"><div class="sign-line" id="signApproved">&nbsp;</div><div class="role">ผู้อนุมัติ (กรรมการผู้จัดการ)</div></div>
+  </footer>
+
+</main>
+
+<script>
+/* ============================================================
+   Firebase REST config (uses fb-auth.js for anonymous auth token)
+   ============================================================ */
+const DB_BASE = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+const ROOT = '/qms-context-risk';
+
+function dbGet(path){
+  return fetch(DB_BASE + path + '.json').then(r=>r.json());
+}
+function dbPut(path, value){
+  return fetch(DB_BASE + path + '.json', { method:'PUT', body: JSON.stringify(value) });
+}
+
+/* ============================================================
+   Seed data (transcribed from 2025 Excel forms) — used only if
+   the database is completely empty on first run.
+   ============================================================ */
+function seed2025(){
+  return {
+    meta: { preparedBy:"พิพิธ ดิษฐราชา", approvedBy:"", docDate:"2025-01-20" },
+    context: {
+      internal: [
+        { cat:"บุคคล", en:"Personal", s:["ค่าแรงสูงกว่าค่าแรงขั้นต่ำที่กฎหมายกำหนด","มีสวัสดิการพนักงาน (ชุดฟอร์ม, โบนัส)","มีที่พักอาศัยภายในเขตโรงงาน"], w:[] },
+        { cat:"เครื่องมือ/อุปกรณ์", en:"Tool / Equipment", s:["เครื่องจักรและอุปกรณ์การชุบเป็นระบบ Auto ทำให้ Cycle Time ในการผลิตลดลง"], w:[] },
+        { cat:"สินค้า/บริการ", en:"Product / Service", s:["มีรถรับส่งสินค้าของเราเอง","เราสามารถรองรับการชุบได้ทั้งแบบกลิ้ง/แขวน","เราสามารถรองรับงานด่วนลูกค้าได้ 24 ชั่วโมง"], w:["เรามีประเภทของการชุบไม่หลากหลายตามความต้องการของลูกค้าที่ติดต่อเข้ามา"] },
+        { cat:"กระบวนการทำงาน", en:"Production", s:["เราสามารถรองรับงานด่วนลูกค้าได้ ภายใน 3 ชม."], w:[] },
+        { cat:"วัฒนธรรมองค์กร", en:"Culture", s:["เรามีความสามัคคีในองค์กร"], w:[] },
+        { cat:"ความรู้", en:"Knowledge", s:["พนักงานมีความรู้ความสามารถหลายด้าน"], w:[] },
+        { cat:"สมรรถนะ", en:"Performance", s:["ปริมาณของเสียที่เกิดขึ้นจากกระบวนการผลิตมีปริมาณน้อย"], w:[] },
+      ],
+      external: [
+        { cat:"กฎหมาย", en:"Legal", o:["มีการดำเนินการอย่างเข้มงวดของเจ้าหน้าที่รัฐเรื่องสิ่งแวดล้อม"], t:["กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูงขึ้น"] },
+        { cat:"เทคโนโลยี", en:"Technology", o:["มีการพัฒนาระบบของการควบคุมการชุบที่ทันสมัย ทำให้สามารถลดการใช้แรงงานจากคน"], t:[] },
+        { cat:"คู่แข่ง/สภาพการแข่งขัน", en:"Competition", o:["โรงชุบในพื้นที่ใกล้เคียงเปิดทำการ 8 ชั่วโมง จึงทำให้ไม่สามารถรับงานด่วนลูกค้าได้"], t:["มีการเปิดตัวของโรงชุบขนาดเล็กเป็นจำนวนมาก ทำให้มีการตัดราคาจากคู่แข่ง"] },
+        { cat:"ขาย/ตลาด", en:"Sales / Market", o:[], t:[] },
+        { cat:"สังคม", en:"Social", o:[], t:[] },
+        { cat:"เศรษฐกิจแวดล้อม", en:"Economic Environment", o:[], t:["ทิศทางราคาน้ำมัน มีแนวโน้มสูงขึ้น ส่งผลให้ต้นทุนการผลิตสูงขึ้น","ทิศทางราคาค่าไฟฟ้า มีแนวโน้มสูงขึ้น ส่งผลให้ต้นทุนการผลิตสูงขึ้น","วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้น"] },
+        { cat:"การเปลี่ยนแปลงภูมิอากาศ", en:"Climate Change", o:["ภาครัฐมีมาตรการเรื่องการลดก๊าซเรือนกระจกที่ทำให้เกิดการเปลี่ยนแปลงสภาพภูมิอากาศขึ้น"], t:[] },
+      ]
+    },
+    stakeholders: [
+      { th:"ลูกค้า", en:"Customers", items:[
+        {expect:"ปฏิบัติตาม Supplier Quality Manual", activity:"อบรมให้ทุกแผนกรับทราบ Supplier Quality Manual", resp:"พิพิธ"},
+        {expect:"Cost reduction", activity:"ดำเนินกิจกรรม Kaizen ภายในองค์กร", resp:"ทุกคนในองค์กร"},
+        {expect:"ไม่มีของเสียหลุดรอด", activity:"อบรมเรื่อง การสร้างจิตสำนึกเรื่องคุณภาพ", resp:"พิพิธ"},
+      ]},
+      { th:"เจ้าของ/นักลงทุน", en:"Owner / Investor", items:[
+        {expect:"ของเสียในกระบวนการผลิตไม่เกินเป้าหมายที่กำหนด", activity:"อบรมเรื่อง การสร้างจิตสำนึกเรื่องคุณภาพ", resp:"พิพิธ"},
+        {expect:"ไม่มีข้อร้องเรียนจากลูกค้า", activity:"อบรมเรื่อง การสร้างจิตสำนึกเรื่องคุณภาพ", resp:"พิพิธ"},
+        {expect:"ยอดขายเพิ่มขึ้น", activity:"หาลูกค้ารายใหม่เพิ่ม", resp:"พิพิธ"},
+        {expect:"ลดต้นทุนการผลิต", activity:"ดำเนินกิจกรรม KAIZEN", resp:"ทุกคนในองค์กร"},
+      ]},
+      { th:"บุคคลากร", en:"Personnel", items:[
+        {expect:"แรงจูงใจ สวัสดิการในการทำงานเพิ่มขึ้น", activity:"แผนการสร้างขวัญกำลังใจในการทำงาน", resp:"พิพิธ"},
+        {expect:"การทำงานมีความปลอดภัย 100%", activity:"ดำเนินกิจกรรม Safety", resp:"พิพิธ"},
+      ]},
+      { th:"ผู้ส่งมอบ/ผู้ขาย", en:"Suppliers / Vendors", items:[
+        {expect:"มีความเข้าใจเกี่ยวกับระบบการจัดการคุณภาพของ APK", activity:"จัดทำ Supplier Quality Manual", resp:"พิพิธ"},
+      ]},
+      { th:"สังคม / นิยม", en:"Society", items:[
+        {expect:"ไม่เกิดปัญหาเกี่ยวกับสิ่งแวดล้อม", activity:"จัดทำระบบการบำบัดน้ำเสีย", resp:"พิพิธ"},
+        {expect:"ไม่เกิดปัญหาเกี่ยวกับสิ่งแวดล้อม", activity:"จัดทำระบบการบำบัดอากาศ", resp:"พิพิธ"},
+      ]},
+    ],
+    risks: [
+      { group:"บริบทขององค์กร (ประเด็นภายใน)", risk:"เรามีประเภทของการชุบไม่หลากหลายตามความต้องการของลูกค้าที่ติดต่อเข้ามา", crit:"เชิงคุณภาพ/ปริมาณ", i:2, l:3, plan:"N/A", resp:"-", status:"na" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูง", crit:"เชิงปริมาณ", i:2, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"มีการดำเนินการอย่างเข้มงวดของเจ้าหน้าที่รัฐเรื่องสิ่งแวดล้อม", crit:"เชิงคุณภาพ", i:3, l:4, plan:"จัดสร้างระบบบำบัดน้ำเสีย / ระบบบำบัดอากาศ", resp:"พิพิธ / ดำเนินการต่อเนื่อง", status:"ok" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"มีการเปิดตัวของโรงชุบขนาดเล็กจำนวนมาก ทำให้มีการตัดราคาจากคู่แข่ง", crit:"เชิงปริมาณ", i:3, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"ทิศทางราคาค่าน้ำมัน มีแนวโน้มสูงขึ้น ส่งผลให้ต้นทุนค่าขนส่งสูงขึ้น", crit:"เชิงปริมาณ", i:3, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"ภาครัฐมีมาตรการเรื่องการลดก๊าซเรือนกระจก", crit:"เชิงปริมาณ", i:3, l:4, plan:"ติดตั้งระบบ โซล่าเซล", resp:"พิพิธ / ดำเนินการต่อเนื่อง", status:"ok" },
+      { group:"บริบทขององค์กร (ประเด็นภายนอก)", risk:"วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้นที่ทำให้เกิดการเปลี่ยนแปลงสภาพภูมิอากาศขึ้น", crit:"เชิงปริมาณ", i:3, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (ลูกค้า)", risk:"ปฏิบัติตาม Supplier Quality Manual", crit:"เชิงคุณภาพ", i:4, l:3, plan:"จัดทำ Supplier Quality Manual", resp:"พิพิธ / Dec'25", status:"pending" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (ลูกค้า)", risk:"Cost Reduction", crit:"เชิงปริมาณ", i:4, l:3, plan:"ดำเนินกิจกรรม Kaizen ในองค์กร", resp:"พิพิธ / ดำเนินการต่อเนื่อง", status:"ok" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (ลูกค้า)", risk:"ไม่มีของเสียหลุดรอด", crit:"เชิงคุณภาพ", i:4, l:2, plan:"อบรมเรื่อง การสร้างจิตสำนึกด้านคุณภาพ ให้กับพนักงานในองค์กร", resp:"พิพิธ / Aug'25", status:"pending" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (เจ้าของ/นักลงทุน)", risk:"ของเสียในกระบวนการผลิตไม่เกินเป้าหมายที่กำหนด", crit:"เชิงคุณภาพ", i:4, l:2, plan:"อบรมเรื่อง การสร้างจิตสำนึกด้านคุณภาพ ให้กับพนักงานในองค์กร", resp:"พิพิธ / Aug'25", status:"pending" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (เจ้าของ/นักลงทุน)", risk:"ไม่มีข้อร้องเรียนจากลูกค้า", crit:"เชิงคุณภาพ", i:4, l:3, plan:"อบรมเรื่อง การสร้างจิตสำนึกด้านคุณภาพ ให้กับพนักงานในองค์กร", resp:"พิพิธ / May'25", status:"pending" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (เจ้าของ/นักลงทุน)", risk:"ยอดขายเพิ่มขึ้น", crit:"เชิงปริมาณ", i:4, l:3, plan:"จัดทำ Web ของบริษัทฯไว้ใน Google", resp:"พิพิธ / Aug'25", status:"pending" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (เจ้าของ/นักลงทุน)", risk:"ลดต้นทุนการผลิต", crit:"เชิงปริมาณ", i:4, l:3, plan:"ดำเนินกิจกรรม Kaizen ในองค์กร", resp:"พิพิธ / ดำเนินการต่อเนื่อง", status:"ok" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (บุคคลากร)", risk:"แรงจูงใจ สวัสดิการในการทำงานเพิ่มขึ้น", crit:"เชิงปริมาณ", i:2, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (บุคคลากร)", risk:"การทำงานมีความปลอดภัย 100%", crit:"เชิงปริมาณ", i:3, l:2, plan:"N/A", resp:"-", status:"na" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (ผู้ส่งมอบ/ผู้ขาย)", risk:"มีความเข้าใจเกี่ยวกับระบบการจัดการคุณภาพของ APK", crit:"เชิงคุณภาพ", i:2, l:3, plan:"N/A", resp:"-", status:"na" },
+      { group:"ผู้มีส่วนได้ส่วนเสีย (สังคม)", risk:"ไม่เกิดปัญหาเกี่ยวกับสิ่งแวดล้อม", crit:"เชิงคุณภาพ", i:4, l:4, plan:"จัดสร้างระบบบำบัดน้ำเสีย / ระบบบำบัดอากาศ", resp:"พิพิธ / ดำเนินการต่อเนื่อง", status:"ok" },
+    ]
+  };
+}
+
+function emptyTemplate(){
+  return { meta:{preparedBy:"",approvedBy:"",docDate:""}, context:{internal:[],external:[]}, stakeholders:[], risks:[] };
+}
+
+/* ============================================================
+   State
+   ============================================================ */
+let YEAR = null;
+let YEARS = [];
+let DATA = emptyTemplate();
+
+function levelBucket(level){
+  if(level<=4) return {key:"low", label:"ต่ำ", cls:"low"};
+  if(level<=8) return {key:"med", label:"ปานกลาง", cls:"med"};
+  if(level<=12) return {key:"high", label:"สูง", cls:"high"};
+  return {key:"crit", label:"วิกฤต", cls:"crit"};
+}
+
+function showSaving(){
+  const el = document.getElementById('saveIndicator');
+  el.textContent = 'กำลังบันทึก...'; el.className = 'save-indicator saving';
+}
+function showSaved(){
+  const el = document.getElementById('saveIndicator');
+  el.textContent = 'บันทึกแล้ว ✓'; el.className = 'save-indicator saved';
+  setTimeout(()=>{ if(el.textContent==='บันทึกแล้ว ✓'){ el.textContent=''; el.className='save-indicator'; } }, 2500);
+}
+
+/* ============================================================
+   Init / Year management
+   ============================================================ */
+async function init(){
+  await loadYearList();
+
+  if(YEARS.length === 0){
+    // completely empty DB -> seed 2025, then create 2026 as a copy
+    DATA = seed2025();
+    await dbPut(ROOT + '/2025', DATA);
+    YEARS = ['2025'];
+    await ensureYear('2026');
+  } else if(!YEARS.includes('2026')){
+    await ensureYear('2026');
+  }
+
+  YEAR = YEARS.includes('2026') ? '2026' : YEARS[YEARS.length-1];
+  await loadYear(YEAR);
+  document.getElementById('loadingScreen').style.display = 'none';
+}
+
+async function loadYearList(){
+  const res = await fetch(DB_BASE + ROOT + '.json?shallow=true').then(r=>r.json());
+  YEARS = res ? Object.keys(res).sort() : [];
+  renderYearSelector();
+}
+
+function renderYearSelector(){
+  const sel = document.getElementById('yearSelect');
+  sel.innerHTML = YEARS.map(y=>`<option value="${y}" ${y===YEAR?'selected':''}>ปี ${y}</option>`).join('');
+}
+
+async function ensureYear(targetYear){
+  if(YEARS.includes(targetYear)) return;
+  const sourceYear = YEARS.filter(y=>y < targetYear).sort().pop();
+  let base;
+  if(sourceYear){
+    base = await dbGet(ROOT + '/' + sourceYear);
+  } else {
+    base = seed2025();
+  }
+  const clone = JSON.parse(JSON.stringify(base || emptyTemplate()));
+  // reset risk statuses for fresh annual review, keep everything else as a draft starting point
+  (clone.risks || []).forEach(r => { r.status = ''; });
+  clone.meta = clone.meta || {};
+  clone.meta.docDate = '';
+  await dbPut(ROOT + '/' + targetYear, clone);
+  YEARS.push(targetYear); YEARS.sort();
+  renderYearSelector();
+}
+
+async function startNewYear(){
+  const nextYear = String(Number(YEAR) + 1);
+  if(YEARS.includes(nextYear)){
+    if(!confirm(`ปี ${nextYear} มีข้อมูลอยู่แล้ว ต้องการเปิดดูปีนี้เลยไหม?`)) return;
+    await switchYear(nextYear);
+    return;
+  }
+  if(!confirm(`สร้างปี ${nextYear} โดยคัดลอกบริบทองค์กร/ผู้มีส่วนได้ส่วนเสียจากปี ${YEAR} มาเป็นต้นแบบ (สถานะความเสี่ยงจะถูกรีเซ็ตให้ทบทวนใหม่) ยืนยันหรือไม่?`)) return;
+  showSaving();
+  await ensureYear(nextYear);
+  await switchYear(nextYear);
+  showSaved();
+}
+
+async function switchYear(y){
+  document.getElementById('loadingScreen').style.display = 'flex';
+  YEAR = y;
+  renderYearSelector();
+  await loadYear(y);
+  document.getElementById('loadingScreen').style.display = 'none';
+}
+
+async function loadYear(y){
+  const res = await dbGet(ROOT + '/' + y);
+  DATA = res || emptyTemplate();
+  DATA.meta = DATA.meta || {preparedBy:"",approvedBy:"",docDate:""};
+  DATA.context = DATA.context || {internal:[],external:[]};
+  DATA.stakeholders = DATA.stakeholders || [];
+  DATA.risks = DATA.risks || [];
+  document.getElementById('yearBadge').textContent = 'ปี ' + y;
+  renderAll();
+}
+
+function renderAll(){
+  document.getElementById('metaPreparedBy').value = DATA.meta.preparedBy || '';
+  document.getElementById('metaApprovedBy').value = DATA.meta.approvedBy || '';
+  document.getElementById('metaDocDate').value = DATA.meta.docDate || '';
+  document.getElementById('signPrepared').textContent = DATA.meta.preparedBy || '\u00A0';
+  document.getElementById('signApproved').textContent = DATA.meta.approvedBy || '\u00A0';
+  renderOverview();
+  renderContext();
+  renderStakeholders();
+  renderRiskTable();
+}
+
+async function saveMeta(){
+  DATA.meta.preparedBy = document.getElementById('metaPreparedBy').value;
+  DATA.meta.approvedBy = document.getElementById('metaApprovedBy').value;
+  DATA.meta.docDate = document.getElementById('metaDocDate').value;
+  showSaving();
+  await dbPut(ROOT + '/' + YEAR + '/meta', DATA.meta);
+  document.getElementById('signPrepared').textContent = DATA.meta.preparedBy || '\u00A0';
+  document.getElementById('signApproved').textContent = DATA.meta.approvedBy || '\u00A0';
+  showSaved();
+}
+
+/* ============================================================
+   Tab switching
+   ============================================================ */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+/* ============================================================
+   Overview
+   ============================================================ */
+function renderOverview(){
+  const risks = DATA.risks;
+  const total = risks.length;
+  const ok = risks.filter(r=>r.status==='ok').length;
+  const pending = risks.filter(r=>r.status==='pending' || !r.status).length;
+  const highOrCrit = risks.filter(r=> (r.i*r.l) > 8).length;
+
+  document.getElementById('statGrid').innerHTML = `
+    <div class="stat-card"><div class="n">${total}</div><div class="l">ประเด็นความเสี่ยง/โอกาสทั้งหมด</div></div>
+    <div class="stat-card ok"><div class="n">${ok}</div><div class="l">ดำเนินมาตรการแล้ว (OK)</div></div>
+    <div class="stat-card watch"><div class="n">${pending}</div><div class="l">มีแผนแต่รอดำเนินการ / ตรวจติดตาม</div></div>
+    <div class="stat-card high"><div class="n">${highOrCrit}</div><div class="l">ระดับความเสี่ยงสูง–วิกฤต (&gt;8)</div></div>
+  `;
+
+  const counts = {};
+  risks.forEach(r=>{ const key = r.i+"-"+r.l; counts[key] = (counts[key]||0)+1; });
+  function colorFor(level){
+    const b = levelBucket(level);
+    return {low:"var(--green)",med:"var(--amber)",high:"var(--orange)",crit:"var(--red)"}[b.cls];
+  }
+  let html = `<div class="axis-label"></div>`;
+  for(let i=1;i<=4;i++) html += `<div class="hdr">${i}</div>`;
+  for(let l=4;l>=1;l--){
+    html += `<div class="axis-label">${l}</div>`;
+    for(let i=1;i<=4;i++){
+      const lvl = i*l;
+      const c = counts[i+"-"+l] || 0;
+      html += `<div class="cell" style="background:${colorFor(lvl)}">${lvl}${c?`<small>${c} รายการ</small>`:""}</div>`;
+    }
+  }
+  document.getElementById('riskMatrix').innerHTML = html;
+
+  document.getElementById('matrixLegend').innerHTML = `
+    <div class="row"><span class="sw" style="background:var(--green)"></span> ต่ำ (1–4) — ยอมรับได้ ไม่ต้องมีแผนเพิ่มเติม</div>
+    <div class="row"><span class="sw" style="background:var(--amber)"></span> ปานกลาง (5–8) — ติดตามอย่างสม่ำเสมอ</div>
+    <div class="row"><span class="sw" style="background:var(--orange)"></span> สูง (9–12) — ต้องมีแผนควบคุม/ลดความเสี่ยง</div>
+    <div class="row"><span class="sw" style="background:var(--red)"></span> วิกฤต (13–16) — ต้องดำเนินการเร่งด่วน</div>
+  `;
+
+  const groups = {};
+  risks.forEach(r=>{ const g = r.group || '(ไม่ระบุกลุ่ม)'; groups[g] = (groups[g]||0)+1; });
+  document.getElementById('groupSummary').innerHTML = Object.entries(groups).map(([g,n])=>
+    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+      <span>${g}</span><span style="font-weight:600;color:var(--navy-800);">${n} ประเด็น</span>
+    </div>`).join('') || '<div style="color:var(--steel-500);">ยังไม่มีข้อมูล</div>';
+}
+
+/* ============================================================
+   Context (SWOT) — editable
+   ============================================================ */
+function esc(s){ return (s||'').replace(/"/g,'&quot;'); }
+
+function renderContext(){
+  renderContextBlock('internal', 'internalContext', {a:'s', aLabel:'จุดแข็ง (Strengths)', aCls:'s', b:'w', bLabel:'จุดอ่อน (Weaknesses)', bCls:'w'});
+  renderContextBlock('external', 'externalContext', {a:'o', aLabel:'โอกาส (Opportunities)', aCls:'o', b:'t', bLabel:'อุปสรรค (Threats)', bCls:'t'});
+}
+
+function renderContextBlock(kind, containerId, cfg){
+  const arr = DATA.context[kind];
+  const container = document.getElementById(containerId);
+  if(arr.length===0){ container.innerHTML = '<div style="color:var(--steel-500);font-size:13px;">ยังไม่มีหมวดหมู่ — กด "เพิ่มหมวดหมู่" ด้านบน</div>'; return; }
+  container.innerHTML = arr.map((row, idx)=>`
+    <div class="context-block">
+      <button class="del-btn" style="position:absolute;top:14px;right:16px;" onclick="removeContextCategory('${kind}',${idx})">ลบหมวดหมู่</button>
+      <div class="cat-inputs">
+        <input type="text" value="${esc(row.cat)}" placeholder="ชื่อหมวดหมู่ (ไทย)" style="max-width:260px;" onchange="updateContextField('${kind}',${idx},'cat',this.value)">
+        <input type="text" value="${esc(row.en)}" placeholder="Category (EN)" style="max-width:200px;color:var(--steel-500);" onchange="updateContextField('${kind}',${idx},'en',this.value)">
+      </div>
+      <div class="swot-grid">
+        ${contextColumn(kind, idx, cfg.a, cfg.aLabel, cfg.aCls, row[cfg.a])}
+        ${contextColumn(kind, idx, cfg.b, cfg.bLabel, cfg.bCls, row[cfg.b])}
+      </div>
+    </div>
+  `).join('');
+}
+
+function contextColumn(kind, idx, field, label, cls, items){
+  const rows = (items||[]).map((txt, i)=>`
+    <div class="swot-item">
+      <textarea onchange="updateContextItem('${kind}',${idx},'${field}',${i},this.value)">${esc(txt)}</textarea>
+      <button class="rm-mini" onclick="removeContextItem('${kind}',${idx},'${field}',${i})">×</button>
+    </div>`).join('');
+  return `<div class="swot-col ${cls}">
+    <h4>${label}</h4>
+    <div class="swot-list">
+      ${rows}
+      <button class="add-mini" onclick="addContextItem('${kind}',${idx},'${field}')">+ เพิ่มข้อ</button>
+    </div>
+  </div>`;
+}
+
+async function saveContext(kind){
+  showSaving();
+  await dbPut(ROOT + '/' + YEAR + '/context/' + kind, DATA.context[kind]);
+  showSaved();
+}
+function addContextCategory(kind){
+  DATA.context[kind].push(kind==='internal' ? {cat:'หมวดหมู่ใหม่',en:'',s:[],w:[]} : {cat:'หมวดหมู่ใหม่',en:'',o:[],t:[]});
+  renderContext(); saveContext(kind);
+}
+function removeContextCategory(kind, idx){
+  if(!confirm('ลบหมวดหมู่นี้ทั้งหมด?')) return;
+  DATA.context[kind].splice(idx,1);
+  renderContext(); saveContext(kind);
+}
+function updateContextField(kind, idx, field, val){
+  DATA.context[kind][idx][field] = val;
+  saveContext(kind);
+}
+function addContextItem(kind, idx, field){
+  DATA.context[kind][idx][field] = DATA.context[kind][idx][field] || [];
+  DATA.context[kind][idx][field].push('');
+  renderContext(); saveContext(kind);
+}
+function updateContextItem(kind, idx, field, i, val){
+  DATA.context[kind][idx][field][i] = val;
+  saveContext(kind);
+}
+function removeContextItem(kind, idx, field, i){
+  DATA.context[kind][idx][field].splice(i,1);
+  renderContext(); saveContext(kind);
+}
+
+/* ============================================================
+   Stakeholders — editable
+   ============================================================ */
+function renderStakeholders(){
+  const container = document.getElementById('stakeGrid');
+  if(DATA.stakeholders.length===0){ container.innerHTML = '<div style="color:var(--steel-500);font-size:13px;">ยังไม่มีข้อมูล — กด "เพิ่มกลุ่มผู้มีส่วนได้ส่วนเสีย" ด้านบน</div>'; return; }
+  container.innerHTML = DATA.stakeholders.map((s, idx)=>`
+    <div class="stake-card">
+      <div class="stake-head">
+        <input type="text" value="${esc(s.th)}" placeholder="ชื่อกลุ่ม (ไทย)" onchange="updateStakeField(${idx},'th',this.value)">
+        <input type="text" value="${esc(s.en)}" placeholder="Group (EN)" onchange="updateStakeField(${idx},'en',this.value)">
+        <button class="del-btn" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.4);white-space:nowrap;" onclick="removeStakeholder(${idx})">ลบกลุ่ม</button>
+      </div>
+      <div class="stake-body">
+        ${(s.items||[]).map((it,i)=>`
+          <div class="stake-row">
+            <div class="grid3">
+              <div><label>ความคาดหวัง</label><textarea onchange="updateStakeItem(${idx},${i},'expect',this.value)">${esc(it.expect)}</textarea></div>
+              <div><label>กิจกรรม</label><textarea onchange="updateStakeItem(${idx},${i},'activity',this.value)">${esc(it.activity)}</textarea></div>
+              <div><label>ผู้รับผิดชอบ</label><input type="text" value="${esc(it.resp)}" onchange="updateStakeItem(${idx},${i},'resp',this.value)"></div>
+              <button class="rm-mini" style="margin-top:16px;" onclick="removeStakeItem(${idx},${i})">×</button>
+            </div>
+          </div>
+        `).join('')}
+        <button class="add-mini" onclick="addStakeItem(${idx})">+ เพิ่มรายการ</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveStakeholders(){
+  showSaving();
+  await dbPut(ROOT + '/' + YEAR + '/stakeholders', DATA.stakeholders);
+  showSaved();
+}
+function addStakeholder(){
+  DATA.stakeholders.push({th:'กลุ่มใหม่', en:'', items:[]});
+  renderStakeholders(); saveStakeholders();
+}
+function removeStakeholder(idx){
+  if(!confirm('ลบกลุ่มผู้มีส่วนได้ส่วนเสียนี้ทั้งหมด?')) return;
+  DATA.stakeholders.splice(idx,1);
+  renderStakeholders(); saveStakeholders();
+}
+function updateStakeField(idx, field, val){
+  DATA.stakeholders[idx][field] = val;
+  saveStakeholders();
+}
+function addStakeItem(idx){
+  DATA.stakeholders[idx].items = DATA.stakeholders[idx].items || [];
+  DATA.stakeholders[idx].items.push({expect:'',activity:'',resp:''});
+  renderStakeholders(); saveStakeholders();
+}
+function updateStakeItem(idx, i, field, val){
+  DATA.stakeholders[idx].items[i][field] = val;
+  saveStakeholders();
+}
+function removeStakeItem(idx, i){
+  DATA.stakeholders[idx].items.splice(i,1);
+  renderStakeholders(); saveStakeholders();
+}
+
+/* ============================================================
+   Risk table — editable
+   ============================================================ */
+function renderRiskTable(){
+  const search = (document.getElementById('riskSearch').value||'').trim().toLowerCase();
+  const levelF = document.getElementById('riskLevelFilter').value;
+  const statusF = document.getElementById('riskStatusFilter').value;
+
+  const rowsWithIdx = DATA.risks.map((r,idx)=>({r,idx}));
+  const filtered = rowsWithIdx.filter(({r})=>{
+    if(search && !((r.risk||'').toLowerCase().includes(search) || (r.plan||'').toLowerCase().includes(search))) return false;
+    if(levelF && levelBucket(r.i*r.l).key !== levelF) return false;
+    if(statusF){
+      const st = r.status || (r.status==='' ? 'pending' : r.status);
+      if(statusF==='pending' && !(r.status==='pending' || !r.status)) return false;
+      if(statusF!=='pending' && r.status !== statusF) return false;
+    }
+    return true;
+  });
+
+  let lastGroup = null;
+  let rows = '';
+  filtered.forEach(({r, idx})=>{
+    if(r.group !== lastGroup){
+      rows += `<tr class="group-row"><td colspan="10">${esc(r.group)||'(ไม่ระบุกลุ่ม)'}</td></tr>`;
+      lastGroup = r.group;
+    }
+    const level = r.i * r.l;
+    const b = levelBucket(level);
+    rows += `<tr>
+      <td><input type="text" value="${esc(r.group)}" onchange="updateRisk(${idx},'group',this.value)"></td>
+      <td><textarea onchange="updateRisk(${idx},'risk',this.value)">${esc(r.risk)}</textarea></td>
+      <td><input type="text" value="${esc(r.crit)}" list="critList" onchange="updateRisk(${idx},'crit',this.value)"></td>
+      <td><select onchange="updateRiskNum(${idx},'i',this.value)">${[1,2,3,4].map(n=>`<option value="${n}" ${n==r.i?'selected':''}>${n}</option>`).join('')}</select></td>
+      <td><select onchange="updateRiskNum(${idx},'l',this.value)">${[1,2,3,4].map(n=>`<option value="${n}" ${n==r.l?'selected':''}>${n}</option>`).join('')}</select></td>
+      <td><span class="badge ${b.cls}">${level}</span><br><span style="font-size:10.5px;color:var(--steel-500);">${b.label}</span></td>
+      <td><textarea onchange="updateRisk(${idx},'plan',this.value)">${esc(r.plan)}</textarea></td>
+      <td><input type="text" value="${esc(r.resp)}" onchange="updateRisk(${idx},'resp',this.value)"></td>
+      <td>
+        <select onchange="updateRisk(${idx},'status',this.value)">
+          <option value="" ${!r.status?'selected':''}>รอดำเนินการ</option>
+          <option value="pending" ${r.status==='pending'?'selected':''}>รอดำเนินการ</option>
+          <option value="ok" ${r.status==='ok'?'selected':''}>OK</option>
+          <option value="na" ${r.status==='na'?'selected':''}>N/A</option>
+        </select>
+      </td>
+      <td><button class="rm-mini" onclick="removeRisk(${idx})">×</button></td>
+    </tr>`;
+  });
+  document.getElementById('riskTableBody').innerHTML = rows || `<tr><td colspan="10" style="text-align:center;color:var(--steel-500);padding:24px;">ไม่พบข้อมูลที่ตรงกับเงื่อนไข</td></tr>`;
+
+  if(!document.getElementById('critList')){
+    const dl = document.createElement('datalist');
+    dl.id = 'critList';
+    dl.innerHTML = '<option value="เชิงปริมาณ"><option value="เชิงคุณภาพ"><option value="เชิงคุณภาพ/ปริมาณ">';
+    document.body.appendChild(dl);
+  }
+}
+
+async function saveRisks(){
+  showSaving();
+  await dbPut(ROOT + '/' + YEAR + '/risks', DATA.risks);
+  showSaved();
+  renderOverview();
+}
+function addRisk(){
+  DATA.risks.push({group:'', risk:'', crit:'เชิงปริมาณ', i:1, l:1, plan:'', resp:'', status:''});
+  renderRiskTable(); saveRisks();
+}
+function removeRisk(idx){
+  if(!confirm('ลบประเด็นความเสี่ยงนี้?')) return;
+  DATA.risks.splice(idx,1);
+  renderRiskTable(); saveRisks();
+}
+function updateRisk(idx, field, val){
+  DATA.risks[idx][field] = val;
+  saveRisks();
+}
+function updateRiskNum(idx, field, val){
+  DATA.risks[idx][field] = Number(val);
+  renderRiskTable(); saveRisks();
+}
+
+['riskSearch','riskLevelFilter','riskStatusFilter'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderRiskTable);
+  document.getElementById(id).addEventListener('change', renderRiskTable);
+});
+
+init();
+</script>
+</body>
+</html>
