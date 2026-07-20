@@ -327,6 +327,9 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <h2>บริบทขององค์กร</h2>
       <span class="en">Context of the Organization</span>
     </div>
+    <div style="font-size:12px;color:var(--steel-500);margin-bottom:14px;">
+      <span style="color:#dc2626;font-weight:600;">■ ข้อความสีแดง</span> = ข้อมูลใหม่จากการวิเคราะห์สถานการณ์ปัจจุบัน ยังไม่ได้ตรวจทาน — แก้ไข/ยืนยันข้อความเมื่อไหร่จะเปลี่ยนเป็นสีปกติเอง
+    </div>
 
     <h3 style="color:var(--navy-800);font-size:15px;margin-bottom:8px;">🏠 ประเด็นภายใน (Internal Issues) — จุดแข็ง / จุดอ่อน</h3>
     <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('internal')">+ เพิ่มหมวดหมู่ภายใน</button></div>
@@ -391,6 +394,9 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <h2>มาตรการจัดการความเสี่ยงและโอกาส</h2>
       <span class="en">Risk &amp; Opportunity Management</span>
       <span class="doc-code">APK-FR-MR-011</span>
+    </div>
+    <div style="font-size:12px;color:var(--steel-500);margin-bottom:10px;">
+      <span style="color:#dc2626;font-weight:600;">■ ข้อความสีแดง</span> = ประเด็นใหม่จากการวิเคราะห์สถานการณ์ปัจจุบัน ยังไม่ได้ตรวจทาน — แก้ไขข้อความเมื่อไหร่จะเปลี่ยนเป็นสีปกติเอง
     </div>
 
     <div class="filter-bar">
@@ -552,7 +558,7 @@ function logout(){
    ============================================================ */
 function seed2025(){
   return {
-    meta: { preparedBy:"พิพิธ ดิษฐราชา", approvedBy:"", docDate:"2025-01-20", codeContext:"APK-FR-MR-009", codeStakeholders:"APK-FR-MR-010", codeRisk:"APK-FR-MR-011" },
+    meta: { preparedBy:"พิพิธ ดิษฐราชา", approvedBy:"", docDate:"2025-01-20", codeContext:"APK-FR-MR-009", codeStakeholders:"APK-FR-MR-010", codeRisk:"APK-FR-MR-011", newItems:[] },
     context: {
       internal: [
         { cat:"บุคคล", en:"Personal", s:["ค่าแรงสูงกว่าค่าแรงขั้นต่ำที่กฎหมายกำหนด","มีสวัสดิการพนักงาน (ชุดฟอร์ม, โบนัส)","มีที่พักอาศัยภายในเขตโรงงาน"], w:[] },
@@ -621,7 +627,7 @@ function seed2025(){
 }
 
 function emptyTemplate(){
-  return { meta:{preparedBy:"",approvedBy:"",docDate:"",codeContext:"APK-FR-MR-009",codeStakeholders:"APK-FR-MR-010",codeRisk:"APK-FR-MR-011"}, context:{internal:[],external:[]}, stakeholders:[], risks:[] };
+  return { meta:{preparedBy:"",approvedBy:"",docDate:"",codeContext:"APK-FR-MR-009",codeStakeholders:"APK-FR-MR-010",codeRisk:"APK-FR-MR-011",newItems:[]}, context:{internal:[],external:[]}, stakeholders:[], risks:[] };
 }
 
 /* ============================================================
@@ -731,11 +737,12 @@ async function loadYear(y){
   const res = await dbGet(ROOT + '/' + y);
   DATA = res || emptyTemplate();
   DATA.meta = DATA.meta || {preparedBy:"",approvedBy:"",docDate:""};
+  DATA.meta.newItems = DATA.meta.newItems || [];
   DATA.context = DATA.context || {internal:[],external:[]};
   DATA.stakeholders = DATA.stakeholders || [];
   DATA.risks = DATA.risks || [];
   document.getElementById('yearBadge').textContent = 'ปี ' + y;
-  if(y === '2026'){ await applyMarket2026Update(); await applyDedup2026(); }
+  if(y === '2026'){ await applyMarket2026Update(); await applyDedup2026(); await applyDedupCompete2026(); }
   renderAll();
   loadPrintLog();
 }
@@ -747,11 +754,14 @@ async function loadYear(y){
    guarded by a flag so it never duplicates data on later visits.
    ============================================================ */
 async function applyMarket2026Update(){
-  const already = await dbGet(ROOT + '/2026/_migrations/marketUpdate2026');
+  const already = await dbGet(ROOT + '/2026/_migrations/marketUpdate2026v2');
   if(already) return;
 
+  DATA.meta.newItems = DATA.meta.newItems || [];
+  function flagNew(text){ if(!DATA.meta.newItems.includes(text)) DATA.meta.newItems.push(text); }
   function ensureItem(arr, text){
     if(!arr.some(t => t === text)) arr.push(text);
+    flagNew(text);
   }
 
   // -- External context updates --
@@ -806,13 +816,15 @@ async function applyMarket2026Update(){
   DATA.risks = DATA.risks || [];
   newRisks.forEach(nr=>{
     if(!DATA.risks.some(r => r.risk === nr.risk)) DATA.risks.push(nr);
+    flagNew(nr.risk);
   });
 
   // Persist, then set the flag so this migration never re-applies or duplicates
   await dbPut(ROOT + '/2026/context/internal', DATA.context.internal);
   await dbPut(ROOT + '/2026/context/external', DATA.context.external);
   await dbPut(ROOT + '/2026/risks', DATA.risks);
-  await dbPut(ROOT + '/2026/_migrations/marketUpdate2026', true);
+  await dbPut(ROOT + '/2026/meta', DATA.meta);
+  await dbPut(ROOT + '/2026/_migrations/marketUpdate2026v2', true);
 }
 
 /* ============================================================
@@ -823,8 +835,15 @@ async function applyMarket2026Update(){
    the risk register.
    ============================================================ */
 async function applyDedup2026(){
-  const already = await dbGet(ROOT + '/2026/_migrations/dedup2026fix');
+  const already = await dbGet(ROOT + '/2026/_migrations/dedup2026fixV2');
   if(already) return;
+
+  DATA.meta.newItems = DATA.meta.newItems || [];
+  function unflag(text){
+    const pos = DATA.meta.newItems.indexOf(text);
+    if(pos !== -1) DATA.meta.newItems.splice(pos,1);
+  }
+  function flagNew(text){ if(!DATA.meta.newItems.includes(text)) DATA.meta.newItems.push(text); }
 
   const ext = DATA.context.external || [];
   const findCat = name => ext.find(c => c.cat === name);
@@ -835,7 +854,10 @@ async function applyDedup2026(){
       t !== 'กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูงขึ้น' &&
       t !== 'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569 แต่ยังเป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง'
     );
-    legal.t.push('ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569');
+    unflag('ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569 แต่ยังเป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง');
+    const merged = 'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569';
+    legal.t.push(merged);
+    flagNew(merged);
   }
 
   const econ = findCat('เศรษฐกิจแวดล้อม');
@@ -844,23 +866,74 @@ async function applyDedup2026(){
       t !== 'วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้น' &&
       t !== 'ราคาสังกะสีตลาดโลกพุ่งสูงสุดในรอบหลายปี (แตะ 3,430 ดอลลาร์/ตัน เม.ย. 2569) จากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ'
     );
-    econ.t.push('วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ');
+    unflag('ราคาสังกะสีตลาดโลกพุ่งสูงสุดในรอบหลายปี (แตะ 3,430 ดอลลาร์/ตัน เม.ย. 2569) จากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ');
+    const merged = 'วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ';
+    econ.t.push(merged);
+    flagNew(merged);
   }
 
   // Remove the now-superseded risk register rows, re-add one clean merged row each
-  const staleRiskTexts = new Set([
+  const staleRiskTexts = [
     'กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูง',
     'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวในระดับสูง (380 บาท/วัน) เป็นภาระต้นทุนแรงงานต่อเนื่อง',
     'วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้นที่ทำให้เกิดการเปลี่ยนแปลงสภาพภูมิอากาศขึ้น',
     'ราคาสังกะสีตลาดโลกปรับตัวสูงขึ้นมากจากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ทำให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้น'
-  ]);
-  DATA.risks = (DATA.risks||[]).filter(r => !staleRiskTexts.has(r.risk));
-  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569', crit:'เชิงปริมาณ', i:2, l:2, plan:'N/A', resp:'-', status:'na' });
-  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:'วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ', crit:'เชิงปริมาณ', i:3, l:4, plan:'ทบทวนโครงสร้างราคาขาย/เจรจาสัญญาซื้อเคมีภัณฑ์ระยะยาวกับซัพพลายเออร์ เพื่อลดผลกระทบจากความผันผวนราคาวัตถุดิบ', resp:'พิพิธ / ดำเนินการต่อเนื่อง', status:'pending' });
+  ];
+  staleRiskTexts.forEach(unflag);
+  const staleSet = new Set(staleRiskTexts);
+  DATA.risks = (DATA.risks||[]).filter(r => !staleSet.has(r.risk));
+
+  const mergedRisk1 = 'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569';
+  const mergedRisk2 = 'วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ';
+  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:mergedRisk1, crit:'เชิงปริมาณ', i:2, l:2, plan:'N/A', resp:'-', status:'na' });
+  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:mergedRisk2, crit:'เชิงปริมาณ', i:3, l:4, plan:'ทบทวนโครงสร้างราคาขาย/เจรจาสัญญาซื้อเคมีภัณฑ์ระยะยาวกับซัพพลายเออร์ เพื่อลดผลกระทบจากความผันผวนราคาวัตถุดิบ', resp:'พิพิธ / ดำเนินการต่อเนื่อง', status:'pending' });
+  flagNew(mergedRisk1);
+  flagNew(mergedRisk2);
 
   await dbPut(ROOT + '/2026/context/external', DATA.context.external);
   await dbPut(ROOT + '/2026/risks', DATA.risks);
-  await dbPut(ROOT + '/2026/_migrations/dedup2026fix', true);
+  await dbPut(ROOT + '/2026/meta', DATA.meta);
+  await dbPut(ROOT + '/2026/_migrations/dedup2026fixV2', true);
+}
+
+/* ============================================================
+   One-time cleanup — merge the "competitors increasing" duplicate
+   pair (คู่แข่ง/สภาพการแข่งขัน threats) missed in the earlier pass.
+   ============================================================ */
+async function applyDedupCompete2026(){
+  const already = await dbGet(ROOT + '/2026/_migrations/dedupCompete2026');
+  if(already) return;
+
+  DATA.meta.newItems = DATA.meta.newItems || [];
+  function unflag(text){
+    const pos = DATA.meta.newItems.indexOf(text);
+    if(pos !== -1) DATA.meta.newItems.splice(pos,1);
+  }
+  function flagNew(text){ if(!DATA.meta.newItems.includes(text)) DATA.meta.newItems.push(text); }
+
+  const OLD_TEXT = 'มีการเปิดตัวของโรงชุบขนาดเล็กเป็นจำนวนมาก ทำให้มีการตัดราคาจากคู่แข่ง';
+  const OLD_TEXT_ALT = 'มีการเปิดตัวของโรงชุบขนาดเล็กจำนวนมาก ทำให้มีการตัดราคาจากคู่แข่ง';
+  const NEW_TEXT = 'มีผู้ประกอบการโรงชุบซิงค์ในพื้นที่สมุทรปราการ/บางพลี/บางเสาธงเพิ่มขึ้นต่อเนื่อง ให้บริการใกล้เคียงกัน (ชุบซิงค์ครบสี ทั้งไลน์กลิ้ง/แขวน) เพิ่มการแข่งขันด้านราคา';
+
+  const compete = (DATA.context.external || []).find(c => c.cat === 'คู่แข่ง/สภาพการแข่งขัน');
+  if(compete && compete.t){
+    compete.t = compete.t.filter(t => t !== OLD_TEXT && t !== OLD_TEXT_ALT);
+    if(!compete.t.includes(NEW_TEXT)) compete.t.push(NEW_TEXT);
+  }
+  unflag(NEW_TEXT); // already-reviewed context wording, no need to flag context side
+
+  // Risk register: keep the row with the fuller evaluation (the newer one), drop the old
+  const oldRow = (DATA.risks||[]).find(r => r.risk === OLD_TEXT || r.risk === OLD_TEXT_ALT);
+  const newRow = (DATA.risks||[]).find(r => r.risk === NEW_TEXT);
+  if(oldRow && newRow){
+    DATA.risks = DATA.risks.filter(r => r !== oldRow);
+  }
+  flagNew(NEW_TEXT);
+
+  await dbPut(ROOT + '/2026/context/external', DATA.context.external);
+  await dbPut(ROOT + '/2026/risks', DATA.risks);
+  await dbPut(ROOT + '/2026/meta', DATA.meta);
+  await dbPut(ROOT + '/2026/_migrations/dedupCompete2026', true);
 }
 
 /* ============================================================
@@ -1176,10 +1249,14 @@ function renderContextBlock(kind, containerId, cfg){
   `).join('');
 }
 
+function isFlaggedNew(text){
+  return (DATA.meta.newItems || []).includes(text);
+}
+
 function contextColumn(kind, idx, field, label, cls, items){
   const rows = (items||[]).map((txt, i)=>`
     <div class="swot-item">
-      <textarea onchange="updateContextItem('${kind}',${idx},'${field}',${i},this.value)">${esc(txt)}</textarea>
+      <textarea style="${isFlaggedNew(txt)?'color:#dc2626;font-weight:600;':''}" onchange="updateContextItem('${kind}',${idx},'${field}',${i},this.value)">${esc(txt)}</textarea>
       <button class="rm-mini" onclick="removeContextItem('${kind}',${idx},'${field}',${i})">×</button>
     </div>`).join('');
   return `<div class="swot-col ${cls}">
@@ -1215,12 +1292,22 @@ function addContextItem(kind, idx, field){
   renderContext(); saveContext(kind);
 }
 function updateContextItem(kind, idx, field, i, val){
+  const oldText = DATA.context[kind][idx][field][i];
   DATA.context[kind][idx][field][i] = val;
+  unflagNew(oldText);
   saveContext(kind);
 }
 function removeContextItem(kind, idx, field, i){
   DATA.context[kind][idx][field].splice(i,1);
   renderContext(); saveContext(kind);
+}
+function unflagNew(text){
+  const list = DATA.meta.newItems || [];
+  const pos = list.indexOf(text);
+  if(pos !== -1){
+    list.splice(pos,1);
+    dbPut(ROOT + '/' + YEAR + '/meta', DATA.meta);
+  }
 }
 
 /* ============================================================
@@ -1297,11 +1384,11 @@ function removeStakeItem(idx, i){
 function collectSourceIssues(){
   const issues = [];
   (DATA.context.internal||[]).forEach(cat=>{
-    // Strengths are not risk/opportunity items in the original forms — only weaknesses are pulled in
+    // Strengths are not risk items — only weaknesses are pulled in
     (cat.w||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายใน)', risk:text}); });
   });
   (DATA.context.external||[]).forEach(cat=>{
-    (cat.o||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:text}); });
+    // Opportunities are not risk items either — only threats are pulled in
     (cat.t||[]).forEach(text=>{ if(text) issues.push({group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:text}); });
   });
   (DATA.stakeholders||[]).forEach(s=>{
@@ -1396,7 +1483,7 @@ function renderRiskTable(){
     const b = levelBucket(level);
     rows += `<tr>
       <td><input type="text" value="${esc(r.group)}" onchange="updateRisk(${idx},'group',this.value)"></td>
-      <td><textarea onchange="updateRisk(${idx},'risk',this.value)">${esc(r.risk)}</textarea></td>
+      <td><textarea style="${isFlaggedNew(r.risk)?'color:#dc2626;font-weight:600;':''}" onchange="updateRisk(${idx},'risk',this.value)">${esc(r.risk)}</textarea></td>
       <td>
         <select onchange="updateRisk(${idx},'crit',this.value)">
           <option value="" ${!r.crit?'selected':''}>— เลือก —</option>
@@ -1439,6 +1526,7 @@ function removeRisk(idx){
   renderRiskTable(); saveRisks();
 }
 function updateRisk(idx, field, val){
+  if(field === 'risk') unflagNew(DATA.risks[idx].risk);
   DATA.risks[idx][field] = val;
   saveRisks();
 }
