@@ -735,7 +735,7 @@ async function loadYear(y){
   DATA.stakeholders = DATA.stakeholders || [];
   DATA.risks = DATA.risks || [];
   document.getElementById('yearBadge').textContent = 'ปี ' + y;
-  if(y === '2026'){ await applyMarket2026Update(); }
+  if(y === '2026'){ await applyMarket2026Update(); await applyDedup2026(); }
   renderAll();
   loadPrintLog();
 }
@@ -813,6 +813,54 @@ async function applyMarket2026Update(){
   await dbPut(ROOT + '/2026/context/external', DATA.context.external);
   await dbPut(ROOT + '/2026/risks', DATA.risks);
   await dbPut(ROOT + '/2026/_migrations/marketUpdate2026', true);
+}
+
+/* ============================================================
+   One-time cleanup — the market update above accidentally added
+   near-duplicate items (wage law, raw material/zinc) alongside
+   the pre-existing ones instead of merging with them. This merges
+   each pair into a single up-to-date item, in both context and
+   the risk register.
+   ============================================================ */
+async function applyDedup2026(){
+  const already = await dbGet(ROOT + '/2026/_migrations/dedup2026fix');
+  if(already) return;
+
+  const ext = DATA.context.external || [];
+  const findCat = name => ext.find(c => c.cat === name);
+
+  const legal = findCat('กฎหมาย');
+  if(legal && legal.t){
+    legal.t = legal.t.filter(t =>
+      t !== 'กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูงขึ้น' &&
+      t !== 'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569 แต่ยังเป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง'
+    );
+    legal.t.push('ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569');
+  }
+
+  const econ = findCat('เศรษฐกิจแวดล้อม');
+  if(econ && econ.t){
+    econ.t = econ.t.filter(t =>
+      t !== 'วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้น' &&
+      t !== 'ราคาสังกะสีตลาดโลกพุ่งสูงสุดในรอบหลายปี (แตะ 3,430 ดอลลาร์/ตัน เม.ย. 2569) จากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ'
+    );
+    econ.t.push('วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ');
+  }
+
+  // Remove the now-superseded risk register rows, re-add one clean merged row each
+  const staleRiskTexts = new Set([
+    'กฏหมายค่าแรงขั้นต่ำ มีอัตราสูงขึ้นทำให้ต้นทุนการผลิตสูง',
+    'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวในระดับสูง (380 บาท/วัน) เป็นภาระต้นทุนแรงงานต่อเนื่อง',
+    'วัตถุดิบหลักในการผลิตมีแนวโน้มราคาสูงขึ้นที่ทำให้เกิดการเปลี่ยนแปลงสภาพภูมิอากาศขึ้น',
+    'ราคาสังกะสีตลาดโลกปรับตัวสูงขึ้นมากจากภาวะขาดแคลนและค่าเงินบาทอ่อนค่า ทำให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้น'
+  ]);
+  DATA.risks = (DATA.risks||[]).filter(r => !staleRiskTexts.has(r.risk));
+  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:'ค่าแรงขั้นต่ำพื้นที่สมุทรปราการทรงตัวที่ 380 บาท/วัน (มีผลตั้งแต่ 1 ก.ค. 2568) เป็นภาระต้นทุนแรงงานระดับสูงต่อเนื่อง ยังไม่มีมติปรับขึ้นเพิ่มในปี 2569', crit:'เชิงปริมาณ', i:2, l:2, plan:'N/A', resp:'-', status:'na' });
+  DATA.risks.push({ group:'บริบทขององค์กร (ประเด็นภายนอก)', risk:'วัตถุดิบหลักในการผลิต โดยเฉพาะสังกะสี มีแนวโน้มราคาสูงขึ้นมากจากภาวะขาดแคลนตลาดโลกและค่าเงินบาทอ่อนค่า ส่งผลให้ต้นทุนเคมีภัณฑ์ชุบซิงค์สูงขึ้นอย่างมีนัยสำคัญ', crit:'เชิงปริมาณ', i:3, l:4, plan:'ทบทวนโครงสร้างราคาขาย/เจรจาสัญญาซื้อเคมีภัณฑ์ระยะยาวกับซัพพลายเออร์ เพื่อลดผลกระทบจากความผันผวนราคาวัตถุดิบ', resp:'พิพิธ / ดำเนินการต่อเนื่อง', status:'pending' });
+
+  await dbPut(ROOT + '/2026/context/external', DATA.context.external);
+  await dbPut(ROOT + '/2026/risks', DATA.risks);
+  await dbPut(ROOT + '/2026/_migrations/dedup2026fix', true);
 }
 
 /* ============================================================
