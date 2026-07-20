@@ -156,6 +156,15 @@
       ]
     },
     {
+      key: 'qms_context_risk', label: 'QMS บริบทองค์กร/ความเสี่ยง', group: 'คุณภาพ & ISO',
+      tabs: [
+        { id: 'overview',     label: 'ภาพรวม' },
+        { id: 'context',      label: 'บริบทขององค์กร' },
+        { id: 'stakeholders', label: 'ผู้มีส่วนได้ส่วนเสีย' },
+        { id: 'risk',         label: 'ความเสี่ยงและโอกาส' }
+      ]
+    },
+    {
       key: 'production_order', label: 'ใบสั่งผลิต', group: 'สายการผลิต',
       tabs: [
         { id: 'orders', label: 'รายการใบสั่งผลิต' },

@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="fb-auth.js"></script>
+<script src="auth-central.js"></script>
 <style>
 :root{
   --navy-950:#0a1929; --navy-900:#0f2942; --navy-800:#15395c; --navy-700:#1e3a5f;
@@ -143,6 +144,34 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 
 .loading-screen{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:200;font-size:14px;color:var(--steel-500);}
 
+.login-screen{
+  position:fixed;inset:0;background:linear-gradient(135deg,var(--navy-950),var(--navy-700));
+  display:flex;align-items:center;justify-content:center;z-index:300;padding:20px;
+}
+.login-card{
+  background:#fff;border-radius:16px;padding:32px 30px;max-width:340px;width:100%;
+  box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;
+}
+.login-card .brand-mark{
+  width:56px;height:56px;border-radius:12px;background:var(--navy-900);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;margin:0 auto 14px;font-size:16px;
+}
+.login-card h2{font-size:16px;color:var(--navy-900);margin-bottom:4px;}
+.login-card p{font-size:12px;color:var(--steel-500);margin-bottom:20px;}
+.login-card input{
+  font-family:inherit;font-size:20px;letter-spacing:6px;text-align:center;padding:12px;
+  border:1px solid var(--border);border-radius:10px;width:100%;margin-bottom:10px;
+}
+.login-card button{
+  width:100%;padding:11px;border:none;border-radius:10px;background:var(--navy-900);color:#fff;
+  font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+}
+.login-card button:hover{background:var(--navy-700);}
+.login-card button:disabled{opacity:.6;cursor:default;}
+.login-error{color:var(--red);font-size:12px;margin-top:10px;min-height:16px;}
+.user-badge{font-size:11.5px;color:var(--steel-300);}
+#appRoot{display:none;}
+
 .print-watermark,.print-info-bar{display:none;}
 @media print{
   header.top .year-controls, nav.tabs, .toolbar, .filter-bar, .del-btn, .rm-mini, .add-mini, .add-block-btn{display:none!important;}
@@ -171,6 +200,18 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 <div class="print-watermark" id="printWatermark"><div class="print-watermark-inner" id="printWatermarkInner"></div></div>
 <div class="print-info-bar" id="printInfoText"></div>
 
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="brand-mark">APK</div>
+    <h2>QMS บริบทองค์กร &amp; ความเสี่ยง</h2>
+    <p>กรุณาใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="8" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <button id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="appRoot">
 <header class="top">
   <div class="top-inner">
     <div class="brand">
@@ -185,6 +226,8 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
       <button class="btn btn-gold" onclick="startNewYear()">+ เริ่มปีใหม่</button>
       <button class="btn btn-outline" onclick="printDocument()">🖨️ พิมพ์เอกสาร</button>
       <span class="save-indicator" id="saveIndicator"></span>
+      <span class="user-badge" id="userBadge"></span>
+      <button class="btn btn-outline" onclick="logout()">ออกจากระบบ</button>
     </div>
   </div>
   <nav class="tabs">
@@ -318,6 +361,7 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
   </footer>
 
 </main>
+</div><!-- /#appRoot -->
 
 <script>
 /* ============================================================
@@ -335,6 +379,87 @@ function dbPut(path, value){
 function dbPost(path, value){
   return fetch(DB_BASE + path + '.json', { method:'POST', body: JSON.stringify(value) });
 }
+
+/* ============================================================
+   Central Auth (PIN login) — matches auth-central.js pattern used
+   across all APK systems. Session kept in sessionStorage only.
+   ============================================================ */
+const SYSTEM_KEY = 'qms_context_risk';
+const SESSION_KEY = 'qms_ctxrisk_session';
+
+function getSession(){
+  try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); }catch(e){ return null; }
+}
+function setSession(s){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
+
+function roleLabel(role){
+  return {admin:'แอดมิน', operator:'ผู้ปฏิบัติงาน', viewer:'ดูอย่างเดียว'}[role] || role;
+}
+
+function applyTabAccess(tabs){
+  if(!tabs) return; // null = เห็นทุกแท็บ
+  const buttons = document.querySelectorAll('nav.tabs button');
+  buttons.forEach(btn=>{
+    if(tabs.indexOf(btn.dataset.view) === -1) btn.style.display = 'none';
+  });
+  const activeBtn = document.querySelector('nav.tabs button.active');
+  if(activeBtn && activeBtn.style.display === 'none'){
+    const firstVisible = Array.from(buttons).find(b=>b.style.display !== 'none');
+    if(firstVisible) firstVisible.click();
+  }
+}
+
+function showApp(session){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'block';
+  document.getElementById('userBadge').textContent =
+    'ผู้ใช้: ' + (session.user.name || session.user.pin) + ' (' + roleLabel(session.role) + ')';
+  applyTabAccess(session.tabs);
+  init();
+}
+
+async function doLogin(){
+  const pinEl = document.getElementById('loginPin');
+  const errEl = document.getElementById('loginError');
+  const btnEl = document.getElementById('loginBtn');
+  const pin = pinEl.value.trim();
+  errEl.textContent = '';
+  if(!pin){ errEl.textContent = 'กรุณาใส่ PIN'; return; }
+
+  btnEl.disabled = true; btnEl.textContent = 'กำลังตรวจสอบ...';
+  const result = await CentralAuth.login(pin, SYSTEM_KEY);
+  btnEl.disabled = false; btnEl.textContent = 'เข้าสู่ระบบ';
+
+  if(!result.ok){
+    const msgs = {
+      invalid_pin: 'PIN ไม่ถูกต้อง',
+      no_access: 'PIN นี้ไม่มีสิทธิ์เข้าระบบนี้ — ให้ผู้ดูแลตั้งสิทธิ์ที่ auth_admin.html',
+      connection_error: 'เชื่อมต่อ Firebase ไม่ได้ ลองใหม่อีกครั้ง'
+    };
+    errEl.textContent = msgs[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+    pinEl.value = '';
+    return;
+  }
+  const session = { role: result.role, tabs: result.tabs, user: result.user };
+  setSession(session);
+  showApp(session);
+}
+
+function logout(){
+  clearSession();
+  location.reload();
+}
+
+(function bootAuth(){
+  const session = getSession();
+  if(session){
+    showApp(session);
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+  }
+})();
+
 
 /* ============================================================
    Seed data (transcribed from 2025 Excel forms) — used only if
@@ -540,15 +665,17 @@ async function loadPrintLog(){
 }
 
 async function printDocument(){
-  const name = prompt('กรุณาระบุชื่อผู้พิมพ์เอกสาร (ระบบจะบันทึกชื่อและเวลาไว้เป็นประวัติ):');
-  if(!name || !name.trim()){ alert('ต้องระบุชื่อผู้พิมพ์ก่อนจึงจะพิมพ์เอกสารได้'); return; }
+  const session = getSession();
+  const name = session && session.user && session.user.name ? session.user.name : (session && session.user ? session.user.pin : '');
+  if(!name){ alert('ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่'); return; }
 
   const now = new Date();
   const displayDate = now.toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
 
   showSaving();
   await dbPost(ROOT + '/' + YEAR + '/printLog', {
-    name: name.trim(),
+    name: name,
+    pin: session.user.pin,
     printedAt: now.toISOString(),
     printedAtDisplay: displayDate,
     year: YEAR
@@ -557,7 +684,7 @@ async function printDocument(){
   loadPrintLog();
 
   document.getElementById('printWatermarkInner').innerHTML = buildWatermarkTiles(
-    `ไม่ควบคุม (Uncontrolled Copy) · ผู้พิมพ์: ${name.trim()} · ${displayDate}`
+    `ไม่ควบคุม (Uncontrolled Copy) · ผู้พิมพ์: ${name} · ${displayDate}`
   );
   document.getElementById('printInfoText').textContent =
     `เอกสาร QMS บริบทองค์กร/ผู้มีส่วนได้ส่วนเสีย/ความเสี่ยงฯ ปี ${YEAR} — เอกสารอิเล็กทรอนิกส์คือฉบับควบคุม`;
@@ -885,8 +1012,6 @@ function updateRiskNum(idx, field, val){
   document.getElementById(id).addEventListener('input', renderRiskTable);
   document.getElementById(id).addEventListener('change', renderRiskTable);
 });
-
-init();
 </script>
 </body>
 </html>
