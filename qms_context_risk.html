@@ -173,26 +173,45 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 #appRoot{display:none;}
 
 .print-watermark,.print-info-bar{display:none;}
+.print-only{display:none;}
 .print-header{display:none;}
+.doc-footer-bar{display:none;}
 @media print{
   .print-header{
-    display:flex;align-items:stretch;border:1.5px solid #1a1a1a;margin-bottom:16px;
+    display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;position:relative;
   }
-  .ph-logo{width:110px;display:flex;align-items:center;justify-content:center;border-right:1.5px solid #1a1a1a;padding:8px;flex-shrink:0;}
-  .ph-logo img{max-width:100%;max-height:56px;object-fit:contain;}
-  .ph-title{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1.5px solid #1a1a1a;padding:8px 14px;text-align:center;}
-  .ph-title .th{font-size:17px;font-weight:700;color:#000;}
-  .ph-title .en{font-size:11px;color:#333;margin-top:2px;}
-  .ph-code{min-width:190px;flex-shrink:0;}
-  .ph-code table{border-collapse:collapse;width:100%;height:100%;font-size:10.5px;}
-  .ph-code th,.ph-code td{border:1px solid #1a1a1a;padding:5px 8px;text-align:left;}
-  .ph-code th{background:#eee;font-weight:600;white-space:nowrap;}
+  .ph-logo{width:90px;flex-shrink:0;}
+  .ph-logo img{max-width:100%;max-height:50px;object-fit:contain;}
+  .ph-title{flex:1;text-align:center;padding-top:4px;}
+  .ph-title .th{font-size:15px;font-weight:700;color:#000;display:inline;}
+  .ph-title .en{font-size:15px;font-weight:700;color:#000;display:inline;}
+  .ph-code{width:170px;flex-shrink:0;text-align:right;font-size:10.5px;color:#000;padding-top:6px;white-space:nowrap;}
+  .ph-code .lbl{margin-right:4px;}
+  .ph-code .val{border-bottom:1px solid #000;padding:0 4px;}
+
+  .doc-footer-bar{
+    display:flex;justify-content:space-between;position:fixed;bottom:6px;left:24px;right:24px;
+    font-size:9px;color:#000;z-index:998;border-top:1px solid #000;padding-top:3px;
+  }
 }
 @media print{
   header.top .year-controls, nav.tabs, .toolbar, .filter-bar, .del-btn, .rm-mini, .add-mini, .add-block-btn{display:none!important;}
   body{background:#fff;}
   .view{display:block!important;page-break-after:always;}
+  #view-overview{display:none!important;}
   input,textarea,select{border:none!important;background:transparent!important;color:#000!important;padding:1px 0!important;}
+
+  /* Hide the interactive on-screen editing UI when printing, show plain Excel-style tables instead */
+  #internalContext, #externalContext, .stake-grid, .table-wrap, .stat-grid, .card, .section-title, footer.sign{display:none!important;}
+  .print-only{display:block!important;}
+
+  .print-only-title{font-size:11px;color:#333;margin:14px 0 4px;}
+  .print-only table.xls{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;}
+  table.xls th, table.xls td{border:1px solid #000;padding:4px 6px;text-align:left;vertical-align:top;word-wrap:break-word;}
+  table.xls th{font-weight:700;text-align:center;background:#fff;}
+  table.xls td.cat-cell{font-weight:600;white-space:normal;}
+  table.xls .yr-tag{text-align:right;font-size:10px;padding:2px 0 6px;border:none;}
+
   .print-watermark{
     display:block;position:fixed;inset:0;overflow:hidden;z-index:999;pointer-events:none;
   }
@@ -203,7 +222,7 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
   .wm-row{white-space:nowrap;font-size:12.5px;font-weight:600;color:rgba(220,38,38,.26);line-height:50px;}
   .wm-row span{margin-right:46px;}
   .print-info-bar{
-    display:block;position:fixed;bottom:6px;left:0;right:0;text-align:center;
+    display:block;position:fixed;bottom:20px;left:0;right:0;text-align:center;
     font-size:9.5px;color:#64748b;z-index:999;
   }
 }
@@ -269,9 +288,9 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
         <div class="field"><label>ผู้จัดทำ (ตัวแทนฝ่ายบริหาร)</label><input type="text" id="metaPreparedBy" onchange="saveMeta()"></div>
         <div class="field"><label>ผู้อนุมัติ (กรรมการผู้จัดการ)</label><input type="text" id="metaApprovedBy" onchange="saveMeta()"></div>
         <div class="field"><label>วันที่จัดทำ</label><input type="date" id="metaDocDate" onchange="saveMeta()"></div>
-        <div class="field"><label>รหัสเอกสาร — บริบทองค์กร</label><input type="text" id="metaCodeContext" placeholder="เช่น FM-QMR-XX" onchange="saveMeta()"></div>
-        <div class="field"><label>รหัสเอกสาร — ผู้มีส่วนได้ส่วนเสีย</label><input type="text" id="metaCodeStakeholders" placeholder="เช่น FM-QMR-XX" onchange="saveMeta()"></div>
-        <div class="field"><label>รหัสเอกสาร — ความเสี่ยงและโอกาส</label><input type="text" id="metaCodeRisk" placeholder="เช่น FM-QMR-22" onchange="saveMeta()"></div>
+        <div class="field"><label>รหัสเอกสาร — บริบทองค์กร</label><input type="text" id="metaCodeContext" placeholder="เช่น APK-FR-MR-009" onchange="saveMeta()"></div>
+        <div class="field"><label>รหัสเอกสาร — ผู้มีส่วนได้ส่วนเสีย</label><input type="text" id="metaCodeStakeholders" placeholder="เช่น APK-FR-MR-010" onchange="saveMeta()"></div>
+        <div class="field"><label>รหัสเอกสาร — ความเสี่ยงและโอกาส</label><input type="text" id="metaCodeRisk" placeholder="เช่น APK-FR-MR-011" onchange="saveMeta()"></div>
       </div>
     </div>
 
@@ -304,16 +323,13 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
   <section class="view" id="view-context">
     <div class="print-header">
       <div class="ph-logo"><img src="logo.png" alt="APK Plating logo"></div>
-      <div class="ph-title">
-        <div class="th">บริบทขององค์กร</div>
-        <div class="en">Context of the Organization</div>
-      </div>
-      <div class="ph-code">
-        <table>
-          <tr><th>รหัสเอกสาร</th><td id="phCodeContext">-</td></tr>
-          <tr><th>ปี / วันที่จัดทำ</th><td id="phDateContext">-</td></tr>
-        </table>
-      </div>
+      <div class="ph-title"><span class="th">บริบทขององค์กร</span> <span class="en">Context of the Organization</span></div>
+      <div class="ph-code"><span class="lbl">วันที่จัดทำ</span><span class="val" id="phDateContext">-</span></div>
+    </div>
+    <div class="doc-footer-bar">
+      <span id="phCodeContext">APK-FR-MR-009</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
     </div>
     <div class="section-title">
       <h2>บริบทขององค์กร</h2>
@@ -323,26 +339,26 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     <h3 style="color:var(--navy-800);font-size:15px;margin-bottom:8px;">🏠 ประเด็นภายใน (Internal Issues) — จุดแข็ง / จุดอ่อน</h3>
     <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('internal')">+ เพิ่มหมวดหมู่ภายใน</button></div>
     <div id="internalContext"></div>
+    <div class="print-only" id="printTableInternal"></div>
 
     <h3 style="color:var(--navy-800);font-size:15px;margin:26px 0 8px;">🌐 ประเด็นภายนอก (External Issues) — โอกาส / อุปสรรค</h3>
     <div class="toolbar"><button class="add-block-btn" onclick="addContextCategory('external')">+ เพิ่มหมวดหมู่ภายนอก</button></div>
     <div id="externalContext"></div>
+    <div class="print-only" id="printTableExternal"></div>
+    <div class="print-only" id="printSignContext"></div>
   </section>
 
   <!-- STAKEHOLDERS -->
   <section class="view" id="view-stakeholders">
     <div class="print-header">
       <div class="ph-logo"><img src="logo.png" alt="APK Plating logo"></div>
-      <div class="ph-title">
-        <div class="th">ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</div>
-        <div class="en">Interested Parties &amp; Expectations</div>
-      </div>
-      <div class="ph-code">
-        <table>
-          <tr><th>รหัสเอกสาร</th><td id="phCodeStakeholders">-</td></tr>
-          <tr><th>ปี / วันที่จัดทำ</th><td id="phDateStakeholders">-</td></tr>
-        </table>
-      </div>
+      <div class="ph-title"><span class="th">ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</span> <span class="en">( Interested Parties ) <span id="phYearStakeholders"></span></span></div>
+      <div class="ph-code"><span class="lbl">วันที่จัดทำ</span><span class="val" id="phDateStakeholders">-</span></div>
+    </div>
+    <div class="doc-footer-bar">
+      <span id="phCodeStakeholders">APK-FR-MR-010</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
     </div>
     <div class="section-title">
       <h2>ความคาดหวังของผู้มีส่วนได้ส่วนเสีย</h2>
@@ -350,27 +366,26 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     </div>
     <div class="toolbar"><button class="add-block-btn" onclick="addStakeholder()">+ เพิ่มกลุ่มผู้มีส่วนได้ส่วนเสีย</button></div>
     <div class="stake-grid" id="stakeGrid"></div>
+    <div class="print-only" id="printTableStakeholders"></div>
+    <div class="print-only" id="printSignStakeholders"></div>
   </section>
 
   <!-- RISK -->
   <section class="view" id="view-risk">
     <div class="print-header">
       <div class="ph-logo"><img src="logo.png" alt="APK Plating logo"></div>
-      <div class="ph-title">
-        <div class="th">มาตรการจัดการความเสี่ยงและโอกาส</div>
-        <div class="en">Risk &amp; Opportunity Management</div>
-      </div>
-      <div class="ph-code">
-        <table>
-          <tr><th>รหัสเอกสาร</th><td id="phCodeRisk">FM-QMR-22</td></tr>
-          <tr><th>ปี / วันที่จัดทำ</th><td id="phDateRisk">-</td></tr>
-        </table>
-      </div>
+      <div class="ph-title"><span class="th">มาตราการจัดการความเสี่ยงและโอกาส</span></div>
+      <div class="ph-code"><span class="lbl">ประจำปี</span><span class="val" id="phDateRisk">-</span></div>
+    </div>
+    <div class="doc-footer-bar">
+      <span id="phCodeRisk">APK-FR-MR-011</span>
+      <span>อายุการจัดเก็บเอกสาร 1 ปี</span>
+      <span>Rev.00 : 02-04-18</span>
     </div>
     <div class="section-title">
       <h2>มาตรการจัดการความเสี่ยงและโอกาส</h2>
       <span class="en">Risk &amp; Opportunity Management</span>
-      <span class="doc-code">FM-QMR-22</span>
+      <span class="doc-code">APK-FR-MR-011</span>
     </div>
 
     <div class="filter-bar">
@@ -410,6 +425,8 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
         <tbody id="riskTableBody"></tbody>
       </table>
     </div>
+    <div class="print-only" id="printTableRisk"></div>
+    <div class="print-only" id="printSignRisk"></div>
   </section>
 
   <footer class="sign">
@@ -524,7 +541,7 @@ function logout(){
    ============================================================ */
 function seed2025(){
   return {
-    meta: { preparedBy:"พิพิธ ดิษฐราชา", approvedBy:"", docDate:"2025-01-20", codeContext:"", codeStakeholders:"", codeRisk:"FM-QMR-22" },
+    meta: { preparedBy:"พิพิธ ดิษฐราชา", approvedBy:"", docDate:"2025-01-20", codeContext:"APK-FR-MR-009", codeStakeholders:"APK-FR-MR-010", codeRisk:"APK-FR-MR-011" },
     context: {
       internal: [
         { cat:"บุคคล", en:"Personal", s:["ค่าแรงสูงกว่าค่าแรงขั้นต่ำที่กฎหมายกำหนด","มีสวัสดิการพนักงาน (ชุดฟอร์ม, โบนัส)","มีที่พักอาศัยภายในเขตโรงงาน"], w:[] },
@@ -593,7 +610,7 @@ function seed2025(){
 }
 
 function emptyTemplate(){
-  return { meta:{preparedBy:"",approvedBy:"",docDate:"",codeContext:"",codeStakeholders:"",codeRisk:"FM-QMR-22"}, context:{internal:[],external:[]}, stakeholders:[], risks:[] };
+  return { meta:{preparedBy:"",approvedBy:"",docDate:"",codeContext:"APK-FR-MR-009",codeStakeholders:"APK-FR-MR-010",codeRisk:"APK-FR-MR-011"}, context:{internal:[],external:[]}, stakeholders:[], risks:[] };
 }
 
 /* ============================================================
@@ -747,14 +764,133 @@ async function printDocument(){
     `เอกสาร QMS บริบทองค์กร/ผู้มีส่วนได้ส่วนเสีย/ความเสี่ยงฯ ปี ${YEAR} — เอกสารอิเล็กทรอนิกส์คือฉบับควบคุม`;
 
   const docDateLabel = (DATA.meta.docDate ? DATA.meta.docDate.split('-').reverse().join('/') : YEAR);
-  document.getElementById('phCodeContext').textContent = DATA.meta.codeContext || '-';
+  document.getElementById('phCodeContext').textContent = DATA.meta.codeContext || 'APK-FR-MR-009';
   document.getElementById('phDateContext').textContent = docDateLabel;
-  document.getElementById('phCodeStakeholders').textContent = DATA.meta.codeStakeholders || '-';
+  document.getElementById('phCodeStakeholders').textContent = DATA.meta.codeStakeholders || 'APK-FR-MR-010';
   document.getElementById('phDateStakeholders').textContent = docDateLabel;
-  document.getElementById('phCodeRisk').textContent = DATA.meta.codeRisk || 'FM-QMR-22';
-  document.getElementById('phDateRisk').textContent = docDateLabel;
+  document.getElementById('phYearStakeholders').textContent = YEAR;
+  document.getElementById('phCodeRisk').textContent = DATA.meta.codeRisk || 'APK-FR-MR-011';
+  document.getElementById('phDateRisk').textContent = YEAR;
+
+  document.getElementById('printTableInternal').innerHTML = buildContextPrintTable('internal');
+  document.getElementById('printTableExternal').innerHTML = buildContextPrintTable('external');
+  document.getElementById('printTableStakeholders').innerHTML = buildStakeholdersPrintTable();
+  document.getElementById('printTableRisk').innerHTML = buildRiskPrintTable();
+
+  const signHtml = buildSignBlockHTML(docDateLabel);
+  document.getElementById('printSignContext').innerHTML = signHtml;
+  document.getElementById('printSignStakeholders').innerHTML = signHtml;
+  document.getElementById('printSignRisk').innerHTML = signHtml;
 
   setTimeout(()=>window.print(), 150);
+}
+
+function buildSignBlockHTML(dateLabel){
+  const prepared = esc(DATA.meta.preparedBy || '');
+  const approved = esc(DATA.meta.approvedBy || '');
+  return `<table style="width:100%;border:none;margin-top:26px;">
+    <tr>
+      <td style="width:50%;text-align:center;border:none;">
+        ผู้จัดทำ &nbsp; <span style="display:inline-block;min-width:140px;border-bottom:1px solid #000;">${prepared}</span><br>
+        <span style="font-size:9px;">( ตัวแทนฝ่ายบริหาร )</span><br>
+        วันที่ <span style="display:inline-block;min-width:100px;border-bottom:1px solid #000;">${esc(dateLabel)}</span>
+      </td>
+      <td style="width:50%;text-align:center;border:none;">
+        ผู้อนุมัติ &nbsp; <span style="display:inline-block;min-width:140px;border-bottom:1px solid #000;">${approved}</span><br>
+        <span style="font-size:9px;">( กรรมการผู้จัดการ )</span><br>
+        วันที่ <span style="display:inline-block;min-width:100px;border-bottom:1px solid #000;">${esc(dateLabel)}</span>
+      </td>
+    </tr>
+  </table>`;
+}
+
+/* ── Excel-style print tables — mirror the original company forms exactly ── */
+function buildContextPrintTable(kind){
+  const rows = DATA.context[kind] || [];
+  const isInternal = kind === 'internal';
+  const fieldA = isInternal ? 's' : 'o';
+  const fieldB = isInternal ? 'w' : 't';
+  const chkS = isInternal ? '☑' : '☐';
+  const chkO = isInternal ? '☐' : '☑';
+  const chkW = isInternal ? '☑' : '☐';
+  const chkT = isInternal ? '☐' : '☑';
+  const chkInt = isInternal ? '☑' : '☐';
+  const chkExt = isInternal ? '☐' : '☑';
+
+  let html = `<table class="xls">
+    <tr>
+      <td style="width:130px;">${chkInt}ประเด็นภายใน</td>
+      <td colspan="2" style="text-align:center;">ประเด็น</td>
+    </tr>
+    <tr>
+      <td>${chkExt}ประเด็นภายนอก</td>
+      <td style="text-align:center;">${chkS}จุดแข็ง (Strengths)&nbsp;&nbsp;${chkO}โอกาส (Opportunities)</td>
+      <td style="text-align:center;">${chkW}จุดอ่อน (Weaknesses)&nbsp;&nbsp;${chkT}อุปสรรค (Threats)</td>
+    </tr>`;
+  rows.forEach(row=>{
+    const a = (row[fieldA]||[]).map((t,i)=>`${i+1}. ${esc(t)}`).join('<br>') || '&nbsp;';
+    const b = (row[fieldB]||[]).map((t,i)=>`${i+1}. ${esc(t)}`).join('<br>') || '&nbsp;';
+    html += `<tr>
+      <td class="cat-cell">${esc(row.cat)}${row.en?`<br><span style="font-weight:400;color:#333;">(${esc(row.en)})</span>`:''}</td>
+      <td>${a}</td>
+      <td>${b}</td>
+    </tr>`;
+  });
+  html += `</table>`;
+  return html;
+}
+
+function buildStakeholdersPrintTable(){
+  let html = `<table class="xls">
+    <tr>
+      <th style="width:14%;">ผู้มีส่วนได้ส่วนเสีย<br><span style="font-weight:400;">Interested Parties</span></th>
+      <th style="width:34%;">ความคาดหวัง<br><span style="font-weight:400;">Expectation</span></th>
+      <th style="width:38%;">กิจกรรม<br><span style="font-weight:400;">Activities</span></th>
+      <th style="width:14%;">ผู้รับผิดชอบ<br><span style="font-weight:400;">Responsible</span></th>
+    </tr>`;
+  (DATA.stakeholders||[]).forEach(s=>{
+    const items = (s.items && s.items.length) ? s.items : [{expect:'',activity:'',resp:''}];
+    items.forEach((it,i)=>{
+      html += '<tr>';
+      if(i===0){
+        html += `<td class="cat-cell" rowspan="${items.length}">${esc(s.th)}<br><span style="font-weight:400;color:#333;">${esc(s.en)}</span></td>`;
+      }
+      html += `<td>${i+1}. ${esc(it.expect)}</td><td>${i+1}. ${esc(it.activity)}</td><td>${esc(it.resp)}</td></tr>`;
+    });
+  });
+  html += `</table>`;
+  return html;
+}
+
+function buildRiskPrintTable(){
+  let html = `<div class="print-only-title" style="text-align:right;">ประจำปี ${esc(YEAR)}</div>
+  <table class="xls" style="font-size:9px;">
+    <tr>
+      <th>กิจกรรม</th><th>ประเด็นความเสี่ยง</th><th>เกณฑ์</th>
+      <th>IMPACT</th><th>Likelihood</th><th>Risk Level</th>
+      <th>Action Plan</th><th>ผู้รับผิดชอบ /<br>วันที่กำหนดเสร็จ</th><th>OK/NG</th>
+    </tr>`;
+  const groups = {};
+  const order = [];
+  (DATA.risks||[]).forEach(r=>{
+    const g = r.group || '';
+    if(!groups[g]){ groups[g] = []; order.push(g); }
+    groups[g].push(r);
+  });
+  order.forEach(g=>{
+    const rows = groups[g];
+    rows.forEach((r,i)=>{
+      html += '<tr>';
+      if(i===0) html += `<td rowspan="${rows.length}" class="cat-cell">${esc(g)}</td>`;
+      const statusText = r.status==='ok' ? 'OK' : (r.status==='na' ? '-' : '');
+      html += `<td>${esc(r.risk)}</td><td style="text-align:center;">${esc(r.crit)}</td>
+      <td style="text-align:center;">${r.i}</td><td style="text-align:center;">${r.l}</td>
+      <td style="text-align:center;">${r.i*r.l}</td>
+      <td>${esc(r.plan)}</td><td>${esc(r.resp)}</td><td style="text-align:center;">${statusText}</td></tr>`;
+    });
+  });
+  html += `</table>`;
+  return html;
 }
 
 function buildWatermarkTiles(text){
@@ -773,7 +909,7 @@ function renderAll(){
   document.getElementById('metaDocDate').value = DATA.meta.docDate || '';
   document.getElementById('metaCodeContext').value = DATA.meta.codeContext || '';
   document.getElementById('metaCodeStakeholders').value = DATA.meta.codeStakeholders || '';
-  document.getElementById('metaCodeRisk').value = DATA.meta.codeRisk || 'FM-QMR-22';
+  document.getElementById('metaCodeRisk').value = DATA.meta.codeRisk || 'APK-FR-MR-011';
   document.getElementById('signPrepared').textContent = DATA.meta.preparedBy || '\u00A0';
   document.getElementById('signApproved').textContent = DATA.meta.approvedBy || '\u00A0';
   renderOverview();
