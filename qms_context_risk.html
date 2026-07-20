@@ -142,11 +142,34 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
 .sign-block .role{font-size:11.5px;color:var(--steel-500);}
 
 .loading-screen{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:200;font-size:14px;color:var(--steel-500);}
+
+.print-watermark,.print-info-bar{display:none;}
+@media print{
+  header.top .year-controls, nav.tabs, .toolbar, .filter-bar, .del-btn, .rm-mini, .add-mini, .add-block-btn{display:none!important;}
+  body{background:#fff;}
+  .view{display:block!important;page-break-after:always;}
+  input,textarea,select{border:none!important;background:transparent!important;color:#000!important;padding:1px 0!important;}
+  .print-watermark{
+    display:block;position:fixed;inset:0;overflow:hidden;z-index:999;pointer-events:none;
+  }
+  .print-watermark-inner{
+    position:absolute;top:-35%;left:-35%;width:170%;height:170%;
+    transform:rotate(-28deg);
+  }
+  .wm-row{white-space:nowrap;font-size:12.5px;font-weight:600;color:rgba(220,38,38,.26);line-height:50px;}
+  .wm-row span{margin-right:46px;}
+  .print-info-bar{
+    display:block;position:fixed;bottom:6px;left:0;right:0;text-align:center;
+    font-size:9.5px;color:#64748b;z-index:999;
+  }
+}
 </style>
 </head>
 <body>
 
 <div class="loading-screen" id="loadingScreen">กำลังโหลดข้อมูลจาก Firebase...</div>
+<div class="print-watermark" id="printWatermark"><div class="print-watermark-inner" id="printWatermarkInner"></div></div>
+<div class="print-info-bar" id="printInfoText"></div>
 
 <header class="top">
   <div class="top-inner">
@@ -160,6 +183,7 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     <div class="year-controls">
       <select id="yearSelect" onchange="switchYear(this.value)"></select>
       <button class="btn btn-gold" onclick="startNewYear()">+ เริ่มปีใหม่</button>
+      <button class="btn btn-outline" onclick="printDocument()">🖨️ พิมพ์เอกสาร</button>
       <span class="save-indicator" id="saveIndicator"></span>
     </div>
   </div>
@@ -207,6 +231,11 @@ footer.sign{margin-top:32px;padding-top:22px;border-top:1px dashed var(--steel-3
     <div class="card">
       <h3>สรุปประเด็นตามกลุ่ม</h3>
       <div id="groupSummary" style="font-size:13.5px;"></div>
+    </div>
+
+    <div class="card">
+      <h3>ประวัติการพิมพ์เอกสาร <span class="tag">Print Log</span></h3>
+      <div id="printLogList" style="font-size:13px;"></div>
     </div>
   </section>
 
@@ -302,6 +331,9 @@ function dbGet(path){
 }
 function dbPut(path, value){
   return fetch(DB_BASE + path + '.json', { method:'PUT', body: JSON.stringify(value) });
+}
+function dbPost(path, value){
+  return fetch(DB_BASE + path + '.json', { method:'POST', body: JSON.stringify(value) });
 }
 
 /* ============================================================
@@ -488,6 +520,59 @@ async function loadYear(y){
   DATA.risks = DATA.risks || [];
   document.getElementById('yearBadge').textContent = 'ปี ' + y;
   renderAll();
+  loadPrintLog();
+}
+
+/* ============================================================
+   Print — watermark + print log (name & time recorded to Firebase)
+   ============================================================ */
+async function loadPrintLog(){
+  const log = await dbGet(ROOT + '/' + YEAR + '/printLog');
+  const el = document.getElementById('printLogList');
+  if(!el) return;
+  const entries = log ? Object.values(log).sort((a,b)=> new Date(b.printedAt) - new Date(a.printedAt)) : [];
+  el.innerHTML = entries.length
+    ? entries.slice(0,10).map(e=>`
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span>${esc(e.name)}</span><span style="color:var(--steel-500);">${esc(e.printedAtDisplay || e.printedAt)}</span>
+        </div>`).join('')
+    : '<div style="color:var(--steel-500);">ยังไม่มีประวัติการพิมพ์เอกสารปีนี้</div>';
+}
+
+async function printDocument(){
+  const name = prompt('กรุณาระบุชื่อผู้พิมพ์เอกสาร (ระบบจะบันทึกชื่อและเวลาไว้เป็นประวัติ):');
+  if(!name || !name.trim()){ alert('ต้องระบุชื่อผู้พิมพ์ก่อนจึงจะพิมพ์เอกสารได้'); return; }
+
+  const now = new Date();
+  const displayDate = now.toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
+
+  showSaving();
+  await dbPost(ROOT + '/' + YEAR + '/printLog', {
+    name: name.trim(),
+    printedAt: now.toISOString(),
+    printedAtDisplay: displayDate,
+    year: YEAR
+  });
+  showSaved();
+  loadPrintLog();
+
+  document.getElementById('printWatermarkInner').innerHTML = buildWatermarkTiles(
+    `ไม่ควบคุม (Uncontrolled Copy) · ผู้พิมพ์: ${name.trim()} · ${displayDate}`
+  );
+  document.getElementById('printInfoText').textContent =
+    `เอกสาร QMS บริบทองค์กร/ผู้มีส่วนได้ส่วนเสีย/ความเสี่ยงฯ ปี ${YEAR} — เอกสารอิเล็กทรอนิกส์คือฉบับควบคุม`;
+
+  setTimeout(()=>window.print(), 150);
+}
+
+function buildWatermarkTiles(text){
+  let rows = '';
+  for(let i=0;i<40;i++){
+    let row = '';
+    for(let j=0;j<14;j++){ row += `<span>${text}</span>`; }
+    rows += `<div class="wm-row">${row}</div>`;
+  }
+  return rows;
 }
 
 function renderAll(){
