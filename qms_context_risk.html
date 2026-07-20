@@ -651,20 +651,22 @@ function showSaved(){
 /* ============================================================
    Init / Year management
    ============================================================ */
+const CURRENT_YEAR = String(new Date().getFullYear());
+
 async function init(){
   await loadYearList();
 
   if(YEARS.length === 0){
-    // completely empty DB -> seed 2025, then create 2026 as a copy
+    // completely empty DB -> seed 2025, then create this year as a copy
     DATA = seed2025();
     await dbPut(ROOT + '/2025', DATA);
     YEARS = ['2025'];
-    await ensureYear('2026');
-  } else if(!YEARS.includes('2026')){
-    await ensureYear('2026');
+    await ensureYear(CURRENT_YEAR);
+  } else if(!YEARS.includes(CURRENT_YEAR)){
+    await ensureYear(CURRENT_YEAR);
   }
 
-  YEAR = YEARS.includes('2026') ? '2026' : YEARS[YEARS.length-1];
+  YEAR = YEARS.includes(CURRENT_YEAR) ? CURRENT_YEAR : YEARS[YEARS.length-1];
   await loadYear(YEAR);
   document.getElementById('loadingScreen').style.display = 'none';
 }
