@@ -1735,17 +1735,17 @@ function addBarrel() {
       // เพราะไม่รู้ว่า "เหลือ X ชิ้น"/"เกินไป X ชิ้น" เทียบเป็นกี่ กก. (ผู้ชุบมักกรอกเป็น กก. เป็นหลัก)
       var _wGmsg = _isKgUnit ? 0 : getWeightGForPO(_billJob.partName || _billJob.partNo || '');
       if (_isKgUnit) {
-        if (kg > _remainKg + 0.001) { _overAmt = kg - _remainKg; _remainStr = Math.max(0,_remainKg).toFixed(2)+' กก.'; }
+        if (kg > _remainKg + 0.001) { _overAmt = kg - _remainKg; _remainStr = ucFmtKg(Math.max(0,_remainKg))+' กก.'; }
       } else {
         if (_pcsChk > _remainPcs) {
           _overAmt = _pcsChk - _remainPcs;
-          var _remainKgHint = (_wGmsg > 0) ? ' (≈'+((Math.max(0,_remainPcs)*_wGmsg)/1000).toFixed(2)+' กก.)' : '';
+          var _remainKgHint = (_wGmsg > 0) ? ' (≈'+ucFmtKg((Math.max(0,_remainPcs)*_wGmsg)/1000)+' กก.)' : '';
           _remainStr = Math.max(0,_remainPcs).toLocaleString()+' ชิ้น'+_remainKgHint;
         }
       }
       if (_overAmt > 0) {
-        var _overKgHint = (_wGmsg > 0 && !_isKgUnit) ? ' (≈'+((_overAmt*_wGmsg)/1000).toFixed(2)+' กก.)' : '';
-        var _overStr = _isKgUnit ? _overAmt.toFixed(2)+' กก.' : _overAmt.toLocaleString()+' ชิ้น'+_overKgHint;
+        var _overKgHint = (_wGmsg > 0 && !_isKgUnit) ? ' (≈'+ucFmtKg((_overAmt*_wGmsg)/1000)+' กก.)' : '';
+        var _overStr = _isKgUnit ? ucFmtKg(_overAmt)+' กก.' : _overAmt.toLocaleString()+' ชิ้น'+_overKgHint;
         showToast('entry', '🚫 บันทึกไม่ได้ — บิล '+(_billJob.bill||'?')+' คงเหลือ '+_remainStr+' แต่กำลังลงจำนวนเกินไป '+_overStr+' กรุณาตรวจสอบยอดค้างจากบิล', 'err');
         return;
       }
@@ -2935,7 +2935,7 @@ function applyPreset(idx) {
         if (sel) { sel.value = savedJobId; sel.size = 1; }
 
         // แสดง bill info
-        var remVal = (job.unit==='kg') ? Math.max(0,realRemain).toFixed(2)+' กก.' : Math.max(0,realRemain).toLocaleString()+' ชิ้น';
+        var remVal = (job.unit==='kg') ? ucFmtKg(Math.max(0,realRemain))+' กก.' : Math.max(0,realRemain).toLocaleString()+' ชิ้น';
         var bi = document.getElementById('bBillInfo');
         if(bi) bi.innerHTML = '📋 บิล <b>'+(job.bill||'?')+'</b> · คงเหลือ <b style="color:#15803d;">'+remVal+'</b>';
 
@@ -6713,10 +6713,10 @@ function renderBillList(active, selectedJobId) {
     // บิลหน่วยชิ้น แต่ผู้ชุบมักกรอกเป็น กก. — วงเล็บน้ำหนักโดยประมาณกำกับไว้ด้วย กันเผลอกรอกเกินเพราะไม่รู้ว่า
     // "เหลือ X ชิ้น" เทียบเป็นกี่ กก. (ใช้ getWeightGForPO — น้ำหนัก/ชิ้น หน่วยกรัม จาก Part Master)
     var weightG = isKgUnit ? 0 : getWeightGForPO(j.partName || '');
-    var kgHint  = (weightG > 0) ? ' (≈'+((r2*weightG)/1000).toFixed(2)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
-    var remStr  = isKgUnit ? r2.toFixed(2)+' กก.' : r2.toLocaleString()+' ชิ้น'+kgHint;
-    var usedKgHint = (weightG > 0 && u.used) ? ' (≈'+((u.used*weightG)/1000).toFixed(2)+' กก.)' : '';
-    var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น'+usedKgHint)+' วันนี้)' : '';
+    var kgHint  = (weightG > 0) ? ' (≈'+ucFmtKg((r2*weightG)/1000)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
+    var remStr  = isKgUnit ? ucFmtKg(r2)+' กก.' : r2.toLocaleString()+' ชิ้น'+kgHint;
+    var usedKgHint = (weightG > 0 && u.used) ? ' (≈'+ucFmtKg((u.used*weightG)/1000)+' กก.)' : '';
+    var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?ucFmtKg(u.usedKg)+' กก.':u.used+' ชิ้น'+usedKgHint)+' วันนี้)' : '';
     var weightWarn = u.weightMissing
       ? '<div style="font-size:9px;color:#dc2626;margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master — แปลงหน่วยไม่ได้ ยอด "ใช้วันนี้" อาจไม่ครบ</div>'
       : '';
@@ -6894,8 +6894,8 @@ function onBarrelJobPick() {
     var isKgUnit = job.unit==='kg';
     var r   = isKgUnit ? rr.remainKg : rr.remainPcs;
     var weightG = isKgUnit ? 0 : getWeightGForPO(job.partName || '');
-    var kgHint  = (weightG > 0) ? ' (≈'+((r*weightG)/1000).toFixed(2)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
-    var remStr = isKgUnit ? r.toFixed(2)+' กก.' : r.toLocaleString()+' ชิ้น'+kgHint;
+    var kgHint  = (weightG > 0) ? ' (≈'+ucFmtKg((r*weightG)/1000)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
+    var remStr = isKgUnit ? ucFmtKg(r)+' กก.' : r.toLocaleString()+' ชิ้น'+kgHint;
     infoEl.innerHTML =
       '<div style="background:#dcfce7;border:1.5px solid #16a34a;border-radius:8px;padding:8px 12px;margin-top:4px;">' +
       '✅ เลือกบิล <b style="font-family:monospace;">'+(job.bill||'?')+'</b> · ' +
@@ -8620,13 +8620,13 @@ function openAddBillModal(dayId, rowIdx) {
 
   var opts = active.map(function(j){
     var r = calcJobRemainToPlate(j.id);
-    var rem = j.unit==='kg' ? r.remainKg.toFixed(2)+' กก.' : r.remainPcs.toLocaleString()+' ชิ้น';
+    var rem = j.unit==='kg' ? ucFmtKg(r.remainKg)+' กก.' : r.remainPcs.toLocaleString()+' ชิ้น';
     return '<option value="'+j.id+'"'+(j.id===row.jobId?' selected':'')+'>['+( j.bill||'?')+'] เหลือ '+rem+'</option>';
   }).join('');
 
   var dlOpts = allBills.map(function(j){
     var r = calcJobRemainToPlate(j.id);
-    var rem = j.unit==='kg' ? r.remainKg.toFixed(2)+'กก.' : r.remainPcs.toLocaleString()+'ชิ้น';
+    var rem = j.unit==='kg' ? ucFmtKg(r.remainKg)+'กก.' : r.remainPcs.toLocaleString()+'ชิ้น';
     return '<option value="'+esc2(j.bill)+'">เหลือ '+rem+(j.customer?' · '+esc2(j.customer):'')+'</option>';
   }).join('');
 

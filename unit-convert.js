@@ -77,3 +77,14 @@ function ucResolveKg(rawPcs, rawKg, partNo, pmParts) {
   }
   return { kg: 0, converted: false, missingWeight: false };
 }
+
+// แสดงผลตัวเลข กก. แบบ "ปรับทศนิยมตามขนาดค่า" — กันปัญหาค่าน้อยมาก (เช่น เหลือไม่กี่กรัม)
+// ถูกปัดจนเห็นเป็น "0.00" ซึ่งใช้คีย์ตัดบิลจริงไม่ได้ (ไม่รู้ว่าจะกรอกเท่าไหร่)
+// >= 1 กก.  → 2 ตำแหน่ง (พอสำหรับงานทั่วไป ไม่รกตา)
+// < 1 กก.   → 4 ตำแหน่ง (ละเอียดถึงระดับกรัม เพียงพอให้คีย์ตัดสต็อกได้จริง)
+function ucFmtKg(kg) {
+  kg = Number(kg) || 0;
+  if (kg <= 0) return '0.00';
+  if (kg >= 1) return kg.toFixed(2);
+  return kg.toFixed(4);
+}
