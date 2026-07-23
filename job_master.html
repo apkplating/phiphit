@@ -193,8 +193,7 @@ input:focus,select:focus{border-color:var(--blue2);}
             <th>หน่วย</th>
             <th>รับเข้า</th>
             <th>จ่ายออก</th>
-            <th>คงเหลือ<br><span style="font-weight:400;font-size:9px;">(ชิ้น)</span></th>
-            <th>คงเหลือ<br><span style="font-weight:400;font-size:9px;">(กก.)</span></th>
+            <th>คงเหลือ</th>
             <th>วันค้าง</th>
             <th>สถานะ</th>
             <th></th>
@@ -1275,14 +1274,13 @@ function daysSince(dateStr) {
 }
 
 function getStatus(job) {
-  // บิลที่ปิดด้วย "🧹 ปิดบิลเก่าเป็นชุด" (job.closed=true) ถือว่าจ่ายครบเสมอ — ไม่งั้นพอตัด qty เหลือ 0
-  // เงื่อนไข isDone ด้านล่าง (ที่ต้องการ totalIn>0) จะไม่ทำงาน ทำให้บิลค้างสถานะ "เกินกำหนด" ตลอดไปทั้งที่ปิดไปแล้ว
-  // เช็คจากหมายเหตุ (note) ด้วยเป็น fallback — ครอบคลุมบิลที่ปิดไปแล้วก่อนเพิ่ม flag "closed" นี้ (ข้อมูลเก่าไม่มี flag แต่มี tag ในหมายเหตุอยู่แล้ว)
-  if (job.closed || (job.note && job.note.indexOf('[ปิดบิลอัตโนมัติ') !== -1)) return 'จ่ายครบ';
   var b = calcJob(job.id);
   // คงเหลือ = 0 → จ่ายครบ (ACER: วันค้าง 0)
+  // หมายเหตุ: เดิมเงื่อนไขนี้ต้องการ totalIn>0 ด้วย ตั้งใจกันบิลที่ยังไม่กรอกอะไรเลยไม่ให้โชว์ "จ่ายครบ" ทันที
+  // แต่พบว่าทำให้บิลที่ totalIn=0 จริงๆ (ปิดบิลแล้ว/กรอกผิดเป็น 0/เคสอื่นๆ) ค้างสถานะ "เกินกำหนด" ตลอดไปแทน ทั้งที่ไม่มีอะไรต้องส่งแล้ว
+  // ตัดเงื่อนไข totalIn>0 ออก — ถ้าคงเหลือ ≤ 0 (ไม่ว่า totalIn จะเป็นเท่าไหร่) ถือว่า "จ่ายครบ" เสมอ เพราะไม่มีอะไรค้างส่งจริงๆ
   var isKg = job.unit === 'kg';
-  var isDone = isKg ? (b.remainKg <= 0 && b.totalInKg > 0) : (b.remain <= 0 && b.totalIn > 0);
+  var isDone = isKg ? (b.remainKg <= 0) : (b.remain <= 0);
   if (isDone) return 'จ่ายครบ';
   var days = daysSince(job.date);
   // ACER conditions: <5 ปกติ, 5<x≤7 ใกล้ครบกำหนด, >7 เกินกำหนด
@@ -1347,10 +1345,10 @@ function renderBoard() {
   tbody.innerHTML = rows.map(function(job) {
     var b = calcJob(job.id);
     var isKg = job.unit === 'kg';
-    var isDone = isKg ? (b.remainKg <= 0 && b.totalInKg > 0) : (b.remain <= 0 && b.totalIn > 0);
-    var days = daysSince(job.date);
     var status = getStatus(job);
-    var remainColor = (isDone) ? '#94a3b8' : (b.remain < b.totalIn*0.2 ? 'var(--red)' : 'var(--green)');
+    // ใช้ status เดียวกับ getStatus() เป็นตัวตัดสิน isDone แทนคำนวณซ้ำเอง (เดิมมีเงื่อนไข totalIn>0 ซ้ำบั๊กเดียวกับที่แก้ใน getStatus() ไปแล้ว)
+    var isDone = status === 'จ่ายครบ';
+    var days = daysSince(job.date);
     var daysColor = days > 7 ? 'var(--red)' : days > 5 ? 'var(--amber)' : 'var(--text-muted)';
     // วันค้าง: แสดง — เมื่อคงเหลือ = 0
     var daysCell = isDone
@@ -1363,29 +1361,26 @@ function renderBoard() {
     // ── แปลงหน่วยกลับไปมา (กก. ↔ ชิ้น) ผ่านน้ำหนัก/ชิ้นจาก Part Master ──
     // ก่อนหน้านี้บิลที่รับเข้าเป็น กก. จะไม่โชว์จำนวนชิ้นเลย (แค่ "—") ทั้งที่คำนวณได้จาก Part Master
     // ทำให้ดูตารางแล้วนึกภาพจำนวนจริงไม่ออกถ้าเคยชินกับหน่วยอีกแบบ เลยแปลงให้เห็นควบคู่กันไปเลยทั้ง 2 หน่วยเสมอ
+    // สี: ชิ้น = น้ำเงิน, กก. = แดง เสมอ ไม่ว่าจะเป็นหน่วยหลักหรือหน่วยรอง (ใช้รูปแบบเดียวกันทั้ง รับเข้า/จ่ายออก/คงเหลือ)
+    var COLOR_PCS = '#1d4ed8', COLOR_KG = '#dc2626';
     var pmRow = pmLookup(job.partName);
     var wpp   = (pmRow && pmRow.weightPerPc) ? Number(pmRow.weightPerPc) : 0; // กรัม/ชิ้น
-    function pcsToKgStr(pcs) { return wpp>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+(pcs*wpp/1000).toFixed(2)+' กก.)</span>' : ''; }
-    function kgToPcsStr(kg)  { return wpp>0 ? ' <span style="font-size:9px;color:var(--text-muted);">('+Math.round(kg*1000/wpp).toLocaleString()+' ชิ้น)</span>' : ''; }
-
-    var remainPcsCell, remainKgCell;
-    if (job.unit==='pcs' || !job.unit) {
-      remainPcsCell = '<td style="font-weight:800;color:'+remainColor+';">'+b.remain.toLocaleString()+'</td>';
-      remainKgCell  = '<td style="color:#94a3b8;font-size:10px;">'+(wpp>0 ? (b.remain*wpp/1000).toFixed(2) : '—')+'</td>';
-    } else {
-      remainPcsCell = '<td style="color:#94a3b8;font-size:10px;">'+(wpp>0 ? Math.round(b.remainKg*1000/wpp).toLocaleString() : '—')+'</td>';
-      remainKgCell  = '<td style="font-weight:800;color:'+remainColor+';">'+b.remainKg.toFixed(2)+'</td>';
+    function pcsToKgStr(pcs) { return wpp>0 ? ' <span style="font-size:9px;color:'+COLOR_KG+';">('+(pcs*wpp/1000).toFixed(2)+' กก.)</span>' : ''; }
+    function kgToPcsStr(kg)  { return wpp>0 ? ' <span style="font-size:9px;color:'+COLOR_PCS+';">('+Math.round(kg*1000/wpp).toLocaleString()+' ชิ้น)</span>' : ''; }
+    // สร้าง cell แบบเดียวกันทั้ง 3 คอลัมน์: หน่วยหลักตามบิลตัวใหญ่ + หน่วยรอง (แปลงจาก Part Master) ในวงเล็บตัวเล็ก — สีตามชนิดหน่วยเสมอ
+    function qtyCell(pcsVal, kgVal) {
+      if (isKg) {
+        var mainKg = '<span style="font-weight:800;color:'+COLOR_KG+';">'+kgVal.toFixed(2)+'</span>';
+        return kgVal>0 ? mainKg+' <span style="font-size:9px;color:'+COLOR_KG+';">กก.</span>'+kgToPcsStr(kgVal) : mainKg;
+      }
+      var mainPcs = '<span style="font-weight:800;color:'+COLOR_PCS+';">'+pcsVal.toLocaleString()+'</span>';
+      return mainPcs+pcsToKgStr(pcsVal);
     }
 
-    // รับเข้า: โชว์หน่วยหลักตามบิล + หน่วยรองในวงเล็บ (ถ้ามีน้ำหนัก/ชิ้นให้แปลง)
-    var inCell = isKg
-      ? (b.totalInKg > 0 ? b.totalInKg.toFixed(2)+' <span style="font-size:9px;color:var(--text-muted);">กก.</span>'+kgToPcsStr(b.totalInKg) : '0')
-      : b.totalIn.toLocaleString()+pcsToKgStr(b.totalIn);
-
-    // จ่ายออก: totalOut(ชิ้น)/totalOutKg(กก.) เก็บแค่หน่วยเดียวตามบิลเสมอ (อีกหน่วยเป็น 0 เปล่าๆ) ต้องแปลงเอาจากหน่วยหลักเท่านั้น
-    var outCell = isKg
-      ? (b.totalOutKg > 0 ? b.totalOutKg.toFixed(2)+' <span style="font-size:9px;">กก.</span>'+kgToPcsStr(b.totalOutKg) : '0')
-      : b.totalOut.toLocaleString()+pcsToKgStr(b.totalOut);
+    // คงเหลือ/รับเข้า/จ่ายออก: ใช้ตัวสร้าง cell ตัวเดียวกัน ให้หน้าตาสอดคล้องกันทั้ง 3 คอลัมน์
+    var remainCell = qtyCell(b.remain, b.remainKg);
+    var inCell     = qtyCell(b.totalIn, b.totalInKg);
+    var outCell    = qtyCell(b.totalOut, b.totalOutKg);
 
     return '<tr>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
@@ -1393,10 +1388,9 @@ function renderBoard() {
       '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
       '<td>'+unitBadge+'</td>' +
-      '<td style="font-weight:700;">'+inCell+'</td>' +
-      '<td style="color:var(--orange);font-weight:700;">'+outCell+'</td>' +
-      remainPcsCell +
-      remainKgCell +
+      '<td>'+inCell+'</td>' +
+      '<td>'+outCell+'</td>' +
+      '<td>'+remainCell+'</td>' +
       daysCell +
       '<td>'+statusBadge(status)+'</td>' +
       '<td style="white-space:nowrap;">' +
