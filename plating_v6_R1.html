@@ -1114,7 +1114,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:var(--blue-light);border-right:2px solid rgba(255,255,255,.15);">ผู้บันทึก</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">ว.ด.ป.</th>
               <th style="padding:7px 6px;text-align:left;font-size:9px;font-weight:600;color:#6ee7b7;white-space:nowrap;">เลขที่ใบสั่งผลิต</th>
-              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">AH</th>
+              <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">AH/โม่</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">เบิก Auto<br>(ลิตร)</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#fbbf24;">เบิก Manual<br>(ลิตร)</th>
               <th style="padding:7px 4px;text-align:right;font-size:9px;font-weight:600;color:#6ee7b7;">คงเหลือ</th>
@@ -4630,6 +4630,41 @@ function renderChemStockCard() {
     return ml / 1000;
   }
 
+  // helper: หาว่าเคมีตัวนี้คำนวณจาก AH หรือจำนวนโม่ (ต่อสี/บ่อ) แล้วคืนค่าอ้างอิงของวันนั้นให้ตรงกับที่ใช้คำนวณจริง
+  // (เคมีกลุ่ม COLOR ใช้จำนวนโม่ K/B/C วันนั้น ไม่ใช่ AH — โชว์ AH ตรงนี้จะทำให้เข้าใจผิด)
+  function calcDayChemRef(day) {
+    var nameLC = item.name.trim().toLowerCase();
+    var itemBatches = item.batches && item.batches.length ? item.batches : [1,2];
+    var dr = (day.rows||[]).filter(function(r){
+      if (itemBatches.length >= 2) return true;
+      var bn = r.batchNo || 1;
+      return itemBatches.indexOf(bn) >= 0;
+    });
+    var bB = dr.filter(function(r){ return r.color==='B'; }).length;
+    var bC = dr.filter(function(r){ return r.color==='C'; }).length;
+    var bK = dr.filter(function(r){ return r.color==='K'; }).length;
+    var result = null;
+    chemSettings.forEach(function(c) {
+      if (result) return;
+      var isGroupMatch = c.name && c.name.trim().toLowerCase() === nameLC;
+      if (c.type === 'AH' && isGroupMatch) {
+        result = { kind:'AH', val: Number(day.ah||0) };
+      } else if (c.type === 'COLOR') {
+        (c.chemicals||[]).forEach(function(ch) {
+          if (result) return;
+          var chMatch = ch.name && ch.name.trim().toLowerCase() === nameLC;
+          if (!isGroupMatch && !chMatch) return;
+          var color = (ch.color||'').toUpperCase();
+          if (color==='B') result = { kind:'COLOR', val:bB, color:'B ฟ้า' };
+          else if (color==='C') result = { kind:'COLOR', val:bC, color:'C รุ้ง' };
+          else if (color==='K') result = { kind:'COLOR', val:bK, color:'K ดำ' };
+          else result = { kind:'COLOR', val:(bB+bC+bK), color:'ทุกสี' };
+        });
+      }
+    });
+    return result || { kind:'AH', val: Number(day.ah||0) };
+  }
+
   // ─── รับเข้า (จัดซื้อ) ───
   var inRows = [];
   chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='in'; })
@@ -4643,11 +4678,12 @@ function renderChemStockCard() {
   dayRecords.forEach(function(day){
     var used = calcDayChemUsedLiter(day);
     if (used > 0) {
-      outRows.push({ date:day.date, kind:'auto', ah:Number(day.ah||0), liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ' });
+      var ref = calcDayChemRef(day);
+      outRows.push({ date:day.date, kind:'auto', refKind:ref.kind, refVal:ref.val, refColor:ref.color||'', liter:used, bill:day.lotNo||'–', recorder:day.recorder||'ระบบ' });
     }
   });
   chemRecords.filter(function(r){ return r.chemId===_selChemId && r.type==='out'; }).forEach(function(r){
-    outRows.push({ date:r.date, kind:'manual', ah:null, liter:Number(r.liter||0), bill:r.bill||'–', recorder:r.recorder||'-', note:r.note||'' });
+    outRows.push({ date:r.date, kind:'manual', refKind:null, liter:Number(r.liter||0), bill:r.bill||'–', recorder:r.recorder||'-', note:r.note||'' });
   });
   outRows.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
@@ -4689,10 +4725,16 @@ function renderChemStockCard() {
     var rowBg = ir ? '' : 'background:#f0fff4;';
     if (ir) sumIn += ir.liter;
     if (or2) {
-      if (or2.kind==='auto') { sumAuto += or2.liter; sumAH += (or2.ah||0); }
+      if (or2.kind==='auto') { sumAuto += or2.liter; if (or2.refKind==='AH') sumAH += (or2.refVal||0); }
       else { sumManual += or2.liter; }
     }
     var isManual = or2 && or2.kind==='manual';
+    var refCell = '';
+    if (or2 && or2.kind==='auto') {
+      refCell = or2.refKind==='COLOR'
+        ? or2.refVal.toLocaleString()+' โม่'+(or2.refColor?' ('+or2.refColor+')':'')
+        : or2.refVal.toLocaleString()+' AH';
+    }
     html += '<tr style="border-bottom:1px solid #f0f0f0;'+rowBg+'">' +
       // จัดซื้อ
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(ir?iDateStr:'')+'</td>' +
@@ -4703,7 +4745,7 @@ function renderChemStockCard() {
       // ผลิต
       '<td style="padding:7px 6px;white-space:nowrap;font-size:11px;">'+(or2?oDateStr:'')+'</td>' +
       '<td style="padding:7px 6px;font-family:monospace;font-size:11px;">'+(or2?or2.bill:'')+(isManual&&or2.note?'<div style="font-size:9px;color:var(--text-muted);font-family:\'IBM Plex Sans Thai\',sans-serif;">'+or2.note+'</div>':'')+'</td>' +
-      '<td style="padding:7px 4px;text-align:right;color:var(--text-muted);">'+(or2&&or2.kind==='auto'?or2.ah.toLocaleString():'')+'</td>' +
+      '<td style="padding:7px 4px;text-align:right;color:var(--text-muted);white-space:nowrap;">'+refCell+'</td>' +
       '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#0d6e56;">'+(or2&&or2.kind==='auto'?or2.liter.toFixed(2):'')+'</td>' +
       '<td style="padding:7px 4px;text-align:right;font-weight:600;color:#b45309;">'+(isManual?or2.liter.toFixed(2):'')+'</td>' +
       '<td style="padding:7px 4px;text-align:right;font-weight:700;color:'+(bal2!==null&&bal2<0?'#c0392b':'var(--navy)')+';">'+(bal2!==null?bal2.toFixed(2):'')+'</td>' +
@@ -4719,7 +4761,7 @@ function renderChemStockCard() {
       '<td style="padding:8px 4px;text-align:right;color:var(--blue);">'+sumIn.toFixed(2)+'</td>' +
       '<td></td><td style="border-right:2px solid #e5e7eb;"></td>' +
       '<td colspan="2" style="padding:8px 6px;font-size:10px;color:var(--navy);">รวมเบิก</td>' +
-      '<td style="padding:8px 4px;text-align:right;color:var(--text-muted);">'+(sumAH?sumAH.toLocaleString():'')+'</td>' +
+      '<td style="padding:8px 4px;text-align:right;color:var(--text-muted);">'+(sumAH?sumAH.toLocaleString()+' AH':'')+'</td>' +
       '<td style="padding:8px 4px;text-align:right;color:#0d6e56;">'+sumAuto.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;color:#b45309;">'+sumManual.toFixed(2)+'</td>' +
       '<td style="padding:8px 4px;text-align:right;color:'+(lastBal!==null&&lastBal<0?'#c0392b':'var(--navy)')+';">'+(lastBal!==null?lastBal.toFixed(2):'')+'</td>' +
