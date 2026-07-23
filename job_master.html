@@ -1275,6 +1275,10 @@ function daysSince(dateStr) {
 }
 
 function getStatus(job) {
+  // บิลที่ปิดด้วย "🧹 ปิดบิลเก่าเป็นชุด" (job.closed=true) ถือว่าจ่ายครบเสมอ — ไม่งั้นพอตัด qty เหลือ 0
+  // เงื่อนไข isDone ด้านล่าง (ที่ต้องการ totalIn>0) จะไม่ทำงาน ทำให้บิลค้างสถานะ "เกินกำหนด" ตลอดไปทั้งที่ปิดไปแล้ว
+  // เช็คจากหมายเหตุ (note) ด้วยเป็น fallback — ครอบคลุมบิลที่ปิดไปแล้วก่อนเพิ่ม flag "closed" นี้ (ข้อมูลเก่าไม่มี flag แต่มี tag ในหมายเหตุอยู่แล้ว)
+  if (job.closed || (job.note && job.note.indexOf('[ปิดบิลอัตโนมัติ') !== -1)) return 'จ่ายครบ';
   var b = calcJob(job.id);
   // คงเหลือ = 0 → จ่ายครบ (ACER: วันค้าง 0)
   var isKg = job.unit === 'kg';
@@ -4151,7 +4155,7 @@ function bulkCloseBill(jobId) {
   var closeTag = '[ปิดบิลอัตโนมัติ '+todayStr+' — ข้อมูลเก่าก่อนมีระบบตัดสต็อก]';
 
   jobItems[idx] = Object.assign({}, job, {
-    qty: newQty, qtyKg: newQtyKg,
+    qty: newQty, qtyKg: newQtyKg, closed: true,
     note: (job.note ? job.note+' ' : '') + closeTag
   });
 
