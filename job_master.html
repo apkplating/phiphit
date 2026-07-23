@@ -153,6 +153,7 @@ input:focus,select:focus{border-color:var(--blue2);}
         <option value="จ่ายครบ">จ่ายครบแล้ว</option>
       </select>
       <button onclick="exportBoardCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
+      <button onclick="openBulkCloseModal()" class="btn btn-outline btn-sm" style="color:#b91c1c;border-color:#fca5a5;">🧹 ปิดบิลเก่าเป็นชุด</button>
     </div>
   </div>
 
@@ -922,6 +923,30 @@ input:focus,select:focus{border-color:var(--blue2);}
     <div class="modal-footer">
       <button class="btn btn-green" onclick="saveEditJob()">💾 บันทึก</button>
       <button class="btn btn-outline" onclick="closeEditModal()">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Bulk Close Modal — ปิดบิลเก่าเป็นชุด ══ -->
+<div class="modal-bg" id="bulkCloseModal">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-title">🧹 ปิดบิลเก่าที่เกินกำหนดเป็นชุด</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
+      ใช้สำหรับเคลียร์บิลรับเข้าเก่าที่ยังโชว์ "คงเหลือ" ทั้งที่จริงใช้หมดไปแล้ว (ข้อมูลก่อนมีระบบตัดสต็อก) —
+      ระบบจะ<strong>ตัดจำนวนรับเข้าให้เหลือเท่ากับที่เคยออก INV จริงแล้วเท่านั้น</strong> (คงเหลือ = 0)
+      <strong style="color:#b91c1c;">ไม่กระทบ INV ที่ออกไปแล้ว</strong> และแก้ไขย้อนกลับได้ทีหลังผ่าน "✏️ แก้ไขข้อมูลบิล" ถ้าพลาด
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <label style="font-size:12px;white-space:nowrap;">รับเข้ามาแล้วเกิน</label>
+      <input type="number" id="bulkCloseDays" value="30" min="1" style="width:80px;padding:7px 8px;">
+      <label style="font-size:12px;white-space:nowrap;">วัน และยังมีคงเหลือ &gt; 0</label>
+      <button class="btn btn-outline btn-sm" onclick="previewBulkClose()">🔍 ค้นหาบิลที่เข้าเงื่อนไข</button>
+    </div>
+    <div id="bulkClosePreview" style="max-height:360px;overflow-y:auto;"></div>
+    <div id="toast-bulkclose" class="toast"></div>
+    <div class="modal-footer">
+      <button class="btn btn-green" id="bulkCloseConfirmBtn" onclick="confirmBulkClose()" style="display:none;">✅ ยืนยันปิดบิลที่เลือก</button>
+      <button class="btn btn-outline" onclick="closeBulkCloseModal()">ปิดหน้าต่าง</button>
     </div>
   </div>
 </div>
@@ -2718,36 +2743,35 @@ function printClaimNote(inv) {
     var pmPart = pmLookup(l.partName);
     var pmName = pmPart ? (pmPart.name||'') : '';
     return '<tr>'+
-      '<td style="text-align:center;border:1px solid #64748b;padding:4px;">'+(i+1)+'</td>'+
-      '<td style="border:1px solid #64748b;padding:4px;">'+esc(l.partName)+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+(i+1)+'</td>'+
+      '<td style="border:1px solid #64748b;padding:7px;">'+esc(l.partName)+
         (pmName?' <span style="color:#475569;">'+esc(pmName)+'</span>':'')+'</td>'+
-      '<td style="text-align:center;border:1px solid #64748b;padding:4px;">'+qtyStr+'</td>'+
-      '<td style="text-align:center;border:1px solid #64748b;padding:4px;">'+(l.lot?esc(l.lot):'-')+'</td>'+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+qtyStr+'</td>'+
+      '<td style="text-align:center;border:1px solid #64748b;padding:7px;">'+(l.lot?esc(l.lot):'-')+'</td>'+
     '</tr>';
   }).join('');
-  // เติมแถวว่างให้ครบอย่างน้อย 3 แถว ให้หน้าตาเหมือนฟอร์ม Excel เดิม (มีที่เขียนเพิ่มด้วยมือได้) — ลดจำนวนแถวว่างเพื่อให้พอดีกระดาษต่อเนื่อง 9x5.5"
-  var blankRows = Math.max(0, 3 - inv.items.length);
+  // เติมแถวว่างให้ครบอย่างน้อย 6 แถว ให้หน้าตาเหมือนฟอร์ม Excel เดิม (มีที่เขียนเพิ่มด้วยมือได้)
+  var blankRows = Math.max(0, 6 - inv.items.length);
   for (var i=0;i<blankRows;i++) {
-    rowsHtml += '<tr><td style="border:1px solid #64748b;padding:8px;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td></tr>';
+    rowsHtml += '<tr><td style="border:1px solid #64748b;padding:14px;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td><td style="border:1px solid #64748b;">&nbsp;</td></tr>';
   }
 
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
     '<title>ใบส่งคืนงานเคลม '+esc(inv.invNo)+'</title>'+
     '<style>'+
-    '@page{ size:9in 5.5in; margin:6mm; }'+
-    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:12px;color:#0f172a;padding:8px 14px;}'+
-    'table{width:100%;border-collapse:collapse;margin-top:8px;}'+
-    'th{background:#f1f5f9;border:1px solid #64748b;padding:5px;font-size:11px;}'+
-    '.hdr{text-align:center;border-bottom:2px solid #1e40af;padding-bottom:6px;margin-bottom:6px;}'+
-    '.hdr .co{font-weight:700;font-size:15px;}'+
-    '.hdr .addr{font-size:11px;color:#334155;margin-top:1px;}'+
-    '.title{text-align:center;font-weight:700;font-size:16px;margin:8px 0;}'+
-    '.meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:4px;font-size:12px;}'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    'th{background:#f1f5f9;border:1px solid #64748b;padding:7px;font-size:12px;}'+
+    '.hdr{text-align:center;border-bottom:2px solid #1e40af;padding-bottom:10px;margin-bottom:10px;}'+
+    '.hdr .co{font-weight:700;font-size:16px;}'+
+    '.hdr .addr{font-size:12px;color:#334155;margin-top:2px;}'+
+    '.title{text-align:center;font-weight:700;font-size:18px;margin:14px 0;}'+
+    '.meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:6px;font-size:13px;}'+
     '.meta .line{flex:1;border-bottom:1px dotted #475569;padding-bottom:2px;}'+
-    '.sign{display:flex;justify-content:space-around;margin-top:26px;text-align:center;font-size:11px;}'+
+    '.sign{display:flex;justify-content:space-around;margin-top:70px;text-align:center;font-size:12px;}'+
     '.sign div{width:38%;}'+
-    '.sign .ul{border-top:1px solid #64748b;margin-top:22px;padding-top:4px;}'+
-    '.docno{text-align:right;font-size:10px;color:#64748b;margin-top:-4px;}'+
+    '.sign .ul{border-top:1px solid #64748b;margin-top:44px;padding-top:4px;}'+
+    '.docno{text-align:right;font-size:11px;color:#64748b;margin-top:-6px;}'+
     '@media print{ body{padding:0;} }'+
     '</style></head><body>'+
     '<div class="hdr">'+
@@ -2764,7 +2788,7 @@ function printClaimNote(inv) {
     '<table><thead><tr>'+
       '<th style="width:40px;">ลำดับ</th>'+
       '<th>รายการ</th>'+
-      '<th style="width:120px;">จำนวน</th>'+
+      '<th style="width:90px;">จำนวน</th>'+
       '<th style="width:120px;">เลขที่ใบเคลม</th>'+
     '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
     (inv.note ? '<div style="margin-top:8px;font-size:12px;"><b>หมายเหตุ:</b> '+esc(inv.note)+'</div>' : '')+
@@ -2788,11 +2812,7 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 // (บิลที่ตัดสต็อกเป็น กก. เก็บ l.qty ไว้เป็นน้ำหนักรวม แต่ลูกค้าต้องการเห็นจำนวนชิ้นที่นับได้จริง)
 function invLineQtyDisplay(l) {
   if (l.unit === 'kg') {
-    if (l.pcs != null && l.pcs > 0) {
-      var pmPart = pmLookup(l.partName);
-      var wKg = (pmPart && pmPart.weightPerPc) ? (Number(l.pcs) * Number(pmPart.weightPerPc) / 1000) : Number(l.qty)||0;
-      return Number(l.pcs).toLocaleString() + ' ชิ้น (' + wKg.toFixed(2) + ' กก.)'; // น้ำหนักคำนวณจาก น้ำหนัก/ชิ้น ใน Part Master คูณจำนวนชิ้น (fallback ใช้ l.qty ถ้าไม่มีข้อมูลใน PM)
-    }
+    if (l.pcs != null && l.pcs > 0) return Number(l.pcs).toLocaleString();
     return Number(l.qty).toFixed(2) + ' กก.'; // fallback: ไม่ทราบน้ำหนัก/ชิ้น จึงแสดงเป็น กก. แทน
   }
   return Number(l.qty).toLocaleString();
@@ -4049,6 +4069,108 @@ function saveEditJob() {
   saveLocal(); fbSave();
   showToast('edit','✅ บันทึกสำเร็จ','ok');
   setTimeout(function(){ closeEditModal(); renderBoard(); }, 800);
+}
+
+// ══════════════════════════════════════
+//  BULK CLOSE — ปิดบิลเก่าที่เกินกำหนดเป็นชุด
+//  ใช้เคลียร์บิลรับเข้าเก่า (ก่อนมีระบบตัดสต็อก) ที่จริงใช้หมดแล้วแต่ยังโชว์คงเหลือค้างอยู่
+//  ตัดจำนวนรับเข้าให้เหลือเท่ากับยอดที่เคยออก INV จริงแล้วเท่านั้น (คงเหลือ = 0) — ไม่แตะ INV ที่ออกไปแล้ว
+// ══════════════════════════════════════
+var _bulkCloseCandidates = [];
+
+function openBulkCloseModal() {
+  document.getElementById('bulkClosePreview').innerHTML = '';
+  document.getElementById('bulkCloseConfirmBtn').style.display = 'none';
+  document.getElementById('bulkCloseModal').classList.add('open');
+}
+function closeBulkCloseModal() {
+  document.getElementById('bulkCloseModal').classList.remove('open');
+}
+
+function previewBulkClose() {
+  var days = parseInt(document.getElementById('bulkCloseDays').value) || 0;
+  if (days <= 0) { showToast('bulkclose','กรุณากรอกจำนวนวันให้ถูกต้อง','err'); return; }
+
+  _bulkCloseCandidates = jobItems.filter(function(j){
+    var age = daysSince(j.date);
+    if (age < days) return false;
+    var b = calcJob(j.id);
+    var remain = (j.unit==='kg') ? b.remainKg : b.remain;
+    return remain > 0.0001;
+  }).sort(function(a,b){ return daysSince(b.date)-daysSince(a.date); });
+
+  var box = document.getElementById('bulkClosePreview');
+  var confirmBtn = document.getElementById('bulkCloseConfirmBtn');
+
+  if (!_bulkCloseCandidates.length) {
+    box.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:12px;">ไม่พบบิลที่เข้าเงื่อนไข (เกิน '+days+' วัน และยังมีคงเหลือ)</div>';
+    confirmBtn.style.display = 'none';
+    return;
+  }
+
+  var rows = _bulkCloseCandidates.map(function(j){
+    var b = calcJob(j.id);
+    var isKg = j.unit === 'kg';
+    var remainStr = isKg ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    return '<tr>' +
+      '<td style="padding:5px 6px;"><input type="checkbox" class="bcChk" value="'+j.id+'" checked></td>' +
+      '<td style="padding:5px 6px;font-size:11px;font-family:monospace;">'+esc(j.bill||'-')+'</td>' +
+      '<td style="padding:5px 6px;font-size:11px;">'+esc(j.partName||'-')+'</td>' +
+      '<td style="padding:5px 6px;font-size:11px;color:var(--text-muted);">'+esc(j.customer||'-')+'</td>' +
+      '<td style="padding:5px 6px;font-size:11px;text-align:center;color:#b91c1c;">'+daysSince(j.date)+' วัน</td>' +
+      '<td style="padding:5px 6px;font-size:11px;text-align:right;font-weight:700;">'+remainStr+'</td>' +
+    '</tr>';
+  }).join('');
+
+  box.innerHTML =
+    '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">พบ '+_bulkCloseCandidates.length+' บิล — '+
+      '<label style="font-weight:400;font-size:11px;cursor:pointer;"><input type="checkbox" id="bcChkAll" checked onchange="toggleAllBulkClose(this.checked)"> เลือกทั้งหมด</label>' +
+    '</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+      '<thead><tr style="background:#f8fafc;text-align:left;">' +
+        '<th style="padding:5px 6px;"></th><th style="padding:5px 6px;">เลขบิล</th><th style="padding:5px 6px;">ชิ้นงาน</th>' +
+        '<th style="padding:5px 6px;">ลูกค้า</th><th style="padding:5px 6px;text-align:center;">อายุ</th><th style="padding:5px 6px;text-align:right;">คงเหลือ (จะตัดเป็น 0)</th>' +
+      '</tr></thead><tbody>'+rows+'</tbody>' +
+    '</table>';
+  confirmBtn.style.display = '';
+}
+
+function toggleAllBulkClose(checked) {
+  document.querySelectorAll('.bcChk').forEach(function(c){ c.checked = checked; });
+}
+
+function bulkCloseBill(jobId) {
+  var idx = jobItems.findIndex(function(j){ return j.id===jobId; });
+  if (idx < 0) return false;
+  var job  = jobItems[idx];
+  var b    = calcJob(jobId);
+  var unit = job.unit || 'pcs';
+  var newQty   = unit==='kg' ? 0 : b.totalOut;
+  var newQtyKg = unit==='kg' ? b.totalOutKg : 0;
+  var todayStr = new Date().toISOString().slice(0,10);
+  var closeTag = '[ปิดบิลอัตโนมัติ '+todayStr+' — ข้อมูลเก่าก่อนมีระบบตัดสต็อก]';
+
+  jobItems[idx] = Object.assign({}, job, {
+    qty: newQty, qtyKg: newQtyKg,
+    note: (job.note ? job.note+' ' : '') + closeTag
+  });
+
+  var firstIn = jobRecords.find(function(r){ return r.jobId===jobId && r.type==='in'; });
+  if (firstIn) { firstIn.qty = newQty; firstIn.qtyKg = newQtyKg; }
+  return true;
+}
+
+function confirmBulkClose() {
+  var checked = Array.from(document.querySelectorAll('.bcChk:checked')).map(function(c){ return c.value; });
+  if (!checked.length) { showToast('bulkclose','ยังไม่ได้เลือกบิล','err'); return; }
+  if (!confirm('ยืนยันปิด '+checked.length+' บิล? ระบบจะตัดคงเหลือของบิลที่เลือกเป็น 0 ทันที (ไม่กระทบ INV ที่ออกไปแล้ว แก้ไขย้อนกลับได้ทีหลัง)')) return;
+
+  var count = 0;
+  checked.forEach(function(jobId){ if (bulkCloseBill(jobId)) count++; });
+
+  saveLocal(); fbSave();
+  showToast('bulkclose','✅ ปิดบิลแล้ว '+count+' รายการ','ok');
+  setTimeout(function(){ closeBulkCloseModal(); renderBoard(); }, 900);
 }
 
 // ปิด modal เมื่อกดนอก
