@@ -225,7 +225,7 @@ tr:hover td{background:var(--sky-pale);}
       </div>
       <div style="font-size:10px;color:var(--text-muted);margin:-4px 0 10px;line-height:1.5;">
         ดึงยอด "รับเข้าแล้ว แต่ยังไม่ได้ชุบ" จาก bl_stock.html มาให้ดู <strong>แยกเป็นรายล็อต/รายบิล</strong> (1 หมายเลขชิ้นงานอาจมีหลายบิลหลายแถว) เรียงจากล็อตเก่าสุดก่อน (FIFO) — <strong>แสดงเฉพาะล็อตที่ค้างมาแล้ว ≥ 3 วัน</strong> (ไฮไลต์สีแดงเตือนให้เห็นชัด) ล็อตที่เพิ่งรับเข้ายังไม่ถึง 3 วันจะยังไม่โชว์ในตารางนี้
-        <br>ระบบ<strong>ไม่ดันเข้าคิวให้อัตโนมัติ</strong> — กดปุ่ม "➕ เข้าคิว" เองทีละแถว/ทีละบิล พร้อมเลือกสายผลิตก่อนยืนยัน สั่งผลิตตัดที่บิลได้เลย ไม่ปนกับบิลอื่น
+        <br>ระบบ<strong>ไม่ดันเข้าคิวให้อัตโนมัติ</strong> — กดปุ่ม "➕ เข้าคิว" เองทีละแถว/ทีละบิล พร้อมเลือกสายผลิตก่อนยืนยัน <strong>จะออกใบสั่งผลิต (PO) ให้ทันที</strong> ไปโชว์ที่ตาราง "📜 ใบสั่งผลิตทั้งหมด" ด้านบนเลย ไม่ต้องรอจัดคิว ตัดที่บิลได้ ไม่ปนกับบิลอื่น — ถ้าชุบไม่ครบยอด ส่วนที่เหลือจะกลับมาโชว์ในตารางนี้เองอัตโนมัติตอนกด "🔄 ดึงข้อมูลจาก BL Stock" ครั้งถัดไป
       </div>
       <div style="overflow-x:auto;">
         <table>
@@ -1057,27 +1057,34 @@ function renderWipCorrectionsList() {
   box.innerHTML = header + list;
 }
 
-// ผู้ใช้กดยืนยันเองทีละรายการ — ไม่ auto-push เข้าคิวโดยไม่ถาม
+// ผู้ใช้กดยืนยันเองทีละรายการ — ไม่ auto-push โดยไม่ถาม
 // 1 แถว = 1 ล็อต/บิลเท่านั้น เข้าคิวแล้วรู้ตัดจากบิลไหนชัดเจน ไม่ปนกัน
+// เปลี่ยนจากเดิม (ดันเข้า Backlog แล้วรอ Auto Scheduler ตัดกำลังผลิต) → สร้างใบสั่งผลิต (PO) ให้ทันที
+// ไม่เช็คกำลังการผลิตสูงสุด เพราะผู้ใช้กดยืนยันเองทีละรายการอยู่แล้ว
 function confirmBLToQueue(i, rowId) {
   var item = blPendingList[i];
   if (!item) return;
   var lineEl = document.getElementById('blline' + i);
   var line = lineEl ? lineEl.value : 'B1';
-  backlogItems.push({
-    id: 'bl_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-    createdAt: item.lotDate ? (item.lotDate + 'T00:00:00.000Z') : new Date().toISOString(), // ใช้วันที่รับเข้าจริงเพื่อรักษาลำดับ FIFO
-    customer: item.customer, partNo: item.partNo, partName: item.partName,
-    line: line, qty: item.pendingPcs, unit: 'pcs', status: 'pending',
-    bill: item.bill || '' // เลขบิลของล็อตนี้ล็อตเดียว — สอบกลับได้ชัดเจน ไม่ปนกับบิลอื่น
+  var now = new Date();
+  var today = isoDate(now);
+  var timestamp = today + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  poOrders.unshift({
+    id: Date.now() + Math.floor(Math.random()*10000),
+    date: today,
+    timestamp: timestamp,
+    planner: 'BL Stock (เข้าคิว)',
+    items: [{
+      customer: item.customer, partNo: item.partNo, partName: item.partName,
+      line: line, qty: item.pendingPcs, unit: 'pcs', bill: item.bill || ''
+    }]
   });
-  saveBacklogToFB();
-  renderBacklogList();
-  renderCapacityInfo();
-  // เอาแถวนี้ออกจากลิสต์ที่รออยู่ (ป้องกันกดซ้ำ)
+  savePOToFB();
+  renderPOList();
+  // เอาแถวนี้ออกจากลิสต์ที่รออยู่ (ป้องกันกดซ้ำ) — ถ้ายังชุบไม่ครบ รายการนี้จะกลับมาเองอัตโนมัติตอนดึงข้อมูลจาก BL Stock ครั้งถัดไป (เพราะคำนวณสดจาก WIP จริงเทียบกับล็อตที่รับเข้า)
   blPendingList.splice(i, 1);
   renderBLPendingList();
-  showToast('toast-backlog','✅ เพิ่ม ' + item.partNo + ' เข้าคิวแล้ว','ok');
+  showToast('toast-backlog','✅ สร้างใบสั่งผลิต ' + item.partNo + ' แล้ว (' + item.pendingPcs.toLocaleString() + ' ชิ้น สาย ' + line + ') — ดูได้ที่ 📜 ใบสั่งผลิตทั้งหมด','ok');
 }
 
 async function savePOToFB() {
