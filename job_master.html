@@ -918,6 +918,10 @@ input:focus,select:focus{border-color:var(--blue2);}
         <input type="text" id="editNote">
       </div>
     </div>
+    <div id="editClosedWarn" style="display:none;background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#b91c1c;">
+      🔒 บิลนี้ถูก<strong>ปิดไว้แล้ว</strong> (จาก "ปิดบิลเก่าเป็นชุด") คงเหลือถูกล็อกเป็น 0 ถาวร แก้ "จำนวนรับเข้า" ด้านบนจะไม่มีผลจนกว่าจะปลดล็อก
+      <label style="display:block;margin-top:6px;font-weight:600;cursor:pointer;"><input type="checkbox" id="editUnlockClosed"> ปลดล็อกบิลนี้ (ยกเลิกสถานะปิดบิล)</label>
+    </div>
     <div id="toast-edit" class="toast"></div>
     <div class="modal-footer">
       <button class="btn btn-green" onclick="saveEditJob()">💾 บันทึก</button>
@@ -1262,6 +1266,10 @@ function calcJob(jobId) {
   }
   var remain   = totalIn - totalOut;
   var remainKg = Math.max(0, parseFloat((totalInKg - totalOutKg).toFixed(3)));
+  // บิลที่ปิดแล้ว (job.closed=true จาก "🧹 ปิดบิลเก่าเป็นชุด") ล็อกคงเหลือเป็น 0 ถาวร —
+  // กันไว้เผื่อมีการแก้ไข/ลบ INV ที่เคยผูกกับบิลนี้ทีหลัง (ทำให้ totalOut ลดลง) จนคงเหลือคำนวณกลับมาเป็นบวกได้อีกโดยไม่ตั้งใจ
+  // ถ้าต้องการเปิดบิลนี้กลับมาจริงๆ ต้องแก้ไขผ่าน "✏️ แก้ไขข้อมูลบิล" เอง (ลบ flag closed ออกด้วยตัวเอง ไม่ใช่เกิดขึ้นเองอัตโนมัติ)
+  if (job.closed) { remain = 0; remainKg = 0; }
   return { totalIn:totalIn, totalOut:totalOut, remain:remain,
            totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
 }
@@ -4019,6 +4027,11 @@ function openEditModal(jobId) {
   document.getElementById('editQtyKg').value    = job.qtyKg   || '';
   document.getElementById('editDueDate').value  = job.dueDate || '';
   document.getElementById('editNote').value     = job.note    || '';
+  // แสดงคำเตือน+checkbox ปลดล็อก ถ้าบิลนี้ถูกปิดไว้ (job.closed) — คงเหลือถูกล็อกเป็น 0 ใน calcJob() จนกว่าจะปลดล็อก
+  var closedWarn = document.getElementById('editClosedWarn');
+  var unlockChk  = document.getElementById('editUnlockClosed');
+  if (closedWarn) closedWarn.style.display = job.closed ? 'block' : 'none';
+  if (unlockChk)  unlockChk.checked = false;
   onEditUnitChange();
   document.getElementById('editModal').classList.add('open');
 }
@@ -4050,10 +4063,13 @@ function saveEditJob() {
 
   var idx = jobItems.findIndex(function(j){ return j.id===jobId; });
   if (idx < 0) return;
-  jobItems[idx] = Object.assign({}, jobItems[idx],
-    { bill:bill, date:date, partName:partName, customer:customer,
+  // ปลดล็อกบิลที่เคยปิดไว้ ถ้าติ๊ก checkbox "ปลดล็อกบิลนี้" — ไม่งั้น calcJob() จะยังล็อกคงเหลือเป็น 0 ต่อไปแม้แก้จำนวนรับเข้าแล้ว
+  var unlockChk = document.getElementById('editUnlockClosed');
+  var stayClosed = jobItems[idx].closed && !(unlockChk && unlockChk.checked);
+  var patch = { bill:bill, date:date, partName:partName, customer:customer,
       unit:unit, qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0,
-      dueDate:dueDate, note:note });
+      dueDate:dueDate, note:note, closed: stayClosed };
+  jobItems[idx] = Object.assign({}, jobItems[idx], patch);
 
   // อัปเดต record 'in' ตัวแรกด้วย (qty หลัก)
   var firstIn = jobRecords.find(function(r){ return r.jobId===jobId && r.type==='in'; });
@@ -4335,17 +4351,28 @@ async function pullFromLines() {
             }
           }
 
-          // หา job ที่ partName ตรงกัน และยังมี remain
-          jobItems.forEach(function(job) {
-            var jPartKey = normalizePartKey(job.partName || '');
-            if (!jPartKey || jPartKey !== bPartKey) return;
+          // ── จับคู่บิลที่ P/No ตรงกัน แล้วตัดสต็อกแบบ FIFO (บิลรับเข้าเก่าสุดก่อนเสมอ) ──
+          // เดิมโค้ดนี้วนทุกบิลที่ P/No ตรงกันแล้วตัดยอดเต็มจำนวนของรอบนี้ (bPcs/bKg) ให้ "ทุกบิล" ที่ยังมีคงเหลือ
+          // ถ้า P/No นั้นมีหลายบิลค้างพร้อมกัน (พบบ่อยในระบบนี้) จะกลายเป็นตัดซ้ำหลายบิลเกินจำนวนที่ผลิตจริงไปมาก (นับซ้ำ)
+          // แถมไม่มีลำดับที่แน่นอนว่าตัดบิลไหนก่อน (ตามลำดับ array ของ jobItems ซึ่งไม่ใช่ FIFO)
+          // แก้ใหม่: เรียงบิลที่ตรงกันตามวันที่รับเข้าเก่าสุดก่อน แล้ว "แบ่ง" จำนวนของรอบนี้ไล่ตัดทีละบิลจนกว่าจะครบ
+          // (ถ้ารอบชุบนี้มากกว่าคงเหลือของบิลแรก จะตัดบิลแรกจนหมดแล้วไล่ตัดบิลถัดไปต่อ ไม่ตัดเกินจำนวนที่ผลิตจริงในรอบนี้)
+          var matchingJobs = jobItems.filter(function(job){
+            return normalizePartKey(job.partName||'') === bPartKey;
+          }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
+          var remainPcsToAllocate = bPcs;
+          var remainKgToAllocate  = bKg;
+          var didAllocate = false;
+
+          matchingJobs.forEach(function(job) {
             var b = calcJob(job.id);
             var isKg = job.unit === 'kg';
 
             if (isKg) {
-              if (!bKg || b.remainKg <= 0) return;
-              var outKg = Math.min(bKg, b.remainKg);
+              if (remainKgToAllocate <= 0 || b.remainKg <= 0) return;
+              var outKg = Math.min(remainKgToAllocate, b.remainKg);
+              if (outKg <= 0) return;
               var newRec = {
                 id: 'AUTO-' + Date.now() + '-' + Math.random().toString(36).slice(2,5),
                 roundId: roundEntryId,
@@ -4355,14 +4382,15 @@ async function pullFromLines() {
                 qty: 0, qtyKg: parseFloat(outKg.toFixed(3)), unit: 'kg',
                 inv: rec.lotNo || '',
                 by: lineName + ' Auto',
-                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '')
+                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '') + ' (FIFO)'
               };
               jobRecords.unshift(newRec);
-              processedRoundIds[roundEntryId] = true;
-              changed = true;
+              remainKgToAllocate -= outKg;
+              didAllocate = true;
             } else {
-              if (!bPcs || b.remain <= 0) return;
-              var outQty = Math.min(bPcs, b.remain);
+              if (remainPcsToAllocate <= 0 || b.remain <= 0) return;
+              var outQty = Math.min(remainPcsToAllocate, b.remain);
+              if (outQty <= 0) return;
               // ตรวจว่าแปลงจาก kg หรือไม่ (เพื่อแสดงใน note)
               var convNote = (!Number(barrel.pcs||0) && bKg > 0)
                 ? ' [แปลงจาก ' + bKg.toFixed(3) + ' kg]' : '';
@@ -4375,13 +4403,18 @@ async function pullFromLines() {
                 qty: outQty, qtyKg: 0, unit: 'pcs',
                 inv: rec.lotNo || '',
                 by: lineName + ' Auto',
-                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '') + convNote
+                note: 'Auto จากรอบชุบ ' + lineName + ' ' + (rec.lotNo || '') + convNote + ' (FIFO)'
               };
               jobRecords.unshift(newRec2);
-              processedRoundIds[roundEntryId] = true;
-              changed = true;
+              remainPcsToAllocate -= outQty;
+              didAllocate = true;
             }
           });
+
+          if (didAllocate) {
+            processedRoundIds[roundEntryId] = true;
+            changed = true;
+          }
         });
       });
     } catch(e) {
