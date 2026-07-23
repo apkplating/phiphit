@@ -2764,7 +2764,7 @@ function printClaimNote(inv) {
     '<table><thead><tr>'+
       '<th style="width:40px;">ลำดับ</th>'+
       '<th>รายการ</th>'+
-      '<th style="width:90px;">จำนวน</th>'+
+      '<th style="width:120px;">จำนวน</th>'+
       '<th style="width:120px;">เลขที่ใบเคลม</th>'+
     '</tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
     (inv.note ? '<div style="margin-top:8px;font-size:12px;"><b>หมายเหตุ:</b> '+esc(inv.note)+'</div>' : '')+
@@ -2788,7 +2788,11 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 // (บิลที่ตัดสต็อกเป็น กก. เก็บ l.qty ไว้เป็นน้ำหนักรวม แต่ลูกค้าต้องการเห็นจำนวนชิ้นที่นับได้จริง)
 function invLineQtyDisplay(l) {
   if (l.unit === 'kg') {
-    if (l.pcs != null && l.pcs > 0) return Number(l.pcs).toLocaleString() + ' ชิ้น(กก)'; // เตือนว่าตัดสต็อกเป็น กก. แต่แสดงจำนวนชิ้นที่แปลงแล้ว
+    if (l.pcs != null && l.pcs > 0) {
+      var pmPart = pmLookup(l.partName);
+      var wKg = (pmPart && pmPart.weightPerPc) ? (Number(l.pcs) * Number(pmPart.weightPerPc) / 1000) : Number(l.qty)||0;
+      return Number(l.pcs).toLocaleString() + ' ชิ้น (' + wKg.toFixed(2) + ' กก.)'; // น้ำหนักคำนวณจาก น้ำหนัก/ชิ้น ใน Part Master คูณจำนวนชิ้น (fallback ใช้ l.qty ถ้าไม่มีข้อมูลใน PM)
+    }
     return Number(l.qty).toFixed(2) + ' กก.'; // fallback: ไม่ทราบน้ำหนัก/ชิ้น จึงแสดงเป็น กก. แทน
   }
   return Number(l.qty).toLocaleString();
