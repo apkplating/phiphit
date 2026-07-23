@@ -4471,7 +4471,7 @@ function calcAutoChemUsed(chemName) {
         // ถ้า match เฉพาะ sub-chemical เดียว
         if (matchedSubName && ch.name.trim().toLowerCase() !== matchedSubName) return;
         var rate = parseFloat(ch.rate||0);
-        var color = (ch.color||'').toUpperCase();
+        var color = (matchedGroup.color||'').toUpperCase();
         if (color === 'B') ml += rate * bB;
         else if (color === 'C') ml += rate * bC;
         else if (color === 'K') ml += rate * bK;
@@ -4578,7 +4578,7 @@ function renderChemStockCard() {
           var chMatch = ch.name && ch.name.trim().toLowerCase() === nameLC;
           if (!isGroupMatch && !chMatch) return;
           var rate = parseFloat(ch.rate||0);
-          var color = (ch.color||'').toUpperCase();
+          var color = (c.color||'').toUpperCase();
           if (color==='B') ml += rate*bB;
           else if (color==='C') ml += rate*bC;
           else if (color==='K') ml += rate*bK;
@@ -4608,7 +4608,7 @@ function renderChemStockCard() {
           if (result) return;
           var chMatch = ch.name && ch.name.trim().toLowerCase() === nameLC;
           if (!isGroupMatch && !chMatch) return;
-          var color = (ch.color||'').toUpperCase();
+          var color = (c.color||'').toUpperCase();
           if (color==='B') result = { kind:'COLOR', val:bB, color:'B ฟ้า' };
           else if (color==='C') result = { kind:'COLOR', val:bC, color:'C รุ้ง' };
           else if (color==='K') result = { kind:'COLOR', val:bK, color:'K ดำ' };
@@ -5730,7 +5730,7 @@ function calcChemMonthTotal(ym) {
       } else if (c.type === 'COLOR') {
         (c.chemicals||[]).forEach(function(ch) {
           var rate = parseFloat(ch.rate||0);
-          var color = (ch.color||'').toUpperCase();
+          var color = (c.color||'').toUpperCase();
           if (color==='B') ml+=rate*bB; else if(color==='C') ml+=rate*bC; else if(color==='K') ml+=rate*bK;
           else ml+=rate*(bB+bC+bK);
         });
@@ -5826,7 +5826,7 @@ function renderSummaryMonthTable() {
           var chMatch = ch.name && ch.name.trim().toLowerCase() === nameLC;
           if (!isGroupMatch && !chMatch) return;
           var rate = parseFloat(ch.rate||0);
-          var color = (ch.color||'').toUpperCase();
+          var color = (c.color||'').toUpperCase();
           if (color==='B') ml+=rate*bB; else if(color==='C') ml+=rate*bC;
           else if(color==='K') ml+=rate*bK; else ml+=rate*(bB+bC+bK);
         });
