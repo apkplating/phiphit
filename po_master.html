@@ -161,6 +161,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
 .se-total{background:#f8fafc;}
 .se-score{font-weight:800;color:var(--navy);}
 .se-manual-tag{font-size:8px;color:#b45309;background:#fef3c7;padding:1px 5px;border-radius:6px;margin-left:4px;}
+.se-auto-tag{font-size:8px;color:#0d9488;background:#ccfbf1;padding:1px 5px;border-radius:6px;margin-left:4px;}
 .se-manual-input{width:50px;border:1px solid var(--border);border-radius:4px;text-align:center;font-weight:800;font-family:inherit;padding:3px;}
 </style>
 </head>
@@ -431,7 +432,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
     <div class="card-label">📝 Supplier Evaluation Report</div>
     <div style="font-size:11px;color:var(--text-mid);margin-bottom:10px;line-height:1.6;">
       ดึงข้อมูลอัตโนมัติจากประวัติรับเข้า/ตรวจ QC ใน chem_master.html (Certificate, เอกสารส่งสินค้า, บรรจุภัณฑ์, จัดส่งตรงเวลา, การเคลม) —
-      หัวข้อที่ยังไม่มีข้อมูลรองรับ (การตอบกลับใบรายงานปัญหา, การขนส่งรอบพิเศษ) กรอกคะแนนเองได้
+      หัวข้อที่ยังไม่มีข้อมูลรองรับ (การตอบกลับใบรายงานปัญหา) กรอกคะแนนเองได้
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
@@ -1672,6 +1673,31 @@ function seCalcScore(records, fullMarks, checkFn) {
   return { score:score, fullMarks:fullMarks, total:total, fails:fails };
 }
 
+// เหมือน seFindTopicResult แต่เช็คได้หลายหัวข้อพร้อมกัน — ถือว่า 'fail' ถ้าหัวข้อใดหัวข้อหนึ่งที่ตรงคำค้นไม่ผ่าน
+// ใช้กับ "ลักษณะของบรรจุภัณฑ์" ซึ่งรวม 2 หัวข้อ QC: สภาพบรรจุภัณฑ์ + สีและลักษณะทางกายภาพ
+function seFindTopicResultAny(rec, keywords) {
+  if (!rec.qcTopicNames || !rec.qcTopicResults) return null;
+  var found = false, anyFail = false;
+  for (var i=0; i<rec.qcTopicNames.length; i++) {
+    var name = rec.qcTopicNames[i]||'';
+    for (var k=0; k<keywords.length; k++) {
+      if (name.indexOf(keywords[k]) !== -1) {
+        found = true;
+        if (rec.qcTopicResults[i]==='fail') anyFail = true;
+      }
+    }
+  }
+  if (!found) return null;
+  return anyFail ? 'fail' : 'pass';
+}
+
+// คำนวณคะแนน "การขนส่งรอบพิเศษ" จากจำนวนครั้งที่ติ๊ก "เที่ยวพิเศษ" ใน chem_master (yes/no ตรงๆ ไม่ใช่ผ่าน/ไม่ผ่านแบบ QC)
+function seCalcSpecialShip(records, fullMarks) {
+  var count = records.filter(function(r){ return r.specialTrip===true; }).length;
+  var score = Math.max(0, fullMarks - 5*count);
+  return { score:score, fullMarks:fullMarks, total:records.length, fails:count };
+}
+
 // คำนวณคะแนนทุกหัวข้อของผู้ขาย+เดือนที่ระบุ (YYYY-MM) — ใช้ทั้งตอนโชว์รายงานหลักและตอนคำนวณกราฟรายเดือน
 function seCalcMonth(vendorName, ym) {
   var vendorChemIds = {};
@@ -1684,18 +1710,19 @@ function seCalcMonth(vendorName, ym) {
   var cert  = seCalcScore(records, 30, function(r){ return seFindTopicResult(r,'Certificate'); });
   var onTime = seCalcScore(records, 50, function(r){ return seFindTopicResult(r,'จัดส่งตรงเวลา'); });
   var doc   = seCalcScore(records, 10, function(r){ return seFindTopicResult(r,'ใบส่งของ'); });
-  var pack  = seCalcScore(records, 20, function(r){ return seFindTopicResult(r,'บรรจุภัณฑ์'); });
+  var pack  = seCalcScore(records, 20, function(r){ return seFindTopicResultAny(r,['บรรจุภัณฑ์','สีและลักษณะทางกายภาพ']); });
+  var special = seCalcSpecialShip(records, 20);
 
   var manualKey = vendorName+'|'+ym;
   var manual = supEvaManual[manualKey] || {};
   var complaintResp = (manual.complaintResponse!=null) ? Number(manual.complaintResponse) : 20;
-  var specialShip    = (manual.specialShipment!=null)   ? Number(manual.specialShipment)   : 20;
+  var specialShip = special.score;
 
   var qualityTotal  = claim.score + cert.score + complaintResp;
   var deliveryTotal = onTime.score + doc.score + pack.score + specialShip;
 
   return {
-    records: records, claim:claim, cert:cert, onTime:onTime, doc:doc, pack:pack,
+    records: records, claim:claim, cert:cert, onTime:onTime, doc:doc, pack:pack, special:special,
     complaintResp:complaintResp, specialShip:specialShip,
     qualityTotal:qualityTotal, deliveryTotal:deliveryTotal,
     manual: manual
@@ -1806,8 +1833,8 @@ function renderSupEva() {
     '<tr><td class="tl">1&nbsp;&nbsp;การจัดส่งตรงตามกำหนดเวลา</td><td>'+m.onTime.fullMarks+'</td><td class="se-score">'+m.onTime.score+'</td></tr>' +
     '<tr><td class="tl">2&nbsp;&nbsp;เอกสารการส่งสินค้า</td><td>'+m.doc.fullMarks+'</td><td class="se-score">'+m.doc.score+'</td></tr>' +
     '<tr><td class="tl">3&nbsp;&nbsp;ลักษณะของบรรจุภัณฑ์</td><td>'+m.pack.fullMarks+'</td><td class="se-score">'+m.pack.score+'</td></tr>' +
-    '<tr><td class="tl">4&nbsp;&nbsp;การขนส่งรอบพิเศษ <span class="se-manual-tag">กรอกเอง</span></td><td>20</td><td>'+
-      '<input type="number" min="0" max="20" value="'+m.specialShip+'" class="se-manual-input" onchange="seSaveManual(\''+manualKey+'\',\'specialShipment\',this.value)"></td></tr>' +
+    '<tr><td class="tl">4&nbsp;&nbsp;การขนส่งรอบพิเศษ <span class="se-auto-tag">Auto</span></td><td>20</td><td class="se-score">'+m.special.score+
+      (m.special.fails>0 ? ' <span style="font-size:9px;color:#b45309;">('+m.special.fails+' ครั้ง)</span>' : '') + '</td></tr>' +
     '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน <span style="display:inline-block;border:1.5px solid var(--navy);border-radius:4px;padding:0 8px;margin-left:6px;font-weight:800;">'+grade+'</span></td><td>100</td><td class="se-score">'+m.deliveryTotal+'</td></tr>' +
   '</table>';
   html += '<div style="width:260px;">'+seMiniBarChart(deliveryByMonth)+'</div>';
@@ -1898,6 +1925,7 @@ function printSupEva() {
     '.se-total{background:#f1f5f9;}' +
     '.se-score{font-weight:800;}' +
     '.se-manual-tag{font-size:8px;color:#b45309;background:#fef3c7;padding:1px 5px;border-radius:6px;margin-left:4px;}' +
+    '.se-auto-tag{font-size:8px;color:#0d9488;background:#ccfbf1;padding:1px 5px;border-radius:6px;margin-left:4px;}' +
     '.se-manual-input{width:50px;border:1px solid #cbd5e1;border-radius:4px;text-align:center;font-weight:800;font-family:inherit;}' +
     '@media print{ body{padding:0;} button,input{display:none !important;} }' +
     '</style></head><body>' + body + '</body></html>';

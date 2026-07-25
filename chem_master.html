@@ -314,6 +314,13 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
     <div id="onTimeAutoBox" style="margin-bottom:8px;"></div>
     <div id="qcChecklist" style="margin-bottom:12px;"></div>
 
+    <!-- เที่ยวพิเศษ — ไม่ใช่หัวข้อ QC ผ่าน/ไม่ผ่าน แต่เป็นข้อเท็จจริงว่ารอบรับเข้านี้เป็นการขนส่งรอบพิเศษ/เร่งด่วนนอกรอบปกติหรือไม่
+         (ใช้ประกอบ Supplier Evaluation หัวข้อ "การขนส่งรอบพิเศษ" ใน po_master.html — ยิ่งมีเที่ยวพิเศษบ่อย ยิ่งสะท้อนว่าผู้ขายส่งของไม่พอ/ไม่ตรงรอบปกติ) -->
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;cursor:pointer;font-size:12px;margin-bottom:4px;">
+      <input type="checkbox" id="inSpecialTrip" style="width:16px;height:16px;">
+      🚚 รอบนี้เป็น<strong>เที่ยวพิเศษ/เร่งด่วน</strong> (นอกรอบส่งปกติ)
+    </label>
+
     <!-- สรุปผล -->
     <div style="display:flex;gap:8px;margin-bottom:0;">
       <button id="qcPassBtn" onclick="setQCResult('pass')"
@@ -1120,6 +1127,7 @@ function addChemIn() {
   var certs    = certLinks.slice();
   var poRefId  = document.getElementById('inPoRef').value;
   var poRef    = poListCache.find(function(p){ return p.id===poRefId; });
+  var specialTrip = document.getElementById('inSpecialTrip').checked;
 
   if (!chemId)   { showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
   if (!date)     { showToast('in','กรุณาระบุวันที่','err'); return; }
@@ -1138,6 +1146,7 @@ function addChemIn() {
     linkedPoId: poRefId || '',
     linkedPoNo: poRef ? poRef.poNo : '',
     linkedPoDueDate: poRef ? (poRef.dueDate||'') : '', // เก็บไว้อ้างอิง/สอบกลับเท่านั้น ไม่ได้ใช้ตัดสินผ่าน/ไม่ผ่านอัตโนมัติแล้ว
+    specialTrip: specialTrip, // true = รอบนี้เป็นเที่ยวพิเศษ/เร่งด่วน — ใช้คำนวณ Supplier Evaluation หัวข้อ "การขนส่งรอบพิเศษ"
   });
   saveLocal(); fbSave();
 
@@ -1147,6 +1156,7 @@ function addChemIn() {
   });
   document.getElementById('inChemSel').value='';
   document.getElementById('inPoRef').innerHTML = '<option value="">— ไม่ผูก PO / ไม่ทราบเลข PO —</option>';
+  document.getElementById('inSpecialTrip').checked = false;
   renderOnTimeHint();
   qcResults = {};
   certLinks = [];
