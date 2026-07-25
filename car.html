@@ -76,6 +76,10 @@ tr:hover td{background:var(--steel-3);}
 .badge-par{background:#fde68a; color:#92400e;}
 .badge-open{background:#fee2e2; color:#991b1b;}
 .badge-closed{background:#dcfce7; color:#166534;}
+.badge-sent{background:#e0e7ff; color:#3730a3;}
+.badge-awaiting_response{background:#fef3c7; color:#92400e;}
+.badge-awaiting_approval{background:#fed7aa; color:#9a3412;}
+.badge-approved_closed{background:#dcfce7; color:#166534;}
 
 .suggest-card{border:1px solid #fecaca; background:#fff7f7; border-radius:12px; padding:16px; margin-bottom:12px;}
 .suggest-card.par{border-color:#fde68a; background:#fffbeb;}
@@ -107,7 +111,19 @@ tr:hover td{background:var(--steel-3);}
 .pchk{font-size:14px; margin-right:4px;}
 .ptable{width:100%; border-collapse:collapse; font-size:11px;}
 .ptable th{background:var(--steel-3); border:1px solid var(--border); padding:5px; font-size:10px;}
-.ptable td{border:1px solid var(--border); padding:5px;}
+.ptable td{border:1px solid var(--border); padding:6px; vertical-align:top;}
+.pteam td{width:33.33%;}
+.pgrid{width:100%; border-collapse:collapse; font-size:11px; margin-bottom:8px;}
+.pgrid td{border:1px solid var(--border); padding:8px; vertical-align:top;}
+.pgridlabel{font-weight:700; font-size:11.5px; margin-bottom:6px;}
+.pchkwrap{margin-bottom:4px; line-height:1.9;}
+.pchkitem{display:inline-block; margin-right:14px; white-space:nowrap;}
+.pnumbox{display:inline-block; border:1px solid #000; min-height:16px; padding:1px 6px; text-align:center; font-family:'IBM Plex Mono',monospace; font-weight:700;}
+.pblank{display:inline-block; border-bottom:1px solid #000; height:14px; vertical-align:bottom; margin:0 2px;}
+.pblankline{border-bottom:1px solid #000; height:18px; margin-bottom:2px;}
+.pfill{border-bottom:1px solid #000; padding:0 3px; font-weight:600;}
+.prow2{margin-bottom:6px; font-size:11px;}
+.pfoot{font-size:9.5px; color:var(--text-muted); margin-top:6px; display:flex; justify-content:space-between;}
 
 @media print{
   body{background:#fff;}
@@ -158,6 +174,10 @@ tr:hover td{background:var(--steel-3);}
       <div class="card">
         <h2>รายการ CAR/PAR ทั้งหมด</h2>
         <div class="sub">คลิกแถวเพื่อดู/แก้ไขรายละเอียด หรือพิมพ์เอกสาร</div>
+        <div class="field" style="max-width:240px;margin-bottom:10px;">
+          <label>กรองตามสถานะการติดตาม</label>
+          <select id="fListStatusFilter"><option value="">— ทุกสถานะ —</option></select>
+        </div>
         <div id="listWrap"><div class="empty">กำลังโหลด…</div></div>
       </div>
     </div>
@@ -220,6 +240,20 @@ var SOURCE_LABELS = {
   customerReturn: 'ลูกค้าคืนของ',
   qualityExceedTarget: 'ปัญหาคุณภาพเกินเป้า'
 };
+// สถานะการติดตามใบ CAR/PAR — 4 ขั้นตอน ตามที่ผู้ใช้ขอ (เดิมมีแค่ เปิดอยู่/ปิดแล้ว แบบ binary)
+var STATUS_LABELS = {
+  sent: 'เอกสารส่งให้ผู้เกี่ยวข้อง',
+  awaiting_response: 'รอตอบกลับ',
+  awaiting_approval: 'รออนุมัติปิด',
+  approved_closed: 'อนุมัติปิด'
+};
+var STATUS_ORDER = ['sent','awaiting_response','awaiting_approval','approved_closed'];
+// รองรับข้อมูลเก่าที่ยังเป็น 'open'/'closed' แบบ binary (ก่อนเปลี่ยนเป็น 4 สถานะ) — แปลงเป็นสถานะใหม่ตอนแสดงผล ไม่แก้ข้อมูลเดิมจนกว่าจะมีการบันทึกใหม่
+function normalizeStatus(s){
+  if (s==='closed') return 'approved_closed';
+  if (s==='open' || !s) return 'sent';
+  return s;
+}
 var MONTH_NAMES = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 function $(id){ return document.getElementById(id); }
@@ -288,12 +322,24 @@ function refreshList(){
   });
 }
 function renderList(){
-  var ids = Object.keys(allRecords).sort(function(a,b){ return (allRecords[b].createdAt||'').localeCompare(allRecords[a].createdAt||''); });
-  if (!ids.length){ $('listWrap').innerHTML = '<div class="empty">ยังไม่มี CAR/PAR ในระบบ</div>'; return; }
+  // เติม dropdown กรองสถานะ ครั้งแรกเท่านั้น (ไม่ล้างค่าที่ผู้ใช้เลือกไว้ทุกครั้งที่ข้อมูลรีเฟรช)
+  var filterSel = $('fListStatusFilter');
+  if (filterSel && filterSel.options.length <= 1) {
+    filterSel.innerHTML = '<option value="">— ทุกสถานะ —</option>' +
+      STATUS_ORDER.map(function(k){ return '<option value="'+k+'">'+STATUS_LABELS[k]+'</option>'; }).join('');
+    filterSel.addEventListener('change', renderList);
+  }
+  var filterVal = filterSel ? filterSel.value : '';
+
+  var ids = Object.keys(allRecords)
+    .filter(function(id){ return !filterVal || normalizeStatus(allRecords[id].status)===filterVal; })
+    .sort(function(a,b){ return (allRecords[b].createdAt||'').localeCompare(allRecords[a].createdAt||''); });
+  if (!ids.length){ $('listWrap').innerHTML = '<div class="empty">'+(filterVal ? 'ไม่มี CAR/PAR ในสถานะนี้' : 'ยังไม่มี CAR/PAR ในระบบ')+'</div>'; return; }
   var rows = ids.map(function(id){
     var r = allRecords[id];
     var typeBadge = '<span class="badge '+(r.type==='PAR'?'badge-par':'badge-car')+'">'+r.type+'</span>';
-    var statusBadge = '<span class="badge '+(r.status==='closed'?'badge-closed':'badge-open')+'">'+(r.status==='closed'?'ปิดแล้ว':'เปิดอยู่')+'</span>';
+    var stKey = normalizeStatus(r.status);
+    var statusBadge = '<span class="badge badge-'+stKey+'">'+STATUS_LABELS[stKey]+'</span>';
     var srcList = Object.keys(SOURCE_LABELS).filter(function(k){ return r.source && r.source[k]; }).map(function(k){ return SOURCE_LABELS[k]; });
     if (r.source && r.source.other && r.source.otherText) srcList.push(r.source.otherText);
     return '<tr data-open="'+id+'" style="cursor:pointer;">' +
@@ -534,7 +580,7 @@ function blankRecord(type){
     docChange: {needed:false, items:['','']},
     applyOther: {needed:false, items:['','']},
     result: {actual:'', closed:null, followUpBy:'', followDate:'', newCarNo:'', newParNo:''},
-    status: 'open',
+    status: 'sent',
     reportedBy: '', reportedDate: bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2),
     createdAt: new Date().toISOString(), createdBy: session ? session.user.name : ''
   };
@@ -605,7 +651,9 @@ function renderDetail(rec, id){
     '<div class="row">' +
       '<div class="field" style="max-width:160px;"><label>ประเภท</label><select id="fType" '+(editable?'':'disabled')+'><option value="CAR"'+(rec.type==='CAR'?' selected':'')+'>CAR</option><option value="PAR"'+(rec.type==='PAR'?' selected':'')+'>PAR</option></select></div>' +
       '<div class="field" style="max-width:160px;"><label>เลขที่เอกสาร</label><input type="text" id="fDocNo" value="'+escapeHtml(rec.docNo||'(ออกเมื่อบันทึกครั้งแรก)')+'" disabled></div>' +
-      '<div class="field" style="max-width:200px;"><label>สถานะ</label><select id="fStatus" '+(editable?'':'disabled')+'><option value="open"'+(rec.status==='open'?' selected':'')+'>เปิดอยู่</option><option value="closed"'+(rec.status==='closed'?' selected':'')+'>ปิดแล้ว</option></select></div>' +
+      '<div class="field" style="max-width:220px;"><label>สถานะการติดตาม</label><select id="fStatus" '+(editable?'':'disabled')+'>'+
+        STATUS_ORDER.map(function(k){ return '<option value="'+k+'"'+(normalizeStatus(rec.status)===k?' selected':'')+'>'+STATUS_LABELS[k]+'</option>'; }).join('') +
+      '</select></div>' +
     '</div>' +
     '<div class="field"><label>แหล่งที่มาของปัญหา</label>'+srcChecks+otherRow+'</div>' +
     '<div class="field"><label>สภาพความผิดปกติ</label><textarea id="fAbnormal" '+(editable?'':'disabled')+'>'+escapeHtml(rec.abnormalCondition)+'</textarea></div>' +
@@ -665,33 +713,110 @@ function renderDetail(rec, id){
 }
 
 function printSheetHtml(rec){
-  function chk(b){ return b ? '☑' : '☐'; }
-  var srcLine = Object.keys(SOURCE_LABELS).map(function(k){ return chk(rec.source[k])+' '+SOURCE_LABELS[k]; }).join('　　');
-  var teamLine = rec.team.map(function(v,i){ return (i+1)+'. '+escapeHtml(v||'…………………')+(i===0?' (หัวหน้าทีม)':''); }).join('　');
+  function chk(b){ return '<span class="pchk">'+(b ? '☑' : '☐')+'</span>'; }
+  // เส้น/กล่องว่างให้เขียนด้วยมือได้จริง ถ้ายังไม่มีข้อมูล — แทนที่จะโชว์ "—" เฉยๆ ซึ่งไม่เชิญชวนให้กรอกต่อ
+  function fill(text, minWidth){
+    if (text) return '<span class="pfill">'+escapeHtml(text)+'</span>';
+    return '<span class="pblank" style="min-width:'+(minWidth||90)+'px;"></span>';
+  }
+  function fillBlock(text, lines){
+    if (text) return escapeHtml(text).replace(/\n/g,'<br>');
+    var out = '';
+    for (var i=0;i<(lines||2);i++) out += '<div class="pblankline"></div>';
+    return out;
+  }
+  // แยกเลขที่เอกสาร "001-07-69" เป็น 3 ช่อง (เลขที่-เดือน-ปี พ.ศ.2หลัก) ให้ตรงรูปแบบกล่องในฟอร์มจริง
+  var docParts = (rec.docNo||'').split('-');
+  function numBox(v, w){ return '<span class="pnumbox" style="min-width:'+w+'px;">'+escapeHtml(v||'')+'</span>'; }
+
+  var srcRow = Object.keys(SOURCE_LABELS).map(function(k){ return '<span class="pchkitem">'+chk(rec.source[k])+' '+SOURCE_LABELS[k]+'</span>'; }).join('');
+  var srcOtherRow = '<span class="pchkitem">'+chk(rec.source.other)+' อื่น (ระบุ): '+fill(rec.source.otherText,150)+'</span>';
+
+  var teamCells = rec.team.map(function(v,i){
+    return '<td>'+(i+1)+'. '+fill(v,110)+(i===0?' <i style="font-size:9px;">(หัวหน้าทีม)</i>':'')+'</td>';
+  });
+  var teamRows = '<tr>'+teamCells.slice(0,3).join('')+'</tr><tr>'+teamCells.slice(3,6).join('')+'</tr>';
+
   var rcRowsHtml = rec.rootCause.map(function(rc){
-    return '<tr><td>'+escapeHtml(rc.cause||'')+'</td><td>'+escapeHtml(rc.solution||'')+'</td><td>'+escapeHtml(rc.responsible||'')+' / '+escapeHtml(rc.dueDate||'')+'</td></tr>';
+    return '<tr><td>'+fillBlock(rc.cause,2)+'</td><td>'+fillBlock(rc.solution,2)+'</td><td>'+fill(rc.responsible,80)+' / '+fill(rc.dueDate,70)+'</td></tr>';
   }).join('');
-  var dcItems = rec.docChange.items.filter(Boolean).map(function(v,i){ return (i+1)+') '+escapeHtml(v); }).join('<br>');
-  var aoItems = rec.applyOther.items.filter(Boolean).map(function(v,i){ return (i+1)+') '+escapeHtml(v); }).join('<br>');
+  if (!rcRowsHtml) rcRowsHtml = '<tr><td>'+fillBlock('',2)+'</td><td>'+fillBlock('',2)+'</td><td>'+fill('',80)+' / '+fill('',70)+'</td></tr>';
+
+  function twoItemBlock(obj){
+    var items = (obj.items||['','']).map(function(v,i){
+      return '<div class="prow2">'+(i+1)+') '+fill(v,220)+' <span style="margin-left:10px;">กำหนดเสร็จ '+fill('',60)+'</span></div>';
+    }).join('');
+    return items;
+  }
+
   return '<div class="printsheet">' +
-    '<div class="phead"><div><h2>ใบรายงานการแก้ไขและป้องกัน</h2><div class="mono" style="font-size:11px;">APK-FR-MR-006 · Rev.00</div></div>' +
-      '<div class="mono" style="text-align:right;"><b>'+rec.type+' No.</b> '+escapeHtml(rec.docNo||'—')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">แหล่งที่มาของปัญหา</div><div class="pbody">'+srcLine+(rec.source.other?('　'+chk(true)+' อื่น: '+escapeHtml(rec.source.otherText||'')):'')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">สภาพความผิดปกติ</div><div class="pbody">'+escapeHtml(rec.abnormalCondition||'—').replace(/\n/g,'<br>')+'<br><br>ผู้แจ้ง: '+escapeHtml(rec.reportedBy||'—')+' &nbsp; วันที่แจ้ง: '+escapeHtml(rec.reportedDate||'—')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">มาตรการดำเนินการเบื้องต้น</div><div class="pbody">แนวทาง: '+escapeHtml(rec.initialAction.approach||'—')+'<br>วิธีการแก้ปัญหา: '+escapeHtml(rec.initialAction.method||'—')+'<br>ผู้รับผิดชอบ: '+escapeHtml(rec.initialAction.responsible||'—')+' &nbsp; วันที่เริ่ม: '+escapeHtml(rec.initialAction.startDate||'—')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">ทีมงานในการวิเคราะห์ปัญหา</div><div class="pbody">'+teamLine+'</div></div>' +
-    '<div class="psection"><div class="ptitle">สาเหตุของปัญหา / วิธีการแก้ปัญหา</div><div class="pbody">' +
-      (rcRowsHtml ? '<table class="ptable"><thead><tr><th>สาเหตุ</th><th>วิธีการแก้ปัญหา</th><th>ผู้รับผิดชอบ/กำหนดเสร็จ</th></tr></thead><tbody>'+rcRowsHtml+'</tbody></table>' : '—') +
+    '<div class="phead"><div><h2>ใบรายงานการแก้ไขและป้องกัน</h2><div class="mono" style="font-size:11px;">APK-FR-MR-006 · Rev.00</div></div></div>' +
+
+    '<table class="pgrid">' +
+      '<tr>' +
+        '<td style="width:60%;" rowspan="2">' +
+          '<div class="pgridlabel">แหล่งที่มาของปัญหา</div>' +
+          '<div class="pchkwrap">'+srcRow+'</div>' +
+          '<div class="pchkwrap">'+srcOtherRow+'</div>' +
+        '</td>' +
+        '<td>' +
+          chk(rec.type==='CAR')+' CAR No.&nbsp; '+numBox(rec.type==='CAR'?docParts[0]:'',34)+'&nbsp;-&nbsp;'+numBox(rec.type==='CAR'?docParts[1]:'',24)+'&nbsp;-&nbsp;'+numBox(rec.type==='CAR'?docParts[2]:'',24)+
+          '<div style="font-size:8.5px;color:#64748b;margin-top:1px;">NUMBER&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MONTH&nbsp;&nbsp;YEAR</div>' +
+        '</td>' +
+      '</tr>' +
+      '<tr>' +
+        '<td>' +
+          chk(rec.type==='PAR')+' PAR No.&nbsp; '+numBox(rec.type==='PAR'?docParts[0]:'',34)+'&nbsp;-&nbsp;'+numBox(rec.type==='PAR'?docParts[1]:'',24)+'&nbsp;-&nbsp;'+numBox(rec.type==='PAR'?docParts[2]:'',24)+
+          '<div style="margin-top:6px;">ผู้แจ้งปัญหา/แผนก: '+fill(rec.reportedBy,120)+'</div>' +
+          '<div style="margin-top:4px;">วันที่แจ้ง: '+fill(rec.reportedDate,80)+'</div>' +
+        '</td>' +
+      '</tr>' +
+    '</table>' +
+
+    '<div class="psection"><div class="ptitle">สภาพความผิดปกติ</div><div class="pbody">'+fillBlock(rec.abnormalCondition,3)+'</div></div>' +
+
+    '<div class="psection"><div class="ptitle">มาตรการดำเนินการเบื้องต้น</div>' +
+      '<table class="ptable"><thead><tr><th>แนวทาง</th><th>วิธีการแก้ปัญหา</th><th>ผู้รับผิดชอบ</th><th>วันที่เริ่มดำเนินการ</th></tr></thead>' +
+      '<tbody><tr><td>'+fillBlock(rec.initialAction.approach,2)+'</td><td>'+fillBlock(rec.initialAction.method,2)+'</td><td>'+fill(rec.initialAction.responsible,80)+'</td><td>'+fill(rec.initialAction.startDate,70)+'</td></tr></tbody></table>' +
+    '</div>' +
+
+    '<div class="psection"><div class="ptitle">ทีมงานในการวิเคราะห์ปัญหา</div>' +
+      '<table class="ptable pteam">'+teamRows+'</table>' +
+    '</div>' +
+
+    '<div class="psection"><div class="ptitle">สาเหตุของปัญหา / วิธีการแก้ปัญหา</div>' +
+      '<table class="ptable"><thead><tr><th>สาเหตุของปัญหา</th><th>วิธีการแก้ปัญหา</th><th>ผู้รับผิดชอบ / กำหนดเสร็จ</th></tr></thead><tbody>'+rcRowsHtml+'</tbody></table>' +
+    '</div>' +
+
+    '<div class="psection"><div class="ptitle">การปรับเปลี่ยนเอกสารที่เกี่ยวข้อง</div><div class="pbody">' +
+      '<div class="pchkwrap">'+chk(!rec.docChange.needed)+' ไม่ต้องปรับเปลี่ยนเอกสาร&nbsp;&nbsp;&nbsp;&nbsp;'+chk(rec.docChange.needed)+' ต้องปรับเปลี่ยนเอกสาร:</div>' +
+      twoItemBlock(rec.docChange) +
     '</div></div>' +
-    '<div class="psection"><div class="ptitle">การปรับเปลี่ยนเอกสารที่เกี่ยวข้อง</div><div class="pbody">'+chk(!rec.docChange.needed)+' ไม่ต้องปรับเปลี่ยนเอกสาร　'+chk(rec.docChange.needed)+' ต้องปรับเปลี่ยนเอกสาร<br>'+(dcItems||'')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">การประยุกต์ใช้กับกระบวนการ/ผลิตภัณฑ์อื่นที่คล้ายคลึงกัน</div><div class="pbody">'+chk(!rec.applyOther.needed)+' ไม่จำเป็นต้องนำไปประยุกต์ใช้　'+chk(rec.applyOther.needed)+' จำเป็นต้องนำไปประยุกต์ใช้<br>'+(aoItems||'')+'</div></div>' +
-    '<div class="psection"><div class="ptitle">การบันทึกผลของการปฏิบัติการแก้ไข/ป้องกัน</div><div class="pbody">' +
-      escapeHtml(rec.result.actual||'—') + '<br><br>' +
-      chk(rec.result.closed===true)+' สามารถปิดปัญหาได้　'+chk(rec.result.closed===false)+' ไม่สามารถปิดปัญหาได้<br>' +
-      'ผู้ติดตามผล: '+escapeHtml(rec.result.followUpBy||'—')+' &nbsp; วันที่ติดตาม: '+escapeHtml(rec.result.followDate||'—')+'<br>' +
-      'New CAR No.: '+escapeHtml(rec.result.newCarNo||'—')+' &nbsp; New PAR No.: '+escapeHtml(rec.result.newParNo||'—') +
+
+    '<div class="psection"><div class="ptitle">การประยุกต์ใช้กับกระบวนการผลิต/ผลิตภัณฑ์อื่นที่คล้ายคลึงกัน</div><div class="pbody">' +
+      '<div class="pchkwrap">'+chk(!rec.applyOther.needed)+' ไม่จำเป็นต้องนำไปประยุกต์ใช้&nbsp;&nbsp;&nbsp;&nbsp;'+chk(rec.applyOther.needed)+' จำเป็นต้องนำไปประยุกต์ใช้:</div>' +
+      twoItemBlock(rec.applyOther) +
     '</div></div>' +
-    '<div style="font-size:9.5px; color:var(--text-muted); margin-top:6px; display:flex; justify-content:space-between;"><span>APK-FR-MR-006</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>' +
+
+    '<div class="psection"><div class="ptitle">การบันทึกผลของการปฏิบัติการแก้ไข/ป้องกัน</div>' +
+      '<table class="ptable"><thead><tr><th style="width:38%;">บันทึกผลจากการปฏิบัติจริง</th><th style="width:38%;">การทบทวนผลการปฏิบัติการแก้ไข/ป้องกัน</th><th style="width:24%;">ผู้ติดตามผล</th></tr></thead>' +
+      '<tbody><tr>' +
+        '<td>'+fillBlock(rec.result.actual,3)+'</td>' +
+        '<td>' +
+          '<div class="pchkwrap">'+chk(rec.result.closed===true)+' สามารถปิดปัญหาได้</div>' +
+          '<div class="pchkwrap">'+chk(rec.result.closed===false)+' ไม่สามารถปิดปัญหาได้</div>' +
+          '<div style="margin-top:6px;">New CAR No. '+numBox(rec.result.newCarNo,60)+'</div>' +
+          '<div style="margin-top:4px;">New PAR No. '+numBox(rec.result.newParNo,60)+'</div>' +
+        '</td>' +
+        '<td>' +
+          '<div>'+fill(rec.result.followUpBy,80)+'</div>' +
+          '<div style="margin-top:6px;">วันที่ติดตาม</div>' +
+          '<div>'+fill(rec.result.followDate,80)+'</div>' +
+        '</td>' +
+      '</tr></tbody></table>' +
+    '</div>' +
+
+    '<div class="pfoot"><span>APK-FR-MR-006</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div>' +
   '</div>';
 }
 
