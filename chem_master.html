@@ -375,7 +375,10 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
         <div class="field" style="margin:0;"><label>ชื่อเคมี</label><input type="text" id="newName" placeholder="เช่น ZB 1533"></div>
       </div>
       <div class="grid2">
-        <div class="field" style="margin:0;"><label>Supplier</label><input type="text" id="newSupplier" placeholder="เช่น Kelly"></div>
+        <div class="field" style="margin:0;">
+          <label>Supplier <span style="font-size:9px;color:var(--text-muted);font-weight:400;">(เลือกจากทะเบียนผู้ขาย po_master ให้ตรงกันเป๊ะ — ใช้จับคู่ตอนประเมิน Sup EVA)</span></label>
+          <select id="newSupplier"><option value="">— เลือกผู้ขาย —</option></select>
+        </div>
         <div class="field" style="margin:0;"><label>ราคา/หน่วย (บาท)</label><input type="number" id="newPrice" placeholder="0.00" step="0.01" min="0" inputmode="decimal"></div>
       </div>
       <div class="grid2">
@@ -1170,11 +1173,33 @@ function addChemIn() {
 
 // ══ ITEMS ══
 var editingItemId = null;
+// เติม dropdown Supplier จากทะเบียนผู้ขายจริงใน po_master (poVendorsCache) — ถ้าค่าเดิมของรายการนี้ไม่ตรงกับทะเบียนเลย (ข้อมูลเก่าก่อนเปลี่ยนเป็น dropdown)
+// จะเก็บค่าเดิมไว้เป็นตัวเลือกพิเศษ มีเครื่องหมาย ⚠️ กำกับ ไม่ให้ข้อมูลหายไปเงียบๆ แต่ก็เห็นชัดว่าต้องแก้ให้ตรงทะเบียน
+function populateSupplierSelect(currentValue) {
+  var sel = document.getElementById('newSupplier');
+  if (!sel) return;
+  var names = poVendorsCache.slice()
+    .sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','th'); })
+    .map(function(v){ return v.name; })
+    .filter(Boolean);
+  var esc2 = function(s){ return String(s||'').replace(/"/g,'&quot;'); };
+  var html = '<option value="">— เลือกผู้ขาย —</option>';
+  var matched = currentValue && names.indexOf(currentValue) !== -1;
+  if (currentValue && !matched) {
+    html += '<option value="'+esc2(currentValue)+'">⚠️ '+currentValue+' (ค่าเดิม — ไม่ตรงกับทะเบียนผู้ขาย po_master)</option>';
+  }
+  html += names.map(function(n){ return '<option value="'+esc2(n)+'">'+n+'</option>'; }).join('');
+  sel.innerHTML = html;
+  sel.value = currentValue || '';
+}
+
 function toggleAddForm(){
   var f=document.getElementById('addItemForm');
   var willShow = f.style.display==='none';
   f.style.display = willShow ? 'block' : 'none';
-  if (!willShow) {
+  if (willShow) {
+    populateSupplierSelect('');
+  } else {
     // ปิดฟอร์ม → เคลียร์สถานะแก้ไขด้วย
     editingItemId = null;
     ['newCode','newName','newSupplier','newPrice','newMinStock','newReorderQty'].forEach(function(id){document.getElementById(id).value='';});
@@ -1188,7 +1213,7 @@ function editItem(id){
   editingItemId = id;
   document.getElementById('newCode').value = item.code||'';
   document.getElementById('newName').value = item.name||'';
-  document.getElementById('newSupplier').value = item.supplier||'';
+  populateSupplierSelect(item.supplier||'');
   document.getElementById('newPrice').value = item.price||'';
   document.getElementById('newMinStock').value = item.minStock||'';
   document.getElementById('newReorderQty').value = item.reorderQty||'';
