@@ -2651,6 +2651,19 @@ function printInvoice(inv) {
   var d = new Date(inv.date+'T00:00:00');
   var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
 
+  // ── ดึงข้อมูลลูกค้าล่าสุดจากทะเบียนเสมอตอนพิมพ์ (ไม่ใช้ก้อนข้อความที่แช่แข็งไว้ตอนออก INV ครั้งแรกเพียงอย่างเดียว) ──
+  // เดิม inv.customer เป็น snapshot ที่บันทึกไว้ ณ ตอนออกบิล — ถ้าทะเบียนลูกค้าถูกแก้ไขทีหลัง (เช่น เพิ่มเลขผู้เสียภาษี)
+  // บิลเก่าที่พิมพ์ซ้ำจะไม่เห็นการแก้ไขนั้นเลย ผู้ใช้แจ้งว่าต้องการให้พิมพ์ซ้ำดึงข้อมูลล่าสุดเสมอ (แม้เป็นบิลเก่า)
+  // จับคู่ด้วยบรรทัดแรกของชื่อลูกค้า (ปกติคือชื่อบริษัท) เทียบกับบรรทัดแรกของ addressText ในทะเบียน — ถ้าเจอใช้ข้อมูลล่าสุดแทน
+  var printCustomerText = inv.customer;
+  var invCustFirstLine = (inv.customer||'').split('\n')[0].trim().toLowerCase();
+  if (invCustFirstLine) {
+    var liveCust = customers.find(function(c){
+      return (c.addressText||'').split('\n')[0].trim().toLowerCase() === invCustFirstLine;
+    });
+    if (liveCust) printCustomerText = liveCust.addressText;
+  }
+
   var rowsHtml = inv.items.map(function(l,i){
     var qtyStr = invLineQtyDisplay(l);
     var wStr   = l.weight ? l.weight.toFixed(2) : '';
@@ -2693,7 +2706,7 @@ function printInvoice(inv) {
     '</div>'+
     '<div class="title">ใบกำกับภาษี/ใบส่งสินค้า — Tax Invoice / Delivery Order</div>'+
     '<div class="box">'+
-      '<div style="white-space:pre-line;flex:2;"><b>ชื่อลูกค้า / Customer Name</b><br>'+esc(inv.customer)+'</div>'+
+      '<div style="white-space:pre-line;flex:2;"><b>ชื่อลูกค้า / Customer Name</b><br>'+esc(printCustomerText)+'</div>'+
       '<div style="flex:1;font-size:12px;">'+
         '<b>เลขที่ No.</b> '+esc(inv.invNo)+'<br>'+
         '<b>วันที่ Date</b> '+dateStr+'<br>'+
@@ -2936,7 +2949,16 @@ function buildFormOverlayBody(inv) {
   if (inv.term) html += fld(P.term.x, P.term.y, esc(inv.term));
 
   // ชื่อลูกค้า/ที่อยู่ — แต่ละบรรทัดตามตำแหน่งที่กำหนด
-  var custLines = (inv.customer||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  // ดึงข้อมูลลูกค้าล่าสุดจากทะเบียนเสมอ (เหมือน printInvoice) แทนก้อนข้อความแช่แข็งของ inv.customer เพียงอย่างเดียว
+  var custText = inv.customer;
+  var custFirstLineForm = (inv.customer||'').split('\n')[0].trim().toLowerCase();
+  if (custFirstLineForm) {
+    var liveCustForm = customers.find(function(c){
+      return (c.addressText||'').split('\n')[0].trim().toLowerCase() === custFirstLineForm;
+    });
+    if (liveCustForm) custText = liveCustForm.addressText;
+  }
+  var custLines = (custText||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
   custLines.forEach(function(line, i){
     if (i < P.custLines.length) html += fld(P.custX, P.custLines[i], esc(line));
   });
