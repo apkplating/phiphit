@@ -1806,8 +1806,16 @@ function onInvLineJobSelect() {
   }
 
   // auto-fill ชื่อลูกค้าในหัวบิล ถ้ายังไม่กรอก (โหมดขาย — โหมดเคลมเติมจาก ① ไปแล้วใน onInvClaimCustomerSelect)
+  // เดิมเติมจาก job.customer ตรงๆ (แค่ชื่อย่อสั้นๆ ที่บันทึกไว้ในบิล เช่น "CASH"/"SYS"/"GSC") ทำให้ได้แค่ชื่อย่อ
+  // ไม่มีที่อยู่เต็ม/เลขผู้เสียภาษีติดไปด้วย ทั้งที่มีข้อมูลเต็มอยู่ในทะเบียนลูกค้าแล้ว (customers[].addressText)
+  // แก้ให้ค้นทะเบียนลูกค้าก่อนเสมอ (จับคู่จาก "ชื่อย่อ" — customers[].name) ถ้าเจอใช้ addressText แบบเต็ม
+  // ถ้าไม่เจอในทะเบียน (ลูกค้าใหม่ที่ยังไม่ได้ลงทะเบียน) ค่อย fallback เป็นชื่อย่อดิบเหมือนเดิม
   var custEl = document.getElementById('invCustomer');
-  if (invDocType!=='claim' && custEl && !custEl.value.trim() && job.customer) custEl.value = job.customer;
+  if (invDocType!=='claim' && custEl && !custEl.value.trim() && job.customer) {
+    var custKeyLC = job.customer.trim().toLowerCase();
+    var matchedCust = customers.find(function(c){ return (c.name||'').trim().toLowerCase() === custKeyLC; });
+    custEl.value = matchedCust ? matchedCust.addressText : job.customer;
+  }
 
   if (invDocType==='claim') {
     // งานเคลมไม่มีราคา — ไม่ต้องดึง/โชว์ราคาจากทะเบียนราคาให้สับสน
@@ -2474,17 +2482,24 @@ function renderCustomerRegistryPage() {
   }).sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','th'); });
 
   if (countEl) countEl.textContent = customers.length;
+  // ── เช็คชื่อย่อซ้ำ (customers[].name) — ถ้ามีลูกค้าชื่อย่อเดียวกันมากกว่า 1 รายการ ระบบ auto-fill ตอนออก INV
+  // จะจับคู่ได้ตัวแรกที่เจอเท่านั้น ถ้ามีตัวซ้ำที่ข้อมูล (ที่อยู่/เลขผู้เสียภาษี) ไม่ตรงกัน จะสุ่มได้ข้อมูลเก่า/ผิดได้
+  var nameCounts = {};
+  customers.forEach(function(c){ var k=(c.name||'').trim().toLowerCase(); if(k) nameCounts[k]=(nameCounts[k]||0)+1; });
   if (!list.length) {
     body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">'+(q?'ไม่พบลูกค้าที่ตรงกับคำค้นหา':'ยังไม่มีลูกค้าในทะเบียน')+'</td></tr>';
   } else {
     body.innerHTML = list.map(function(c){
       var firstLine = (c.addressText||'').split('\n')[0].trim();
+      var isDup = nameCounts[(c.name||'').trim().toLowerCase()] > 1;
       var mgmtBtns = canEdit
         ? '<button class="icon-btn" title="แก้ไข" onclick="editCustomerFormEntry(\''+c.id+'\')">✏️</button>'+
           '<button class="icon-btn" title="ลบ" onclick="deleteCustomerFormEntry(\''+c.id+'\')">🗑️</button>'
         : '<span style="font-size:9px;color:var(--text-muted);">อ่านอย่างเดียว</span>';
-      return '<tr>'+
-        '<td class="td-l" style="font-weight:700;">'+esc(c.name)+'</td>'+
+      return '<tr'+(isDup?' style="background:#fef2f2;"':'')+'>'+
+        '<td class="td-l" style="font-weight:700;">'+esc(c.name)+
+          (isDup?' <span title="ชื่อย่อนี้ซ้ำกับรายการอื่น — ตอน auto-fill ออก INV อาจได้ข้อมูลผิดตัว ควรรวมหรือแก้ชื่อย่อให้ไม่ซ้ำ" style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:8px;margin-left:4px;">⚠️ ซ้ำ</span>':'')+
+        '</td>'+
         '<td class="td-l" style="font-size:11px;color:var(--text-muted);">'+esc(firstLine)+'</td>'+
         '<td class="td-l">'+esc(c.term||'-')+'</td>'+
         '<td class="td-l" style="white-space:nowrap;">'+mgmtBtns+'</td>'+
