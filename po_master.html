@@ -445,6 +445,10 @@ body.viewer-mode .hide-viewer{display:none !important;}
         <input type="month" id="seMonthSel" onchange="renderSupEva()">
       </div>
     </div>
+    <div class="field" style="margin-top:8px;max-width:180px;">
+      <label>🎯 เป้าหมาย (%) — เส้นในกราฟ</label>
+      <input type="number" id="seTargetInput" min="0" max="100" step="1" onchange="seSaveTarget(this.value)">
+    </div>
     <button class="btn btn-outline" style="width:auto;margin-top:8px;font-size:11px;padding:6px 12px;" onclick="initSupEva(true)">🔄 รีเฟรชข้อมูล</button>
     <span id="seLoadStatus" style="font-size:11px;color:var(--text-mid);margin-left:8px;"></span>
   </div>
@@ -545,6 +549,7 @@ var DISCORD_WEBHOOK_APPROVED = 'https://discordapp.com/api/webhooks/151788264708
 var poList   = [];   // [{id, poNo, date, vendorName, vendorAddr, vendorTax, dueDate, items:[...], vatPercent, note, issuedBy, approvedBy, status, createdAt}]
 var vendors  = [];   // [{id, name, addr, tax, contact}]
 var supEvaManual = {}; // { "vendorName|YYYY-MM": {complaintResponse, specialShipment, issues:[{date,text}], preparedBy, approvedBy, preparedDate, approvedDate} } — หัวข้อที่ยังไม่มีข้อมูลอัตโนมัติรองรับ กรอกเองแล้วเก็บไว้ที่นี่
+var supEvaTarget = 95; // เป้าหมาย % สำหรับเส้นกราฟเป้าหมาย — ปรับได้ในหน้า Sup EVA
 var chemItemsCache = [];   // cache จาก chem_master.html (อ่านอย่างเดียว) — ใช้คำนวณ Supplier Evaluation
 var chemRecordsCache = [];
 var itemRegistry = []; // [{key, desc, unit, lastPrice, lastDate, totalQty, orderCount}] — สร้างจาก poList อัตโนมัติ
@@ -629,11 +634,13 @@ function loadLocal() {
   try { poList  = JSON.parse(localStorage.getItem('po_master_list')    || '[]'); } catch(e){ poList=[]; }
   try { vendors = JSON.parse(localStorage.getItem('po_master_vendors') || '[]'); } catch(e){ vendors=[]; }
   try { supEvaManual = JSON.parse(localStorage.getItem('po_master_supeva') || '{}'); } catch(e){ supEvaManual={}; }
+  try { supEvaTarget = JSON.parse(localStorage.getItem('po_master_supeva_target') || '95'); } catch(e){ supEvaTarget=95; }
 }
 function saveLocal() {
   try { localStorage.setItem('po_master_list',    JSON.stringify(poList)); } catch(e){}
   try { localStorage.setItem('po_master_vendors', JSON.stringify(vendors)); } catch(e){}
   try { localStorage.setItem('po_master_supeva',  JSON.stringify(supEvaManual)); } catch(e){}
+  try { localStorage.setItem('po_master_supeva_target', JSON.stringify(supEvaTarget)); } catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -643,7 +650,7 @@ async function fbSave() {
   try {
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ poList:poList, vendors:vendors, supEvaManual:supEvaManual, savedAt:new Date().toISOString() })
+      body: JSON.stringify({ poList:poList, vendors:vendors, supEvaManual:supEvaManual, supEvaTarget:supEvaTarget, savedAt:new Date().toISOString() })
     });
     if (res.ok) setSyncOk(); else setSyncErr();
   } catch(e) { setSyncErr(); }
@@ -658,6 +665,7 @@ async function fbLoad() {
       if (Array.isArray(data.poList))  poList  = data.poList;
       if (Array.isArray(data.vendors)) vendors = data.vendors;
       if (data.supEvaManual && typeof data.supEvaManual==='object') supEvaManual = data.supEvaManual;
+      if (typeof data.supEvaTarget === 'number') supEvaTarget = data.supEvaTarget;
       saveLocal();
       setSyncOk();
       renderAll();
@@ -1621,6 +1629,9 @@ async function initSupEva(force) {
     monthEl.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   }
 
+  var targetEl = document.getElementById('seTargetInput');
+  if (targetEl) targetEl.value = supEvaTarget;
+
   if (force || !chemRecordsCache.length) {
     if (statusEl) statusEl.textContent = '⏳ กำลังโหลดข้อมูลจาก chem_master...';
     try {
@@ -1698,18 +1709,42 @@ function seGrade(score) {
   return 'D';
 }
 
-function seMiniBarChart(monthScores) {
-  var max = 100;
-  return '<div style="display:flex;align-items:flex-end;gap:3px;height:60px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:2px 4px 0;">' +
-    monthScores.map(function(v,i){
-      var h = Math.round((v/max)*54);
-      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">' +
-        '<div style="width:100%;background:'+(v>0?'#3b82f6':'transparent')+';height:'+h+'px;border-radius:2px 2px 0 0;"></div>' +
-      '</div>';
-    }).join('') +
-  '</div>' +
-  '<div style="display:flex;gap:3px;padding:0 4px;">' +
-    monthScores.map(function(v,i){ return '<div style="flex:1;text-align:center;font-size:8px;color:var(--text-muted);">'+SUPEVA_MONTH_TH[i]+'</div>'; }).join('') +
+function seMiniBarChart(monthData) {
+  // monthData: [{score, hasData}] x12 — bar = ผลการประเมิน, เส้นประ = เป้าหมาย (supEvaTarget, ปรับได้)
+  var W = 260, H = 90, padL = 4, padR = 4, padT = 6, padB = 16;
+  var chartH = H - padT - padB;
+  var chartW = W - padL - padR;
+  var barW = chartW / 12;
+  var yFor = function(v){ return padT + chartH - (v/100)*chartH; };
+  var targetY = yFor(supEvaTarget);
+
+  var bars = monthData.map(function(d,i){
+    var x = padL + i*barW + barW*0.12;
+    var w = barW*0.76;
+    var h = (d.score/100)*chartH;
+    var y = padT + chartH - h;
+    var color = !d.hasData ? '#e2e8f0' : (d.score >= supEvaTarget ? '#16a34a' : '#dc2626');
+    var label = !d.hasData ? '' : ('<title>'+SUPEVA_MONTH_TH[i]+': '+d.score+'</title>');
+    return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+Math.max(0,h).toFixed(1)+'" fill="'+color+'" rx="1.5">'+label+'</rect>';
+  }).join('');
+
+  var monthLabels = monthData.map(function(d,i){
+    var x = padL + i*barW + barW/2;
+    return '<text x="'+x.toFixed(1)+'" y="'+(H-4)+'" font-size="7" fill="#94a3b8" text-anchor="middle">'+SUPEVA_MONTH_TH[i]+'</text>';
+  }).join('');
+
+  var targetLine = '<line x1="'+padL+'" y1="'+targetY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+targetY.toFixed(1)+'" stroke="#f59e0b" stroke-width="1.3" stroke-dasharray="4,3"/>' +
+    '<text x="'+(W-padR)+'" y="'+(targetY-2).toFixed(1)+'" font-size="7.5" fill="#b45309" text-anchor="end" font-weight="700">เป้า '+supEvaTarget+'%</text>';
+
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;">' +
+    '<line x1="'+padL+'" y1="'+padT+'" x2="'+padL+'" y2="'+(padT+chartH)+'" stroke="var(--border)"/>' +
+    '<line x1="'+padL+'" y1="'+(padT+chartH)+'" x2="'+(W-padR)+'" y2="'+(padT+chartH)+'" stroke="var(--border)"/>' +
+    bars + targetLine + monthLabels +
+  '</svg>' +
+  '<div style="display:flex;gap:8px;font-size:9px;color:var(--text-mid);margin-top:2px;">' +
+    '<span><span style="display:inline-block;width:8px;height:8px;background:#16a34a;border-radius:2px;margin-right:2px;"></span>ถึงเป้า</span>' +
+    '<span><span style="display:inline-block;width:8px;height:8px;background:#dc2626;border-radius:2px;margin-right:2px;"></span>ต่ำกว่าเป้า</span>' +
+    '<span><span style="display:inline-block;width:8px;height:8px;background:#e2e8f0;border-radius:2px;margin-right:2px;"></span>ไม่มีข้อมูล</span>' +
   '</div>';
 }
 
@@ -1725,12 +1760,14 @@ function renderSupEva() {
   var m = seCalcMonth(vendorName, ym);
 
   // คำนวณคะแนนทั้ง 12 เดือนของปีเดียวกัน (สำหรับกราฟแท่งรายเดือน)
+  // เก็บ hasData แยกไว้ด้วย — เดือนที่ไม่มี record รับเข้าจริงเลย จะโชว์เป็นแท่งเทาจางๆ (ไม่ใช่ 100 ปลอมๆ) ให้เห็นชัดว่า "ยังไม่มีข้อมูล" ต่างจาก "ประเมินแล้วได้เต็ม"
   var qualityByMonth = [], deliveryByMonth = [];
   for (var i=1;i<=12;i++){
     var ymI = year+'-'+String(i).padStart(2,'0');
     var mi = (ymI===ym) ? m : seCalcMonth(vendorName, ymI);
-    qualityByMonth.push(mi.records.length ? mi.qualityTotal : 0);
-    deliveryByMonth.push(mi.records.length ? mi.deliveryTotal : 0);
+    var hasData = mi.records.length > 0;
+    qualityByMonth.push({ score: mi.qualityTotal, hasData: hasData });
+    deliveryByMonth.push({ score: mi.deliveryTotal, hasData: hasData });
   }
 
   var manualKey = vendorName+'|'+ym;
@@ -1757,7 +1794,7 @@ function renderSupEva() {
       '<input type="number" min="0" max="20" value="'+m.complaintResp+'" class="se-manual-input" onchange="seSaveManual(\''+manualKey+'\',\'complaintResponse\',this.value)"></td></tr>' +
     '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน</td><td>100</td><td class="se-score">'+m.qualityTotal+'</td></tr>' +
   '</table>';
-  html += '<div style="width:220px;">'+seMiniBarChart(qualityByMonth)+'</div>';
+  html += '<div style="width:260px;">'+seMiniBarChart(qualityByMonth)+'</div>';
   html += '</div>';
 
   // ── ผลประเมินด้านส่งมอบ ──
@@ -1773,7 +1810,7 @@ function renderSupEva() {
       '<input type="number" min="0" max="20" value="'+m.specialShip+'" class="se-manual-input" onchange="seSaveManual(\''+manualKey+'\',\'specialShipment\',this.value)"></td></tr>' +
     '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน <span style="display:inline-block;border:1.5px solid var(--navy);border-radius:4px;padding:0 8px;margin-left:6px;font-weight:800;">'+grade+'</span></td><td>100</td><td class="se-score">'+m.deliveryTotal+'</td></tr>' +
   '</table>';
-  html += '<div style="width:220px;">'+seMiniBarChart(deliveryByMonth)+'</div>';
+  html += '<div style="width:260px;">'+seMiniBarChart(deliveryByMonth)+'</div>';
   html += '</div>';
 
   // ── ประเด็นที่เป็นปัญหา + เกณฑ์การประเมิน ──
@@ -1819,6 +1856,12 @@ function renderSupEva() {
   html += '</div>';
 
   document.getElementById('seReportBody').innerHTML = html;
+}
+
+function seSaveTarget(val) {
+  supEvaTarget = Math.max(0, Math.min(100, parseFloat(val)||95));
+  saveLocal(); fbSave();
+  renderSupEva();
 }
 
 function seSaveManual(key, field, val) {
