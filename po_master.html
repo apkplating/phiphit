@@ -437,13 +437,13 @@ body.viewer-mode .hide-viewer{display:none !important;}
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>ผู้ขาย (Supplier)</label>
-        <select id="seVendorSel" onchange="renderSupEva()">
+        <select id="seVendorSel" onchange="renderSupplierDebug();renderSupEva();">
           <option value="">— เลือกผู้ขาย —</option>
         </select>
       </div>
       <div class="field" style="margin:0;">
-        <label>ประจำเดือน</label>
-        <input type="month" id="seMonthSel" onchange="renderSupEva()">
+        <label>ประจำปี</label>
+        <select id="seYearSel" onchange="renderSupEva()"></select>
       </div>
     </div>
     <div class="field" style="margin-top:8px;max-width:180px;">
@@ -452,6 +452,7 @@ body.viewer-mode .hide-viewer{display:none !important;}
     </div>
     <button class="btn btn-outline" style="width:auto;margin-top:8px;font-size:11px;padding:6px 12px;" onclick="initSupEva(true)">🔄 รีเฟรชข้อมูล</button>
     <span id="seLoadStatus" style="font-size:11px;color:var(--text-mid);margin-left:8px;"></span>
+    <div id="seSupplierDebug" style="font-size:10px;color:var(--text-mid);margin-top:6px;"></div>
   </div>
 
   <div class="card" id="seReportCard" style="display:none;">
@@ -626,6 +627,10 @@ function tab(t) {
   if (t==='new')     { renderVendorDatalist(); renderItemRegistryDatalist(); }
   if (t==='summary') { populateSummaryYears(); populateItemHistFilters(); renderVendorBreakdownTab(); renderItemHistory(); }
   if (t==='supeva')  { initSupEva(); }
+
+  // Sup EVA: อัปเดตอัตโนมัติทุก 20 วิ ขณะเปิดแท็บนี้ค้างไว้ ให้คะแนน/กราฟขยับตามข้อมูลรับเข้าใหม่จาก chem_master โดยไม่ต้องกดรีเฟรชเอง — หยุด poll ทันทีที่สลับออกจากแท็บ (กันดึงข้อมูลทิ้งเปล่าๆ)
+  if (_supEvaPollTimer) { clearInterval(_supEvaPollTimer); _supEvaPollTimer = null; }
+  if (t==='supeva') { _supEvaPollTimer = setInterval(function(){ initSupEva(true); }, 20000); }
 }
 
 // ══════════════════════════════════════
@@ -1613,6 +1618,8 @@ function renderItemHistory(){
 var SUPEVA_DOC_CODE = 'APK-FR-PU-004';
 var SUPEVA_MONTH_TH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+var _supEvaPollTimer = null;
+
 async function initSupEva(force) {
   var statusEl = document.getElementById('seLoadStatus');
   // เติม dropdown ผู้ขาย
@@ -1623,12 +1630,14 @@ async function initSupEva(force) {
       .map(function(v){ return '<option value="'+esc(v.name)+'">'+esc(v.name)+'</option>'; }).join('');
   if (cur) sel.value = cur;
 
-  // ตั้งค่าเดือนเริ่มต้น (เดือนปัจจุบัน) ถ้ายังไม่ได้เลือก
-  var monthEl = document.getElementById('seMonthSel');
-  if (!monthEl.value) {
-    var d = new Date();
-    monthEl.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-  }
+  // ตั้งค่าปีเริ่มต้น (ปีปัจจุบัน) ถ้ายังไม่ได้เลือก — เติมตัวเลือกปีจากปีปัจจุบัน ย้อนหลัง 3 ปี + ล่วงหน้า 1 ปี
+  var yearSel = document.getElementById('seYearSel');
+  var curYear = yearSel.value;
+  var thisYear = new Date().getFullYear();
+  var years = [];
+  for (var y=thisYear+1; y>=thisYear-3; y--) years.push(y);
+  yearSel.innerHTML = years.map(function(y){ return '<option value="'+y+'">'+y+'</option>'; }).join('');
+  yearSel.value = curYear || String(thisYear);
 
   var targetEl = document.getElementById('seTargetInput');
   if (targetEl) targetEl.value = supEvaTarget;
@@ -1640,12 +1649,34 @@ async function initSupEva(force) {
       var data = res.ok ? await res.json() : null;
       chemItemsCache   = (data && Array.isArray(data.items))   ? data.items   : [];
       chemRecordsCache = (data && Array.isArray(data.records)) ? data.records : [];
-      if (statusEl) statusEl.textContent = '✅ โหลดแล้ว ('+chemRecordsCache.length+' รายการรับเข้า)';
+      var nowStr = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      if (statusEl) statusEl.textContent = '✅ อัปเดตล่าสุด '+nowStr+' ('+chemRecordsCache.length+' รายการรับเข้าทั้งหมด)';
     } catch(e) {
       if (statusEl) statusEl.textContent = '⚠️ โหลดข้อมูล chem_master ไม่ได้ — เช็คการเชื่อมต่อ';
     }
   }
+  renderSupplierDebug();
   renderSupEva();
+}
+
+// โชว์รายชื่อผู้ขาย (supplier) ที่พบจริงในรายการเคมี chem_master เทียบกับผู้ขายที่เลือกอยู่ — ช่วยเช็คว่าสะกดตรงกันไหมถ้าคะแนน/กราฟไม่ขึ้น
+function renderSupplierDebug() {
+  var box = document.getElementById('seSupplierDebug');
+  if (!box) return;
+  var vendorName = document.getElementById('seVendorSel').value;
+  var suppliersInChem = {};
+  chemItemsCache.forEach(function(it){ if (it.supplier) suppliersInChem[it.supplier] = (suppliersInChem[it.supplier]||0)+1; });
+  var names = Object.keys(suppliersInChem);
+  if (!vendorName) { box.innerHTML=''; return; }
+  var matched = names.indexOf(vendorName) !== -1;
+  if (matched) {
+    box.innerHTML = '✅ พบชื่อ "'+esc(vendorName)+'" ตรงกับ supplier ใน chem_master ('+suppliersInChem[vendorName]+' รายการเคมี)';
+    box.style.color = '#16a34a';
+  } else {
+    box.innerHTML = '⚠️ ไม่พบชื่อ "'+esc(vendorName)+'" ตรงกับ supplier ใน chem_master เลย — ชื่อ supplier ที่มีอยู่จริง: '+
+      (names.length ? names.map(esc).join(', ') : '(ไม่พบข้อมูลเคมีเลย)');
+    box.style.color = '#b45309';
+  }
 }
 
 // หาผลตรวจของหัวข้อ QC ที่ตรงกับคำค้น (บางส่วนของชื่อหัวข้อ) จาก snapshot ของ record นั้นๆ
@@ -1698,14 +1729,8 @@ function seCalcSpecialShip(records, fullMarks) {
   return { score:score, fullMarks:fullMarks, total:records.length, fails:count };
 }
 
-// คำนวณคะแนนทุกหัวข้อของผู้ขาย+เดือนที่ระบุ (YYYY-MM) — ใช้ทั้งตอนโชว์รายงานหลักและตอนคำนวณกราฟรายเดือน
-function seCalcMonth(vendorName, ym) {
-  var vendorChemIds = {};
-  chemItemsCache.forEach(function(it){ if (it.supplier===vendorName) vendorChemIds[it.id]=true; });
-  var records = chemRecordsCache.filter(function(r){
-    return r.type==='in' && vendorChemIds[r.chemId] && (r.date||'').slice(0,7)===ym;
-  });
-
+// คำนวณคะแนนทุกหัวข้อ จากรายการรับเข้าที่กรองไว้แล้ว (ใช้ร่วมกันทั้งราย เดือน/ปี)
+function seCalcForRecords(records, manualKey) {
   var claim = seCalcScore(records, 50, function(r){ return r.qcResult||''; });
   var cert  = seCalcScore(records, 30, function(r){ return seFindTopicResult(r,'Certificate'); });
   var onTime = seCalcScore(records, 50, function(r){ return seFindTopicResult(r,'จัดส่งตรงเวลา'); });
@@ -1713,7 +1738,6 @@ function seCalcMonth(vendorName, ym) {
   var pack  = seCalcScore(records, 20, function(r){ return seFindTopicResultAny(r,['บรรจุภัณฑ์','สีและลักษณะทางกายภาพ']); });
   var special = seCalcSpecialShip(records, 20);
 
-  var manualKey = vendorName+'|'+ym;
   var manual = supEvaManual[manualKey] || {};
   var complaintResp = (manual.complaintResponse!=null) ? Number(manual.complaintResponse) : 20;
   var specialShip = special.score;
@@ -1725,8 +1749,28 @@ function seCalcMonth(vendorName, ym) {
     records: records, claim:claim, cert:cert, onTime:onTime, doc:doc, pack:pack, special:special,
     complaintResp:complaintResp, specialShip:specialShip,
     qualityTotal:qualityTotal, deliveryTotal:deliveryTotal,
-    manual: manual
+    manual: manual, manualKey: manualKey
   };
+}
+
+// คำนวณคะแนนของเดือนเดียว (YYYY-MM) — ใช้สำหรับกราฟแท่งรายเดือน — manualKey อิงระดับปี ให้สอดคล้องกับรายงานหลักที่เป็นรายปี
+function seCalcMonth(vendorName, ym) {
+  var vendorChemIds = {};
+  chemItemsCache.forEach(function(it){ if (it.supplier===vendorName) vendorChemIds[it.id]=true; });
+  var records = chemRecordsCache.filter(function(r){
+    return r.type==='in' && vendorChemIds[r.chemId] && (r.date||'').slice(0,7)===ym;
+  });
+  return seCalcForRecords(records, vendorName+'|'+ym.slice(0,4));
+}
+
+// คำนวณคะแนนรวมทั้งปี — ใช้เป็นตารางรายงานหลัก (เปลี่ยนจาก "ประจำเดือน" เป็น "ประจำปี" ตามที่ผู้ใช้ขอ)
+function seCalcYear(vendorName, year) {
+  var vendorChemIds = {};
+  chemItemsCache.forEach(function(it){ if (it.supplier===vendorName) vendorChemIds[it.id]=true; });
+  var records = chemRecordsCache.filter(function(r){
+    return r.type==='in' && vendorChemIds[r.chemId] && (r.date||'').slice(0,4)===String(year);
+  });
+  return seCalcForRecords(records, vendorName+'|'+year);
 }
 
 function seGrade(score) {
@@ -1777,28 +1821,27 @@ function seMiniBarChart(monthData) {
 
 function renderSupEva() {
   var vendorName = document.getElementById('seVendorSel').value;
-  var ym = document.getElementById('seMonthSel').value;
+  var year = document.getElementById('seYearSel').value;
   var card = document.getElementById('seReportCard');
-  if (!vendorName || !ym) { card.style.display='none'; return; }
+  if (!vendorName || !year) { card.style.display='none'; return; }
   card.style.display = 'block';
 
   var vendor = vendors.find(function(v){ return v.name===vendorName; }) || {};
-  var year = ym.slice(0,4), month = ym.slice(5,7);
-  var m = seCalcMonth(vendorName, ym);
+  var m = seCalcYear(vendorName, year);
 
-  // คำนวณคะแนนทั้ง 12 เดือนของปีเดียวกัน (สำหรับกราฟแท่งรายเดือน)
+  // คำนวณคะแนนทั้ง 12 เดือนของปีที่เลือก (สำหรับกราฟแท่งรายเดือน) — ตารางหลักด้านบนเป็นยอดรวมทั้งปีจาก seCalcYear แล้ว
   // เก็บ hasData แยกไว้ด้วย — เดือนที่ไม่มี record รับเข้าจริงเลย จะโชว์เป็นแท่งเทาจางๆ (ไม่ใช่ 100 ปลอมๆ) ให้เห็นชัดว่า "ยังไม่มีข้อมูล" ต่างจาก "ประเมินแล้วได้เต็ม"
   var qualityByMonth = [], deliveryByMonth = [];
   for (var i=1;i<=12;i++){
     var ymI = year+'-'+String(i).padStart(2,'0');
-    var mi = (ymI===ym) ? m : seCalcMonth(vendorName, ymI);
+    var mi = seCalcMonth(vendorName, ymI);
     var hasData = mi.records.length > 0;
     qualityByMonth.push({ score: mi.qualityTotal, hasData: hasData });
     deliveryByMonth.push({ score: mi.deliveryTotal, hasData: hasData });
   }
 
-  var manualKey = vendorName+'|'+ym;
-  var thMonthLabel = SUPEVA_MONTH_TH[parseInt(month,10)-1] + '-' + String(parseInt(year,10)).slice(-2);
+  var manualKey = vendorName+'|'+year;
+  var thYearLabel = 'ปี '+year;
 
   var html = '';
   html += '<div style="border:1.5px solid var(--navy);border-radius:10px;padding:14px;background:#fff;">';
@@ -1806,12 +1849,16 @@ function renderSupEva() {
   // ── หัว ──
   html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--navy);padding-bottom:8px;margin-bottom:10px;flex-wrap:wrap;gap:8px;">' +
     '<div style="font-size:18px;font-weight:800;color:var(--navy);">Supplier Evaluation Report</div>' +
-    '<table style="font-size:11px;"><tr><td style="color:var(--text-mid);padding:2px 8px 2px 0;">Supplier Name</td><td style="font-weight:700;">'+esc(vendor.name||vendorName)+'</td><td style="color:var(--text-mid);padding:2px 8px;">ประจำเดือน</td><td style="font-weight:700;">'+thMonthLabel+'</td></tr>' +
+    '<table style="font-size:11px;"><tr><td style="color:var(--text-mid);padding:2px 8px 2px 0;">Supplier Name</td><td style="font-weight:700;">'+esc(vendor.name||vendorName)+'</td><td style="color:var(--text-mid);padding:2px 8px;">ประจำปี</td><td style="font-weight:700;">'+thYearLabel+'</td></tr>' +
     '<tr><td style="color:var(--text-mid);padding:2px 8px 2px 0;">Person Contact</td><td style="font-weight:700;">'+esc(vendor.contact||'-')+'</td><td></td><td></td></tr></table>' +
   '</div>';
 
   // ── ผลประเมินด้านคุณภาพ ──
+  var qGrade = seGrade(m.qualityTotal);
   html += '<div style="font-weight:700;font-style:italic;margin-bottom:4px;">ผลประเมินด้านคุณภาพ</div>';
+  html += '<div style="font-size:10px;color:var(--text-mid);margin-bottom:6px;">📊 พบข้อมูลรับเข้าจริงจาก chem_master ของผู้ขายนี้ในเดือนนี้ <strong>'+m.records.length+' รายการ</strong>'+
+    (m.records.length===0 ? ' — <span style="color:#b45309;">ยังไม่มีข้อมูล คะแนนอัตโนมัติด้านล่างจึงเป็นค่าเต็มโดยปริยาย (ไม่มีอะไรให้หักคะแนน) ถ้าคาดว่าควรมีข้อมูล ให้เช็คว่าชื่อผู้ขายใน chem_master สะกดตรงกับที่นี่เป๊ะหรือไม่</span>' : '') +
+  '</div>';
   html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;">';
   html += '<table class="se-tbl" style="flex:1;min-width:280px;">' +
     '<tr><th class="tl">หัวข้อประเมิน</th><th>คะแนนเต็ม</th><th>คะแนนที่ได้</th></tr>' +
@@ -1819,7 +1866,7 @@ function renderSupEva() {
     '<tr><td class="tl">2&nbsp;&nbsp;ใบรับรองวัตถุดิบ (Certificate)</td><td>'+m.cert.fullMarks+'</td><td class="se-score">'+m.cert.score+'</td></tr>' +
     '<tr><td class="tl">3&nbsp;&nbsp;การตอบกลับใบรายงานปัญหา <span class="se-manual-tag">กรอกเอง</span></td><td>20</td><td>'+
       '<input type="number" min="0" max="20" value="'+m.complaintResp+'" class="se-manual-input" onchange="seSaveManual(\''+manualKey+'\',\'complaintResponse\',this.value)"></td></tr>' +
-    '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน</td><td>100</td><td class="se-score">'+m.qualityTotal+'</td></tr>' +
+    '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน <span style="display:inline-block;border:1.5px solid var(--navy);border-radius:4px;padding:0 8px;margin-left:6px;font-weight:800;">'+qGrade+'</span> <span style="font-size:8px;color:var(--text-mid);font-style:normal;">(คำนวณอัตโนมัติ ไม่ใช่ช่องกรอก)</span></td><td>100</td><td class="se-score">'+m.qualityTotal+'</td></tr>' +
   '</table>';
   html += '<div style="width:260px;">'+seMiniBarChart(qualityByMonth)+'</div>';
   html += '</div>';
@@ -1835,7 +1882,7 @@ function renderSupEva() {
     '<tr><td class="tl">3&nbsp;&nbsp;ลักษณะของบรรจุภัณฑ์</td><td>'+m.pack.fullMarks+'</td><td class="se-score">'+m.pack.score+'</td></tr>' +
     '<tr><td class="tl">4&nbsp;&nbsp;การขนส่งรอบพิเศษ <span class="se-auto-tag">Auto</span></td><td>20</td><td class="se-score">'+m.special.score+
       (m.special.fails>0 ? ' <span style="font-size:9px;color:#b45309;">('+m.special.fails+' ครั้ง)</span>' : '') + '</td></tr>' +
-    '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน <span style="display:inline-block;border:1.5px solid var(--navy);border-radius:4px;padding:0 8px;margin-left:6px;font-weight:800;">'+grade+'</span></td><td>100</td><td class="se-score">'+m.deliveryTotal+'</td></tr>' +
+    '<tr class="se-total"><td class="tl" style="font-style:italic;font-weight:700;">ผลการประเมิน <span style="display:inline-block;border:1.5px solid var(--navy);border-radius:4px;padding:0 8px;margin-left:6px;font-weight:800;">'+grade+'</span> <span style="font-size:8px;color:var(--text-mid);font-style:normal;">(คำนวณอัตโนมัติ ไม่ใช่ช่องกรอก)</span></td><td>100</td><td class="se-score">'+m.deliveryTotal+'</td></tr>' +
   '</table>';
   html += '<div style="width:260px;">'+seMiniBarChart(deliveryByMonth)+'</div>';
   html += '</div>';
@@ -1913,10 +1960,10 @@ function seAddIssue(key) {
 function printSupEva() {
   var body = document.getElementById('seReportBody').innerHTML;
   var vendorName = document.getElementById('seVendorSel').value;
-  var ym = document.getElementById('seMonthSel').value;
+  var year = document.getElementById('seYearSel').value;
   var w = window.open('', '_blank');
   if (!w) { alert('เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์'); return; }
-  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>Supplier Evaluation '+esc(vendorName)+' '+esc(ym)+'</title>' +
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>Supplier Evaluation '+esc(vendorName)+' '+esc(year)+'</title>' +
     '<style>' +
     'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:12px;color:#0f172a;padding:16px;}' +
     '.se-tbl{width:100%;border-collapse:collapse;font-size:11px;}' +
