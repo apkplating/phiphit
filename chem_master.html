@@ -244,19 +244,25 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
     <!-- ─── ข้อมูลหลัก ─── -->
     <div class="field">
       <label>รายการเคมี</label>
-      <select id="inChemSel">
+      <select id="inChemSel" onchange="onInChemSelChange()">
         <option value="">— เลือกรายการเคมี —</option>
       </select>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>วันที่รับ</label>
-        <input type="date" id="inDate">
+        <input type="date" id="inDate" onchange="renderOnTimeHint()">
       </div>
       <div class="field" style="margin:0;">
-        <label>เลขที่ใบสั่งซื้อ (PO)</label>
-        <input type="text" id="inBill" placeholder="เช่น PO-2026-001">
+        <label>อ้างอิง PO (สำหรับเช็คจัดส่งตรงเวลา)</label>
+        <select id="inPoRef" onchange="onInPoRefChange()">
+          <option value="">— ไม่ผูก PO / ไม่ทราบเลข PO —</option>
+        </select>
       </div>
+    </div>
+    <div class="field" style="margin-top:6px;">
+      <label>เลขที่ใบสั่งซื้อ (PO) — ถ้าไม่มีใน dropdown ด้านบน กรอกเองได้</label>
+      <input type="text" id="inBill" placeholder="เช่น PO-2026-001">
     </div>
     <div class="grid3">
       <div class="field" style="margin:0;">
@@ -305,6 +311,7 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
     </div>
 
     <!-- checklist ตรวจสอบ -->
+    <div id="onTimeAutoBox" style="margin-bottom:8px;"></div>
     <div id="qcChecklist" style="margin-bottom:12px;"></div>
 
     <!-- สรุปผล -->
@@ -460,6 +467,8 @@ var FIREBASE_CONFIG = {
 };
 var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
 var PO_FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/po-master';
+var poListCache = []; // cache ของ po_master.html — ใช้ผูก PO ตอนบันทึกรับเข้า เพื่อคำนวณ "จัดส่งตรงเวลา" อัตโนมัติ (เทียบ date กับ dueDate)
+var poVendorsCache = [];
 
 // ══ Auto-Reorder: แจ้ง Discord เมื่อสร้าง PO อัตโนมัติ (ใส่ URL เดียวกับใน po_master.html) ══
 var DISCORD_WEBHOOK_NEW_PO = 'https://discordapp.com/api/webhooks/1517882647089647769/4aVSUKg8CYEDH9d1ZqZFaw90Rgc45pvfhvBnCMA9i1I-kpqLdkf9Ywi8GgMUcnaFgCaO';
@@ -495,7 +504,7 @@ function checkPin() {
     document.getElementById('appScreen').style.display = 'block';
     try { sessionStorage.setItem('chem_master_pin', pin); } catch(e){}
     applyRole();
-    loadLocal(); startPoll(); setTimeout(fbLoad, 800);
+    loadLocal(); startPoll(); setTimeout(fbLoad, 800); loadPoCache();
   });
 }
 
@@ -578,8 +587,23 @@ async function fbLoad() {
       var active = document.querySelector('.view.active');
       if (active) tab(active.id.replace('v-',''));
       checkLowStockAndAutoPO();
+      loadPoCache();
     }
   } catch(e){ setSyncErr(); }
+}
+
+// ══════════════════════════════════════
+//  โหลด PO cache (อ่านอย่างเดียว) — ใช้ผูก PO ตอนบันทึกรับเข้าเคมี
+// ══════════════════════════════════════
+async function loadPoCache(){
+  try {
+    var poRes = await fetch(PO_FB_PATH+'.json');
+    var poData = poRes.ok ? await poRes.json() : null;
+    poListCache  = (poData && Array.isArray(poData.poList))  ? poData.poList  : [];
+    poVendorsCache = (poData && Array.isArray(poData.vendors)) ? poData.vendors : [];
+  } catch(e) {
+    console.warn('loadPoCache failed:', e.message);
+  }
 }
 
 // ══════════════════════════════════════
@@ -913,7 +937,7 @@ function renderInSelect() {
 }
 
 // ══ QC Topics ══
-var qcTopics = ['สภาพบรรจุภัณฑ์','สีและลักษณะทางกายภาพ','กลิ่น','ปริมาณตรงตามใบส่งของ','มี Certificate แนบ'];
+var qcTopics = ['สภาพบรรจุภัณฑ์','สีและลักษณะทางกายภาพ','กลิ่น','ปริมาณตรงตามใบส่งของ','มี Certificate แนบ','จัดส่งตรงเวลา'];
 var qcResults = {}; // { topicIdx: 'pass'|'fail'|'' }
 var certLinks = []; // [{name, url}]
 var _qcResult = ''; // 'pass' | 'fail' | ''
@@ -961,6 +985,50 @@ function removeQCTopic(i) {
   saveQCTopics();
   renderQCSetup();
   renderQCChecklist();
+}
+
+// ══ ผูก PO เพื่อเป็นข้อมูลอ้างอิงตอนตัดสินใจ "จัดส่งตรงเวลา" (หัวข้อ QC แบบกดเลือกเองด้านล่าง) ══
+// เดิมคำนวณผ่าน/ไม่ผ่านอัตโนมัติจากการเทียบวันที่ แต่ PO ที่ auto-generate จากระบบสั่งซื้ออัตโนมัติบางใบยังไม่มี dueDate
+// (รอผู้อนุมัติกรอก) หรือยังไม่ได้รับการอนุมัติตอนที่ของมาถึงจริง เทียบอัตโนมัติแล้วอาจตัดสินผิดได้ — เปลี่ยนเป็นให้คนตัดสินเองแทน
+// dropdown นี้ยังมีประโยชน์อยู่: ช่วยผูกอ้างอิง PO ไว้ตรวจสอบย้อนหลังได้ และโชว์กำหนดส่งให้ดูประกอบการตัดสินใจ
+function onInChemSelChange() {
+  var chemId = document.getElementById('inChemSel').value;
+  var item = chemItems.find(function(c){ return c.id===chemId; });
+  var sel = document.getElementById('inPoRef');
+  sel.innerHTML = '<option value="">— ไม่ผูก PO / ไม่ทราบเลข PO —</option>';
+  if (item && item.supplier) {
+    var matches = poListCache.filter(function(p){ return p.vendorName===item.supplier; })
+      .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    matches.forEach(function(p){
+      var opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.poNo + (p.dueDate ? ' (กำหนดส่ง '+p.dueDate+')' : ' (ยังไม่ระบุกำหนดส่ง — รออนุมัติ/กรอกเพิ่ม)');
+      sel.appendChild(opt);
+    });
+  }
+  sel.value = '';
+  onInPoRefChange();
+}
+
+function onInPoRefChange() {
+  var poId = document.getElementById('inPoRef').value;
+  var billEl = document.getElementById('inBill');
+  var po = poListCache.find(function(p){ return p.id===poId; });
+  if (po && billEl && !billEl.value.trim()) billEl.value = po.poNo; // ช่วย auto-fill เลข PO ให้เผื่อไว้ดูง่าย ไม่บังคับทับของที่พิมพ์เองไว้แล้ว
+  renderOnTimeHint();
+}
+
+function renderOnTimeHint() {
+  var box = document.getElementById('onTimeAutoBox');
+  if (!box) return;
+  var poId = document.getElementById('inPoRef').value;
+  var date = document.getElementById('inDate').value;
+  var po = poListCache.find(function(p){ return p.id===poId; });
+  if (!po) { box.innerHTML=''; return; }
+  var hint = po.dueDate
+    ? 'กำหนดส่งของ PO นี้: <strong>'+po.dueDate+'</strong>' + (date ? ' (วันนี้ที่เลือกรับ: '+date+')' : '')
+    : 'PO นี้ยังไม่ระบุกำหนดส่ง (รออนุมัติ/กรอกเพิ่ม) — ใช้ดุลยพินิจตัดสินหัวข้อ "จัดส่งตรงเวลา" ด้านล่างเอง';
+  box.innerHTML = '<div style="padding:6px 10px;border:1px dashed var(--border);border-radius:8px;background:#f8fafc;font-size:11px;color:var(--text-mid);">📌 '+hint+'</div>';
 }
 
 function renderQCChecklist() {
@@ -1048,8 +1116,10 @@ function addChemIn() {
   var receiver = document.getElementById('inReceiver').value.trim();
   var qcResult = _qcResult;
   var qcFail   = document.getElementById('inQCFailReason').value.trim();
-  var qcSnap   = JSON.parse(JSON.stringify(qcResults)); // snapshot หัวข้อ
+  var qcSnap   = JSON.parse(JSON.stringify(qcResults)); // snapshot หัวข้อ (รวม "จัดส่งตรงเวลา" ที่กดเลือกเองแล้ว)
   var certs    = certLinks.slice();
+  var poRefId  = document.getElementById('inPoRef').value;
+  var poRef    = poListCache.find(function(p){ return p.id===poRefId; });
 
   if (!chemId)   { showToast('in','กรุณาเลือกรายการเคมี','err'); return; }
   if (!date)     { showToast('in','กรุณาระบุวันที่','err'); return; }
@@ -1065,6 +1135,9 @@ function addChemIn() {
     qcTopicResults: qcSnap,
     qcTopicNames: qcTopics.slice(),
     certLinks: certs,
+    linkedPoId: poRefId || '',
+    linkedPoNo: poRef ? poRef.poNo : '',
+    linkedPoDueDate: poRef ? (poRef.dueDate||'') : '', // เก็บไว้อ้างอิง/สอบกลับเท่านั้น ไม่ได้ใช้ตัดสินผ่าน/ไม่ผ่านอัตโนมัติแล้ว
   });
   saveLocal(); fbSave();
 
@@ -1073,6 +1146,8 @@ function addChemIn() {
     var el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('inChemSel').value='';
+  document.getElementById('inPoRef').innerHTML = '<option value="">— ไม่ผูก PO / ไม่ทราบเลข PO —</option>';
+  renderOnTimeHint();
   qcResults = {};
   certLinks = [];
   _qcResult = '';
