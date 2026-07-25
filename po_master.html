@@ -1856,7 +1856,7 @@ function renderSupEva() {
   // ── ผลประเมินด้านคุณภาพ ──
   var qGrade = seGrade(m.qualityTotal);
   html += '<div style="font-weight:700;font-style:italic;margin-bottom:4px;">ผลประเมินด้านคุณภาพ</div>';
-  html += '<div style="font-size:10px;color:var(--text-mid);margin-bottom:6px;">📊 พบข้อมูลรับเข้าจริงจาก chem_master ของผู้ขายนี้ในเดือนนี้ <strong>'+m.records.length+' รายการ</strong>'+
+  html += '<div style="font-size:10px;color:var(--text-mid);margin-bottom:6px;">📊 พบข้อมูลรับเข้าจริงจาก chem_master ของผู้ขายนี้ในปีนี้ <strong>'+m.records.length+' รายการ</strong>'+
     (m.records.length===0 ? ' — <span style="color:#b45309;">ยังไม่มีข้อมูล คะแนนอัตโนมัติด้านล่างจึงเป็นค่าเต็มโดยปริยาย (ไม่มีอะไรให้หักคะแนน) ถ้าคาดว่าควรมีข้อมูล ให้เช็คว่าชื่อผู้ขายใน chem_master สะกดตรงกับที่นี่เป๊ะหรือไม่</span>' : '') +
   '</div>';
   html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;">';
