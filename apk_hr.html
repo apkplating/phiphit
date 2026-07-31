@@ -239,6 +239,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       </div>
       <div class="summary-grid" id="attSummary"></div>
       <div class="card"><div class="card-title" id="attTitle">⏰ บันทึกเวลา</div><div class="tbl-wrap" id="attTable"></div></div>
+      <div class="card"><div class="card-title">📌 พนักงานที่ไม่มีบันทึกวันนี้ (มาร์คขาดงาน/ลาไม่หัก/ลาพักร้อน)</div><div class="tbl-wrap" id="leaveSection"></div></div>
     </div>
 
     <!-- SALARY -->
@@ -501,6 +502,26 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
   </div>
 </div>
 
+<!-- MODAL: ระบุสถานะวันลา/ขาดงาน -->
+<div class="modal-ov" id="leaveModal">
+  <div class="modal-box">
+    <h3 id="leaveModalTitle">📌 ระบุสถานะ</h3>
+    <div class="shift-opts-modal">
+      <div class="sopt" style="background:#fee2e2;border-color:#ef4444;color:#991b1b;" onclick="saveLeaveType('absent_deduct')">🔴 <div><b>ขาดงาน</b><br><small>หักเงิน (เฉพาะพนักงานรายเดือน — เงินเดือน÷30 ต่อวัน)</small></div></div>
+      <div class="sopt" style="background:#dbeafe;border-color:#3b82f6;color:#1e40af;" onclick="saveLeaveType('leave_nopay')">🔵 <div><b>ลา (ไม่หักเงิน)</b><br><small>ลาป่วย/ลากิจที่อนุมัติแล้ว</small></div></div>
+      <div class="sopt" style="background:#d1fae5;border-color:#10b981;color:#065f46;" onclick="saveLeaveType('vacation')">🟢 <div><b>ลาพักร้อน</b><br><small>ไม่หักเงิน</small></div></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>หมายเหตุ (ไม่บังคับ)</label>
+      <input type="text" id="leaveNote" placeholder="เช่น ลาป่วยมีใบรับรองแพทย์" style="padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="clearLeaveType()" style="flex:1;">🗑️ ล้างสถานะ</button>
+      <button class="btn btn-secondary" onclick="closeLeaveModal()" style="flex:1;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: รายการหักเงินเดือน -->
 <div class="modal-ov" id="deductModal">
   <div class="modal-box" style="width:90%;max-width:440px;">
@@ -639,6 +660,29 @@ let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGrac
 let companyHolidays=JSON.parse(localStorage.getItem('apk_companyholidays')||'{}'); // key: "2569_7" -> [5,6,...]
 let attCorrections=JSON.parse(localStorage.getItem('apk_att_corrections')||'{}'); // key: "20260714_23" -> {checkIn,checkOut,note,editedAt,editedBy}
 function corrKey(dateKey,empId){return dateKey+'_'+empId;}
+// ========== ระบบมาร์คสถานะวันลา/ขาดงาน (สำหรับพนักงานรายเดือนที่ควรได้เงินเต็มจำนวน เว้นแต่ขาดงานจริง) ==========
+let leaveRecords=JSON.parse(localStorage.getItem('apk_leaves')||'{}'); // key: "20260714_23" -> {type,note,markedAt}
+const LEAVE_TYPES={
+  absent_deduct:{label:'ขาดงาน (หักเงิน)',color:'#ef4444',badge:'🔴'},
+  leave_nopay:{label:'ลา (ไม่หักเงิน)',color:'#3b82f6',badge:'🔵'},
+  vacation:{label:'ลาพักร้อน',color:'#10b981',badge:'🟢'}
+};
+function leaveKey(dateKey,empId){return dateKey+'_'+empId;}
+// นับจำนวนวันที่ถูกมาร์คสถานะ (ตามชนิดที่ระบุ) ของพนักงานคนหนึ่งในเดือน/ปีที่กำหนด — ใช้คำนวณเงินหักในหน้าเงินเดือน
+function getLeaveDaysInMonth(empId,year,month,type){
+  let items=[];
+  Object.keys(leaveRecords).forEach(k=>{
+    const us=k.indexOf('_');
+    const dk=k.slice(0,us),eid=k.slice(us+1);
+    if(eid!==empId||dk.length!==8)return;
+    const y=parseInt(dk.slice(0,4),10),m=parseInt(dk.slice(4,6),10)-1;
+    if(y!==year||m!==month)return;
+    const rec=leaveRecords[k];
+    if(type&&rec.type!==type)return;
+    items.push(Object.assign({dateKey:dk},rec));
+  });
+  return{count:items.length,items};
+}
 let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
 
@@ -749,7 +793,7 @@ function normalizeZKRecord(dateKey,empKey,raw){
 
 // โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr,fbLeaves]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves')]);
   // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
   if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
   if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
@@ -757,6 +801,7 @@ async function loadFromFirebase(){
   if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
   if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   if(fbCorr){attCorrections=fbCorr;localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));}
+  if(fbLeaves){leaveRecords=fbLeaves;localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));}
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -1023,6 +1068,43 @@ function resetAttCorrection(){
 }
 document.getElementById('attEditModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 
+// ========== มาร์คสถานะวันลา/ขาดงาน (สำหรับพนักงานที่ไม่มีบันทึกสแกนในวันนั้น) ==========
+let curLeaveKey=null;
+function openLeaveModal(dateKey,empId){
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  if(!emp)return;
+  curLeaveKey=leaveKey(dateKey,empId);
+  const dObj=new Date(dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8));
+  document.getElementById('leaveModalTitle').textContent=`📌 ${emp.name} — ${dObj.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}`;
+  const existing=leaveRecords[curLeaveKey];
+  document.getElementById('leaveNote').value=existing&&existing.note?existing.note:'';
+  document.getElementById('leaveModal').classList.add('show');
+}
+function closeLeaveModal(){document.getElementById('leaveModal').classList.remove('show');curLeaveKey=null;}
+function saveLeaveType(type){
+  if(!curLeaveKey)return;
+  leaveRecords[curLeaveKey]={type,note:document.getElementById('leaveNote').value.trim(),markedAt:new Date().toISOString()};
+  localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));
+  fbPut('/hr/leaves/'+curLeaveKey,leaveRecords[curLeaveKey]);
+  closeLeaveModal();
+  showToast('✅ บันทึกสถานะแล้ว');
+  renderAttendance();
+  const salPage=document.getElementById('page-salary');
+  if(salPage&&salPage.classList.contains('active'))renderSalary();
+}
+function clearLeaveType(){
+  if(!curLeaveKey)return;
+  delete leaveRecords[curLeaveKey];
+  localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));
+  fbPut('/hr/leaves/'+curLeaveKey,null); // PUT null = ลบ node นี้ออกจาก Firebase
+  closeLeaveModal();
+  showToast('🗑️ ล้างสถานะแล้ว');
+  renderAttendance();
+  const salPage=document.getElementById('page-salary');
+  if(salPage&&salPage.classList.contains('active'))renderSalary();
+}
+document.getElementById('leaveModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
+
 
 // ========== DASHBOARD ==========
 function renderDashboard(){
@@ -1188,6 +1270,7 @@ function setHistToday(){document.getElementById('histDate').valueAsDate=new Date
 function renderAttendance(){
   const dv=document.getElementById('histDate').value;if(!dv)return;
   const ds=new Date(dv+'T00:00:00'),de=new Date(ds.getTime()+86400000);
+  const dateKey=dv.replace(/-/g,'');
   const recs=attendance.filter(r=>{const ci=new Date(r.checkIn);return ci>=ds&&ci<de;});
   document.getElementById('attTitle').textContent=`⏰ ${ds.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric',weekday:'long'})}`;
   const done=recs.filter(r=>r.checkOut);
@@ -1200,6 +1283,23 @@ function renderAttendance(){
     <div class="sum-card"><div class="sum-icon" style="background:#d1fae5;">💵</div><div><div class="sum-label">ค่าแรงปกติ</div><div class="sum-value">฿${rp.toFixed(0)}</div></div></div>
     <div class="sum-card"><div class="sum-icon" style="background:#fce7f3;">💰</div><div><div class="sum-label">ค่า OT</div><div class="sum-value">฿${op.toFixed(0)}</div></div></div>`;
   document.getElementById('attTable').innerHTML=recs.length?buildAttTable(recs):'<p style="color:#9ca3af;padding:16px;text-align:center;">ไม่มีข้อมูลในวันที่เลือก</p>';
+  renderLeaveSection(dateKey,recs);
+}
+// พนักงานที่ไม่มีบันทึกสแกนในวันที่เลือก — ให้มาร์คสถานะ ขาดงาน/ลาไม่หัก/ลาพักร้อน ได้ที่นี่ (กันสับสนกับตารางบันทึกเวลาด้านบนที่โชว์เฉพาะคนที่สแกนแล้ว)
+function renderLeaveSection(dateKey,recs){
+  const wrap=document.getElementById('leaveSection');
+  if(!wrap)return;
+  const scannedIds=new Set(recs.map(r=>r.empId));
+  const notScanned=EMPLOYEES.filter(e=>!scannedIds.has(e.id));
+  if(!notScanned.length){wrap.innerHTML='<p style="color:#9ca3af;padding:16px;text-align:center;">พนักงานสแกนครบทุกคนแล้ว</p>';return;}
+  let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>สถานะ</th><th></th></tr></thead><tbody>`;
+  notScanned.forEach(emp=>{
+    const lv=leaveRecords[leaveKey(dateKey,emp.id)];
+    const lt=lv?LEAVE_TYPES[lv.type]:null;
+    const badge=lt?`<span class="badge" style="background:${lt.color}22;color:${lt.color};border:1.5px solid ${lt.color};">${lt.badge} ${lt.label}</span>${lv.note?`<br><span style="font-size:0.74em;color:#9ca3af;">${lv.note}</span>`:''}`:`<span style="color:#9ca3af;font-size:0.85em;">— ยังไม่ระบุ</span>`;
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td>${badge}</td><td><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openLeaveModal('${dateKey}','${emp.id}')">📌 ระบุสถานะ</button></td></tr>`;
+  });
+  wrap.innerHTML=h+'</tbody></table>';
 }
 
 // ========== SALARY ==========
@@ -1219,14 +1319,20 @@ function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
   const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0);
-  // รวมเงินจาก regPay/otPay ที่คำนวณไว้แล้วต่อ record (แต่ละวันอาจมีอัตรา OT ต่างกันตามวันปกติ/วันอาทิตย์-วันหยุด)
-  const rp=recs.reduce((s,r)=>s+parseFloat(r.regPay||0),0),op=recs.reduce((s,r)=>s+parseFloat(r.otPay||0),0);
+  const op=recs.reduce((s,r)=>s+parseFloat(r.otPay||0),0); // ค่า OT คิดจาก ชม.OT จริงเสมอ ไม่ว่ารายวันหรือรายเดือน
+  const isMonthly=emp.payType==='รายเดือน';
+  // พนักงานรายเดือน: เงินปกติ = เต็มจำนวนตามสัญญาเสมอ ไม่ผูกกับ ชม.สแกน (ตามที่ตกลงกันไว้)
+  // พนักงานรายวัน: จ่ายตาม ชม.จริง เหมือนเดิม (regPay ต่อ record สะสมกัน)
+  const rp=isMonthly?(parseFloat(emp.salary)||0):recs.reduce((s,r)=>s+parseFloat(r.regPay||0),0);
+  const absentInfo=getLeaveDaysInMonth(empId,yr,month,'absent_deduct');
+  const dailyRate=(parseFloat(emp.salary)||0)/30;
+  const absentDeduction=isMonthly?(absentInfo.count*dailyRate):0; // หักเฉพาะรายเดือน — รายวันขาดงานคือไม่ได้เงินวันนั้นอยู่แล้วโดยธรรมชาติ
   const gross=rp+op;
   const dk=dedKey(empId,yr,month);
   const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
-  const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0);
+  const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0)+absentDeduction;
   const net=gross-dedTotal;
-  return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),rp:rp.toFixed(2),op:op.toFixed(2),gross:gross.toFixed(2),ded,dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
+  return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),rp:rp.toFixed(2),op:op.toFixed(2),gross:gross.toFixed(2),ded,absentDays:absentInfo.count,absentDeduction:absentDeduction.toFixed(2),dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
 }
 function renderSalary(){
   const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
@@ -1236,7 +1342,8 @@ function renderSalary(){
   let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะทำงาน</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินปกติ</th><th>เงิน OT</th><th>หัก</th><th>สุทธิ</th><th></th></tr></thead><tbody>`;
   EMPLOYEES.forEach(emp=>{
     const d=getMonthlySalary(emp.id,m);
-    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${d.rp}</td><td style="color:#3b82f6;">฿${d.op}</td><td style="color:#ef4444;">฿${d.dedTotal}</td><td style="color:#10b981;font-weight:700;">฿${d.total}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
+    const absentNote=d.absentDays>0?`<br><span style="font-size:0.72em;color:#ef4444;">(ขาด ${d.absentDays} วัน)</span>`:'';
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${d.rp}</td><td style="color:#3b82f6;">฿${d.op}</td><td style="color:#ef4444;">฿${d.dedTotal}${absentNote}</td><td style="color:#10b981;font-weight:700;">฿${d.total}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
   });
   document.getElementById('salaryTable').innerHTML=h+'</tbody></table>';
 }
@@ -1328,6 +1435,7 @@ function showPayslip(empId,month){
   if(parseFloat(ded.utility)>0)dedRows+=`<tr><td>หัก: ค่าน้ำ-ไฟ</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.utility).toFixed(2)}</td></tr>`;
   if(parseFloat(ded.social)>0)dedRows+=`<tr><td>หัก: ประกันสังคม</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.social).toFixed(2)}</td></tr>`;
   if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>หัก: ${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(ded.otherAmount).toFixed(2)}</td></tr>`;
+  if(d.absentDays>0)dedRows+=`<tr><td>หัก: ขาดงาน ${d.absentDays} วัน</td><td style="text-align:right;color:#ef4444;">-฿${parseFloat(d.absentDeduction).toFixed(2)}</td></tr>`;
   document.getElementById('printArea').innerHTML=`<div class="payslip"><div class="ps-header"><div style="font-size:1.8em;font-weight:700;color:#1a2236;">🏭 APK Plating Service Co., Ltd.</div><div style="color:#6b7280;margin-top:5px;">สลิปเงินเดือนพนักงาน — ระบบ 3 กะ 24 ชม.</div></div>${noteHtml}<div class="ps-info"><div class="ps-infobox"><div class="ps-row"><span class="ps-label">รหัสพนักงาน</span><span class="ps-val">${d.emp.id}</span></div><div class="ps-row"><span class="ps-label">ชื่อ-นามสกุล</span><span class="ps-val">${d.emp.name}</span></div><div class="ps-row"><span class="ps-label">แผนก</span><span class="ps-val">${d.emp.dept}</span></div><div class="ps-row"><span class="ps-label">ตำแหน่ง</span><span class="ps-val">${d.emp.position}</span></div></div><div class="ps-infobox"><div class="ps-row"><span class="ps-label">เดือน</span><span class="ps-val">${TH_MONTHS[month]} ${yr+543}</span></div><div class="ps-row"><span class="ps-label">วันที่จ่าย</span><span class="ps-val">${new Date().toLocaleDateString('th-TH')}</span></div><div class="ps-row"><span class="ps-label">จำนวนกะทำงาน</span><span class="ps-val">${d.days} กะ</span></div></div></div><table class="ps-table"><thead><tr><th>#</th><th>วันที่</th><th>กะ</th><th style="text-align:right;">ชม.ปกติ</th><th style="text-align:right;">ชม.OT</th><th style="text-align:right;">ค่าแรงปกติ</th><th style="text-align:right;">ค่า OT</th><th style="text-align:right;">รวม</th></tr></thead><tbody>${rows}</tbody></table><table class="ps-table"><tbody><tr><td>อัตราค่าแรงปกติ</td><td style="text-align:right;">฿${d.emp.hourlyRate}/ชม.</td></tr><tr><td>อัตรา OT (วันปกติ)</td><td style="text-align:right;">฿${(d.emp.hourlyRate*1.5).toFixed(2)}/ชม. (1.5 เท่า)</td></tr><tr><td>อัตรา OT (วันอาทิตย์/วันหยุดบริษัท)</td><td style="text-align:right;">฿${(d.emp.payType==='รายเดือน'?d.emp.hourlyRate:d.emp.hourlyRate*1.5).toFixed(2)}/ชม. (${d.emp.payType==='รายเดือน'?'1.0':'1.5'} เท่า)</td></tr><tr><td>ชั่วโมงทำงานปกติรวม</td><td style="text-align:right;">${d.rh} ชม.</td></tr><tr><td>ชั่วโมง OT รวม</td><td style="text-align:right;">${d.ot} ชม.</td></tr><tr><td><b>ค่าแรงปกติ</b></td><td style="text-align:right;"><b>฿${d.rp}</b></td></tr><tr><td><b>ค่า OT</b></td><td style="text-align:right;"><b>฿${d.op}</b></td></tr><tr><td><b>รวมก่อนหัก</b></td><td style="text-align:right;"><b>฿${d.gross}</b></td></tr>${dedRows}<tr class="ps-total-row"><td><b>รวมเงินเดือนสุทธิ</b></td><td style="text-align:right;font-size:1.2em;"><b>฿${d.total}</b></td></tr></tbody></table><div class="ps-footer"><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นพนักงาน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(${d.emp.name})</div></div><div class="sig-box"><div class="sig-line"></div><b>ลายเซ็นผู้จ่ายเงิน</b><div style="color:#9ca3af;font-size:0.85em;margin-top:5px;">(...........................)</div></div></div><div style="margin-top:24px;padding:13px;background:#f8fafc;border-radius:8px;font-size:0.82em;color:#9ca3af;text-align:center;">สลิปเงินเดือนฉบับนี้ออกโดยระบบอัตโนมัติ APK HR — ระบบ 3 กะ 24 ชม.</div></div>`;
   document.getElementById('payslipModal').classList.add('show');
 }
