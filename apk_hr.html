@@ -444,6 +444,10 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">วันเริ่มงาน</label>
         <input id="eStart" class="form-control" type="date">
       </div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;background:#fef2f2;padding:10px 13px;border-radius:8px;">
+        <input type="checkbox" id="eNoOT" style="width:16px;height:16px;">
+        <label for="eNoOT" style="font-size:0.85em;font-weight:600;color:#991b1b;cursor:pointer;">🚫 ไม่มี OT (ชม.ที่เกินกะจะไม่นับเงินให้ทั้งหมด)</label>
+      </div>
     </div>
     <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="document.getElementById('editEmpModal').classList.remove('show')">ยกเลิก</button>
@@ -757,6 +761,7 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     shift=shiftFromHour(ciDate.getHours());
     regH=Math.min(wh,8);otH=Math.max(0,wh-8);
   }
+  if(emp.noOT)otH=0; // พนักงานที่ติ๊ก "ไม่มี OT" ไว้ — ชม.ที่เกินกะไม่นับเงินให้เลย ไม่ว่าจะเป็นกรณีไหน
   return {shift,isLate,lateMin,regH,otH,workingOnDayOff,otMultiplier,hasSchedule:assigned!==undefined};
 }
 function normalizeZKRecord(dateKey,empKey,raw){
@@ -1579,6 +1584,7 @@ function renderSettings(){
   document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
     const sd=e.startDate?new Date(e.startDate).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}):'—';
     const payBadge=e.payType==='รายเดือน'?'<span style="background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายเดือน</span>':'<span style="background:#fef9c3;color:#92400e;padding:2px 7px;border-radius:10px;font-size:0.78em;">รายวัน</span>';
+    const noOTBadge=e.noOT?'<br><span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:10px;font-size:0.72em;">🚫 ไม่มี OT</span>':'';
     const nameEN=e.nameEN&&e.nameEN!==e.name?`<br><small style="color:#9ca3af;">${e.nameEN}</small>`:'';
     return `<tr>
       <td><span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:${e.color};border-radius:50%;color:white;font-size:0.8em;font-weight:700;">${e.name[0]}</span> ${e.id}</td>
@@ -1588,7 +1594,7 @@ function renderSettings(){
       <td>${e.dept}</td>
       <td style="white-space:nowrap;">${sd}</td>
       <td>${e.phone||'—'}</td>
-      <td>${payBadge}</td>
+      <td>${payBadge}${noOTBadge}</td>
       <td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;margin-right:4px;" onclick="openEmpEdit('${e.id}')">✏️ แก้ไข</button><button class="btn btn-danger" style="padding:4px 10px;font-size:0.8em;" onclick="deleteEmpConfirm('${e.id}')">🗑️ ลบ</button></td>
     </tr>`;
   }).join('');
@@ -1698,6 +1704,7 @@ function openEmpAdd(){
   document.getElementById('ePayType').value='รายวัน';
   document.getElementById('eSalary').value=0;
   document.getElementById('eStart').value=new Date().toISOString().slice(0,10);
+  document.getElementById('eNoOT').checked=false;
   recalcHourly();
   const h3=document.querySelector('#editEmpModal h3');
   if(h3) h3.textContent='➕ เพิ่มพนักงานใหม่';
@@ -1724,6 +1731,7 @@ function openEmpEdit(id){
   document.getElementById('ePayType').value=e.payType||'รายวัน';
   document.getElementById('eSalary').value=e.salary||0;
   document.getElementById('eStart').value=e.startDate||'';
+  document.getElementById('eNoOT').checked=!!e.noOT;
   recalcHourly();
   document.getElementById('editEmpModal').classList.add('show');
 }
@@ -1745,6 +1753,7 @@ function saveEmpEdit(){
     salary: parseFloat(document.getElementById('eSalary').value)||0,
     hourlyRate: parseFloat(document.getElementById('eHourly').value)||0,
     startDate: document.getElementById('eStart').value,
+    noOT: document.getElementById('eNoOT').checked,
   };
 
   if(empIsNew){
