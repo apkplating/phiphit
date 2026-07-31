@@ -725,11 +725,13 @@ function normalizeZKRecord(dateKey,empKey,raw){
   const rawCheckOut=(corr&&corr.hasOwnProperty('checkOut'))?corr.checkOut:raw.checkOut;
   let ciISO=timeToISO(dateKey,rawCheckIn);
   if(!ciISO)return null; // ยังไม่มีเวลาเข้างาน ข้ามไปก่อน
+  if(isNaN(new Date(ciISO))){console.warn('⚠️ ข้าม record เวลาเข้างานผิดปกติ:',dateKey,empKey,raw);return null;} // กันไม่ให้ record เสียตัวเดียวทำระบบล้มทั้งหมด
   let coISO=rawCheckOut?timeToISO(dateKey,rawCheckOut):null;
+  if(coISO&&isNaN(new Date(coISO))){console.warn('⚠️ ข้าม coISO เวลาออกงานผิดปกติ (ยังโชว์เวลาเข้าได้):',dateKey,empKey,raw);coISO=null;}
   if(coISO){
     // กะดึก (21:00-05:00): ถ้าเวลาออก "น้อยกว่า" เวลาเข้า แปลว่าออกงานข้ามวันถัดไป
     const ciH=parseInt(rawCheckIn.slice(0,2),10),coH=parseInt(rawCheckOut.slice(0,2),10);
-    if(coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
+    if(!isNaN(ciH)&&!isNaN(coH)&&coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
   }
   const ciDate=new Date(ciISO);
   const calc=computeAttendanceCalc(emp,ciDate,coISO?new Date(coISO):ciDate);
