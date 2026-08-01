@@ -525,12 +525,24 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
     <p style="font-size:0.8em;color:#6b7280;margin-bottom:16px;">แก้ไขแล้วจะไม่ถูกข้อมูลจากเครื่องสแกนทับ (ป้องกันไว้ให้อัตโนมัติ) ระบบจะคำนวณสาย/OT/เงินใหม่ให้ทันที</p>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div>
-        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเข้างาน</label>
-        <input type="time" id="aeCheckIn" step="1" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเข้างาน (24 ชม. — ไม่มี AM/PM)</label>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <input type="number" id="aeCheckInH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+          <span style="font-weight:700;color:#9ca3af;">:</span>
+          <input type="number" id="aeCheckInM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+          <span style="font-weight:700;color:#9ca3af;">:</span>
+          <input type="number" id="aeCheckInS" min="0" max="59" placeholder="วินาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+        </div>
       </div>
       <div>
-        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาออกงาน (เว้นว่างได้ถ้ายังไม่ออก)</label>
-        <input type="time" id="aeCheckOut" step="1" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาออกงาน (24 ชม. — เว้นว่างได้ถ้ายังไม่ออก)</label>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <input type="number" id="aeCheckOutH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+          <span style="font-weight:700;color:#9ca3af;">:</span>
+          <input type="number" id="aeCheckOutM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+          <span style="font-weight:700;color:#9ca3af;">:</span>
+          <input type="number" id="aeCheckOutS" min="0" max="59" placeholder="วินาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.95em;outline:none;text-align:center;">
+        </div>
       </div>
       <div>
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">หมายเหตุ (ไม่บังคับ)</label>
@@ -795,8 +807,9 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     lateMin=Math.max(0,Math.round((ciDate-win.start)/60000));
     isLate=lateMin>(otConfig.lateGraceMin||0);
     const pastEnd=coDate-win.end;
-    if(isQCDept(emp)){
-      // QC/QA: พักจริง 1 ชม. (หรือตามที่ตั้งไว้) หลังเลิกกะก่อนเริ่มนับ OT — หักออกจากชั่วโมงจริง ไม่ใช่แค่เกณฑ์ผ่อนผัน
+    if(shift===4){
+      // อยู่ "กะ QC" (08:00-17:00 พัก 12-13) — พักจริง 1 ชม. (หรือตามที่ตั้งไว้) หลังเลิกกะก่อนเริ่มนับ OT — หักออกจากชั่วโมงจริง ไม่ใช่แค่เกณฑ์ผ่อนผัน
+      // อ้างอิงจากกะที่เลือกเสมอ ไม่เกี่ยวกับชื่อแผนกของพนักงาน (ตามที่ตกลงกันไว้)
       const qcBreakMs=(otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60)*60000;
       ot15=pastEnd>qcBreakMs?(pastEnd-qcBreakMs)/3600000:0;
     } else {
@@ -1100,6 +1113,27 @@ function timeStrFromISO(iso){
   const d=new Date(iso);
   return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
 }
+// ใส่ค่าเวลา (จาก ISO string หรือ "HH:MM:SS") ลงช่องกรอก ชม./นาที/วินาที แยกกัน — prefix เช่น 'aeCheckIn' หรือ 'aeCheckOut'
+function setTimeParts(prefix,timeVal){
+  let hh='',mm='',ss='';
+  if(timeVal){
+    const t=/^\d{2}:\d{2}:\d{2}$/.test(timeVal)?timeVal:timeStrFromISO(timeVal);
+    if(t){const p=t.split(':');hh=String(+p[0]);mm=String(+p[1]);ss=String(+p[2]);}
+  }
+  document.getElementById(prefix+'H').value=hh;
+  document.getElementById(prefix+'M').value=mm;
+  document.getElementById(prefix+'S').value=ss;
+}
+// อ่านค่าจากช่องกรอก ชม./นาที/วินาที รวมเป็น "HH:MM:SS" — คืนค่าว่างถ้าไม่ได้กรอกอะไรเลย
+function getTimeParts(prefix){
+  const hEl=document.getElementById(prefix+'H'),mEl=document.getElementById(prefix+'M'),sEl=document.getElementById(prefix+'S');
+  const h=hEl.value.trim(),m=mEl.value.trim(),s=sEl.value.trim();
+  if(h===''&&m===''&&s==='')return '';
+  const hh=String(Math.min(23,Math.max(0,parseInt(h||'0',10)))).padStart(2,'0');
+  const mm=String(Math.min(59,Math.max(0,parseInt(m||'0',10)))).padStart(2,'0');
+  const ss=String(Math.min(59,Math.max(0,parseInt(s||'0',10)))).padStart(2,'0');
+  return `${hh}:${mm}:${ss}`;
+}
 function openAttEditModal(dateKey,empId){
   const emp=EMPLOYEES.find(e=>e.id===empId);
   if(!emp)return;
@@ -1108,8 +1142,8 @@ function openAttEditModal(dateKey,empId){
   const dObj=new Date(dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8));
   document.getElementById('attEditModalTitle').textContent=`✏️ แก้ไขเวลา — ${emp.name} (${dObj.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})})`;
   const corr=attCorrections[curAttEditKey];
-  document.getElementById('aeCheckIn').value=rec?timeStrFromISO(rec.checkIn):(corr&&corr.checkIn?corr.checkIn:'');
-  document.getElementById('aeCheckOut').value=rec?timeStrFromISO(rec.checkOut):(corr&&corr.checkOut?corr.checkOut:'');
+  setTimeParts('aeCheckIn', rec?rec.checkIn:(corr&&corr.checkIn?corr.checkIn:''));
+  setTimeParts('aeCheckOut', rec?rec.checkOut:(corr&&corr.checkOut?corr.checkOut:''));
   document.getElementById('aeNote').value=corr&&corr.note?corr.note:'';
   if(rec){
     const origIn=rec.rawScanCheckIn||'-',origOut=rec.rawScanCheckOut||'-';
@@ -1127,12 +1161,10 @@ async function saveAttCorrection(){
   const dateKey=curAttEditKey.slice(0,us),empId=curAttEditKey.slice(us+1);
   const emp=EMPLOYEES.find(e=>e.id===empId);
   if(!emp)return;
-  const ciVal=document.getElementById('aeCheckIn').value;
+  const ciVal=getTimeParts('aeCheckIn');
   if(!ciVal){alert('กรุณากรอกเวลาเข้างาน');return;}
-  const coVal=document.getElementById('aeCheckOut').value;
-  // ช่อง <input type="time" step="1"> ปกติจะคืนค่าเป็น "HH:MM:SS" อยู่แล้ว — ต่อ ":00" ซ้ำเฉพาะกรณีที่ยังไม่มีวินาที (บราวเซอร์บางตัว) กันไม่ให้ได้ค่าเวลาผิดรูปแบบเช่น "08:48:56:00"
-  const normTime=v=>{if(!v)return v;return v.length<=5?v+':00':v;};
-  const ciNorm=normTime(ciVal),coNorm=coVal?normTime(coVal):null;
+  const coVal=getTimeParts('aeCheckOut');
+  const ciNorm=ciVal,coNorm=coVal||null;
   attCorrections[curAttEditKey]={
     checkIn: ciNorm,
     checkOut: coNorm,
