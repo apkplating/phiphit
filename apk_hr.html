@@ -1647,8 +1647,11 @@ function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
   const rh=recs.reduce((s,r)=>s+parseFloat(r.regH||0),0),ot=recs.reduce((s,r)=>s+parseFloat(r.otH||0),0);
-  const ot10=recs.reduce((s,r)=>s+parseFloat(r.ot10||0),0),ot15=recs.reduce((s,r)=>s+parseFloat(r.ot15||0),0),ot20=recs.reduce((s,r)=>s+parseFloat(r.ot20||0),0),ot30=recs.reduce((s,r)=>s+parseFloat(r.ot30||0),0);
-  const ot10Pay=recs.reduce((s,r)=>s+parseFloat(r.ot10Pay||0),0),ot15Pay=recs.reduce((s,r)=>s+parseFloat(r.ot15Pay||0),0),ot20Pay=recs.reduce((s,r)=>s+parseFloat(r.ot20Pay||0),0),ot30Pay=recs.reduce((s,r)=>s+parseFloat(r.ot30Pay||0),0);
+  const ot10=recs.reduce((s,r)=>s+parseFloat(r.ot10||0),0);
+  // OT2.0/OT3.0 (เดิม) จ่ายอัตรา 1.5 เท่าเหมือน OT1.5 แล้วทุกกรณี — รวมเป็นหมวดเดียวกันตั้งแต่ตรงนี้ ไม่ต้องแยกป้ายให้สับสน เหลือแค่ OT1.0 กับ OT1.5 เท่านั้น
+  const ot15=recs.reduce((s,r)=>s+parseFloat(r.ot15||0)+parseFloat(r.ot20||0)+parseFloat(r.ot30||0),0);
+  const ot10Pay=recs.reduce((s,r)=>s+parseFloat(r.ot10Pay||0),0);
+  const ot15Pay=recs.reduce((s,r)=>s+parseFloat(r.ot15Pay||0)+parseFloat(r.ot20Pay||0)+parseFloat(r.ot30Pay||0),0);
   const op=recs.reduce((s,r)=>s+parseFloat(r.otPay||0),0); // ค่า OT คิดจาก ชม.OT จริงเสมอ ไม่ว่ารายวันหรือรายเดือน
   const isMonthly=emp.payType==='รายเดือน';
   // พนักงานรายเดือน: เงินปกติ = เต็มจำนวนตามสัญญาเสมอ ไม่ผูกกับ ชม.สแกน (ตามที่ตกลงกันไว้)
@@ -1695,8 +1698,8 @@ function getMonthlySalary(empId,month){
   const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0)+absentDeduction;
   const net=gross-dedTotal;
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),
-    ot10:ot10.toFixed(2),ot15:ot15.toFixed(2),ot20:ot20.toFixed(2),ot30:ot30.toFixed(2),
-    ot10Pay:ot10Pay.toFixed(2),ot15Pay:ot15Pay.toFixed(2),ot20Pay:ot20Pay.toFixed(2),ot30Pay:ot30Pay.toFixed(2),
+    ot10:ot10.toFixed(2),ot15:ot15.toFixed(2),
+    ot10Pay:ot10Pay.toFixed(2),ot15Pay:ot15Pay.toFixed(2),
     rp:rp.toFixed(2),op:op.toFixed(2),positionAllowance:positionAllowance.toFixed(2),attendanceBonus:attendanceBonus.toFixed(2),bonusEligible,bonusReason,bonusReasonDetail,
     gross:gross.toFixed(2),ded,absentDays:absentInfo.count,absentDeduction:absentDeduction.toFixed(2),dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
 }
@@ -1809,8 +1812,6 @@ function showPayslip(empId,month){
   let incomeRows=`<tr><td>เงินเดือน${d.emp.payType==='รายวัน'?' (ตามวันทำงาน)':''}</td><td style="text-align:right;">${fmtMoney(d.rp)}</td></tr>`;
   if(parseFloat(d.ot10)>0)incomeRows+=`<tr><td>OT 1.0</td><td style="text-align:right;">${fmtMoney(d.ot10Pay)}</td></tr>`;
   if(parseFloat(d.ot15)>0)incomeRows+=`<tr><td>OT 1.5</td><td style="text-align:right;">${fmtMoney(d.ot15Pay)}</td></tr>`;
-  if(parseFloat(d.ot20)>0)incomeRows+=`<tr><td>OT 2.0</td><td style="text-align:right;">${fmtMoney(d.ot20Pay)}</td></tr>`;
-  if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
   if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${fmtMoney(d.positionAllowance)}</td></tr>`;
   if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${fmtMoney(d.attendanceBonus)}</td></tr>`;
   else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้)${d.bonusReason?`<br><span style="font-size:0.78em;">${d.bonusReason}</span> <button type="button" class="no-print" onclick="alert(${escAttr(JSON.stringify(d.bonusReasonDetail||d.bonusReason))})" style="border:none;background:#eff6ff;color:#1e40af;font-size:0.72em;padding:1px 6px;border-radius:6px;cursor:pointer;">🔍 ดูรายละเอียด</button>`:''}</td><td style="text-align:right;color:#9ca3af;vertical-align:top;">0.00</td></tr>`;
@@ -1833,8 +1834,6 @@ function showPayslip(empId,month){
     <div class="pl-otrow">
       <span>OT 1.0: <b>${d.ot10}</b> ชั่วโมง</span>
       <span>OT 1.5: <b>${d.ot15}</b> ชั่วโมง</span>
-      <span>OT 2.0: <b>${d.ot20}</b> ชั่วโมง</span>
-      <span>OT 3.0: <b>${d.ot30}</b> ชั่วโมง</span>
     </div>
     <div class="pl-cols">
       <div class="pl-col">
