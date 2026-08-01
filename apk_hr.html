@@ -791,6 +791,11 @@ function computeAttendanceCalc(emp,ciDate,coDate){
       const otGraceMs=(otConfig.otGraceMin||0)*60000;
       ot15=pastEnd>otGraceMs?pastEnd/3600000:0;
     }
+    // OT ก่อนเริ่มกะ (มาทำงานก่อนเวลาเริ่มกะจริง เช่น กะบ่ายเริ่ม 13:00 แต่มา 08:49) — เดิมชั่วโมงส่วนนี้ถูกตัดทิ้งไม่นับเงินให้เลย
+    // ใช้เกณฑ์อนุโลมเดียวกับ OT หลังเลิกงาน (otGraceMin) ตามที่ตกลงกันไว้ นับเป็น OT1.5 เหมือน OT วันทำงานปกติทั่วไป
+    const beforeStartMs=win.start-ciDate;
+    const otGraceMsBefore=(otConfig.otGraceMin||0)*60000;
+    if(beforeStartMs>otGraceMsBefore)ot15+=beforeStartMs/3600000;
     let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciDate,win.start))/3600000);
     if(win.breakStart&&win.breakEnd){
       // หักเวลาพักออกจากชั่วโมงปกติ (ไม่นับเป็นเวลาทำงาน)
