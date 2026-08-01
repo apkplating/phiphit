@@ -1390,9 +1390,13 @@ function getMonthlySalary(empId,month){
   const absentDeduction=isMonthly?(absentInfo.count*dailyRate):0; // หักเฉพาะรายเดือน — รายวันขาดงานคือไม่ได้เงินวันนั้นอยู่แล้วโดยธรรมชาติ
   const positionAllowance=parseFloat(emp.positionAllowance)||0; // เงินตำแหน่ง — บวกเข้าเสมอ ไม่มีเงื่อนไข
   // เบี้ยขยัน — ได้เฉพาะเดือนที่ไม่มีบันทึกมาสาย และไม่มีการมาร์คลา/ขาดงานเลยทั้งเดือน (ต้องมีวันทำงานในเดือนนั้นด้วย ไม่งั้นเดือนที่ไม่มีข้อมูลเลยจะได้ฟรีๆ)
-  const anyLate=recs.some(r=>r.isLate===true);
-  const anyLeave=getLeaveDaysInMonth(empId,yr,month,null).count>0;
-  const bonusEligible=recs.length>0&&!anyLate&&!anyLeave;
+  const lateCount=recs.filter(r=>r.isLate===true).length;
+  const leaveInfo=getLeaveDaysInMonth(empId,yr,month,null);
+  const bonusEligible=recs.length>0&&lateCount===0&&leaveInfo.count===0;
+  let bonusReason='';
+  if(recs.length===0)bonusReason='ไม่มีข้อมูลบันทึกเวลาในเดือนนี้';
+  else if(lateCount>0)bonusReason=`มาสาย ${lateCount} วัน`;
+  else if(leaveInfo.count>0)bonusReason=`ลา/ขาดงาน ${leaveInfo.count} วัน`;
   const attendanceBonus=bonusEligible?(parseFloat(emp.attendanceBonus)||0):0;
   const gross=rp+op+positionAllowance+attendanceBonus;
   const dk=dedKey(empId,yr,month);
@@ -1402,7 +1406,7 @@ function getMonthlySalary(empId,month){
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),
     ot10:ot10.toFixed(2),ot15:ot15.toFixed(2),ot20:ot20.toFixed(2),ot30:ot30.toFixed(2),
     ot10Pay:ot10Pay.toFixed(2),ot15Pay:ot15Pay.toFixed(2),ot20Pay:ot20Pay.toFixed(2),ot30Pay:ot30Pay.toFixed(2),
-    rp:rp.toFixed(2),op:op.toFixed(2),positionAllowance:positionAllowance.toFixed(2),attendanceBonus:attendanceBonus.toFixed(2),bonusEligible,
+    rp:rp.toFixed(2),op:op.toFixed(2),positionAllowance:positionAllowance.toFixed(2),attendanceBonus:attendanceBonus.toFixed(2),bonusEligible,bonusReason,
     gross:gross.toFixed(2),ded,absentDays:absentInfo.count,absentDeduction:absentDeduction.toFixed(2),dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
 }
 function renderSalary(){
@@ -1512,13 +1516,13 @@ function showPayslip(empId,month){
   const ded=d.ded;
   // เงินได้: เงินเดือน/ค่าจ้าง + OT แต่ละระดับที่มีจริง (>0) + เงินตำแหน่ง + เบี้ยขยัน
   let incomeRows=`<tr><td>เงินเดือน${d.emp.payType==='รายวัน'?' (ตามวันทำงาน)':''}</td><td style="text-align:right;">${fmtMoney(d.rp)}</td></tr>`;
-  if(parseFloat(d.ot10)>0)incomeRows+=`<tr><td>OT 1.0 (${d.ot10} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot10Pay)}</td></tr>`;
-  if(parseFloat(d.ot15)>0)incomeRows+=`<tr><td>OT 1.5 (${d.ot15} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot15Pay)}</td></tr>`;
-  if(parseFloat(d.ot20)>0)incomeRows+=`<tr><td>OT 2.0 (${d.ot20} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot20Pay)}</td></tr>`;
-  if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0 (${d.ot30} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
+  if(parseFloat(d.ot10)>0)incomeRows+=`<tr><td>OT 1.0</td><td style="text-align:right;">${fmtMoney(d.ot10Pay)}</td></tr>`;
+  if(parseFloat(d.ot15)>0)incomeRows+=`<tr><td>OT 1.5</td><td style="text-align:right;">${fmtMoney(d.ot15Pay)}</td></tr>`;
+  if(parseFloat(d.ot20)>0)incomeRows+=`<tr><td>OT 2.0</td><td style="text-align:right;">${fmtMoney(d.ot20Pay)}</td></tr>`;
+  if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
   if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${fmtMoney(d.positionAllowance)}</td></tr>`;
   if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${fmtMoney(d.attendanceBonus)}</td></tr>`;
-  else if(d.emp.attendanceBonus>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้ — ขาด/ลา/สาย)</td><td style="text-align:right;color:#9ca3af;">0.00</td></tr>`;
+  else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้ — ${d.bonusReason||'ไม่เข้าเงื่อนไข'})</td><td style="text-align:right;color:#9ca3af;">0.00</td></tr>`;
   // เงินหัก: รวมค่าที่พัก+ค่าน้ำไฟเป็นบรรทัดเดียวแบบฟอร์มเดิม, ประกันสังคม, อื่นๆ, ขาดงาน
   let dedRows='';
   const housingCombined=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0);
