@@ -922,10 +922,13 @@ function computeAttendanceCalc(emp,ciDate,coDate){
 // คำนวณเงิน OT แยกตาม 4 ระดับ จากผลลัพธ์ของ computeAttendanceCalc — คืนทั้งเงินแต่ละระดับและยอดรวม
 function calcOTPay(emp,calc){
   const hr=emp.hourlyRate||0;
-  // หมายเหตุ: ยังคงแยกชั่วโมง OT เป็น 4 หมวด (1.0/1.5/2.0/3.0) ไว้แสดงผลในสลิปเหมือนเดิม
-  // แต่บริษัทจ่ายเงินจริงที่ 1.5 เท่าเท่ากันทุกหมวด ไม่ใช้อัตรา 1.0/2.0/3.0 ตามกฎหมายเต็มรูปแบบ (ตามที่ตกลงกันไว้)
-  const rate=hr*1.5;
-  const ot10Pay=calc.ot10*rate,ot15Pay=calc.ot15*rate,ot20Pay=calc.ot20*rate,ot30Pay=calc.ot30*rate;
+  // อัตรา OT (ยืนยันล่าสุด) — เหลือแค่ 2 อัตราเท่านั้น ไม่มี 2.0/3.0 อีกต่อไป:
+  // 1.0 เท่า = เฉพาะ OT1.0 (วันหยุดบริษัท, รายเดือน, ใน 8 ชม.แรก — มีสิทธิ์รับค่าจ้างวันหยุดอยู่แล้ว)
+  // 1.5 เท่า = ทุกกรณีอื่นทั้งหมด (วันทำงานปกติ, รายวันทุกกรณี, รายเดือนที่เกิน 8ชม.ในวันหยุด)
+  const ot10Pay=calc.ot10*hr*1.0;
+  const ot15Pay=calc.ot15*hr*1.5;
+  const ot20Pay=calc.ot20*hr*1.5;
+  const ot30Pay=calc.ot30*hr*1.5;
   return{ot10Pay,ot15Pay,ot20Pay,ot30Pay,otPay:ot10Pay+ot15Pay+ot20Pay+ot30Pay};
 }
 function normalizeZKRecord(dateKey,empKey,raw){
