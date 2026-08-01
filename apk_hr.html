@@ -1086,7 +1086,7 @@ function buildAttTable(recs){
     const corrBadge=r.corrected?`<br><span style="color:#f59e0b;font-size:0.74em;font-weight:700;">✏️ แก้ไขเวลาแล้ว</span>`:'';
     const dk=attDateKeyOf(r);
     const editBtn=`<button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openAttEditModal('${dk}','${r.empId}')">✏️ แก้ไข</button>`;
-    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}">${s.emoji} ${s.name}</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}${corrBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td><td>${editBtn}</td></tr>`;
+    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}" style="cursor:pointer;" onclick="openShiftModalFromAttendance('${dk}','${r.empId}')" title="คลิกเพื่อเปลี่ยนกะของวันนี้">${s.emoji} ${s.name} ✏️</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}${corrBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td><td>${editBtn}</td></tr>`;
   });
   return h+'</tbody></table>';
 }
@@ -1337,15 +1337,35 @@ function toggleWeeklyOff(empId,dow,checked){
   fbPut('/hr/weeklyOff',weeklyOff);
 }
 
-function openShiftModal(empId,day){selCell={empId,day};const emp=EMPLOYEES.find(e=>e.id===empId);document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${day} ${TH_MONTHS[calMonth]}`;const cb=document.getElementById('applyWholeMonth');if(cb)cb.checked=false;document.getElementById('shiftModal').classList.add('show');}
+function openShiftModal(empId,day){
+  selCell={empId,day};
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${day} ${TH_MONTHS[calMonth]}`;
+  const cb=document.getElementById('applyWholeMonth');
+  if(cb){cb.checked=false;cb.parentElement.style.display='';} // โชว์ตัวเลือก "ทั้งเดือน" ตามปกติ (เผื่อถูกซ่อนไว้จากการเปิดผ่านหน้าบันทึกเวลาครั้งก่อน)
+  document.getElementById('shiftModal').classList.add('show');
+}
+// เปิด modal เปลี่ยนกะจากหน้า "บันทึกเวลา" โดยตรง — เจาะจงวันเดียวเท่านั้น (ซ่อนตัวเลือก "ทั้งเดือน" เพราะไม่ใช่ context ของหน้าตารางกะ)
+function openShiftModalFromAttendance(dateKey,empId){
+  const y=+dateKey.slice(0,4),m=+dateKey.slice(4,6)-1,d=+dateKey.slice(6,8);
+  selCell={empId,day:d,year:y,month:m};
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  if(!emp)return;
+  document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${d} ${TH_MONTHS[m]} ${y+543}`;
+  const cb=document.getElementById('applyWholeMonth');
+  if(cb){cb.checked=false;cb.parentElement.style.display='none';}
+  document.getElementById('shiftModal').classList.add('show');
+}
 function closeShiftModal(){document.getElementById('shiftModal').classList.remove('show');selCell=null;}
 function assignShift(sv){
   if(!selCell)return;
+  const y=selCell.year!=null?selCell.year:calYear;
+  const m=selCell.month!=null?selCell.month:calMonth;
   const applyWhole=document.getElementById('applyWholeMonth')?.checked;
   if(applyWhole && sv!==null){
     applyShiftWholeMonth(selCell.empId,sv);
   } else {
-    const k=schedKey(selCell.empId,calYear,calMonth,selCell.day);
+    const k=schedKey(selCell.empId,y,m,selCell.day);
     if(sv===null)delete schedule[k];else schedule[k]=sv;
     persistSchedule();
   }
