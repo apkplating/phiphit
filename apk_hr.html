@@ -1104,21 +1104,60 @@ function openAttEditModal(dateKey,empId){
   document.getElementById('attEditModal').classList.add('show');
 }
 function closeAttEditModal(){document.getElementById('attEditModal').classList.remove('show');curAttEditKey=null;}
-function saveAttCorrection(){
+async function saveAttCorrection(){
   if(!curAttEditKey)return;
+  const us=curAttEditKey.indexOf('_');
+  const dateKey=curAttEditKey.slice(0,us),empId=curAttEditKey.slice(us+1);
+  const emp=EMPLOYEES.find(e=>e.id===empId);
+  if(!emp)return;
   const ciVal=document.getElementById('aeCheckIn').value;
   if(!ciVal){alert('กรุณากรอกเวลาเข้างาน');return;}
   const coVal=document.getElementById('aeCheckOut').value;
   // ช่อง <input type="time" step="1"> ปกติจะคืนค่าเป็น "HH:MM:SS" อยู่แล้ว — ต่อ ":00" ซ้ำเฉพาะกรณีที่ยังไม่มีวินาที (บราวเซอร์บางตัว) กันไม่ให้ได้ค่าเวลาผิดรูปแบบเช่น "08:48:56:00"
   const normTime=v=>{if(!v)return v;return v.length<=5?v+':00':v;};
+  const ciNorm=normTime(ciVal),coNorm=coVal?normTime(coVal):null;
   attCorrections[curAttEditKey]={
-    checkIn: normTime(ciVal),
-    checkOut: coVal?normTime(coVal):null,
+    checkIn: ciNorm,
+    checkOut: coNorm,
     note: document.getElementById('aeNote').value.trim(),
     editedAt: new Date().toISOString()
   };
   localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));
-  fbPut('/hr/attCorrections',attCorrections);
+  await fbPut('/hr/attCorrections',attCorrections);
+
+  // สร้าง record ตามเวลาที่กรอก (ใช้ทั้งกับ manual record เดิมที่มีอยู่แล้ว และ record ใหม่ที่ยังไม่เคยมีเลย)
+  function buildManualRec(existingId){
+    const y=dateKey.slice(0,4),m=dateKey.slice(4,6),d=dateKey.slice(6,8);
+    const ciDate=new Date(`${y}-${m}-${d}T${ciNorm}`);
+    let coDate=coNorm?new Date(`${y}-${m}-${d}T${coNorm}`):null;
+    if(coDate&&coDate<ciDate)coDate.setDate(coDate.getDate()+1); // กะดึกข้ามวัน
+    const calc=computeAttendanceCalc(emp,ciDate,coDate||ciDate);
+    const otp=calcOTPay(emp,calc);
+    const rec={id:existingId||Date.now(),empId,empName:emp.name,shift:calc.shift,shiftName:SHIFTS[calc.shift].name,checkIn:ciDate.toISOString(),checkOut:coDate?coDate.toISOString():null,isLate:calc.isLate,lateMin:calc.lateMin,dateKey};
+    if(coDate){
+      const wh=(coDate-ciDate)/3600000;
+      rec.workedH=wh.toFixed(2);rec.regH=calc.regH.toFixed(2);rec.otH=calc.otH.toFixed(2);rec.workingOnDayOff=calc.workingOnDayOff;
+      rec.ot10=calc.ot10.toFixed(2);rec.ot15=calc.ot15.toFixed(2);rec.ot20=calc.ot20.toFixed(2);rec.ot30=calc.ot30.toFixed(2);
+      rec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);rec.otPay=otp.otPay.toFixed(2);rec.totalPay=(calc.regH*emp.hourlyRate+otp.otPay).toFixed(2);
+    }
+    return rec;
+  }
+  const existingRec=attendance.find(r=>attDateKeyOf(r)===dateKey&&r.empId===empId);
+  if(existingRec&&existingRec.source==='ZKTeco'){
+    // มีรอยสแกนจริงจากเครื่องอยู่แล้ว — attCorrections ที่บันทึกไว้ด้านบนจะถูกใช้คำนวณใหม่อัตโนมัติตอน normalizeZKRecord() ไม่ต้องทำอะไรเพิ่ม
+  } else if(existingRec){
+    // มี record ที่แอพสร้างเอง/กรอกมือไว้ก่อนแล้ว (ไม่ใช่จากเครื่องสแกน) — อัปเดตทับของเดิมที่ Firebase ตรงๆ
+    const rec=buildManualRec(existingRec.id);
+    await fbPut('/hr/attendance/'+dateKey+'/manual_'+empId+'_'+existingRec.id,rec);
+  } else {
+    // ไม่มี record ใดๆ เลยในระบบสำหรับวันนี้ (เช่น ช่วงก่อนเริ่มใช้ ZKTeco) — เช็คก่อนว่ามีรอยสแกนดิบจากเครื่องซ่อนอยู่ไหม กันสร้างซ้ำซ้อนกับ record ที่ correction ด้านบนกำลังจะซ่อมให้
+    const rawExists=await fbGet('/hr/attendance/'+dateKey+'/emp_'+empId);
+    if(!rawExists){
+      const rec=buildManualRec();
+      await fbPut('/hr/attendance/'+dateKey+'/manual_'+empId+'_'+rec.id,rec);
+    }
+  }
+
   closeAttEditModal();
   showToast('✅ แก้ไขเวลาแล้ว กำลังคำนวณใหม่...');
   loadFromFirebase();
