@@ -727,6 +727,8 @@ function fmtMoney(n){
   const num=parseFloat(n)||0;
   return num.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+// escape ข้อความสำหรับใส่ใน HTML attribute (เช่น onclick="...") กันเครื่องหมายคำพูดในข้อความชนกับ attribute
+function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function timeToISO(dateKey,timeStr){
   if(!timeStr)return null;
   const y=dateKey.slice(0,4),m=dateKey.slice(4,6),d=dateKey.slice(6,8);
@@ -1392,17 +1394,32 @@ function getMonthlySalary(empId,month){
   // เบี้ยขยัน — ได้เฉพาะเดือนที่ไม่มีบันทึกมาสาย และไม่มีการมาร์คลา/ขาดงานเลยทั้งเดือน (ต้องมีวันทำงานในเดือนนั้นด้วย ไม่งั้นเดือนที่ไม่มีข้อมูลเลยจะได้ฟรีๆ)
   const lateRecs=recs.filter(r=>r.isLate===true);
   const absentInfoForBonus=getLeaveDaysInMonth(empId,yr,month,'absent_deduct');
-  const leaveNopayCount=getLeaveDaysInMonth(empId,yr,month,'leave_nopay').count+getLeaveDaysInMonth(empId,yr,month,'vacation').count;
+  const leaveNopayInfo=getLeaveDaysInMonth(empId,yr,month,'leave_nopay');
+  const vacationInfo=getLeaveDaysInMonth(empId,yr,month,'vacation');
+  const leaveNopayCount=leaveNopayInfo.count+vacationInfo.count;
   const bonusEligible=recs.length>0&&lateRecs.length===0&&absentInfoForBonus.count===0&&leaveNopayCount===0;
-  let bonusReason='';
+  let bonusReason='',bonusReasonDetail='';
   if(recs.length===0){
     bonusReason='ไม่มีข้อมูลบันทึกเวลาในเดือนนี้';
+    bonusReasonDetail=bonusReason;
   } else {
     const parts=[];
     if(lateRecs.length>0)parts.push(`สาย ${lateRecs.length} วัน`);
     if(leaveNopayCount>0)parts.push(`ลา ${leaveNopayCount} วัน`);
     if(absentInfoForBonus.count>0)parts.push(`ขาด ${absentInfoForBonus.count} วัน`);
     bonusReason=parts.join(' / ');
+    // รายละเอียดเต็ม (วันที่ + นาทีที่สาย / วันที่ + ประเภทลา) — ใช้แสดงตอนกดปุ่ม "ดูรายละเอียด" ในสลิปเท่านั้น
+    const detailParts=[];
+    if(lateRecs.length>0){
+      const lines=lateRecs.map(r=>{const dt=new Date(r.checkIn);return `- ${dt.getDate()} ${TH_MONTHS[dt.getMonth()]} : สาย ${r.lateMin||0} นาที`;}).join('\n');
+      detailParts.push(`มาสาย ${lateRecs.length} วัน:\n${lines}`);
+    }
+    const allLeaveItems=[...leaveNopayInfo.items,...vacationInfo.items,...absentInfoForBonus.items];
+    if(allLeaveItems.length>0){
+      const lines=allLeaveItems.map(it=>{const day=parseInt(it.dateKey.slice(6,8),10);const mo=parseInt(it.dateKey.slice(4,6),10)-1;const lt=LEAVE_TYPES[it.type];return `- ${day} ${TH_MONTHS[mo]} : ${lt?lt.label:it.type}${it.note?' ('+it.note+')':''}`;}).join('\n');
+      detailParts.push(`ลา/ขาดงาน ${allLeaveItems.length} วัน:\n${lines}`);
+    }
+    bonusReasonDetail=detailParts.join('\n\n')||bonusReason;
   }
   const attendanceBonus=bonusEligible?(parseFloat(emp.attendanceBonus)||0):0;
   const gross=rp+op+positionAllowance+attendanceBonus;
@@ -1413,7 +1430,7 @@ function getMonthlySalary(empId,month){
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),
     ot10:ot10.toFixed(2),ot15:ot15.toFixed(2),ot20:ot20.toFixed(2),ot30:ot30.toFixed(2),
     ot10Pay:ot10Pay.toFixed(2),ot15Pay:ot15Pay.toFixed(2),ot20Pay:ot20Pay.toFixed(2),ot30Pay:ot30Pay.toFixed(2),
-    rp:rp.toFixed(2),op:op.toFixed(2),positionAllowance:positionAllowance.toFixed(2),attendanceBonus:attendanceBonus.toFixed(2),bonusEligible,bonusReason,
+    rp:rp.toFixed(2),op:op.toFixed(2),positionAllowance:positionAllowance.toFixed(2),attendanceBonus:attendanceBonus.toFixed(2),bonusEligible,bonusReason,bonusReasonDetail,
     gross:gross.toFixed(2),ded,absentDays:absentInfo.count,absentDeduction:absentDeduction.toFixed(2),dedTotal:dedTotal.toFixed(2),total:net.toFixed(2),recs};
 }
 function renderSalary(){
@@ -1529,7 +1546,7 @@ function showPayslip(empId,month){
   if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
   if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${fmtMoney(d.positionAllowance)}</td></tr>`;
   if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${fmtMoney(d.attendanceBonus)}</td></tr>`;
-  else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้)${d.bonusReason?`<br><span style="font-size:0.78em;">${d.bonusReason}</span>`:''}</td><td style="text-align:right;color:#9ca3af;vertical-align:top;">0.00</td></tr>`;
+  else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้)${d.bonusReason?`<br><span style="font-size:0.78em;">${d.bonusReason}</span> <button type="button" class="no-print" onclick="alert(${escAttr(JSON.stringify(d.bonusReasonDetail||d.bonusReason))})" style="border:none;background:#eff6ff;color:#1e40af;font-size:0.72em;padding:1px 6px;border-radius:6px;cursor:pointer;">🔍 ดูรายละเอียด</button>`:''}</td><td style="text-align:right;color:#9ca3af;vertical-align:top;">0.00</td></tr>`;
   // เงินหัก: รวมค่าที่พัก+ค่าน้ำไฟเป็นบรรทัดเดียวแบบฟอร์มเดิม, ประกันสังคม, อื่นๆ, ขาดงาน
   let dedRows='';
   const housingCombined=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0);
