@@ -106,7 +106,6 @@ table.cal tbody td.emp-cell{text-align:left;padding-left:12px;background:#fafafa
 .payslip{max-width:720px;margin:0 auto;background:white;padding:36px;border:2px solid #333;}
 .payslip-legacy{width:100%;max-width:9in;box-sizing:border-box;min-height:5.2in;margin:0 auto;background:white;padding:10px 18px;border:1px solid #333;font-family:'Courier New',monospace;color:#111;}
 .pl-header{text-align:center;border-bottom:2px solid #333;padding-bottom:6px;margin-bottom:8px;position:relative;}
-.pl-noot-badge{position:absolute;top:0;right:0;background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:8px;font-size:0.72em;font-weight:700;white-space:nowrap;}
 .pl-header .plh-name{font-size:1.15em;font-weight:700;}
 .pl-row{display:flex;gap:22px;margin-bottom:5px;font-size:0.92em;flex-wrap:wrap;}
 .pl-row b{margin-right:4px;}
@@ -469,6 +468,10 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <input id="eAttendanceBonus" class="form-control" type="number" placeholder="0">
         <span class="helper">ได้เฉพาะเดือนที่ไม่ขาด/ไม่ลา/ไม่สายเลยทั้งเดือน</span>
       </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">🏦 เลขที่บัญชี</label>
+        <input id="eBankAccount" class="form-control" placeholder="เช่น 123-4-56789-0">
+      </div>
       <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;background:#fef2f2;padding:10px 13px;border-radius:8px;">
         <input type="checkbox" id="eNoOT" style="width:16px;height:16px;">
         <label for="eNoOT" style="font-size:0.85em;font-weight:600;color:#991b1b;cursor:pointer;">🚫 ไม่มี OT (ชม.ที่เกินกะจะไม่นับเงินให้ทั้งหมด)</label>
@@ -719,6 +722,11 @@ let currentUser=null;
 // zk_sync.py (บนเครื่อง HR) เขียนข้อมูลดิบไปที่ /hr/attendance/{YYYYMMDD}/emp_{empId}
 // รูปแบบ: {empId, date:"dd/mm/yyyy", checkIn:"HH:MM:SS"|null, checkOut:"HH:MM:SS"|null, source:"ZKTeco", syncAt}
 // ฟังก์ชันนี้แปลงให้เป็นรูปแบบเดียวกับ record ที่แอพสร้างเอง (checkIn/checkOut แบบ ISO + คำนวณ ชม./เงิน)
+// ใส่ comma คั่นหลักพันให้ตัวเลขเงิน เช่น 17500 -> "17,500.00"
+function fmtMoney(n){
+  const num=parseFloat(n)||0;
+  return num.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
 function timeToISO(dateKey,timeStr){
   if(!timeStr)return null;
   const y=dateKey.slice(0,4),m=dateKey.slice(4,6),d=dateKey.slice(6,8);
@@ -1403,7 +1411,7 @@ function renderSalary(){
   EMPLOYEES.forEach(emp=>{
     const d=getMonthlySalary(emp.id,m);
     const absentNote=d.absentDays>0?`<br><span style="font-size:0.72em;color:#ef4444;">(ขาด ${d.absentDays} วัน)</span>`:'';
-    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${d.rp}</td><td style="color:#3b82f6;">฿${d.op}</td><td style="color:#ef4444;">฿${d.dedTotal}${absentNote}</td><td style="color:#10b981;font-weight:700;">฿${d.total}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${fmtMoney(d.rp)}</td><td style="color:#3b82f6;">฿${fmtMoney(d.op)}</td><td style="color:#ef4444;">฿${fmtMoney(d.dedTotal)}${absentNote}</td><td style="color:#10b981;font-weight:700;">฿${fmtMoney(d.total)}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
   });
   document.getElementById('salaryTable').innerHTML=h+'</tbody></table>';
 }
@@ -1500,28 +1508,27 @@ function showPayslip(empId,month){
   const noteHtml=note?`<div style="margin:4px 0 8px;padding:6px 10px;background:#fffbeb;border:1.5px solid #fbbf24;border-radius:6px;font-size:0.78em;color:#92400e;"><b>⚠️ หมายเหตุ:</b> ${note}</div>`:'';
   const ded=d.ded;
   // เงินได้: เงินเดือน/ค่าจ้าง + OT แต่ละระดับที่มีจริง (>0) + เงินตำแหน่ง + เบี้ยขยัน
-  let incomeRows=`<tr><td>เงินเดือน${d.emp.payType==='รายวัน'?' (ตามวันทำงาน)':''}</td><td style="text-align:right;">${d.rp}</td></tr>`;
-  if(parseFloat(d.ot10)>0)incomeRows+=`<tr><td>OT 1.0 (${d.ot10} ชม.)</td><td style="text-align:right;">${d.ot10Pay}</td></tr>`;
-  if(parseFloat(d.ot15)>0)incomeRows+=`<tr><td>OT 1.5 (${d.ot15} ชม.)</td><td style="text-align:right;">${d.ot15Pay}</td></tr>`;
-  if(parseFloat(d.ot20)>0)incomeRows+=`<tr><td>OT 2.0 (${d.ot20} ชม.)</td><td style="text-align:right;">${d.ot20Pay}</td></tr>`;
-  if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0 (${d.ot30} ชม.)</td><td style="text-align:right;">${d.ot30Pay}</td></tr>`;
-  if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${d.positionAllowance}</td></tr>`;
-  if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${d.attendanceBonus}</td></tr>`;
+  let incomeRows=`<tr><td>เงินเดือน${d.emp.payType==='รายวัน'?' (ตามวันทำงาน)':''}</td><td style="text-align:right;">${fmtMoney(d.rp)}</td></tr>`;
+  if(parseFloat(d.ot10)>0)incomeRows+=`<tr><td>OT 1.0 (${d.ot10} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot10Pay)}</td></tr>`;
+  if(parseFloat(d.ot15)>0)incomeRows+=`<tr><td>OT 1.5 (${d.ot15} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot15Pay)}</td></tr>`;
+  if(parseFloat(d.ot20)>0)incomeRows+=`<tr><td>OT 2.0 (${d.ot20} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot20Pay)}</td></tr>`;
+  if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0 (${d.ot30} ชม.)</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
+  if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${fmtMoney(d.positionAllowance)}</td></tr>`;
+  if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${fmtMoney(d.attendanceBonus)}</td></tr>`;
   else if(d.emp.attendanceBonus>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้ — ขาด/ลา/สาย)</td><td style="text-align:right;color:#9ca3af;">0.00</td></tr>`;
   // เงินหัก: รวมค่าที่พัก+ค่าน้ำไฟเป็นบรรทัดเดียวแบบฟอร์มเดิม, ประกันสังคม, อื่นๆ, ขาดงาน
   let dedRows='';
   const housingCombined=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0);
-  if(parseFloat(ded.social)>0)dedRows+=`<tr><td>เงินสมทบประกันสังคม</td><td style="text-align:right;">${parseFloat(ded.social).toFixed(2)}</td></tr>`;
-  if(housingCombined>0)dedRows+=`<tr><td>ค่าที่พัก-น้ำ-ไฟ</td><td style="text-align:right;">${housingCombined.toFixed(2)}</td></tr>`;
-  if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;">${parseFloat(ded.otherAmount).toFixed(2)}</td></tr>`;
-  if(d.absentDays>0)dedRows+=`<tr><td>ขาดงาน ${d.absentDays} วัน</td><td style="text-align:right;">${parseFloat(d.absentDeduction).toFixed(2)}</td></tr>`;
+  if(parseFloat(ded.social)>0)dedRows+=`<tr><td>เงินสมทบประกันสังคม</td><td style="text-align:right;">${fmtMoney(ded.social)}</td></tr>`;
+  if(housingCombined>0)dedRows+=`<tr><td>ค่าที่พัก-น้ำ-ไฟ</td><td style="text-align:right;">${fmtMoney(housingCombined)}</td></tr>`;
+  if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;">${fmtMoney(ded.otherAmount)}</td></tr>`;
+  if(d.absentDays>0)dedRows+=`<tr><td>ขาดงาน ${d.absentDays} วัน</td><td style="text-align:right;">${fmtMoney(d.absentDeduction)}</td></tr>`;
   const ytd=getYTDSummary(empId,month);
   const isMonthly=d.emp.payType==='รายเดือน';
   // ฐานเงินเดือน = ค่าจ้างเฉลี่ยต่อวัน (รายเดือน: เงินเดือน÷30 / รายวัน: เงินปกติ÷จำนวนวันที่มาทำงานจริงในเดือนนี้)
   const baseDailyRate=isMonthly?((parseFloat(d.emp.salary)||0)/30):(d.days>0?(parseFloat(d.rp)/d.days):(d.emp.hourlyRate*8));
-  const noOTNote=d.emp.noOT?`<span class="pl-noot-badge">🚫 ไม่มี OT</span>`:'';
   document.getElementById('printArea').innerHTML=`<div class="payslip-legacy">
-    <div class="pl-header">${noOTNote}<div class="plh-name">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div></div>
+    <div class="pl-header"><div class="plh-name">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div></div>
     ${noteHtml}
     <div class="pl-row"><span><b>รหัส:</b> ${d.emp.id}</span><span><b>ชื่อ:</b> ${d.emp.name}</span><span><b>แผนก:</b> ${d.emp.dept}</span></div>
     <div class="pl-row"><span><b>จำนวนวัน:</b> ${d.days}</span><span><b>ตำแหน่ง:</b> ${d.emp.position||'—'}</span><span><b>วันจ่ายเงิน:</b> ${new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'})}</span></div>
@@ -1534,25 +1541,25 @@ function showPayslip(empId,month){
     <div class="pl-cols">
       <div class="pl-col">
         <table class="pl-table"><thead><tr><th>เงินได้</th><th style="text-align:right;">จำนวนเงิน</th></tr></thead>
-        <tbody>${incomeRows}<tr class="pl-totalrow"><td>รวมเงินได้</td><td style="text-align:right;">${d.gross}</td></tr></tbody></table>
+        <tbody>${incomeRows}<tr class="pl-totalrow"><td>รวมเงินได้</td><td style="text-align:right;">${fmtMoney(d.gross)}</td></tr></tbody></table>
       </div>
       <div class="pl-col">
         <table class="pl-table"><thead><tr><th>เงินหัก</th><th style="text-align:right;">จำนวนเงิน</th></tr></thead>
-        <tbody>${dedRows||'<tr><td colspan="2" style="color:#9ca3af;">— ไม่มี —</td></tr>'}<tr class="pl-totalrow"><td>รวมเงินหัก</td><td style="text-align:right;">${d.dedTotal}</td></tr></tbody></table>
+        <tbody>${dedRows||'<tr><td colspan="2" style="color:#9ca3af;">— ไม่มี —</td></tr>'}<tr class="pl-totalrow"><td>รวมเงินหัก</td><td style="text-align:right;">${fmtMoney(d.dedTotal)}</td></tr></tbody></table>
       </div>
     </div>
     <div class="pl-yearrow">
-      <span>รายได้ทั้งปี: <b>${ytd.grossYTD.toFixed(2)}</b></span>
+      <span>รายได้ทั้งปี: <b>${fmtMoney(ytd.grossYTD)}</b></span>
       <span>ภาษีทั้งปี: <b>0.00</b>*</span>
-      <span>ปกส.ทั้งปี: <b>${ytd.ssoYTD.toFixed(2)}</b></span>
+      <span>ปกส.ทั้งปี: <b>${fmtMoney(ytd.ssoYTD)}</b></span>
       <span>PVF ทั้งปี: <b>0.00</b>*</span>
     </div>
     <div class="pl-footrow">
-      <span>ฐานเงินเดือน: <b>${baseDailyRate.toFixed(2)}</b></span>
-      <span style="font-size:1.1em;">รายได้สุทธิ: <b>฿${d.total}</b></span>
+      <span>ฐานเงินเดือน: <b>${fmtMoney(baseDailyRate)}</b></span>
+      <span style="font-size:1.1em;">รายได้สุทธิ: <b>฿${fmtMoney(d.total)}</b></span>
     </div>
     <div class="pl-footrow" style="margin-top:10px;">
-      <span>เลขที่บัญชี: ..........................................</span>
+      <span>เลขที่บัญชี: ${d.emp.bankAccount?`<b>${d.emp.bankAccount}</b>`:'..........................................'}</span>
     </div>
     <div style="font-size:0.68em;color:#9ca3af;margin-top:6px;">*ระบบยังไม่มีการคำนวณภาษีหัก ณ ที่จ่าย และกองทุนสำรองเลี้ยงชีพ (PVF) จึงแสดง 0.00 ไปก่อน</div>
   </div>`;
@@ -1823,6 +1830,7 @@ function openEmpAdd(){
   document.getElementById('eNoOT').checked=false;
   document.getElementById('ePositionAllowance').value=0;
   document.getElementById('eAttendanceBonus').value=0;
+  document.getElementById('eBankAccount').value='';
   recalcHourly();
   const h3=document.querySelector('#editEmpModal h3');
   if(h3) h3.textContent='➕ เพิ่มพนักงานใหม่';
@@ -1852,6 +1860,7 @@ function openEmpEdit(id){
   document.getElementById('eNoOT').checked=!!e.noOT;
   document.getElementById('ePositionAllowance').value=e.positionAllowance||0;
   document.getElementById('eAttendanceBonus').value=e.attendanceBonus||0;
+  document.getElementById('eBankAccount').value=e.bankAccount||'';
   recalcHourly();
   document.getElementById('editEmpModal').classList.add('show');
 }
@@ -1876,6 +1885,7 @@ function saveEmpEdit(){
     noOT: document.getElementById('eNoOT').checked,
     positionAllowance: parseFloat(document.getElementById('ePositionAllowance').value)||0,
     attendanceBonus: parseFloat(document.getElementById('eAttendanceBonus').value)||0,
+    bankAccount: document.getElementById('eBankAccount').value.trim(),
   };
 
   if(empIsNew){
