@@ -283,6 +283,18 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         </div>
         <div class="tbl-wrap" id="zkDiagTable" style="margin-top:12px;"></div>
       </div>
+      <div class="card" style="border:2px solid #f59e0b;">
+        <div class="card-title">🔄 คำนวณใหม่: record ที่กรอกเวลาด้วยมือ (ช่วงวันที่ระบุ)</div>
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ใช้เมื่อสูตรคำนวณสาย/OT/เงิน เปลี่ยนไปหลังจากที่เคยกรอกเวลามือไว้แล้ว — record ที่กรอกมือจะคำนวณครั้งเดียวตอนบันทึกแล้วเก็บค่าไว้ ไม่ได้คำนวณสดใหม่ทุกครั้งเหมือน record จากเครื่องสแกน เครื่องมือนี้จะไล่คำนวณ record ที่กรอกมือทั้งหมดในช่วงวันที่ที่เลือกใหม่ตามสูตรปัจจุบัน (record จากเครื่องสแกนจริงไม่ถูกแตะต้อง เพราะคำนวณสดอยู่แล้ว)</p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <label style="font-weight:600;font-size:0.9em;">จากวันที่:</label>
+          <input type="date" id="recalcFrom" style="padding:9px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;">
+          <label style="font-weight:600;font-size:0.9em;">ถึงวันที่:</label>
+          <input type="date" id="recalcTo" style="padding:9px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;">
+          <button class="btn btn-primary" onclick="runRecalcManual()">🔄 คำนวณใหม่</button>
+        </div>
+        <div id="recalcResult" style="margin-top:12px;"></div>
+      </div>
       <div class="card" style="border:2px solid #00c9a7;">
         <div class="card-title">📥 นำเข้าไฟล์ CSV ด้วยตนเอง (สำรอง กรณี zk_sync.py ไม่ทำงาน)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px;">
@@ -1679,6 +1691,58 @@ function renderZKDiagnostic(){
   const unmatched=(window._zkUnmatched||[]).filter(u=>u.dateKey===dk);
   if(unmatched.length){
     document.getElementById('zkDiagTable').innerHTML+=`<div class="alert alert-warn">⚠️ พบรหัส ${unmatched.map(u=>u.raw.empId||u.key.replace('emp_','')).join(', ')} จากเครื่องสแกน แต่ไม่มีในทะเบียนพนักงาน (ตรวจสอบว่ารหัสในเครื่อง ZKTeco ตรงกับรหัสพนักงานในระบบหรือไม่)</div>`;
+  }
+}
+
+// ========== คำนวณใหม่: record ที่กรอกเวลาด้วยมือ (ใช้เมื่อสูตรคำนวณเปลี่ยนหลังจากบันทึกไปแล้ว) ==========
+// วน dateKey ทีละวันในช่วงที่กำหนด อ่าน record ทุกตัวที่ "ไม่ใช่" จากเครื่องสแกน (key ไม่ขึ้นต้นด้วย emp_)
+// แล้วคำนวณ สาย/ชม.ปกติ/OT/เงิน ใหม่ตามสูตรปัจจุบัน เขียนทับกลับไปที่ Firebase ตำแหน่งเดิม
+async function recalcManualRecords(fromKey,toKey){
+  const y1=+fromKey.slice(0,4),m1=+fromKey.slice(4,6)-1,d1=+fromKey.slice(6,8);
+  const y2=+toKey.slice(0,4),m2=+toKey.slice(4,6)-1,d2=+toKey.slice(6,8);
+  const start=new Date(y1,m1,d1),end=new Date(y2,m2,d2);
+  let updated=0,skipped=0;
+  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+    const dateKey=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+    const dayObj=await fbGet('/hr/attendance/'+dateKey);
+    if(!dayObj)continue;
+    for(const key of Object.keys(dayObj)){
+      if(key.startsWith('emp_'))continue; // record จากเครื่องสแกนจริง คำนวณสดอยู่แล้ว ไม่ต้องแตะ
+      const raw=dayObj[key];
+      if(!raw||!raw.empId||!raw.checkIn){skipped++;continue;}
+      const emp=EMPLOYEES.find(e=>e.id===raw.empId);
+      if(!emp){skipped++;continue;}
+      const ciDate=new Date(raw.checkIn);
+      if(isNaN(ciDate)){skipped++;continue;}
+      const coDate=raw.checkOut?new Date(raw.checkOut):null;
+      const calc=computeAttendanceCalc(emp,ciDate,coDate||ciDate);
+      const otp=calcOTPay(emp,calc);
+      const updatedRec=Object.assign({},raw,{shift:calc.shift,shiftName:SHIFTS[calc.shift].name,isLate:calc.isLate,lateMin:calc.lateMin});
+      if(coDate&&!isNaN(coDate)){
+        const wh=(coDate-ciDate)/3600000;
+        updatedRec.workedH=wh.toFixed(2);updatedRec.regH=calc.regH.toFixed(2);updatedRec.otH=calc.otH.toFixed(2);updatedRec.workingOnDayOff=calc.workingOnDayOff;
+        updatedRec.ot10=calc.ot10.toFixed(2);updatedRec.ot15=calc.ot15.toFixed(2);updatedRec.ot20=calc.ot20.toFixed(2);updatedRec.ot30=calc.ot30.toFixed(2);
+        updatedRec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);updatedRec.otPay=otp.otPay.toFixed(2);updatedRec.totalPay=(calc.regH*emp.hourlyRate+otp.otPay).toFixed(2);
+      }
+      await fbPut('/hr/attendance/'+dateKey+'/'+key,updatedRec);
+      updated++;
+    }
+  }
+  return{updated,skipped};
+}
+async function runRecalcManual(){
+  const from=document.getElementById('recalcFrom').value,to=document.getElementById('recalcTo').value;
+  if(!from||!to){alert('กรุณาเลือกช่วงวันที่ให้ครบทั้งจากและถึง');return;}
+  if(!confirm(`ยืนยันคำนวณ record ที่กรอกมือใหม่ ตั้งแต่ ${from} ถึง ${to}?\n\nเงินเดือน/สาย/OT ของวันที่เหล่านี้อาจเปลี่ยนแปลงตามสูตรล่าสุด`))return;
+  const fromKey=from.replace(/-/g,''),toKey=to.replace(/-/g,'');
+  document.getElementById('recalcResult').innerHTML='<div class="alert alert-warn">⏳ กำลังคำนวณใหม่ อาจใช้เวลาสักครู่...</div>';
+  try{
+    const result=await recalcManualRecords(fromKey,toKey);
+    document.getElementById('recalcResult').innerHTML=`<div class="alert alert-success">✅ คำนวณใหม่แล้ว ${result.updated} รายการ${result.skipped?` (ข้าม ${result.skipped} รายการที่ข้อมูลไม่ครบ)`:''}</div>`;
+    showToast('✅ คำนวณ record ที่กรอกมือใหม่เรียบร้อย');
+    loadFromFirebase();
+  }catch(e){
+    document.getElementById('recalcResult').innerHTML='<div class="alert alert-err">❌ เกิดข้อผิดพลาด: '+(e&&e.message?e.message:e)+'</div>';
   }
 }
 
