@@ -1085,17 +1085,21 @@ function timeStrFromISO(iso){
 }
 function openAttEditModal(dateKey,empId){
   const emp=EMPLOYEES.find(e=>e.id===empId);
+  if(!emp)return;
   const rec=attendance.find(r=>attDateKeyOf(r)===dateKey&&r.empId===empId);
-  if(!emp||!rec)return;
   curAttEditKey=corrKey(dateKey,empId);
   const dObj=new Date(dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8));
   document.getElementById('attEditModalTitle').textContent=`✏️ แก้ไขเวลา — ${emp.name} (${dObj.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})})`;
-  document.getElementById('aeCheckIn').value=timeStrFromISO(rec.checkIn);
-  document.getElementById('aeCheckOut').value=timeStrFromISO(rec.checkOut);
   const corr=attCorrections[curAttEditKey];
+  document.getElementById('aeCheckIn').value=rec?timeStrFromISO(rec.checkIn):(corr&&corr.checkIn?corr.checkIn:'');
+  document.getElementById('aeCheckOut').value=rec?timeStrFromISO(rec.checkOut):(corr&&corr.checkOut?corr.checkOut:'');
   document.getElementById('aeNote').value=corr&&corr.note?corr.note:'';
-  const origIn=rec.rawScanCheckIn||'-',origOut=rec.rawScanCheckOut||'-';
-  document.getElementById('aeOriginalInfo').textContent=`เวลาจากเครื่องสแกนจริง: ${origIn} – ${origOut}`;
+  if(rec){
+    const origIn=rec.rawScanCheckIn||'-',origOut=rec.rawScanCheckOut||'-';
+    document.getElementById('aeOriginalInfo').textContent=`เวลาจากเครื่องสแกนจริง: ${origIn} – ${origOut}`;
+  } else {
+    document.getElementById('aeOriginalInfo').textContent='⚠️ ไม่พบข้อมูลบันทึกเดิมในระบบ (อาจยังไม่เคยสแกน หรือข้อมูลเดิมเสียหาย) — กรอกเวลาใหม่ได้เลย';
+  }
   document.getElementById('aeResetBtn').style.display=corr?'':'none';
   document.getElementById('attEditModal').classList.add('show');
 }
@@ -1360,7 +1364,7 @@ function renderLeaveSection(dateKey,recs){
     const lv=leaveRecords[leaveKey(dateKey,emp.id)];
     const lt=lv?LEAVE_TYPES[lv.type]:null;
     const badge=lt?`<span class="badge" style="background:${lt.color}22;color:${lt.color};border:1.5px solid ${lt.color};">${lt.badge} ${lt.label}</span>${lv.note?`<br><span style="font-size:0.74em;color:#9ca3af;">${lv.note}</span>`:''}`:`<span style="color:#9ca3af;font-size:0.85em;">— ยังไม่ระบุ</span>`;
-    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td>${badge}</td><td><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openLeaveModal('${dateKey}','${emp.id}')">📌 ระบุสถานะ</button></td></tr>`;
+    h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td>${badge}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;margin-right:4px;" onclick="openLeaveModal('${dateKey}','${emp.id}')">📌 ระบุสถานะ</button><button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openAttEditModal('${dateKey}','${emp.id}')">✏️ แก้ไขเวลา</button></td></tr>`;
   });
   wrap.innerHTML=h+'</tbody></table>';
 }
