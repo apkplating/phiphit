@@ -104,8 +104,9 @@ table.cal tbody td.emp-cell{text-align:left;padding-left:12px;background:#fafafa
 .sopt.soff{background:#f3f4f6;border-color:#d1d5db;color:#6b7280;}
 .modal-footer{display:flex;gap:10px;margin-top:12px;}
 .payslip{max-width:720px;margin:0 auto;background:white;padding:36px;border:2px solid #333;}
-.payslip-legacy{width:9in;min-height:5.2in;margin:0 auto;background:white;padding:10px 18px;border:1px solid #333;font-family:'Courier New',monospace;color:#111;}
+.payslip-legacy{width:100%;max-width:9in;box-sizing:border-box;min-height:5.2in;margin:0 auto;background:white;padding:10px 18px;border:1px solid #333;font-family:'Courier New',monospace;color:#111;}
 .pl-header{text-align:center;border-bottom:2px solid #333;padding-bottom:6px;margin-bottom:8px;position:relative;}
+.pl-noot-badge{position:absolute;top:0;right:0;background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:8px;font-size:0.72em;font-weight:700;white-space:nowrap;}
 .pl-header .plh-name{font-size:1.15em;font-weight:700;}
 .pl-row{display:flex;gap:22px;margin-bottom:5px;font-size:0.92em;flex-wrap:wrap;}
 .pl-row b{margin-right:4px;}
@@ -147,7 +148,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
 .role-badge .dot{width:8px;height:8px;border-radius:50%;background:#00c9a7;}
 .btn-logout{background:#fee2e2;color:#991b1b;border:none;padding:7px 13px;border-radius:8px;font-size:0.8em;font-weight:600;cursor:pointer;}
 .btn-logout:hover{background:#fecaca;}
-@media print{body *{visibility:hidden;}#printArea,#printArea *{visibility:visible;}#printArea{position:absolute;left:0;top:0;width:100%;}.no-print{display:none!important;}@page{size:9in 5.5in;margin:3mm;}}
+@media print{body *{visibility:hidden;}#printArea,#printArea *{visibility:visible;}#printArea{position:absolute;left:0;top:0;width:100%;}.no-print{display:none!important;}.payslip-legacy{width:9in;}@page{size:9in 5.5in;margin:3mm;}}
 </style>
 </head>
 <body>
@@ -1518,9 +1519,9 @@ function showPayslip(empId,month){
   const isMonthly=d.emp.payType==='รายเดือน';
   // ฐานเงินเดือน = ค่าจ้างเฉลี่ยต่อวัน (รายเดือน: เงินเดือน÷30 / รายวัน: เงินปกติ÷จำนวนวันที่มาทำงานจริงในเดือนนี้)
   const baseDailyRate=isMonthly?((parseFloat(d.emp.salary)||0)/30):(d.days>0?(parseFloat(d.rp)/d.days):(d.emp.hourlyRate*8));
-  const noOTNote=d.emp.noOT?`<span style="color:#991b1b;font-weight:700;">🚫 พนักงานคนนี้ไม่มี OT (ตั้งค่าไว้)</span>`:'';
+  const noOTNote=d.emp.noOT?`<span class="pl-noot-badge">🚫 ไม่มี OT</span>`:'';
   document.getElementById('printArea').innerHTML=`<div class="payslip-legacy">
-    <div class="pl-header"><div class="plh-name">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div></div>
+    <div class="pl-header">${noOTNote}<div class="plh-name">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด</div></div>
     ${noteHtml}
     <div class="pl-row"><span><b>รหัส:</b> ${d.emp.id}</span><span><b>ชื่อ:</b> ${d.emp.name}</span><span><b>แผนก:</b> ${d.emp.dept}</span></div>
     <div class="pl-row"><span><b>จำนวนวัน:</b> ${d.days}</span><span><b>ตำแหน่ง:</b> ${d.emp.position||'—'}</span><span><b>วันจ่ายเงิน:</b> ${new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'})}</span></div>
@@ -1529,7 +1530,6 @@ function showPayslip(empId,month){
       <span>OT 1.5: <b>${d.ot15}</b> ชั่วโมง</span>
       <span>OT 2.0: <b>${d.ot20}</b> ชั่วโมง</span>
       <span>OT 3.0: <b>${d.ot30}</b> ชั่วโมง</span>
-      ${noOTNote}
     </div>
     <div class="pl-cols">
       <div class="pl-col">
