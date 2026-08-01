@@ -1105,9 +1105,11 @@ function saveAttCorrection(){
   const ciVal=document.getElementById('aeCheckIn').value;
   if(!ciVal){alert('กรุณากรอกเวลาเข้างาน');return;}
   const coVal=document.getElementById('aeCheckOut').value;
+  // ช่อง <input type="time" step="1"> ปกติจะคืนค่าเป็น "HH:MM:SS" อยู่แล้ว — ต่อ ":00" ซ้ำเฉพาะกรณีที่ยังไม่มีวินาที (บราวเซอร์บางตัว) กันไม่ให้ได้ค่าเวลาผิดรูปแบบเช่น "08:48:56:00"
+  const normTime=v=>{if(!v)return v;return v.length<=5?v+':00':v;};
   attCorrections[curAttEditKey]={
-    checkIn: ciVal+':00',
-    checkOut: coVal?coVal+':00':null,
+    checkIn: normTime(ciVal),
+    checkOut: coVal?normTime(coVal):null,
     note: document.getElementById('aeNote').value.trim(),
     editedAt: new Date().toISOString()
   };
