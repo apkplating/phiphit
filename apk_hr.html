@@ -203,12 +203,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
     <div class="page active" id="page-scan">
       <div class="card">
         <div class="card-title">🎫 สแกนบัตรพนักงาน (3 กะ 24 ชม.)</div>
-        <div class="shift-selector">
-          <div class="shift-opt selected" id="shiftBtn1" onclick="selectShift(1)"><div class="sname">🌅 กะที่ 1 เช้า</div><div class="stime">05:00 – 13:00</div></div>
-          <div class="shift-opt" id="shiftBtn2" onclick="selectShift(2)"><div class="sname">☀️ กะที่ 2 บ่าย</div><div class="stime">13:00 – 21:00</div></div>
-          <div class="shift-opt" id="shiftBtn3" onclick="selectShift(3)"><div class="sname">🌙 กะที่ 3 ดึก</div><div class="stime">21:00 – 05:00</div></div>
-          <div class="shift-opt" id="shiftBtn4" onclick="selectShift(4)"><div class="sname">🔬 กะ QC</div><div class="stime">08:00 – 17:00 (พัก 12-13)</div></div>
-        </div>
+        <div class="shift-selector" id="shiftSelectorContainer"></div>
         <div class="scan-input">
           <input type="text" id="cardInput" placeholder="กรอกรหัสพนักงาน เช่น 1, 23, 64 แล้วกด Enter">
           <button class="btn btn-primary" onclick="scanCard()">สแกนบัตร</button>
@@ -233,7 +228,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           </div>
         </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:0.82em;">
-          <span>🌅 <b>กะ 1</b> 05:00-13:00</span><span>☀️ <b>กะ 2</b> 13:00-21:00</span><span>🌙 <b>กะ 3</b> 21:00-05:00</span><span>🔬 <b>กะ QC</b> 08:00-17:00 (พัก 12-13)</span><span>🏖️ <b>หยุด</b></span>
+          <span id="shiftLegend" style="display:flex;gap:16px;flex-wrap:wrap;"></span>
         </div>
         <div id="companyHolidayWrap" style="margin-bottom:14px;padding:12px 14px;background:#fef2f2;border-radius:10px;"></div>
         <div id="weeklyOffWrap" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#f9fafb;border-radius:10px;"></div>
@@ -388,18 +383,23 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
             <span class="helper">เข้างานช้ากว่ากะไม่เกินกี่นาทีถึงยังไม่ถือว่าสาย</span>
           </div>
           <div class="form-group">
-            <label>เริ่มนับ OT หลังเลิกงาน (นาที)</label>
+            <label>เริ่มนับ OT หลังเลิกงาน (นาที) — ค่า default</label>
             <input type="number" id="otGraceMin" value="15">
-            <span class="helper">ต้องอยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มคิด OT (นับเต็มตั้งแต่เวลาเลิกกะจริง) — ใช้กับพนักงานทั่วไป (ไม่ใช่ QC/QA)</span>
+            <span class="helper">ใช้เป็นค่าสำรองเฉพาะตอนกะนั้นยังไม่ได้ตั้งค่าอนุโลมของตัวเองไว้ — ถ้าอยากตั้งอนุโลมแยกเป็นรายกะ ไปที่การ์ด "จัดการกะการทำงาน" ด้านล่างแทน</span>
           </div>
-          <div class="form-group">
-            <label>🔬 พักก่อนเริ่ม OT เฉพาะ QC/QA (นาที)</label>
-            <input type="number" id="qcBreakMin" value="60">
-            <span class="helper">เฉพาะพนักงานแผนกที่มีคำว่า QC หรือ QA — พักจริงหลังเลิกกะกี่นาที (หักออกจากชั่วโมง OT จริง ไม่ใช่แค่เกณฑ์ผ่อนผัน)</span>
+          <div class="form-group" style="opacity:0.55;">
+            <label>🔬 พักก่อนเริ่ม OT เฉพาะ QC/QA (นาที) — เลิกใช้แล้ว</label>
+            <input type="number" id="qcBreakMin" value="60" disabled style="background:#f3f4f6;cursor:not-allowed;">
+            <span class="helper">⚠️ ยกเลิกกฎนี้แล้ว (ยืนยันแล้วว่าหลังเลิกกะไม่มีพักจริง) — กะ QC ใช้เกณฑ์อนุโลม OT เดียวกับกะอื่นทั้งหมดแล้ว ช่องนี้ไม่มีผลต่อการคำนวณอีกต่อไป</span>
           </div>
         </div>
         <button class="btn btn-primary" onclick="saveOTConfig()">💾 บันทึกการตั้งค่า</button>
         <div id="otConfigMsg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🕐 จัดการกะการทำงาน (<span id="shiftDefCountLabel">4</span> กะ)<button class="btn btn-primary" style="margin-left:auto;padding:6px 14px;font-size:0.82em;" onclick="openShiftDefAdd()">➕ เพิ่มกะใหม่</button></div>
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ปรับเวลาเริ่ม-เลิกกะ, ช่วงพัก, และเกณฑ์อนุโลมนับ OT (ก่อนกะ/หลังกะ) ได้แยกอิสระต่อกะ — เพิ่มกะใหม่ได้ไม่จำกัด เช่น กะพิเศษ, กะครึ่งวัน ฯลฯ</p>
+        <div class="tbl-wrap"><table class="data"><thead><tr><th>กะ</th><th>เวลาทำงาน</th><th>ช่วงพัก</th><th>อนุโลมก่อนกะ</th><th>อนุโลมหลังกะ</th><th>แก้ไข</th></tr></thead><tbody id="shiftDefTable"></tbody></table></div>
       </div>
       <div class="card">
         <div class="card-title">👥 รายชื่อพนักงาน (<span id="empCountLabel">34</span> คน)<button class="btn btn-primary" style="margin-left:auto;padding:6px 14px;font-size:0.82em;" onclick="openEmpAdd()">➕ เพิ่มพนักงานใหม่</button></div>
@@ -504,13 +504,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       <input type="checkbox" id="applyWholeMonth" style="width:16px;height:16px;">
       ใช้กะนี้ทั้งเดือน (เว้นวันหยุดประจำสัปดาห์ที่ตั้งไว้ด้านบน)
     </label>
-    <div class="shift-opts-modal">
-      <div class="sopt s1" onclick="assignShift(1)">🌅 <div><b>กะที่ 1 เช้า</b><br><small>05:00 – 13:00 น.</small></div></div>
-      <div class="sopt s2" onclick="assignShift(2)">☀️ <div><b>กะที่ 2 บ่าย</b><br><small>13:00 – 21:00 น.</small></div></div>
-      <div class="sopt s3" onclick="assignShift(3)">🌙 <div><b>กะที่ 3 ดึก</b><br><small>21:00 – 05:00 น.</small></div></div>
-      <div class="sopt s4" onclick="assignShift(4)">🔬 <div><b>กะ QC</b><br><small>08:00 – 17:00 น. (พัก 12:00-13:00)</small></div></div>
-      <div class="sopt soff" onclick="assignShift('off')">🏖️ <div><b>วันหยุด</b><br><small>ไม่ทำงาน</small></div></div>
-    </div>
+    <div class="shift-opts-modal" id="shiftOptsContainer"></div>
     <div class="modal-footer">
       <button class="btn btn-danger" onclick="assignShift(null)" style="flex:1;">🗑️ ลบ</button>
       <button class="btn btn-secondary" onclick="closeShiftModal()" style="flex:1;">ยกเลิก</button>
@@ -554,6 +548,80 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       <button class="btn btn-primary" onclick="saveAttCorrection()" style="flex:1;">💾 บันทึก</button>
       <button class="btn btn-danger" onclick="resetAttCorrection()" style="flex:1;" id="aeResetBtn">↩️ คืนค่าเดิม</button>
       <button class="btn btn-secondary" onclick="closeAttEditModal()" style="flex:1;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: แก้ไข/เพิ่มกะการทำงาน -->
+<div class="modal-ov" id="shiftDefModal">
+  <div class="modal-box" style="width:92%;max-width:520px;max-height:90vh;overflow-y:auto;">
+    <h3 id="shiftDefModalTitle" style="margin-bottom:18px;">🕐 เพิ่มกะใหม่</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">ชื่อกะ</label>
+        <input id="sdName" class="form-control" placeholder="เช่น กะพิเศษเช้า" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">อีโมจิ</label>
+        <input id="sdEmoji" class="form-control" placeholder="🌅" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">สีป้าย</label>
+        <input id="sdColor" type="color" value="#f59e0b" style="width:100%;padding:4px;border:2px solid #e5e7eb;border-radius:8px;height:42px;">
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเริ่มกะ</label>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <input type="number" id="sdStartH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+          <span>:</span>
+          <input type="number" id="sdStartM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเลิกกะ</label>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <input type="number" id="sdEndH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+          <span>:</span>
+          <input type="number" id="sdEndM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+        </div>
+        <span class="helper">ถ้าเวลาเลิกน้อยกว่าหรือเท่ากับเวลาเริ่ม ระบบจะเข้าใจว่าข้ามเที่ยงคืน (กะดึก)</span>
+      </div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="sdHasBreak" style="width:16px;height:16px;" onchange="document.getElementById('sdBreakRow').style.display=this.checked?'grid':'none';">
+        <label for="sdHasBreak" style="font-size:0.85em;font-weight:600;cursor:pointer;">มีเวลาพักในกะนี้</label>
+      </div>
+      <div id="sdBreakRow" style="grid-column:1/-1;display:none;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเริ่มพัก</label>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input type="number" id="sdBreakStartH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+            <span>:</span>
+            <input type="number" id="sdBreakStartM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">เวลาเลิกพัก</label>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input type="number" id="sdBreakEndH" min="0" max="23" placeholder="ชม." style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+            <span>:</span>
+            <input type="number" id="sdBreakEndM" min="0" max="59" placeholder="นาที" style="width:100%;padding:10px 8px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;">
+          </div>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">อนุโลมก่อนกะ (นาที)</label>
+        <input type="number" id="sdGraceBefore" min="0" value="30" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        <span class="helper">มาก่อนเวลาเริ่มกะเกินกี่นาทีถึงเริ่มนับเป็น OT</span>
+      </div>
+      <div>
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">อนุโลมหลังกะ (นาที)</label>
+        <input type="number" id="sdGraceAfter" min="0" value="30" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        <span class="helper">อยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มนับเป็น OT</span>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="document.getElementById('shiftDefModal').classList.remove('show')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveShiftDef()">💾 บันทึก</button>
     </div>
   </div>
 </div>
@@ -704,7 +772,28 @@ const EMPLOYEES = [
   {id:'79', sysCode:'0079', prefix:'นาย',    name:'79',                    nameTH:'79',                    nameEN:'79',                         position:'พนักงาน',          dept:'แผนก',              contractType:'ฟูลไทม์',  salary:0,     payType:'รายวัน',   startDate:'2026-07-04', phone:'',           color:'#0ea5e9', hourlyRate:100,   otRate:150},
 ];
 
-const SHIFTS={1:{name:'กะที่ 1 เช้า',short:'05-13',emoji:'🌅',cls:'cs1',badge:'badge-s1'},2:{name:'กะที่ 2 บ่าย',short:'13-21',emoji:'☀️',cls:'cs2',badge:'badge-s2'},3:{name:'กะที่ 3 ดึก',short:'21-05',emoji:'🌙',cls:'cs3',badge:'badge-s3'},4:{name:'กะ QC (พักเที่ยง)',short:'08-17',emoji:'🔬',cls:'cs4',badge:'badge-s4'},off:{name:'หยุด',short:'OFF',emoji:'🏖️',cls:'csoff',badge:'badge-off'}};
+// ระบบกะแบบปรับแต่งได้เอง — เก็บที่ Firebase /hr/shiftDefs แก้ไข/เพิ่ม/ลบได้จากหน้า "การตั้งค่า"
+// ค่าเริ่มต้น 4 กะเดิม (ใช้ถ้ายังไม่เคยตั้งค่าอะไรไว้ หรือ Firebase ยังโหลดไม่เสร็จ)
+let shiftDefs=JSON.parse(localStorage.getItem('apk_shiftdefs')||'null')||{
+  '1':{id:'1',name:'กะที่ 1 เช้า',emoji:'🌅',color:'#f59e0b',startH:5,startM:0,endH:13,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
+  '2':{id:'2',name:'กะที่ 2 บ่าย',emoji:'☀️',color:'#3b82f6',startH:13,startM:0,endH:21,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
+  '3':{id:'3',name:'กะที่ 3 ดึก',emoji:'🌙',color:'#8b5cf6',startH:21,startM:0,endH:5,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
+  '4':{id:'4',name:'กะ QC (พักเที่ยง)',emoji:'🔬',color:'#22c55e',startH:8,startM:0,endH:17,endM:0,breakStartH:12,breakStartM:0,breakEndH:13,breakEndM:0,otGraceBefore:30,otGraceAfter:30}
+};
+const SHIFT_COLOR_PALETTE=['#f59e0b','#3b82f6','#8b5cf6','#22c55e','#06b6d4','#ec4899','#f97316','#14b8a6','#a855f7','#ef4444'];
+const SHIFT_EMOJI_PALETTE=['🌅','☀️','🌙','🔬','⚙️','🕐','🕑','🕒','🕓','🕔'];
+// สร้าง SHIFTS (ข้อมูลไว้แสดงผล: ชื่อ/ช่วงเวลาย่อ/สี/อีโมจิ) ใหม่จาก shiftDefs ทุกครั้งที่ shiftDefs เปลี่ยน
+let SHIFTS={};
+function rebuildShiftsDisplay(){
+  const s={};
+  Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0)).forEach((id,idx)=>{
+    const sd=shiftDefs[id];
+    s[id]={name:sd.name,short:`${String(sd.startH).padStart(2,'0')}-${String(sd.endH).padStart(2,'0')}`,emoji:sd.emoji||SHIFT_EMOJI_PALETTE[idx%SHIFT_EMOJI_PALETTE.length],color:sd.color||SHIFT_COLOR_PALETTE[idx%SHIFT_COLOR_PALETTE.length]};
+  });
+  s['off']={name:'หยุด',short:'OFF',emoji:'🏖️',color:'#9ca3af'};
+  SHIFTS=s;
+}
+rebuildShiftsDisplay();
 const TH_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const TH_DAYS=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 
@@ -739,7 +828,7 @@ function getLeaveDaysInMonth(empId,year,month,type){
   });
   return{count:items.length,items};
 }
-let selShift=1,calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
+let selShift='1',calYear=new Date().getFullYear(),calMonth=new Date().getMonth(),selCell=null,pendingCSVData=[];
 let currentUser=null;
 
 // ========== ZKTECO LIVE SYNC ADAPTER ==========
@@ -758,18 +847,17 @@ function timeToISO(dateKey,timeStr){
   const y=dateKey.slice(0,4),m=dateKey.slice(4,6),d=dateKey.slice(6,8);
   return `${y}-${m}-${d}T${timeStr}`;
 }
-function shiftFromHour(h){return (h>=5&&h<13)?1:(h>=13&&h<21)?2:3;}
-const SHIFT_HOURS={1:{startH:5,endH:13},2:{startH:13,endH:21},3:{startH:21,endH:5},4:{startH:8,endH:17,breakStartH:12,breakEndH:13}};
+function shiftFromHour(h){return (h>=5&&h<13)?1:(h>=13&&h<21)?2:3;} // ใช้เฉพาะ fallback วันที่ยังไม่เคยตั้งตารางกะไว้เลย (เดาแบบเดิมจาก 3 กะหลัก)
 function getShiftWindow(shiftNum,y,m,d){
-  const st=SHIFT_HOURS[shiftNum];
+  const st=shiftDefs[shiftNum];
   if(!st)return null;
-  const start=new Date(y,m,d,st.startH,0,0);
-  const end=new Date(y,m,d,st.endH,0,0);
-  if(st.endH<=st.startH)end.setDate(end.getDate()+1); // กะดึกข้ามเที่ยงคืน
+  const start=new Date(y,m,d,st.startH,st.startM||0,0);
+  const end=new Date(y,m,d,st.endH,st.endM||0,0);
+  if(end<=start)end.setDate(end.getDate()+1); // กะดึกข้ามเที่ยงคืน (เวลาเลิกก่อนหรือเท่ากับเวลาเริ่ม)
   let breakStart=null,breakEnd=null;
   if(st.breakStartH!=null&&st.breakEndH!=null){
-    breakStart=new Date(y,m,d,st.breakStartH,0,0);
-    breakEnd=new Date(y,m,d,st.breakEndH,0,0);
+    breakStart=new Date(y,m,d,st.breakStartH,st.breakStartM||0,0);
+    breakEnd=new Date(y,m,d,st.breakEndH,st.breakEndM||0,0);
   }
   return {start,end,breakStart,breakEnd};
 }
@@ -801,25 +889,19 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     const within=Math.min(wh,8),beyond=Math.max(0,wh-8);
     if(emp.payType==='รายเดือน')ot10=within;else ot20=within;
     ot30=beyond;
-  } else if(assigned===1||assigned===2||assigned===3||assigned===4){
+  } else if(shiftDefs[assigned]){
     shift=assigned;
     const win=getShiftWindow(shift,y,m,d);
     lateMin=Math.max(0,Math.round((ciDate-win.start)/60000));
     isLate=lateMin>(otConfig.lateGraceMin||0);
     const pastEnd=coDate-win.end;
-    if(shift===4){
-      // อยู่ "กะ QC" (08:00-17:00 พัก 12-13) — พักจริง 1 ชม. (หรือตามที่ตั้งไว้) หลังเลิกกะก่อนเริ่มนับ OT — หักออกจากชั่วโมงจริง ไม่ใช่แค่เกณฑ์ผ่อนผัน
-      // อ้างอิงจากกะที่เลือกเสมอ ไม่เกี่ยวกับชื่อแผนกของพนักงาน (ตามที่ตกลงกันไว้)
-      const qcBreakMs=(otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60)*60000;
-      ot15=pastEnd>qcBreakMs?(pastEnd-qcBreakMs)/3600000:0;
-    } else {
-      const otGraceMs=(otConfig.otGraceMin||0)*60000;
-      ot15=pastEnd>otGraceMs?pastEnd/3600000:0;
-    }
-    // OT ก่อนเริ่มกะ (มาทำงานก่อนเวลาเริ่มกะจริง เช่น กะบ่ายเริ่ม 13:00 แต่มา 08:49) — เดิมชั่วโมงส่วนนี้ถูกตัดทิ้งไม่นับเงินให้เลย
-    // ใช้เกณฑ์อนุโลมเดียวกับ OT หลังเลิกงาน (otGraceMin) ตามที่ตกลงกันไว้ นับเป็น OT1.5 เหมือน OT วันทำงานปกติทั่วไป
+    const sd=shiftDefs[shift];
+    // OT หลังเลิกงาน — ใช้เกณฑ์อนุโลมของกะนั้นๆ (otGraceAfter) ไม่มีการหักเวลาพักจริงออกจาก OT
+    const otGraceMs=(sd.otGraceAfter!=null?sd.otGraceAfter:otConfig.otGraceMin||0)*60000;
+    ot15=pastEnd>otGraceMs?pastEnd/3600000:0;
+    // OT ก่อนเริ่มกะ (มาทำงานก่อนเวลาเริ่มกะจริง) — ใช้เกณฑ์อนุโลมของกะนั้นๆ (otGraceBefore)
     const beforeStartMs=win.start-ciDate;
-    const otGraceMsBefore=(otConfig.otGraceMin||0)*60000;
+    const otGraceMsBefore=(sd.otGraceBefore!=null?sd.otGraceBefore:otConfig.otGraceMin||0)*60000;
     if(beforeStartMs>otGraceMsBefore)ot15+=beforeStartMs/3600000;
     let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciDate,win.start))/3600000);
     if(win.breakStart&&win.breakEnd){
@@ -880,9 +962,28 @@ function normalizeZKRecord(dateKey,empKey,raw){
   return rec;
 }
 
-// โหลดข้อมูลจาก Firebase ทุกวันที่มี แล้วรวมกับ record ที่แอพสร้างเอง (ถ้าออฟไลน์ fallback localStorage)
+// คำนวณ record ที่กรอกมือ/แอพสร้างเอง (manual_...) ใหม่สดๆ ทุกครั้งที่โหลด — เหมือนกับ record จากเครื่องสแกน
+// เพื่อไม่ให้ค่า สาย/OT/เงิน ค้างของเก่าเวลาสูตรคำนวณเปลี่ยน (ไม่ต้องกด badge กะซ้ำเพื่อบังคับคำนวณใหม่อีกต่อไป)
+function normalizeManualRecord(raw){
+  const emp=EMPLOYEES.find(e=>e.id===raw.empId);
+  if(!emp)return raw; // ไม่พบพนักงานในระบบ (เช่น ถูกลบไปแล้ว) — คืนค่าดิบไปก่อน กันพัง
+  const ciDate=new Date(raw.checkIn);
+  if(isNaN(ciDate))return raw; // เวลาผิดรูปแบบ — คืนค่าดิบไปก่อน กันพัง
+  const coDate=raw.checkOut?new Date(raw.checkOut):null;
+  const calc=computeAttendanceCalc(emp,ciDate,coDate&&!isNaN(new Date(raw.checkOut))?coDate:ciDate);
+  const rec=Object.assign({},raw,{empName:emp.name,shift:calc.shift,shiftName:SHIFTS[calc.shift].name,isLate:calc.isLate,lateMin:calc.lateMin});
+  if(coDate&&!isNaN(coDate)){
+    const wh=(coDate-ciDate)/3600000;
+    const otp=calcOTPay(emp,calc);
+    rec.workedH=wh.toFixed(2);rec.regH=calc.regH.toFixed(2);rec.otH=calc.otH.toFixed(2);rec.workingOnDayOff=calc.workingOnDayOff;
+    rec.ot10=calc.ot10.toFixed(2);rec.ot15=calc.ot15.toFixed(2);rec.ot20=calc.ot20.toFixed(2);rec.ot30=calc.ot30.toFixed(2);
+    rec.ot10Pay=otp.ot10Pay.toFixed(2);rec.ot15Pay=otp.ot15Pay.toFixed(2);rec.ot20Pay=otp.ot20Pay.toFixed(2);rec.ot30Pay=otp.ot30Pay.toFixed(2);
+    rec.regPay=(calc.regH*emp.hourlyRate).toFixed(2);rec.otPay=otp.otPay.toFixed(2);rec.totalPay=(calc.regH*emp.hourlyRate+otp.otPay).toFixed(2);
+  }
+  return rec;
+}
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr,fbLeaves]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr,fbLeaves,fbShiftDefs]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves'),fbGet('/hr/shiftDefs')]);
   // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
   if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
   if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
@@ -891,6 +992,7 @@ async function loadFromFirebase(){
   if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   if(fbCorr){attCorrections=fbCorr;localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));}
   if(fbLeaves){leaveRecords=fbLeaves;localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));}
+  if(fbShiftDefs){shiftDefs=fbShiftDefs;localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));rebuildShiftsDisplay();}
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -903,7 +1005,7 @@ async function loadFromFirebase(){
           if(norm)merged.push(norm);
           else zkUnmatched.push({dateKey,key,raw});
         } else {
-          merged.push(raw); // record ที่แอพเขียนเอง (manual_...)
+          merged.push(normalizeManualRecord(raw)); // record ที่แอพเขียนเอง (manual_...) — คำนวณสดใหม่ทุกครั้งแล้ว ไม่ค้างค่าเก่าอีกต่อไป
         }
       });
     });
@@ -918,6 +1020,8 @@ async function loadFromFirebase(){
   if(activePage&&activePage.id==='page-attendance')renderAttendance();
   if(activePage&&activePage.id==='page-salary')renderSalary();
   if(activePage&&activePage.id==='page-import')renderZKImportStatus();
+  if(activePage&&activePage.id==='page-scan')renderShiftSelector();
+  if(activePage&&activePage.id==='page-schedule')renderCal();
 }
 loadFromFirebase();
 setInterval(loadFromFirebase,60000); // รีเฟรชข้อมูลจาก ZKTeco อัตโนมัติทุก 1 นาที
@@ -998,6 +1102,7 @@ function gotoPage(id,el){
   const t={dashboard:'📊 แดชบอร์ด',scan:'🎫 สแกนบัตร',schedule:'📅 ตารางกะ',attendance:'⏰ บันทึกเวลา',salary:'💰 เงินเดือน',import:'📥 นำเข้า ZKTeco',settings:'⚙️ การตั้งค่า'};
   document.getElementById('pageTitle').textContent=t[id]||id;
   if(id==='dashboard')renderDashboard();
+  if(id==='scan')renderShiftSelector();
   if(id==='schedule')renderCal();
   if(id==='attendance'){setHistToday();renderAttendance();}
   if(id==='salary')renderSalary();
@@ -1006,7 +1111,18 @@ function gotoPage(id,el){
 }
 
 // ========== SCAN ==========
-function selectShift(n){selShift=n;[1,2,3,4].forEach(i=>document.getElementById('shiftBtn'+i).classList.toggle('selected',i===n));}
+function renderShiftSelector(){
+  const el=document.getElementById('shiftSelectorContainer');
+  if(!el)return;
+  const shiftIds=Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0));
+  if(!shiftIds.includes(selShift))selShift=shiftIds[0]||'1';
+  el.innerHTML=shiftIds.map(id=>{
+    const sd=shiftDefs[id];
+    const breakTxt=sd.breakStartH!=null?` (พัก ${String(sd.breakStartH).padStart(2,'0')}:${String(sd.breakStartM||0).padStart(2,'0')}-${String(sd.breakEndH).padStart(2,'0')}:${String(sd.breakEndM||0).padStart(2,'0')})`:'';
+    return `<div class="shift-opt${id===selShift?' selected':''}" id="shiftBtn${id}" onclick="selectShift('${id}')"><div class="sname">${sd.emoji} ${sd.name}</div><div class="stime">${String(sd.startH).padStart(2,'0')}:${String(sd.startM||0).padStart(2,'0')} – ${String(sd.endH).padStart(2,'0')}:${String(sd.endM||0).padStart(2,'0')}${breakTxt}</div></div>`;
+  }).join('');
+}
+function selectShift(id){selShift=id;Object.keys(shiftDefs).forEach(i=>{const el=document.getElementById('shiftBtn'+i);if(el)el.classList.toggle('selected',i===id);});}
 document.getElementById('cardInput').addEventListener('keypress',e=>{if(e.key==='Enter')scanCard();});
 
 function scanCard(){
@@ -1099,7 +1215,7 @@ function buildAttTable(recs){
     const corrBadge=r.corrected?`<br><span style="color:#f59e0b;font-size:0.74em;font-weight:700;">✏️ แก้ไขเวลาแล้ว</span>`:'';
     const dk=attDateKeyOf(r);
     const editBtn=`<button class="btn btn-secondary" style="padding:5px 10px;font-size:0.78em;" onclick="openAttEditModal('${dk}','${r.empId}')">✏️ แก้ไข</button>`;
-    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge ${s.badge}" style="cursor:pointer;" onclick="openShiftModalFromAttendance('${dk}','${r.empId}')" title="คลิกเพื่อเปลี่ยนกะของวันนี้">${s.emoji} ${s.name} ✏️</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}${corrBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td><td>${editBtn}</td></tr>`;
+    h+=`<tr><td>${r.empId}</td><td>${r.empName}</td><td style="font-size:0.8em;color:#6b7280;">${emp?emp.dept:'-'}</td><td><span class="badge" style="cursor:pointer;background:${s.color}22;color:${s.color};border:1.5px solid ${s.color};" onclick="openShiftModalFromAttendance('${dk}','${r.empId}')" title="คลิกเพื่อเปลี่ยนกะของวันนี้">${s.emoji} ${s.name} ✏️</span></td><td>${new Date(r.checkIn).toLocaleTimeString('th-TH')}${lateBadge}${corrBadge}</td><td>${co}${offBadge}</td><td>${r.regH||'-'}</td><td style="color:#3b82f6;font-weight:600;">${r.otH||'-'}</td><td style="color:#10b981;font-weight:700;">${r.totalPay?'฿'+r.totalPay:'-'}</td><td>${editBtn}</td></tr>`;
   });
   return h+'</tbody></table>';
 }
@@ -1259,6 +1375,7 @@ function clearLeaveType(){
   if(salPage&&salPage.classList.contains('active'))renderSalary();
 }
 document.getElementById('leaveModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
+document.getElementById('shiftDefModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 
 
 // ========== DASHBOARD ==========
@@ -1276,19 +1393,29 @@ function renderDashboard(){
 // ========== SCHEDULE ==========
 function schedKey(empId,y,m,d){return `${empId}_${y}_${m+1}_${d}`;}
 
+function renderShiftLegend(){
+  const el=document.getElementById('shiftLegend');
+  if(!el)return;
+  const shiftIds=Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0));
+  el.innerHTML=shiftIds.map(id=>{
+    const sd=shiftDefs[id];
+    const breakTxt=sd.breakStartH!=null?` (พัก ${String(sd.breakStartH).padStart(2,'0')}:${String(sd.breakStartM||0).padStart(2,'0')}-${String(sd.breakEndH).padStart(2,'0')}:${String(sd.breakEndM||0).padStart(2,'0')})`:'';
+    return `<span>${sd.emoji} <b>${sd.name}</b> ${String(sd.startH).padStart(2,'0')}:${String(sd.startM||0).padStart(2,'0')}-${String(sd.endH).padStart(2,'0')}:${String(sd.endM||0).padStart(2,'0')}${breakTxt}</span>`;
+  }).join('')+'<span>🏖️ <b>หยุด</b></span>';
+}
 function renderCal(){
   const days=new Date(calYear,calMonth+1,0).getDate(),today=new Date();
   document.getElementById('calMonthLabel').textContent=`${TH_MONTHS[calMonth]} ${calYear+543}`;
-  let c=[0,0,0,0];
+  renderShiftLegend();
+  const shiftIds=Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0));
+  const counts={};shiftIds.forEach(id=>counts[id]=0);
   const flt=document.getElementById('empFilter').value;
   const emps=flt==='all'?EMPLOYEES:EMPLOYEES.filter(e=>e.id===flt);
-  emps.forEach(emp=>{for(let d=1;d<=days;d++){const s=schedule[schedKey(emp.id,calYear,calMonth,d)];if(s===1)c[0]++;else if(s===2)c[1]++;else if(s===3)c[2]++;else if(s===4)c[3]++;}});
-  document.getElementById('schedSummary').innerHTML=`
-    <div class="sum-card"><div class="sum-icon" style="background:#fef3c7;">🌅</div><div><div class="sum-label">กะ 1 เช้า</div><div class="sum-value">${c[0]}</div></div></div>
-    <div class="sum-card"><div class="sum-icon" style="background:#dbeafe;">☀️</div><div><div class="sum-label">กะ 2 บ่าย</div><div class="sum-value">${c[1]}</div></div></div>
-    <div class="sum-card"><div class="sum-icon" style="background:#ede9fe;">🌙</div><div><div class="sum-label">กะ 3 ดึก</div><div class="sum-value">${c[2]}</div></div></div>
-    <div class="sum-card"><div class="sum-icon" style="background:#dcfce7;">🔬</div><div><div class="sum-label">กะ QC</div><div class="sum-value">${c[3]}</div></div></div>
-    <div class="sum-card"><div class="sum-icon" style="background:#f3f4f6;">👥</div><div><div class="sum-label">พนักงานทั้งหมด</div><div class="sum-value">${EMPLOYEES.length}</div></div></div>`;
+  emps.forEach(emp=>{for(let d=1;d<=days;d++){const s=schedule[schedKey(emp.id,calYear,calMonth,d)];if(s!=null&&counts[s]!==undefined)counts[s]++;}});
+  document.getElementById('schedSummary').innerHTML=shiftIds.map(id=>{
+    const sd=SHIFTS[id];
+    return `<div class="sum-card"><div class="sum-icon" style="background:${sd.color}22;">${sd.emoji}</div><div><div class="sum-label">${sd.name}</div><div class="sum-value">${counts[id]}</div></div></div>`;
+  }).join('')+`<div class="sum-card"><div class="sum-icon" style="background:#f3f4f6;">👥</div><div><div class="sum-label">พนักงานทั้งหมด</div><div class="sum-value">${EMPLOYEES.length}</div></div></div>`;
   let hh=`<tr><th class="emp-head">พนักงาน</th>`;
   for(let d=1;d<=days;d++){const dow=new Date(calYear,calMonth,d).getDay();const isT=(d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear());const wknd=dow===0||dow===6;hh+=`<th class="${isT?'today-head':''}" style="${wknd?'color:#ef4444':''}">${TH_DAYS[dow]}<br><b>${d}</b></th>`;}
   document.getElementById('calHead').innerHTML=hh+'</tr>';
@@ -1298,7 +1425,7 @@ function renderCal(){
     for(let d=1;d<=days;d++){
       const isT=(d===today.getDate()&&calMonth===today.getMonth()&&calYear===today.getFullYear());
       const k=schedKey(emp.id,calYear,calMonth,d),sv=schedule[k];
-      let cell=sv&&SHIFTS[sv]?`<div class="cal-shift ${SHIFTS[sv].cls}" onclick="openShiftModal('${emp.id}',${d})">${SHIFTS[sv].emoji}<br>${SHIFTS[sv].short}</div>`:`<div class="cal-empty" onclick="openShiftModal('${emp.id}',${d})">+</div>`;
+      let cell=sv&&SHIFTS[sv]?`<div class="cal-shift" style="background:${SHIFTS[sv].color}22;color:${SHIFTS[sv].color};border:1.5px solid ${SHIFTS[sv].color};" onclick="openShiftModal('${emp.id}',${d})">${SHIFTS[sv].emoji}<br>${SHIFTS[sv].short}</div>`:`<div class="cal-empty" onclick="openShiftModal('${emp.id}',${d})">+</div>`;
       bh+=`<td class="${isT?'today-td':''}">${cell}</td>`;
     }
     bh+='</tr>';
@@ -1369,12 +1496,23 @@ function toggleWeeklyOff(empId,dow,checked){
   fbPut('/hr/weeklyOff',weeklyOff);
 }
 
+function renderShiftOptsModal(){
+  const el=document.getElementById('shiftOptsContainer');
+  if(!el)return;
+  const shiftIds=Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0));
+  el.innerHTML=shiftIds.map(id=>{
+    const sd=shiftDefs[id];
+    const breakTxt=sd.breakStartH!=null?` (พัก ${String(sd.breakStartH).padStart(2,'0')}:${String(sd.breakStartM||0).padStart(2,'0')}-${String(sd.breakEndH).padStart(2,'0')}:${String(sd.breakEndM||0).padStart(2,'0')})`:'';
+    return `<div class="sopt" style="background:${sd.color}22;border-color:${sd.color};color:${sd.color};" onclick="assignShift('${id}')">${sd.emoji} <div><b>${sd.name}</b><br><small>${String(sd.startH).padStart(2,'0')}:${String(sd.startM||0).padStart(2,'0')} – ${String(sd.endH).padStart(2,'0')}:${String(sd.endM||0).padStart(2,'0')} น.${breakTxt}</small></div></div>`;
+  }).join('')+`<div class="sopt soff" onclick="assignShift('off')">🏖️ <div><b>วันหยุด</b><br><small>ไม่ทำงาน</small></div></div>`;
+}
 function openShiftModal(empId,day){
   selCell={empId,day};
   const emp=EMPLOYEES.find(e=>e.id===empId);
   document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${day} ${TH_MONTHS[calMonth]}`;
   const cb=document.getElementById('applyWholeMonth');
   if(cb){cb.checked=false;cb.parentElement.style.display='';} // โชว์ตัวเลือก "ทั้งเดือน" ตามปกติ (เผื่อถูกซ่อนไว้จากการเปิดผ่านหน้าบันทึกเวลาครั้งก่อน)
+  renderShiftOptsModal();
   document.getElementById('shiftModal').classList.add('show');
 }
 // เปิด modal เปลี่ยนกะจากหน้า "บันทึกเวลา" โดยตรง — เจาะจงวันเดียวเท่านั้น (ซ่อนตัวเลือก "ทั้งเดือน" เพราะไม่ใช่ context ของหน้าตารางกะ)
@@ -1386,6 +1524,7 @@ function openShiftModalFromAttendance(dateKey,empId){
   document.getElementById('modalTitle').textContent=`⚙️ ${emp.name} — ${d} ${TH_MONTHS[m]} ${y+543}`;
   const cb=document.getElementById('applyWholeMonth');
   if(cb){cb.checked=false;cb.parentElement.style.display='none';}
+  renderShiftOptsModal();
   document.getElementById('shiftModal').classList.add('show');
 }
 function closeShiftModal(){document.getElementById('shiftModal').classList.remove('show');selCell=null;}
@@ -1910,6 +2049,7 @@ function renderSettings(){
   if(rEl){rEl.value=ssoConfig.rate;mnEl.value=ssoConfig.min;mxEl.value=ssoConfig.max;cpEl.value=ssoConfig.cap;}
   const lgEl=document.getElementById('lateGraceMin'),ogEl=document.getElementById('otGraceMin'),qcEl=document.getElementById('qcBreakMin');
   if(lgEl){lgEl.value=otConfig.lateGraceMin;ogEl.value=otConfig.otGraceMin;qcEl.value=otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60;}
+  renderShiftDefTable();
   const cl=document.getElementById('empCountLabel');
   if(cl) cl.textContent=EMPLOYEES.length;
   document.getElementById('empTable').innerHTML=EMPLOYEES.map(e=>{
@@ -1929,6 +2069,118 @@ function renderSettings(){
       <td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;margin-right:4px;" onclick="openEmpEdit('${e.id}')">✏️ แก้ไข</button><button class="btn btn-danger" style="padding:4px 10px;font-size:0.8em;" onclick="deleteEmpConfirm('${e.id}')">🗑️ ลบ</button></td>
     </tr>`;
   }).join('');
+}
+
+// ========== จัดการกะการทำงาน (เพิ่ม/แก้ไข/ลบ ได้เอง ไม่ต้องแก้โค้ด) ==========
+let shiftDefIsNew=false,curShiftDefId=null;
+function fmtHM(h,m){return `${String(h).padStart(2,'0')}:${String(m||0).padStart(2,'0')}`;}
+function renderShiftDefTable(){
+  const el=document.getElementById('shiftDefTable');
+  if(!el)return;
+  const shiftIds=Object.keys(shiftDefs).sort((a,b)=>(+a||0)-(+b||0));
+  const cl=document.getElementById('shiftDefCountLabel');
+  if(cl)cl.textContent=shiftIds.length;
+  el.innerHTML=shiftIds.map(id=>{
+    const sd=shiftDefs[id];
+    const breakTxt=sd.breakStartH!=null?`${fmtHM(sd.breakStartH,sd.breakStartM)} - ${fmtHM(sd.breakEndH,sd.breakEndM)}`:'<span style="color:#9ca3af;">— ไม่มีพัก —</span>';
+    return `<tr>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:${sd.color};display:inline-block;"></span>${sd.emoji} <strong>${sd.name}</strong></span></td>
+      <td>${fmtHM(sd.startH,sd.startM)} - ${fmtHM(sd.endH,sd.endM)}</td>
+      <td>${breakTxt}</td>
+      <td>${sd.otGraceBefore!=null?sd.otGraceBefore:'-'} นาที</td>
+      <td>${sd.otGraceAfter!=null?sd.otGraceAfter:'-'} นาที</td>
+      <td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;margin-right:4px;" onclick="openShiftDefEdit('${id}')">✏️ แก้ไข</button><button class="btn btn-danger" style="padding:4px 10px;font-size:0.8em;" onclick="deleteShiftDef('${id}')">🗑️ ลบ</button></td>
+    </tr>`;
+  }).join('');
+}
+function openShiftDefAdd(){
+  shiftDefIsNew=true;curShiftDefId=null;
+  document.getElementById('shiftDefModalTitle').textContent='🕐 เพิ่มกะใหม่';
+  document.getElementById('sdName').value='';
+  document.getElementById('sdEmoji').value='⚙️';
+  document.getElementById('sdColor').value='#06b6d4';
+  document.getElementById('sdStartH').value=8;document.getElementById('sdStartM').value=0;
+  document.getElementById('sdEndH').value=17;document.getElementById('sdEndM').value=0;
+  document.getElementById('sdHasBreak').checked=false;
+  document.getElementById('sdBreakRow').style.display='none';
+  document.getElementById('sdBreakStartH').value='';document.getElementById('sdBreakStartM').value='';
+  document.getElementById('sdBreakEndH').value='';document.getElementById('sdBreakEndM').value='';
+  document.getElementById('sdGraceBefore').value=30;
+  document.getElementById('sdGraceAfter').value=30;
+  document.getElementById('shiftDefModal').classList.add('show');
+}
+function openShiftDefEdit(id){
+  const sd=shiftDefs[id];
+  if(!sd)return;
+  shiftDefIsNew=false;curShiftDefId=id;
+  document.getElementById('shiftDefModalTitle').textContent=`✏️ แก้ไขกะ — ${sd.name}`;
+  document.getElementById('sdName').value=sd.name||'';
+  document.getElementById('sdEmoji').value=sd.emoji||'';
+  document.getElementById('sdColor').value=sd.color||'#06b6d4';
+  document.getElementById('sdStartH').value=sd.startH;document.getElementById('sdStartM').value=sd.startM||0;
+  document.getElementById('sdEndH').value=sd.endH;document.getElementById('sdEndM').value=sd.endM||0;
+  const hasBreak=sd.breakStartH!=null;
+  document.getElementById('sdHasBreak').checked=hasBreak;
+  document.getElementById('sdBreakRow').style.display=hasBreak?'grid':'none';
+  document.getElementById('sdBreakStartH').value=hasBreak?sd.breakStartH:'';document.getElementById('sdBreakStartM').value=hasBreak?(sd.breakStartM||0):'';
+  document.getElementById('sdBreakEndH').value=hasBreak?sd.breakEndH:'';document.getElementById('sdBreakEndM').value=hasBreak?(sd.breakEndM||0):'';
+  document.getElementById('sdGraceBefore').value=sd.otGraceBefore!=null?sd.otGraceBefore:30;
+  document.getElementById('sdGraceAfter').value=sd.otGraceAfter!=null?sd.otGraceAfter:30;
+  document.getElementById('shiftDefModal').classList.add('show');
+}
+async function saveShiftDef(){
+  const name=document.getElementById('sdName').value.trim();
+  if(!name){alert('กรุณากรอกชื่อกะ');return;}
+  const startH=parseInt(document.getElementById('sdStartH').value,10);
+  const endH=parseInt(document.getElementById('sdEndH').value,10);
+  if(isNaN(startH)||isNaN(endH)){alert('กรุณากรอกเวลาเริ่ม-เลิกกะให้ครบ');return;}
+  const hasBreak=document.getElementById('sdHasBreak').checked;
+  const newDef={
+    name,
+    emoji:document.getElementById('sdEmoji').value.trim()||'⚙️',
+    color:document.getElementById('sdColor').value||'#06b6d4',
+    startH:Math.min(23,Math.max(0,startH)), startM:Math.min(59,Math.max(0,parseInt(document.getElementById('sdStartM').value,10)||0)),
+    endH:Math.min(23,Math.max(0,endH)), endM:Math.min(59,Math.max(0,parseInt(document.getElementById('sdEndM').value,10)||0)),
+    breakStartH:hasBreak?Math.min(23,Math.max(0,parseInt(document.getElementById('sdBreakStartH').value,10)||0)):null,
+    breakStartM:hasBreak?Math.min(59,Math.max(0,parseInt(document.getElementById('sdBreakStartM').value,10)||0)):null,
+    breakEndH:hasBreak?Math.min(23,Math.max(0,parseInt(document.getElementById('sdBreakEndH').value,10)||0)):null,
+    breakEndM:hasBreak?Math.min(59,Math.max(0,parseInt(document.getElementById('sdBreakEndM').value,10)||0)):null,
+    otGraceBefore:Math.max(0,parseInt(document.getElementById('sdGraceBefore').value,10)||0),
+    otGraceAfter:Math.max(0,parseInt(document.getElementById('sdGraceAfter').value,10)||0),
+  };
+  let id=curShiftDefId;
+  if(shiftDefIsNew){
+    // สร้างรหัสกะใหม่ (เลขถัดจากที่มีอยู่มากสุด) เก็บเป็น string เสมอให้สอดคล้องกับกะเดิม
+    const maxId=Object.keys(shiftDefs).reduce((mx,k)=>Math.max(mx,+k||0),0);
+    id=String(maxId+1);
+  }
+  newDef.id=id;
+  shiftDefs[id]=newDef;
+  localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));
+  rebuildShiftsDisplay();
+  await fbPut('/hr/shiftDefs/'+id,newDef);
+  document.getElementById('shiftDefModal').classList.remove('show');
+  showToast(shiftDefIsNew?'✅ เพิ่มกะ '+name+' แล้ว':'✅ บันทึกกะ '+name+' แล้ว');
+  renderShiftDefTable();
+  renderShiftLegend();
+  const activePage=document.querySelector('.page.active');
+  if(activePage&&activePage.id==='page-scan')renderShiftSelector();
+  loadFromFirebase(); // คำนวณ สาย/OT/เงิน ใหม่ทันทีตามกะที่เพิ่งแก้ (record ที่กรอกมือคำนวณสดอยู่แล้ว)
+}
+async function deleteShiftDef(id){
+  const sd=shiftDefs[id];
+  if(!sd)return;
+  if(Object.keys(shiftDefs).length<=1){alert('ต้องมีอย่างน้อย 1 กะเสมอ ลบกะสุดท้ายไม่ได้');return;}
+  if(!confirm(`ยืนยันลบกะ "${sd.name}"?\n\nพนักงานที่เคยถูกตั้งกะนี้ไว้ในตารางกะเดิมจะยังมีข้อมูลอยู่ แต่ระบบจะไม่รู้จักกะนี้อีกต่อไป (แนะนำให้ไปแก้ตารางกะของคนที่ใช้กะนี้ก่อนลบ)`))return;
+  delete shiftDefs[id];
+  localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));
+  rebuildShiftsDisplay();
+  await fbPut('/hr/shiftDefs/'+id,null); // PUT null = ลบ node นี้ออกจาก Firebase
+  showToast('🗑️ ลบกะ '+sd.name+' แล้ว');
+  renderShiftDefTable();
+  renderShiftLegend();
+  const activePage=document.querySelector('.page.active');
+  if(activePage&&activePage.id==='page-scan')renderShiftSelector();
 }
 
 
@@ -2127,6 +2379,7 @@ document.getElementById('payslipModal').addEventListener('click',e=>{if(e.target
 document.getElementById('deductModal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
 initSalaryMonths();
 setHistToday();
+renderShiftSelector(); // หน้าสแกนบัตร active ตั้งแต่เปิดเว็บ ต้องเรนเดอร์ปุ่มกะทันที
 
 // (empFilter dropdown ถูกสร้างผ่าน refreshEmpFilterDropdown() แล้ว ทั้งตอนโหลดหน้าครั้งแรกและหลังข้อมูลจาก Firebase มาถึง)
 </script>
