@@ -1390,13 +1390,20 @@ function getMonthlySalary(empId,month){
   const absentDeduction=isMonthly?(absentInfo.count*dailyRate):0; // หักเฉพาะรายเดือน — รายวันขาดงานคือไม่ได้เงินวันนั้นอยู่แล้วโดยธรรมชาติ
   const positionAllowance=parseFloat(emp.positionAllowance)||0; // เงินตำแหน่ง — บวกเข้าเสมอ ไม่มีเงื่อนไข
   // เบี้ยขยัน — ได้เฉพาะเดือนที่ไม่มีบันทึกมาสาย และไม่มีการมาร์คลา/ขาดงานเลยทั้งเดือน (ต้องมีวันทำงานในเดือนนั้นด้วย ไม่งั้นเดือนที่ไม่มีข้อมูลเลยจะได้ฟรีๆ)
-  const lateCount=recs.filter(r=>r.isLate===true).length;
-  const leaveInfo=getLeaveDaysInMonth(empId,yr,month,null);
-  const bonusEligible=recs.length>0&&lateCount===0&&leaveInfo.count===0;
+  const lateRecs=recs.filter(r=>r.isLate===true);
+  const absentInfoForBonus=getLeaveDaysInMonth(empId,yr,month,'absent_deduct');
+  const leaveNopayCount=getLeaveDaysInMonth(empId,yr,month,'leave_nopay').count+getLeaveDaysInMonth(empId,yr,month,'vacation').count;
+  const bonusEligible=recs.length>0&&lateRecs.length===0&&absentInfoForBonus.count===0&&leaveNopayCount===0;
   let bonusReason='';
-  if(recs.length===0)bonusReason='ไม่มีข้อมูลบันทึกเวลาในเดือนนี้';
-  else if(lateCount>0)bonusReason=`มาสาย ${lateCount} วัน`;
-  else if(leaveInfo.count>0)bonusReason=`ลา/ขาดงาน ${leaveInfo.count} วัน`;
+  if(recs.length===0){
+    bonusReason='ไม่มีข้อมูลบันทึกเวลาในเดือนนี้';
+  } else {
+    const parts=[];
+    if(lateRecs.length>0)parts.push(`สาย ${lateRecs.length} วัน`);
+    if(leaveNopayCount>0)parts.push(`ลา ${leaveNopayCount} วัน`);
+    if(absentInfoForBonus.count>0)parts.push(`ขาด ${absentInfoForBonus.count} วัน`);
+    bonusReason=parts.join(' / ');
+  }
   const attendanceBonus=bonusEligible?(parseFloat(emp.attendanceBonus)||0):0;
   const gross=rp+op+positionAllowance+attendanceBonus;
   const dk=dedKey(empId,yr,month);
@@ -1522,7 +1529,7 @@ function showPayslip(empId,month){
   if(parseFloat(d.ot30)>0)incomeRows+=`<tr><td>OT 3.0</td><td style="text-align:right;">${fmtMoney(d.ot30Pay)}</td></tr>`;
   if(parseFloat(d.positionAllowance)>0)incomeRows+=`<tr><td>เงินตำแหน่ง</td><td style="text-align:right;">${fmtMoney(d.positionAllowance)}</td></tr>`;
   if(parseFloat(d.attendanceBonus)>0)incomeRows+=`<tr><td>เบี้ยขยัน</td><td style="text-align:right;">${fmtMoney(d.attendanceBonus)}</td></tr>`;
-  else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้ — ${d.bonusReason||'ไม่เข้าเงื่อนไข'})</td><td style="text-align:right;color:#9ca3af;">0.00</td></tr>`;
+  else if(parseFloat(d.emp.attendanceBonus)>0)incomeRows+=`<tr><td style="color:#9ca3af;">เบี้ยขยัน (ไม่ได้)${d.bonusReason?`<br><span style="font-size:0.78em;">${d.bonusReason}</span>`:''}</td><td style="text-align:right;color:#9ca3af;vertical-align:top;">0.00</td></tr>`;
   // เงินหัก: รวมค่าที่พัก+ค่าน้ำไฟเป็นบรรทัดเดียวแบบฟอร์มเดิม, ประกันสังคม, อื่นๆ, ขาดงาน
   let dedRows='';
   const housingCombined=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0);
