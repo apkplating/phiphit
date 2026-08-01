@@ -1353,9 +1353,10 @@ function assignShift(sv){
   renderCal();
 }
 // บันทึกตารางกะลง localStorage + sync ขึ้น Firebase ทันที (กันข้อมูลหายจากการ auto-refresh ทุก 60 วิ ก่อนกดปุ่มบันทึกมือ)
-function persistSchedule(){
+async function persistSchedule(){
   localStorage.setItem('apk_sched',JSON.stringify(schedule));
-  fbPut('/hr/schedule',schedule);
+  await fbPut('/hr/schedule',schedule);
+  loadFromFirebase(); // คำนวณ สาย/OT/เงิน ในหน้าบันทึกเวลา-เงินเดือนใหม่ทันที ไม่ต้องรอ auto-refresh 60 วิ
 }
 function applyShiftWholeMonth(empId,sv){
   const days=new Date(calYear,calMonth+1,0).getDate();
@@ -1380,6 +1381,7 @@ function saveSched(){
     e.style.background=ok?'#10b981':'#ef4444';
     e.disabled=false;
     setTimeout(()=>{e.textContent=o;e.style.background='';},2500);
+    if(ok)loadFromFirebase(); // คำนวณ สาย/OT/เงิน ในหน้าบันทึกเวลา-เงินเดือนใหม่ทันที ไม่ต้องรอ auto-refresh 60 วิ
   });
 }
 function copyPrevMonth(){const pm=calMonth===0?11:calMonth-1,py=calMonth===0?calYear-1:calYear,pd=new Date(py,pm+1,0).getDate(),cd=new Date(calYear,calMonth+1,0).getDate();let n=0;EMPLOYEES.forEach(emp=>{for(let d=1;d<=Math.min(pd,cd);d++){const sk=schedKey(emp.id,py,pm,d),dk=schedKey(emp.id,calYear,calMonth,d);if(schedule[sk]&&!schedule[dk]){schedule[dk]=schedule[sk];n++;}}});saveSched();renderCal();alert(n>0?`✅ คัดลอก ${n} รายการ`:'ไม่มีข้อมูลเดือนก่อน');}
