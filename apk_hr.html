@@ -1357,7 +1357,7 @@ function openShiftModalFromAttendance(dateKey,empId){
   document.getElementById('shiftModal').classList.add('show');
 }
 function closeShiftModal(){document.getElementById('shiftModal').classList.remove('show');selCell=null;}
-function assignShift(sv){
+async function assignShift(sv){
   if(!selCell)return;
   const y=selCell.year!=null?selCell.year:calYear;
   const m=selCell.month!=null?selCell.month:calMonth;
@@ -1367,7 +1367,11 @@ function assignShift(sv){
   } else {
     const k=schedKey(selCell.empId,y,m,selCell.day);
     if(sv===null)delete schedule[k];else schedule[k]=sv;
-    persistSchedule();
+    await persistSchedule(); // เขียนตารางกะใหม่ + คำนวณ record จากเครื่องสแกนใหม่อัตโนมัติ (ผ่าน loadFromFirebase ข้างใน)
+    // record ที่กรอกมือ (ไม่ใช่จากเครื่องสแกน) ไม่คำนวณสดตามกะใหม่อัตโนมัติเหมือน record จากเครื่องสแกน — ต้องคำนวณซ้ำเฉพาะวันนี้ให้ด้วยตรงนี้
+    const dk=String(y)+String(m+1).padStart(2,'0')+String(selCell.day).padStart(2,'0');
+    await recalcManualRecords(dk,dk);
+    loadFromFirebase(); // รีเฟรชอีกรอบ ดึงค่า record ที่กรอกมือที่เพิ่งคำนวณใหม่มาแสดงผล
   }
   closeShiftModal();
   renderCal();
@@ -1378,7 +1382,7 @@ async function persistSchedule(){
   await fbPut('/hr/schedule',schedule);
   loadFromFirebase(); // คำนวณ สาย/OT/เงิน ในหน้าบันทึกเวลา-เงินเดือนใหม่ทันที ไม่ต้องรอ auto-refresh 60 วิ
 }
-function applyShiftWholeMonth(empId,sv){
+async function applyShiftWholeMonth(empId,sv){
   const days=new Date(calYear,calMonth+1,0).getDate();
   const off=weeklyOff[empId]||[];
   const holidays=companyHolidays[holidayKey(calYear,calMonth)]||[];
@@ -1389,7 +1393,12 @@ function applyShiftWholeMonth(empId,sv){
     schedule[k]=(holidays.includes(d)||off.includes(dow))?'off':sv;
     n++;
   }
-  persistSchedule();
+  await persistSchedule();
+  // คำนวณ record ที่กรอกมือทั้งเดือนซ้ำด้วย (บั๊กเดียวกับตอนแก้ทีละวัน — record กรอกมือไม่คำนวณสดตามกะใหม่อัตโนมัติ)
+  const fromKey=String(calYear)+String(calMonth+1).padStart(2,'0')+'01';
+  const toKey=String(calYear)+String(calMonth+1).padStart(2,'0')+String(days).padStart(2,'0');
+  await recalcManualRecords(fromKey,toKey);
+  loadFromFirebase();
   alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน และซิงค์ขึ้น Firebase ทันที (เว้นวันหยุดประจำสัปดาห์และวันหยุดบริษัทให้อัตโนมัติ)`);
 }
 function saveSched(){
