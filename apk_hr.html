@@ -618,6 +618,11 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <input type="number" id="sdGraceAfter" min="0" value="30" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
         <span class="helper">อยู่เกินเวลาเลิกกะกี่นาทีถึงเริ่มนับเป็น OT</span>
       </div>
+      <div style="grid-column:1/-1;">
+        <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">หักพักจาก OT (นาที)</label>
+        <input type="number" id="sdOTBreak" min="0" value="0" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        <span class="helper">หักทันที X นาทีแรกของช่วงที่อยู่เกินเลิกกะ ก่อนเริ่มนับ OT จริง (ปกติใส่ 0 ไม่หัก — ใส่ 60 ถ้ากะนี้ต้องพักจริง 1 ชม.ก่อนเริ่ม OT เช่นกะ QC)</span>
+      </div>
     </div>
     <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="document.getElementById('shiftDefModal').classList.remove('show')">ยกเลิก</button>
@@ -775,10 +780,11 @@ const EMPLOYEES = [
 // ระบบกะแบบปรับแต่งได้เอง — เก็บที่ Firebase /hr/shiftDefs แก้ไข/เพิ่ม/ลบได้จากหน้า "การตั้งค่า"
 // ค่าเริ่มต้น 4 กะเดิม (ใช้ถ้ายังไม่เคยตั้งค่าอะไรไว้ หรือ Firebase ยังโหลดไม่เสร็จ)
 let shiftDefs=JSON.parse(localStorage.getItem('apk_shiftdefs')||'null')||{
-  '1':{id:'1',name:'กะที่ 1 เช้า',emoji:'🌅',color:'#f59e0b',startH:5,startM:0,endH:13,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
-  '2':{id:'2',name:'กะที่ 2 บ่าย',emoji:'☀️',color:'#3b82f6',startH:13,startM:0,endH:21,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
-  '3':{id:'3',name:'กะที่ 3 ดึก',emoji:'🌙',color:'#8b5cf6',startH:21,startM:0,endH:5,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30},
-  '4':{id:'4',name:'กะ QC (พักเที่ยง)',emoji:'🔬',color:'#22c55e',startH:8,startM:0,endH:17,endM:0,breakStartH:12,breakStartM:0,breakEndH:13,breakEndM:0,otGraceBefore:30,otGraceAfter:30}
+  '1':{id:'1',name:'กะที่ 1 เช้า',emoji:'🌅',color:'#f59e0b',startH:5,startM:0,endH:13,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30,otBreakMin:0},
+  '2':{id:'2',name:'กะที่ 2 บ่าย',emoji:'☀️',color:'#3b82f6',startH:13,startM:0,endH:21,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30,otBreakMin:0},
+  '3':{id:'3',name:'กะที่ 3 ดึก',emoji:'🌙',color:'#8b5cf6',startH:21,startM:0,endH:5,endM:0,breakStartH:null,breakStartM:null,breakEndH:null,breakEndM:null,otGraceBefore:30,otGraceAfter:30,otBreakMin:0},
+  '4':{id:'4',name:'กะ QC (พักเที่ยง)',emoji:'🔬',color:'#22c55e',startH:8,startM:0,endH:17,endM:0,breakStartH:12,breakStartM:0,breakEndH:13,breakEndM:0,otGraceBefore:30,otGraceAfter:30,otBreakMin:0},
+  '5':{id:'5',name:'กะพิเศษ (พักเที่ยง)',emoji:'⚙️',color:'#06b6d4',startH:5,startM:0,endH:17,endM:0,breakStartH:12,breakStartM:0,breakEndH:13,breakEndM:0,otGraceBefore:30,otGraceAfter:30,otBreakMin:0}
 };
 const SHIFT_COLOR_PALETTE=['#f59e0b','#3b82f6','#8b5cf6','#22c55e','#06b6d4','#ec4899','#f97316','#14b8a6','#a855f7','#ef4444'];
 const SHIFT_EMOJI_PALETTE=['🌅','☀️','🌙','🔬','⚙️','🕐','🕑','🕒','🕓','🕔'];
@@ -896,9 +902,12 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     isLate=lateMin>(otConfig.lateGraceMin||0);
     const pastEnd=coDate-win.end;
     const sd=shiftDefs[shift];
-    // OT หลังเลิกงาน — ใช้เกณฑ์อนุโลมของกะนั้นๆ (otGraceAfter) ไม่มีการหักเวลาพักจริงออกจาก OT
+    // หักพัก OT (ถ้ากะนี้ตั้งไว้) — หักทันที X นาทีแรกของช่วงที่อยู่เกินเวลาเลิกกะ ก่อนเทียบกับเกณฑ์อนุโลม
+    const otBreakMs=(sd.otBreakMin||0)*60000;
+    const pastEndAfterBreak=Math.max(0,pastEnd-otBreakMs);
+    // OT หลังเลิกงาน — ใช้เกณฑ์อนุโลมของกะนั้นๆ (otGraceAfter)
     const otGraceMs=(sd.otGraceAfter!=null?sd.otGraceAfter:otConfig.otGraceMin||0)*60000;
-    ot15=pastEnd>otGraceMs?pastEnd/3600000:0;
+    ot15=pastEndAfterBreak>otGraceMs?pastEndAfterBreak/3600000:0;
     // OT ก่อนเริ่มกะ (มาทำงานก่อนเวลาเริ่มกะจริง) — ใช้เกณฑ์อนุโลมของกะนั้นๆ (otGraceBefore)
     const beforeStartMs=win.start-ciDate;
     const otGraceMsBefore=(sd.otGraceBefore!=null?sd.otGraceBefore:otConfig.otGraceMin||0)*60000;
@@ -1634,10 +1643,16 @@ function renderLeaveSection(dateKey,recs){
 function initSalaryMonths(){const s=document.getElementById('salaryMonth');TH_MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;s.appendChild(o);});s.value=new Date().getMonth();}
 let deductions=JSON.parse(localStorage.getItem('apk_deductions')||'{}');
 function dedKey(empId,year,month){return empId+'_'+year+'_'+(month+1);}
-function calcAutoSSO(emp){
-  // ตามกฎหมายประกันสังคม มาตรา 33: ฐานค่าจ้างขั้นต่ำ = ssoConfig.min เสมอ
-  // แม้พนักงานจะยังไม่ได้กรอก "เงินเดือน/ค่าจ้าง" ในโปรไฟล์ (เช่น พนักงานรายวัน) ก็ยังต้องใช้ฐานขั้นต่ำนี้ ไม่ใช่ 0
-  const baseSalary=parseFloat(emp.salary)||0;
+function calcAutoSSO(emp,actualRegPay){
+  // ตามกฎหมายประกันสังคม มาตรา 33: ฐานค่าจ้างขั้นต่ำ = ssoConfig.min, สูงสุด = ssoConfig.max
+  // พนักงานรายเดือน: ใช้เงินเดือนในโปรไฟล์เป็นฐาน (คงเดิม)
+  // พนักงานรายวัน: ใช้ "ค่าแรงปกติจริงที่ทำได้เดือนนั้น" (ไม่รวม OT) เป็นฐานแทน ถ้ามีค่าส่งมาให้ — ไม่ใช่เงินเดือนในโปรไฟล์ที่มักไม่ได้กรอกไว้ (เป็น 0)
+  let baseSalary;
+  if(emp.payType==='รายวัน'&&actualRegPay!=null){
+    baseSalary=actualRegPay;
+  } else {
+    baseSalary=parseFloat(emp.salary)||0;
+  }
   const base=Math.min(Math.max(baseSalary,ssoConfig.min),ssoConfig.max);
   let sso=Math.round(base*(ssoConfig.rate/100));
   if(sso>ssoConfig.cap)sso=ssoConfig.cap;
@@ -1694,7 +1709,7 @@ function getMonthlySalary(empId,month){
   const attendanceBonus=bonusEligible?(parseFloat(emp.attendanceBonus)||0):0;
   const gross=rp+op+positionAllowance+attendanceBonus;
   const dk=dedKey(empId,yr,month);
-  const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
+  const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp,rp),otherLabel:'',otherAmount:0};
   const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0)+absentDeduction;
   const net=gross-dedTotal;
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),
@@ -1725,15 +1740,18 @@ function saveSalaryNote(){
 }
 let curDeductKey=null;
 let curDeductEmpId=null;
+let curDeductMonth=null;
 function openDeductModal(empId,month){
   const yr=new Date().getFullYear(),emp=EMPLOYEES.find(e=>e.id===empId);
   curDeductKey=dedKey(empId,yr,month);
   curDeductEmpId=empId;
+  curDeductMonth=month;
   document.getElementById('deductModalTitle').textContent=`📝 รายการหัก — ${emp.name} (${TH_MONTHS[month]})`;
   let ded=deductions[curDeductKey];
   if(!ded){
-    // ยังไม่เคยตั้งเดือนนี้ -> คำนวณประกันสังคมอัตโนมัติจากสูตร % ที่ตั้งไว้ในหน้า "การตั้งค่า" ให้ทันที
-    ded={rent:0,utility:0,social:calcAutoSSO(emp),otherLabel:'',otherAmount:0};
+    // ยังไม่เคยตั้งเดือนนี้ -> คำนวณประกันสังคมอัตโนมัติจากสูตร % ที่ตั้งไว้ในหน้า "การตั้งค่า" ให้ทันที (ใช้ค่าแรงปกติจริงของเดือนนั้นถ้าเป็นพนักงานรายวัน)
+    const actualRegPay=parseFloat(getMonthlySalary(empId,month).rp)||0;
+    ded={rent:0,utility:0,social:calcAutoSSO(emp,actualRegPay),otherLabel:'',otherAmount:0};
   }
   document.getElementById('dRent').value=ded.rent||0;
   document.getElementById('dUtility').value=ded.utility||0;
@@ -1743,11 +1761,12 @@ function openDeductModal(empId,month){
   updateDedPreview();
   document.getElementById('deductModal').classList.add('show');
 }
-function closeDeductModal(){document.getElementById('deductModal').classList.remove('show');curDeductKey=null;curDeductEmpId=null;}
+function closeDeductModal(){document.getElementById('deductModal').classList.remove('show');curDeductKey=null;curDeductEmpId=null;curDeductMonth=null;}
 function autoCalcSSO(){
   if(!curDeductEmpId)return;
   const emp=EMPLOYEES.find(e=>e.id===curDeductEmpId);
-  document.getElementById('dSocial').value=calcAutoSSO(emp);
+  const actualRegPay=curDeductMonth!=null?(parseFloat(getMonthlySalary(curDeductEmpId,curDeductMonth).rp)||0):null;
+  document.getElementById('dSocial').value=calcAutoSSO(emp,actualRegPay);
   updateDedPreview();
 }
 function saveSSOConfig(){
@@ -2085,12 +2104,13 @@ function renderShiftDefTable(){
   el.innerHTML=shiftIds.map(id=>{
     const sd=shiftDefs[id];
     const breakTxt=sd.breakStartH!=null?`${fmtHM(sd.breakStartH,sd.breakStartM)} - ${fmtHM(sd.breakEndH,sd.breakEndM)}`:'<span style="color:#9ca3af;">— ไม่มีพัก —</span>';
+    const otBreakTxt=sd.otBreakMin>0?`<br><span style="color:#f59e0b;font-size:0.85em;">🔸หัก OT ${sd.otBreakMin} นาที</span>`:'';
     return `<tr>
       <td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border-radius:4px;background:${sd.color};display:inline-block;"></span>${sd.emoji} <strong>${sd.name}</strong></span></td>
       <td>${fmtHM(sd.startH,sd.startM)} - ${fmtHM(sd.endH,sd.endM)}</td>
       <td>${breakTxt}</td>
       <td>${sd.otGraceBefore!=null?sd.otGraceBefore:'-'} นาที</td>
-      <td>${sd.otGraceAfter!=null?sd.otGraceAfter:'-'} นาที</td>
+      <td>${sd.otGraceAfter!=null?sd.otGraceAfter:'-'} นาที${otBreakTxt}</td>
       <td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.8em;margin-right:4px;" onclick="openShiftDefEdit('${id}')">✏️ แก้ไข</button><button class="btn btn-danger" style="padding:4px 10px;font-size:0.8em;" onclick="deleteShiftDef('${id}')">🗑️ ลบ</button></td>
     </tr>`;
   }).join('');
@@ -2109,6 +2129,7 @@ function openShiftDefAdd(){
   document.getElementById('sdBreakEndH').value='';document.getElementById('sdBreakEndM').value='';
   document.getElementById('sdGraceBefore').value=30;
   document.getElementById('sdGraceAfter').value=30;
+  document.getElementById('sdOTBreak').value=0;
   document.getElementById('shiftDefModal').classList.add('show');
 }
 function openShiftDefEdit(id){
@@ -2128,6 +2149,7 @@ function openShiftDefEdit(id){
   document.getElementById('sdBreakEndH').value=hasBreak?sd.breakEndH:'';document.getElementById('sdBreakEndM').value=hasBreak?(sd.breakEndM||0):'';
   document.getElementById('sdGraceBefore').value=sd.otGraceBefore!=null?sd.otGraceBefore:30;
   document.getElementById('sdGraceAfter').value=sd.otGraceAfter!=null?sd.otGraceAfter:30;
+  document.getElementById('sdOTBreak').value=sd.otBreakMin||0;
   document.getElementById('shiftDefModal').classList.add('show');
 }
 async function saveShiftDef(){
@@ -2149,6 +2171,7 @@ async function saveShiftDef(){
     breakEndM:hasBreak?Math.min(59,Math.max(0,parseInt(document.getElementById('sdBreakEndM').value,10)||0)):null,
     otGraceBefore:Math.max(0,parseInt(document.getElementById('sdGraceBefore').value,10)||0),
     otGraceAfter:Math.max(0,parseInt(document.getElementById('sdGraceAfter').value,10)||0),
+    otBreakMin:Math.max(0,parseInt(document.getElementById('sdOTBreak').value,10)||0),
   };
   let id=curShiftDefId;
   if(shiftDefIsNew){
