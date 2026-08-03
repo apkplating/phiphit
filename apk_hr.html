@@ -1985,21 +1985,29 @@ async function scanDuplicateManualRecords(){
   const el=document.getElementById('dedupeMsg');
   if(el)el.innerHTML='⏳ กำลังตรวจสอบข้อมูลทั้งหมด...';
   const fbAttAll=await fbGet('/hr/attendance');
-  const groups={};
+  const groups={}; // key: dateKey_empId -> {dateKey,empId,hasScan,items:[{key,raw}]} — items คือเฉพาะ manual_ เท่านั้น (emp_ ไม่มีทางซ้ำกันเองเพราะ key ตายตัวอยู่แล้ว)
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
       const dayObj=fbAttAll[dateKey]||{};
       Object.keys(dayObj).forEach(key=>{
-        if(key.startsWith('emp_'))return; // ของเครื่องสแกน key ตายตัวอยู่แล้ว ไม่มีทางซ้ำ ข้าม
         const raw=dayObj[key];
-        if(!raw||typeof raw!=='object'||!raw.empId)return;
+        if(!raw||typeof raw!=='object')return;
+        if(key.startsWith('emp_')){
+          const empId=key.slice(4);
+          const gk=dateKey+'_'+empId;
+          if(!groups[gk])groups[gk]={dateKey,empId,hasScan:false,items:[]};
+          groups[gk].hasScan=true;
+          return;
+        }
+        if(!raw.empId)return;
         const gk=dateKey+'_'+raw.empId;
-        if(!groups[gk])groups[gk]=[];
-        groups[gk].push({dateKey,key,raw});
+        if(!groups[gk])groups[gk]={dateKey,empId:raw.empId,hasScan:false,items:[]};
+        groups[gk].items.push({key,raw});
       });
     });
   }
-  const dupGroups=Object.values(groups).filter(g=>g.length>1);
+  // ซ้ำซ้อน 2 แบบ: (1) manual_ ซ้ำกันเอง 2 รายการขึ้นไป หรือ (2) มี manual_ ค้างอยู่ทั้งที่มี emp_ (สแกนจริง) อยู่แล้ว — กรณีนี้ manual_ เป็นตัวซ้ำที่ไม่จำเป็นทั้งหมด เพราะ emp_ + attCorrections จัดการเองอยู่แล้ว
+  const dupGroups=Object.values(groups).filter(g=>g.items.length>1||(g.hasScan&&g.items.length>=1));
   dedupeCandidates=dupGroups;
   if(!el)return;
   if(!dupGroups.length){
@@ -2008,24 +2016,27 @@ async function scanDuplicateManualRecords(){
   }
   let totalExtra=0;
   const lines=dupGroups.map(g=>{
-    totalExtra+=g.length-1;
-    const emp=EMPLOYEES.find(e=>e.id===g[0].raw.empId);
-    const dk=g[0].dateKey;
+    const keepCount=g.hasScan?0:1; // ถ้ามีสแกนจริงอยู่แล้ว จะลบ manual_ ทิ้งทั้งหมด (เหลือ 0 manual, ใช้ emp_ แทน) ถ้าไม่มีสแกนจริง จะเก็บ manual_ ล่าสุดไว้ 1 รายการ
+    const del=g.items.length-keepCount;
+    totalExtra+=del;
+    const emp=EMPLOYEES.find(e=>e.id===g.empId);
+    const dk=g.dateKey;
     const dateStr=dk.slice(6,8)+'/'+dk.slice(4,6)+'/'+dk.slice(0,4);
-    return `- รหัส ${g[0].raw.empId} ${emp?emp.name:'(ไม่พบชื่อ)'} วันที่ ${dateStr}: พบซ้ำ ${g.length} รายการ`;
+    const reason=g.hasScan?`มีข้อมูลสแกนจริงอยู่แล้ว + ค้าง record กรอกมือซ้ำ ${g.items.length} รายการ (จะลบทิ้งทั้งหมด เหลือใช้ข้อมูลสแกนจริง)`:`พบ record กรอกมือซ้ำ ${g.items.length} รายการ (จะเก็บล่าสุดไว้ 1 รายการ)`;
+    return `- รหัส ${g.empId} ${emp?emp.name:'(ไม่พบชื่อ)'} วันที่ ${dateStr}: ${reason}`;
   }).join('<br>');
-  el.innerHTML=`<div class="alert alert-err">⚠️ พบข้อมูลซ้ำซ้อน ${dupGroups.length} จุด (รายการส่วนเกินที่จะลบรวม ${totalExtra} รายการ):<br><br>${lines}<br><br><button class="btn btn-danger" onclick="confirmDedupeManualRecords()">🗑️ ลบรายการซ้ำ (เก็บล่าสุดไว้ 1 รายการ/วัน)</button></div>`;
+  el.innerHTML=`<div class="alert alert-err">⚠️ พบข้อมูลซ้ำซ้อน ${dupGroups.length} จุด (รายการส่วนเกินที่จะลบรวม ${totalExtra} รายการ):<br><br>${lines}<br><br><button class="btn btn-danger" onclick="confirmDedupeManualRecords()">🗑️ ลบรายการซ้ำ</button></div>`;
 }
 async function confirmDedupeManualRecords(){
   if(!dedupeCandidates||!dedupeCandidates.length)return;
-  if(!confirm(`ยืนยันลบข้อมูลซ้ำซ้อนทั้ง ${dedupeCandidates.length} จุดหรือไม่? การลบนี้ย้อนกลับไม่ได้ (ระบบจะเก็บรายการล่าสุดไว้เสมอ 1 รายการต่อวัน ลบเฉพาะส่วนเกิน)`))return;
+  if(!confirm(`ยืนยันลบข้อมูลซ้ำซ้อนทั้ง ${dedupeCandidates.length} จุดหรือไม่? การลบนี้ย้อนกลับไม่ได้ (ถ้ามีข้อมูลสแกนจริงอยู่แล้วจะลบ record กรอกมือทิ้งทั้งหมด ถ้าไม่มีจะเก็บ record กรอกมือล่าสุดไว้ 1 รายการ)`))return;
   const el=document.getElementById('dedupeMsg');
   if(el)el.innerHTML='⏳ กำลังลบข้อมูลซ้ำซ้อน...';
   for(const g of dedupeCandidates){
-    const sorted=[...g].sort((a,b)=>(parseFloat(b.raw.id)||0)-(parseFloat(a.raw.id)||0)); // เก็บ id ใหม่สุด (บันทึกล่าสุด) ไว้
-    const toDelete=sorted.slice(1);
+    const sorted=[...g.items].sort((a,b)=>(parseFloat(b.raw.id)||0)-(parseFloat(a.raw.id)||0)); // เรียงใหม่สุดก่อน
+    const toDelete=g.hasScan?sorted:sorted.slice(1); // มีสแกนจริง -> ลบ manual ทั้งหมด / ไม่มี -> เก็บ manual ล่าสุดไว้ 1 อัน
     for(const d of toDelete){
-      await fbPut('/hr/attendance/'+d.dateKey+'/'+d.key,null); // PUT null = ลบ node นั้นออกจาก Firebase
+      await fbPut('/hr/attendance/'+g.dateKey+'/'+d.key,null); // PUT null = ลบ node นั้นออกจาก Firebase
     }
   }
   dedupeCandidates=null;
