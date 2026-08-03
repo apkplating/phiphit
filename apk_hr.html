@@ -895,6 +895,13 @@ function isSundayOrHoliday(y,m,d){
   const hol=companyHolidays[holidayKey(y,m)]||[];
   return hol.includes(d);
 }
+// ปัดเศษชั่วโมง OT ให้เหลือแค่ขั้นละ 30 นาที (ปัดลงเสมอ): <30นาที=0, 30-59นาที=30นาที, 60-89นาที=60นาที, ...
+function roundOTHours(h){
+  if(!h||h<=0)return 0;
+  const totalMin=h*60;
+  const flooredMin=Math.floor(totalMin/30)*30;
+  return flooredMin/60;
+}
 function computeAttendanceCalc(emp,ciDate,coDate){
   const empId=emp.id;
   const y=ciDate.getFullYear(),m=ciDate.getMonth(),d=ciDate.getDate();
@@ -947,6 +954,7 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     shift=shiftFromHour(ciDate.getHours());
     regH=Math.min(wh,8);ot15=Math.max(0,wh-8);
   }
+  ot10=roundOTHours(ot10);ot15=roundOTHours(ot15);ot20=roundOTHours(ot20);ot30=roundOTHours(ot30); // ปัดเศษ OT เป็นขั้น 30 นาทีเสมอ (ปัดลง)
   if(emp.noOT){ot10=0;ot15=0;ot20=0;ot30=0;} // พนักงานที่ติ๊ก "ไม่มี OT" ไว้ — ชม.ที่เกินกะไม่นับเงินให้เลย ไม่ว่ากรณีไหน
   const otH=ot10+ot15+ot20+ot30; // รวมทุกระดับไว้เผื่อจุดที่ยังอ้างอิง otH รวม (แสดงผลในตารางเดิม)
   return {shift,isLate,lateMin,regH,schedH,ot10,ot15,ot20,ot30,otH,workingOnDayOff,hasSchedule:assigned!==undefined};
