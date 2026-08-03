@@ -222,12 +222,12 @@ tr:hover td{background:#f8fafc;}
       </div>
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">ต้นทุนแรงงาน (Labor Cost) รายเดือน (บาท) · 12 เดือนล่าสุด</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">ต้นทุนแรงงาน (Labor Cost) รายเดือน (บาท) · ม.ค.–เดือนนี้ (ปีปัจจุบัน)</div>
           <span id="laborCostBadge" style="font-size:10.5px;color:var(--text-muted);white-space:nowrap;"></span>
         </div>
         <div class="chart-wrap-lg"><canvas id="chartCostLabor"></canvas></div>
         <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
-          ประมาณการจากข้อมูลสแกนเวลา + โครงสร้างเงินเดือนใน apk_hr.html: พนักงานรายเดือน = เงินเดือนเต็มทุกเดือน, พนักงานรายวัน = ชม.ปกติ(≤8/วัน)×ค่าแรง, OT = ชม.เกิน8×1.5 เท่า (ทุกคน) · <b>ไม่รวมรายการหัก</b> (ประกันสังคม/มาสาย/ขาดงาน) และไม่แยกอัตรา OT หลายระดับแบบหน้าเงินเดือนจริง — ใช้ดูแนวโน้มเท่านั้น ไม่ใช่ยอดจ่ายจริง
+          ดึงตัวเลขจากฟังก์ชันคำนวณเงินเดือนจริงของ apk_hr.html โดยตรง (โหลดผ่าน iframe ที่ซ่อนไว้) — <b>ตัวเลขตรงกับหน้า "เงินเดือน" เป๊ะๆ</b> รวมเบี้ยขยัน/เงินตำแหน่ง/หักประกันสังคม/หักมาสาย-ขาดงาน/OT หลายระดับครบทุกอย่าง ไม่ใช่ค่าประมาณ
         </div>
       </div>
     </div>
@@ -290,6 +290,10 @@ tr:hover td{background:#f8fafc;}
 
   </main>
 </div>
+
+<!-- iframe ซ่อน โหลด apk_hr.html จริง เพื่อใช้ฟังก์ชันคำนวณเงินเดือน (getMonthlySalary) ตัวเดียวกับหน้าเงินเดือนเป๊ะๆ
+     ไม่ต้องคัดลอก/ดูแลสูตรคำนวณแยกอีกชุด — ข้อมูลจะตรงกับหน้า HR เสมอโดยอัตโนมัติ -->
+<iframe id="hrEngineFrame" src="apk_hr.html" style="display:none;width:0;height:0;border:0;"></iframe>
 
 <script src="fb-auth.js"></script>
 <script>
@@ -411,7 +415,7 @@ async function loadAndRender() {
   renderKPI(records);
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
-  renderLaborCostSection(); // ต้นทุนแรงงาน — ประมาณการจากข้อมูลสแกนเวลา HR (apk_hr.html)
+  renderLaborCostSection(); // ต้นทุนแรงงาน — เรียกฟังก์ชันจริงจาก apk_hr.html (iframe) ให้ตรงกับหน้าเงินเดือนเป๊ะๆ
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
@@ -674,161 +678,106 @@ async function renderCostSection(lineSel){
 }
 
 // ══════════════════════════════════════════════
-//  SECTION 2d: ต้นทุนแรงงาน (Labor Cost) — ประมาณการจากข้อมูลสแกนเวลา HR (apk_hr.html)
-//  ที่มา: Firebase เดียวกับ B1 (FB.B1) โหนด /hr/attendance · ไม่มีรายชื่อพนักงานเก็บไว้บน Firebase
-//  (EMPLOYEES เป็น hardcode array ใน apk_hr.html) จึงต้องคัดลอกฟิลด์ที่จำเป็นมาไว้ที่นี่ (EMP_COST)
-//  วิธีคิด (ประมาณการอย่างง่าย ไม่ตรงกับหน้าเงินเดือนจริง 100%):
-//    - พนักงานรายเดือน: นับเงินเดือนเต็มทุกเดือนตั้งแต่ startDate (ไม่ผูกกับ ชม.สแกน ตามกฎ HR จริง)
-//    - พนักงานรายวัน: ชม.ปกติ(≤8ชม./วัน) x ค่าแรง/ชม. จากข้อมูลสแกนเข้า-ออกจริง
-//    - OT (ทุกคน): ชม.ที่เกิน 8/วัน x ค่าแรง/ชม. x 1.5 (ไม่แยกอัตรา 1.0/1.5 หลายระดับแบบหน้าเงินเดือนจริง)
-//    - ไม่รวมรายการหัก (ประกันสังคม, มาสาย, ขาดงาน, ลาไม่รับเงิน) และไม่รวมเบี้ยขยัน/เงินตำแหน่ง
-//  ⚠️ อัปเดต EMP_COST ด้วยมือถ้ามีพนักงานเข้าใหม่/ลาออก/ค่าแรงเปลี่ยน (คัดลอกจาก EMPLOYEES ใน apk_hr.html)
+//  SECTION 2d: ต้นทุนแรงงาน (Labor Cost) — ใช้ "เอนจิน" คำนวณจริงจาก apk_hr.html
+//  วิธีการ: โหลด apk_hr.html เข้า iframe ที่ซ่อนไว้ (ตัวเดียวกับที่ Deploy จริง อยู่โฟลเดอร์เดียวกัน)
+//  แล้วเรียกฟังก์ชัน getMonthlySalary(empId, month) ของมันตรงๆ ผ่าน iframe.contentWindow
+//  ข้อดี: ไม่ต้องคัดลอก/ดูแลสูตรคำนวณ (OT หลายระดับ, เบี้ยขยัน, หักมาสาย/ขาด/ประกันสังคม ฯลฯ) แยกอีกชุด
+//  ตัวเลขจะ "ตรงกับหน้าเงินเดือนของ apk_hr.html เป๊ะๆ" เสมอ เพราะเรียกฟังก์ชันเดียวกันจริงๆ
+//  ⚠️ ข้อจำกัดที่มาจากตัว apk_hr.html เอง (ไม่ใช่จากไฟล์นี้): getMonthlySalary() คำนวณได้เฉพาะ "ปีปัจจุบัน"
+//  เท่านั้น (ปีถูกล็อกเป็น new Date().getFullYear() ในซอร์สโค้ด) ดังนั้นกราฟนี้จะแสดงได้ตั้งแต่ ม.ค.
+//  ปีนี้ ถึงเดือนปัจจุบันเท่านั้น (ไม่ใช่ 12 เดือนย้อนหลังแบบกราฟอื่นๆ ในหน้านี้) — เหมือนหน้าเงินเดือนจริงที่
+//  เลือกดูข้ามปีไม่ได้เช่นกัน
 // ══════════════════════════════════════════════
-var EMP_COST = [
-  {id:'1',payType:'รายเดือน',salary:17500,hourlyRate:72.92,startDate:'2018-07-02'},
-  {id:'2',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2016-08-01'},
-  {id:'3',payType:'รายเดือน',salary:0,hourlyRate:100,startDate:'2016-09-20'},
-  {id:'6',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2019-07-02'},
-  {id:'8',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2019-03-04'},
-  {id:'11',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2019-09-11'},
-  {id:'12',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2023-09-04'},
-  {id:'15',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2022-05-03'},
-  {id:'21',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2023-12-09'},
-  {id:'23',payType:'รายเดือน',salary:0,hourlyRate:120,startDate:'2024-01-16'},
-  {id:'25',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2024-05-23'},
-  {id:'30',payType:'รายเดือน',salary:0,hourlyRate:100,startDate:'2024-06-25'},
-  {id:'32',payType:'รายเดือน',salary:0,hourlyRate:100,startDate:'2024-06-22'},
-  {id:'33',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2024-05-15'},
-  {id:'40',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-06-09'},
-  {id:'46',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-07-08'},
-  {id:'50',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-09-16'},
-  {id:'51',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-09-16'},
-  {id:'54',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-11-04'},
-  {id:'56',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-11-06'},
-  {id:'58',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2025-12-01'},
-  {id:'59',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-01-03'},
-  {id:'60',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-02-02'},
-  {id:'61',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-02-16'},
-  {id:'62',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-03-02'},
-  {id:'63',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-02'},
-  {id:'64',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-04'},
-  {id:'65',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-04'},
-  {id:'66',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-09'},
-  {id:'69',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-13'},
-  {id:'70',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-13'},
-  {id:'71',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-12'},
-  {id:'72',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-18'},
-  {id:'73',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-05-18'},
-  {id:'78',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-07-04'},
-  {id:'79',payType:'รายวัน',salary:0,hourlyRate:100,startDate:'2026-07-04'}
-];
-var EMP_COST_MAP = {}; EMP_COST.forEach(function(e){ EMP_COST_MAP[e.id]=e; });
 
-var _hrAttCache = null;
-async function fetchHRAttendance(){
-  if (_hrAttCache) return _hrAttCache;
-  try {
-    var r = await fetch(FB.B1 + '/hr/attendance.json');
-    _hrAttCache = r.ok ? ((await r.json()) || {}) : {};
-  } catch(e) { _hrAttCache = {}; }
-  return _hrAttCache;
+// หมายเหตุสำคัญ: EMPLOYEES/attendance ใน apk_hr.html ประกาศด้วย const/let ไม่ใช่ var
+// ตัวแปรแบบนี้ "ไม่" กลายเป็น property ของ window (ต่างจาก var/function) จึงอ่านผ่าน
+// iframe.contentWindow.EMPLOYEES ตรงๆ จากนอก iframe ไม่ได้ — ต้องใช้ contentWindow.eval()
+// สั่งรันโค้ดจาก "ข้างใน" scope ของ iframe เอง ถึงจะมองเห็นตัวแปรพวกนี้
+function hrEval(win, code){
+  try { return win.eval(code); } catch(e){ return undefined; }
 }
 
-// แปลง record ดิบ 1 รายการ ให้เป็น {empId, ciDate, coDate}
-// key ขึ้นต้น 'emp_' = ข้อมูลดิบจากเครื่องสแกน (checkIn/checkOut เป็น "HH:MM:SS" ต้องรวมกับ dateKey เอง + เช็คกะดึกข้ามเที่ยงคืน)
-// key อื่นๆ (manual_...) = บันทึกมือในแอพ (checkIn/checkOut เป็น ISO datetime เต็มอยู่แล้ว)
-function parseAttRecord(dateKey, key, raw){
-  if (!raw || typeof raw !== 'object' || !raw.checkIn) return null;
-  var empId = raw.empId ? String(raw.empId) : key.replace(/^emp_/,'');
-  var ciDate, coDate;
-  if (key.indexOf('emp_') === 0) {
-    var y=dateKey.slice(0,4), mo=dateKey.slice(4,6), d=dateKey.slice(6,8);
-    ciDate = new Date(y+'-'+mo+'-'+d+'T'+raw.checkIn);
-    if (!raw.checkOut) return {empId:empId, ciDate:ciDate, coDate:null};
-    var ciH = parseInt(String(raw.checkIn).slice(0,2),10), coH = parseInt(String(raw.checkOut).slice(0,2),10);
-    var coDateKey = dateKey;
-    if (!isNaN(ciH) && !isNaN(coH) && coH < ciH) { // กะดึกข้ามเที่ยงคืน — เลื่อนวันที่ออกงาน +1 วัน
-      var nx = new Date(parseInt(y,10), parseInt(mo,10)-1, parseInt(d,10));
-      nx.setDate(nx.getDate()+1);
-      coDateKey = nx.getFullYear()+String(nx.getMonth()+1).padStart(2,'0')+String(nx.getDate()).padStart(2,'0');
-    }
-    var y2=coDateKey.slice(0,4), mo2=coDateKey.slice(4,6), d2=coDateKey.slice(6,8);
-    coDate = new Date(y2+'-'+mo2+'-'+d2+'T'+raw.checkOut);
-  } else {
-    ciDate = new Date(raw.checkIn);
-    coDate = raw.checkOut ? new Date(raw.checkOut) : null;
-  }
-  if (isNaN(ciDate)) return null;
-  if (coDate && isNaN(coDate)) coDate = null;
-  return {empId:empId, ciDate:ciDate, coDate:coDate};
+function waitForHrEngine(timeoutMs){
+  return new Promise(function(resolve){
+    var frame = document.getElementById('hrEngineFrame');
+    var start = Date.now();
+    (function poll(){
+      var w = frame.contentWindow;
+      var ok = false;
+      if (w) {
+        ok = !!hrEval(w, '(typeof getMonthlySalary==="function" && typeof EMPLOYEES!=="undefined" && typeof attendance!=="undefined" && attendance.length>0)');
+      }
+      if (ok) { resolve(w); return; }
+      if (Date.now() - start > timeoutMs) { resolve(null); return; }
+      setTimeout(poll, 300);
+    })();
+  });
 }
 
 async function renderLaborCostSection(){
-  var months = lastNMonths(12);
-  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
-  var baseByMonth = {}, otByMonth = {};
-  months.forEach(function(m){ baseByMonth[m]=0; otByMonth[m]=0; });
+  var badge = document.getElementById('laborCostBadge');
+  var caveatEl = document.getElementById('laborCostCaveat');
+  if (badge) badge.innerHTML = 'กำลังโหลดเอนจิน HR...';
+  if (caveatEl) caveatEl.textContent = '';
 
-  // 1) เงินเดือนพนักงานรายเดือน — เต็มจำนวนทุกเดือนตั้งแต่ startDate
-  months.forEach(function(ym){
-    EMP_COST.forEach(function(e){
-      if (e.payType === 'รายเดือน' && e.startDate && e.startDate.slice(0,7) <= ym) {
-        baseByMonth[ym] += (parseFloat(e.salary)||0);
-      }
-    });
-  });
+  var hrWin = await waitForHrEngine(15000);
+  if (!hrWin) {
+    if (badge) badge.innerHTML = '';
+    if (caveatEl) caveatEl.textContent = '❌ โหลด apk_hr.html ไม่สำเร็จ (เช็คว่าไฟล์ apk_hr.html อยู่โฟลเดอร์เดียวกับ analytics.html บน GitHub Pages, และไม่ถูกบล็อกด้วยข้อจำกัด same-origin) — แสดงกราฟต้นทุนแรงงานไม่ได้';
+    destroyChart('chartCostLabor');
+    return;
+  }
 
-  // 2) ค่าแรงรายวัน + OT ทุกคน — จากข้อมูลสแกนเวลาจริง
-  var attAll = await fetchHRAttendance();
-  Object.keys(attAll).forEach(function(dateKey){
-    if (!/^\d{8}$/.test(dateKey)) return;
-    var ym = dateKey.slice(0,4)+'-'+dateKey.slice(4,6);
-    if (!monthSet[ym]) return;
-    var dayObj = attAll[dateKey] || {};
-    Object.keys(dayObj).forEach(function(key){
-      var parsed = parseAttRecord(dateKey, key, dayObj[key]);
-      if (!parsed || !parsed.coDate) return;
-      var emp = EMP_COST_MAP[parsed.empId];
-      if (!emp) return;
-      var wh = (parsed.coDate - parsed.ciDate) / 3600000;
-      if (!(wh > 0) || wh > 16) return; // กันข้อมูลผิดปกติ/ลืมสแกนออก
-      var regH = Math.min(wh, 8), otH = Math.max(0, wh-8);
-      var hr = parseFloat(emp.hourlyRate)||0;
-      if (emp.payType !== 'รายเดือน') baseByMonth[ym] += regH * hr;
-      otByMonth[ym] += otH * hr * 1.5;
-    });
+  var now = new Date();
+  var curMonth = now.getMonth(); // 0-indexed, getMonthlySalary ใช้ปีปัจจุบันเสมอ (ข้อจำกัดของ apk_hr.html)
+  var months = []; // เดือน ม.ค. → เดือนปัจจุบัน ของปีนี้เท่านั้น
+  for (var mi=0; mi<=curMonth; mi++){
+    months.push(now.getFullYear() + '-' + String(mi+1).padStart(2,'0'));
+  }
+
+  // รันลูปคำนวณทั้งหมด "ข้างใน" scope ของ iframe ในครั้งเดียว (ประหยัด ไม่ต้อง marshal ข้ามเฟรมทีละคน/ทีละเดือน)
+  var evalScript = '(function(){'
+    + 'var out={};'
+    + 'for(var mi=0; mi<=' + curMonth + '; mi++){'
+    + '  var rp=0,op=0,ded=0,net=0;'
+    + '  EMPLOYEES.forEach(function(emp){'
+    + '    var d=getMonthlySalary(emp.id, mi);'
+    + '    rp+=parseFloat(d.rp)||0; op+=parseFloat(d.op)||0; ded+=parseFloat(d.dedTotal)||0; net+=parseFloat(d.total)||0;'
+    + '  });'
+    + '  out[mi]={rp:rp,op:op,ded:ded,net:net};'
+    + '}'
+    + 'return JSON.stringify(out);'
+    + '})()';
+  var resultRaw = hrEval(hrWin, evalScript);
+  var result = resultRaw ? JSON.parse(resultRaw) : {};
+
+  var rpByMonth = {}, opByMonth = {}, dedByMonth = {}, netByMonth = {};
+  months.forEach(function(ym, idx){
+    var r = result[idx] || {rp:0,op:0,ded:0,net:0};
+    rpByMonth[ym]=r.rp; opByMonth[ym]=r.op; dedByMonth[ym]=r.ded; netByMonth[ym]=r.net;
   });
 
   destroyChart('chartCostLabor');
   _charts['chartCostLabor'] = new Chart(document.getElementById('chartCostLabor'), {
-    type:'bar',
     data:{
       labels: months.map(monthLabelTH),
       datasets:[
-        {label:'ค่าแรงปกติ/เงินเดือน', data: months.map(function(m){return Math.round(baseByMonth[m]);}), backgroundColor:'#22c55e'},
-        {label:'ค่า OT (ประมาณ 1.5x)', data: months.map(function(m){return Math.round(otByMonth[m]);}), backgroundColor:'#f59e0b'}
+        {type:'bar', label:'เงินปกติ', data: months.map(function(m){return Math.round(rpByMonth[m]);}), backgroundColor:'#22c55e', yAxisID:'y', order:2},
+        {type:'bar', label:'เงิน OT',   data: months.map(function(m){return Math.round(opByMonth[m]);}), backgroundColor:'#3b82f6', yAxisID:'y', order:2},
+        {type:'bar', label:'หัก',       data: months.map(function(m){return -Math.round(dedByMonth[m]);}), backgroundColor:'#ef4444', yAxisID:'y', order:2},
+        {type:'line', label:'สุทธิ (จ่ายจริง)', data: months.map(function(m){return Math.round(netByMonth[m]);}), borderColor:'#f59e0b', backgroundColor:'#f59e0b', yAxisID:'y', tension:.3, pointRadius:3, order:1, datalabels:{display:false}}
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top',labels:{font:{size:11}}},
-        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},anchor:'end',align:'top',rotation:270,font:{size:8},color:'#374151',formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
+        datalabels:{display:function(ctx){return ctx.dataset.type==='bar' && Math.abs(ctx.dataset.data[ctx.dataIndex])>0;},anchor:'end',align:'top',rotation:270,font:{size:8},color:'#374151',formatter:function(v){return (Math.abs(v)>=1000?fmt(v/1000,1)+'k':fmt(v,0));}}},
       scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท',font:{size:10}}}}
     }
   });
 
   var curYM = months[months.length-1];
-  var totalCur = (baseByMonth[curYM]||0) + (otByMonth[curYM]||0);
-  var badge = document.getElementById('laborCostBadge');
-  if (badge) badge.innerHTML = 'เดือนนี้ (' + monthLabelTH(curYM) + ') ≈ <b>฿' + fmt(totalCur,0) + '</b>';
-
-  // เตือนถ้ามีพนักงานรายเดือนที่ยังไม่ได้กรอกเงินเดือนในระบบ (salary=0) — ยอดรวมจะต่ำกว่าจริง
-  var zeroSalaryMonthly = EMP_COST.filter(function(e){ return e.payType==='รายเดือน' && !(parseFloat(e.salary)>0); });
-  var caveatEl = document.getElementById('laborCostCaveat');
-  if (caveatEl) {
-    caveatEl.textContent = zeroSalaryMonthly.length > 0
-      ? '⚠️ พบพนักงานรายเดือน ' + zeroSalaryMonthly.length + ' คนที่ยังไม่ได้กรอกเงินเดือนในระบบ (salary=0 ในโปรไฟล์) — ยอดต้นทุนแรงงานด้านบนจะต่ำกว่าความจริง จนกว่าจะกรอกเงินเดือนให้ครบในหน้า "การตั้งค่าพนักงาน" ของ apk_hr.html'
-      : '';
-  }
+  if (badge) badge.innerHTML = 'เดือนนี้ (' + monthLabelTH(curYM) + ') สุทธิ ≈ <b>฿' + fmt(netByMonth[curYM],0) + '</b> · ตรงกับหน้าเงินเดือน apk_hr.html';
+  if (caveatEl) caveatEl.textContent = 'ℹ️ แสดงได้เฉพาะ ม.ค.–เดือนปัจจุบันของปีนี้ (ข้อจำกัดจากตัวระบบเงินเดือนเอง ไม่รองรับดูข้ามปี)';
 }
 
 // ══════════════════════════════════════════════
