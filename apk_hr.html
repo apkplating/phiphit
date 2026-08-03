@@ -1819,12 +1819,15 @@ function renderSalary(){
   const noteEl=document.getElementById('salaryNote');
   if(noteEl)noteEl.value=localStorage.getItem(noteKey)||'';
   let h=`<table class="data"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>กะทำงาน</th><th>ชม.ปกติ</th><th>ชม.OT</th><th>เงินปกติ</th><th>เงิน OT</th><th>หัก</th><th>สุทธิ</th><th></th></tr></thead><tbody>`;
+  let sumRegH=0,sumOtH=0,sumRp=0,sumOp=0,sumDed=0,sumNet=0;
   EMPLOYEES.forEach(emp=>{
     const d=getMonthlySalary(emp.id,m);
     const absentNote=d.absentDays>0?`<br><span style="font-size:0.72em;color:#ef4444;">(ขาด ${d.absentDays} วัน)</span>`:'';
     h+=`<tr><td>${emp.id}</td><td>${emp.name}</td><td style="font-size:0.8em;color:#6b7280;">${emp.dept}</td><td style="text-align:center;">${d.days}</td><td>${d.rh}</td><td style="color:#3b82f6;font-weight:600;">${d.ot}</td><td>฿${fmtMoney(d.rp)}</td><td style="color:#3b82f6;">฿${fmtMoney(d.op)}</td><td style="color:#ef4444;">฿${fmtMoney(d.dedTotal)}${absentNote}</td><td style="color:#10b981;font-weight:700;">฿${fmtMoney(d.total)}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" style="padding:6px 10px;font-size:0.8em;margin-right:4px;" onclick="openDeductModal('${emp.id}',${m})">📝 หัก</button><button class="btn btn-primary" style="padding:6px 13px;font-size:0.8em;" onclick="showPayslip('${emp.id}',${m})">🖨️ สลิป</button></td></tr>`;
+    sumRegH+=parseFloat(d.rh)||0;sumOtH+=parseFloat(d.ot)||0;sumRp+=parseFloat(d.rp)||0;sumOp+=parseFloat(d.op)||0;sumDed+=parseFloat(d.dedTotal)||0;sumNet+=parseFloat(d.total)||0;
   });
-  document.getElementById('salaryTable').innerHTML=h+'</tbody></table>';
+  h+=`</tbody><tfoot><tr style="background:#f0fdf4;font-weight:700;border-top:2px solid #10b981;"><td colspan="4" style="text-align:right;">🧮 รวมทั้งหมด (${EMPLOYEES.length} คน)</td><td>${sumRegH.toFixed(2)}</td><td style="color:#3b82f6;">${sumOtH.toFixed(2)}</td><td>฿${fmtMoney(sumRp)}</td><td style="color:#3b82f6;">฿${fmtMoney(sumOp)}</td><td style="color:#ef4444;">฿${fmtMoney(sumDed)}</td><td style="color:#10b981;">฿${fmtMoney(sumNet)}</td><td></td></tr></tfoot></table>`;
+  document.getElementById('salaryTable').innerHTML=h;
 }
 function saveSalaryNote(){
   const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
