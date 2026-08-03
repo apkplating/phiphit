@@ -351,6 +351,12 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <div id="settingsMsg"></div>
       </div>
       <div class="card">
+        <div class="card-title">🧹 ล้างข้อมูลบันทึกเวลาที่ซ้ำซ้อน (กรอกมือ)</div>
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">เดิมมีบั๊กที่ทำให้บางวันที่กรอกเวลามือซ้ำหลายรอบเกิด record ซ้ำในระบบ (บั๊กแก้แล้ว แต่ข้อมูลเก่าที่ซ้ำอยู่ก่อนหน้านี้ยังตกค้างอยู่ ต้องล้างด้วยมือ 1 ครั้ง) — เครื่องมือนี้จะตรวจหาวัน/พนักงานที่มี record กรอกมือซ้ำกันมากกว่า 1 รายการ แล้วลบส่วนเกินออก เหลือไว้แค่รายการล่าสุด 1 รายการต่อวัน</p>
+        <button class="btn btn-primary" onclick="scanDuplicateManualRecords()">🔍 ตรวจสอบข้อมูลซ้ำ</button>
+        <div id="dedupeMsg" style="margin-top:12px;font-size:0.85em;"></div>
+      </div>
+      <div class="card">
         <div class="card-title">🛡️ ตั้งค่าสูตรคำนวณประกันสังคม</div>
         <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ปรับค่าตรงนี้ได้เองเมื่อกฎหมายเปลี่ยนแปลง โดยไม่ต้องแก้ไขไฟล์ระบบ — ตั้ง "วันที่มีผลบังคับใช้" ได้ ระบบจะเลือกกฎที่ตรงกับเดือนที่คำนวณให้อัตโนมัติ (กฎเก่ายังใช้กับเดือนก่อนหน้าเหมือนเดิม ไม่กระทบย้อนหลัง) — ใช้เป็นค่าเริ่มต้นตอนกด "คำนวณอัตโนมัติ" ในหน้าเงินเดือน (ยังสามารถแก้ตัวเลขเป็นรายคนได้เสมอ)</p>
         <div id="ssoActiveNow" style="margin-bottom:14px;"></div>
@@ -1374,18 +1380,19 @@ async function saveAttCorrection(){
     return rec;
   }
   const existingRec=attendance.find(r=>attDateKeyOf(r)===dateKey&&r.empId===empId);
+  const manualKey='manual_'+empId+'_'+dateKey; // key ตายตัวต่อ (พนักงาน+วันที่) เสมอ — กันสร้าง record ซ้ำถ้ากดบันทึกซ้ำหลายรอบ (เดิมใช้ Date.now() ทำให้ทุกครั้งที่บันทึกได้ record ใหม่ไม่ทับของเดิม)
   if(existingRec&&existingRec.source==='ZKTeco'){
     // มีรอยสแกนจริงจากเครื่องอยู่แล้ว — attCorrections ที่บันทึกไว้ด้านบนจะถูกใช้คำนวณใหม่อัตโนมัติตอน normalizeZKRecord() ไม่ต้องทำอะไรเพิ่ม
   } else if(existingRec){
     // มี record ที่แอพสร้างเอง/กรอกมือไว้ก่อนแล้ว (ไม่ใช่จากเครื่องสแกน) — อัปเดตทับของเดิมที่ Firebase ตรงๆ
     const rec=buildManualRec(existingRec.id);
-    await fbPut('/hr/attendance/'+dateKey+'/manual_'+empId+'_'+existingRec.id,rec);
+    await fbPut('/hr/attendance/'+dateKey+'/'+manualKey,rec);
   } else {
     // ไม่มี record ใดๆ เลยในระบบสำหรับวันนี้ (เช่น ช่วงก่อนเริ่มใช้ ZKTeco) — เช็คก่อนว่ามีรอยสแกนดิบจากเครื่องซ่อนอยู่ไหม กันสร้างซ้ำซ้อนกับ record ที่ correction ด้านบนกำลังจะซ่อมให้
     const rawExists=await fbGet('/hr/attendance/'+dateKey+'/emp_'+empId);
     if(!rawExists){
       const rec=buildManualRec();
-      await fbPut('/hr/attendance/'+dateKey+'/manual_'+empId+'_'+rec.id,rec);
+      await fbPut('/hr/attendance/'+dateKey+'/'+manualKey,rec);
     }
   }
 
@@ -1971,6 +1978,59 @@ function renderSSORulesTable(){
   wrap.innerHTML=h+'</tbody></table>';
   const activeEl=document.getElementById('ssoActiveNow');
   if(activeEl)activeEl.innerHTML=`<div class="alert alert-success" style="margin:0;">🟢 กฎที่ใช้อยู่ตอนนี้ (เดือนปัจจุบัน): อัตรา <b>${nowCfg.rate}%</b> ฐาน ${fmtMoney(nowCfg.min)}–${fmtMoney(nowCfg.max)} บาท เพดานหัก ${fmtMoney(nowCfg.cap)} บาท</div>`;
+}
+// ========== ตรวจ/ลบข้อมูลบันทึกเวลาที่ซ้ำซ้อน (จากบั๊กเดิมที่แก้ไปแล้ว) ==========
+let dedupeCandidates=null;
+async function scanDuplicateManualRecords(){
+  const el=document.getElementById('dedupeMsg');
+  if(el)el.innerHTML='⏳ กำลังตรวจสอบข้อมูลทั้งหมด...';
+  const fbAttAll=await fbGet('/hr/attendance');
+  const groups={};
+  if(fbAttAll){
+    Object.keys(fbAttAll).forEach(dateKey=>{
+      const dayObj=fbAttAll[dateKey]||{};
+      Object.keys(dayObj).forEach(key=>{
+        if(key.startsWith('emp_'))return; // ของเครื่องสแกน key ตายตัวอยู่แล้ว ไม่มีทางซ้ำ ข้าม
+        const raw=dayObj[key];
+        if(!raw||typeof raw!=='object'||!raw.empId)return;
+        const gk=dateKey+'_'+raw.empId;
+        if(!groups[gk])groups[gk]=[];
+        groups[gk].push({dateKey,key,raw});
+      });
+    });
+  }
+  const dupGroups=Object.values(groups).filter(g=>g.length>1);
+  dedupeCandidates=dupGroups;
+  if(!el)return;
+  if(!dupGroups.length){
+    el.innerHTML='<div class="alert alert-success">✅ ไม่พบข้อมูลซ้ำซ้อนแล้วครับ</div>';
+    return;
+  }
+  let totalExtra=0;
+  const lines=dupGroups.map(g=>{
+    totalExtra+=g.length-1;
+    const emp=EMPLOYEES.find(e=>e.id===g[0].raw.empId);
+    const dk=g[0].dateKey;
+    const dateStr=dk.slice(6,8)+'/'+dk.slice(4,6)+'/'+dk.slice(0,4);
+    return `- รหัส ${g[0].raw.empId} ${emp?emp.name:'(ไม่พบชื่อ)'} วันที่ ${dateStr}: พบซ้ำ ${g.length} รายการ`;
+  }).join('<br>');
+  el.innerHTML=`<div class="alert alert-err">⚠️ พบข้อมูลซ้ำซ้อน ${dupGroups.length} จุด (รายการส่วนเกินที่จะลบรวม ${totalExtra} รายการ):<br><br>${lines}<br><br><button class="btn btn-danger" onclick="confirmDedupeManualRecords()">🗑️ ลบรายการซ้ำ (เก็บล่าสุดไว้ 1 รายการ/วัน)</button></div>`;
+}
+async function confirmDedupeManualRecords(){
+  if(!dedupeCandidates||!dedupeCandidates.length)return;
+  if(!confirm(`ยืนยันลบข้อมูลซ้ำซ้อนทั้ง ${dedupeCandidates.length} จุดหรือไม่? การลบนี้ย้อนกลับไม่ได้ (ระบบจะเก็บรายการล่าสุดไว้เสมอ 1 รายการต่อวัน ลบเฉพาะส่วนเกิน)`))return;
+  const el=document.getElementById('dedupeMsg');
+  if(el)el.innerHTML='⏳ กำลังลบข้อมูลซ้ำซ้อน...';
+  for(const g of dedupeCandidates){
+    const sorted=[...g].sort((a,b)=>(parseFloat(b.raw.id)||0)-(parseFloat(a.raw.id)||0)); // เก็บ id ใหม่สุด (บันทึกล่าสุด) ไว้
+    const toDelete=sorted.slice(1);
+    for(const d of toDelete){
+      await fbPut('/hr/attendance/'+d.dateKey+'/'+d.key,null); // PUT null = ลบ node นั้นออกจาก Firebase
+    }
+  }
+  dedupeCandidates=null;
+  if(el)el.innerHTML='<div class="alert alert-success">✅ ลบข้อมูลซ้ำซ้อนเรียบร้อยแล้ว กำลังคำนวณข้อมูลใหม่...</div>';
+  loadFromFirebase();
 }
 function saveOTConfig(){
   otConfig={
