@@ -351,8 +351,13 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       </div>
       <div class="card">
         <div class="card-title">🛡️ ตั้งค่าสูตรคำนวณประกันสังคม</div>
-        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ปรับค่าตรงนี้ได้เองเมื่อกฎหมายเปลี่ยนแปลง โดยไม่ต้องแก้ไขไฟล์ระบบ — ใช้เป็นค่าเริ่มต้นตอนกด "คำนวณอัตโนมัติ" ในหน้าเงินเดือน (ยังสามารถแก้ตัวเลขเป็นรายคนได้เสมอ)</p>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+        <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">ปรับค่าตรงนี้ได้เองเมื่อกฎหมายเปลี่ยนแปลง โดยไม่ต้องแก้ไขไฟล์ระบบ — ตั้ง "วันที่มีผลบังคับใช้" ได้ ระบบจะเลือกกฎที่ตรงกับเดือนที่คำนวณให้อัตโนมัติ (กฎเก่ายังใช้กับเดือนก่อนหน้าเหมือนเดิม ไม่กระทบย้อนหลัง) — ใช้เป็นค่าเริ่มต้นตอนกด "คำนวณอัตโนมัติ" ในหน้าเงินเดือน (ยังสามารถแก้ตัวเลขเป็นรายคนได้เสมอ)</p>
+        <div id="ssoActiveNow" style="margin-bottom:14px;"></div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:14px;">
+          <div class="form-group">
+            <label>มีผลบังคับใช้ตั้งแต่</label>
+            <input type="date" id="ssoEffDate">
+          </div>
           <div class="form-group">
             <label>อัตรา (%)</label>
             <input type="number" id="ssoRate" value="5" step="0.1">
@@ -370,8 +375,12 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
             <input type="number" id="ssoCap" value="750">
           </div>
         </div>
-        <button class="btn btn-primary" onclick="saveSSOConfig()">💾 บันทึกสูตรประกันสังคม</button>
+        <button class="btn btn-primary" onclick="addSSORule()">➕ เพิ่ม/บันทึกกฎนี้</button>
         <div id="ssoConfigMsg"></div>
+        <div style="margin-top:18px;">
+          <div style="font-weight:600;font-size:0.88em;margin-bottom:8px;color:#374151;">📜 ประวัติกฎประกันสังคมทั้งหมด</div>
+          <div id="ssoRulesTable"></div>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">⏰ ตั้งค่าการมาสาย / เริ่มนับ OT</div>
@@ -671,15 +680,12 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
           <button type="button" class="btn btn-secondary" style="white-space:nowrap;font-size:0.78em;padding:0 12px;" onclick="autoCalcSSO()">🔄 คำนวณอัตโนมัติ</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1.4;">
-          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">📌 รายการอื่นๆ (ระบุ)</label>
-          <input type="text" id="dOtherLabel" placeholder="เช่น ค่าปรับ, เงินยืม" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label style="font-size:0.82em;color:#6b7280;">📌 รายการอื่นๆ (เพิ่ม/ลบได้)</label>
+          <button type="button" class="btn btn-secondary" style="padding:3px 10px;font-size:0.76em;" onclick="addOtherDedItem()">➕ เพิ่มรายการ</button>
         </div>
-        <div style="flex:1;">
-          <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">จำนวน (บาท)</label>
-          <input type="number" id="dOtherAmount" value="0" oninput="updateDedPreview()" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
-        </div>
+        <div id="dOtherItemsList" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
       <div style="background:#fef2f2;padding:12px;border-radius:8px;font-weight:700;color:#991b1b;text-align:right;" id="dedTotalPreview">รวมหักทั้งหมด: ฿0</div>
     </div>
@@ -806,7 +812,15 @@ const TH_DAYS=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 let attendance=JSON.parse(localStorage.getItem('apk_att')||'[]');
 let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
 let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
-let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750};
+let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750}; // เก่า (fallback/migration)
+// ประวัติสูตรประกันสังคม — array ของกฎ {date:'YYYY-MM-DD', rate, min, max, cap} เรียงตามวันที่มีผลบังคับใช้
+let ssoRules=JSON.parse(localStorage.getItem('apk_ssorules')||'null')||[{date:'2000-01-01',rate:ssoConfig.rate,min:ssoConfig.min,max:ssoConfig.max,cap:ssoConfig.cap}];
+// หากฎที่ "มีผลบังคับใช้" ล่าสุดที่ไม่เกินเดือน/ปีที่ต้องการคำนวณ (เทียบกับวันสุดท้ายของเดือนนั้น)
+function getSSOConfigForMonth(year,month){
+  const endOfMonth=year+'-'+String(month+1).padStart(2,'0')+'-'+'31';
+  const applicable=ssoRules.filter(r=>r.date<=endOfMonth).sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  return applicable.length?applicable[0]:ssoRules[ssoRules.length-1];
+}
 let otConfig=JSON.parse(localStorage.getItem('apk_otconfig')||'null')||{lateGraceMin:0,otGraceMin:15,qcBreakMin:60};
 let companyHolidays=JSON.parse(localStorage.getItem('apk_companyholidays')||'{}'); // key: "2569_7" -> [5,6,...]
 let attCorrections=JSON.parse(localStorage.getItem('apk_att_corrections')||'{}'); // key: "20260714_23" -> {checkIn,checkOut,note,editedAt,editedBy}
@@ -995,11 +1009,18 @@ function normalizeManualRecord(raw){
   return rec;
 }
 async function loadFromFirebase(){
-  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbOT,fbHoliday,fbCorr,fbLeaves,fbShiftDefs]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves'),fbGet('/hr/shiftDefs')]);
+  const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbSSORules,fbOT,fbHoliday,fbCorr,fbLeaves,fbShiftDefs]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/ssoRules'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves'),fbGet('/hr/shiftDefs')]);
   // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
   if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
   if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
   if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
+  if(fbSSORules&&fbSSORules.length){
+    ssoRules=fbSSORules;localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+  }else if(fbSSO){
+    // ยังไม่เคยตั้งประวัติกฎ -> ย้ายค่าเดิมมาเป็นกฎแรก มีผลตั้งแต่ 1 ม.ค. 2000 (ใช้กับทุกเดือนจนกว่าจะตั้งกฎใหม่)
+    ssoRules=[{date:'2000-01-01',rate:fbSSO.rate,min:fbSSO.min,max:fbSSO.max,cap:fbSSO.cap}];
+    localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+  }
   if(fbOT){otConfig=fbOT;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
   if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
   if(fbCorr){attCorrections=fbCorr;localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));}
@@ -1643,8 +1664,14 @@ function renderLeaveSection(dateKey,recs){
 function initSalaryMonths(){const s=document.getElementById('salaryMonth');TH_MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;s.appendChild(o);});s.value=new Date().getMonth();}
 let deductions=JSON.parse(localStorage.getItem('apk_deductions')||'{}');
 function dedKey(empId,year,month){return empId+'_'+year+'_'+(month+1);}
-function calcAutoSSO(emp,actualRegPay){
-  // ตามกฎหมายประกันสังคม มาตรา 33: ฐานค่าจ้างขั้นต่ำ = ssoConfig.min, สูงสุด = ssoConfig.max
+// รวมยอด "รายการอื่นๆ" — รองรับทั้งฟอร์แมตใหม่ (ded.items = array หลายรายการ) และฟอร์แมตเก่า (ded.otherLabel/otherAmount รายการเดียว) เพื่อไม่ให้ข้อมูลเดือนเก่าพัง
+function sumOtherDedItems(ded){
+  if(!ded)return 0;
+  if(Array.isArray(ded.items))return ded.items.reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+  return parseFloat(ded.otherAmount)||0;
+}
+function calcAutoSSO(emp,actualRegPay,year,month){
+  // ตามกฎหมายประกันสังคม มาตรา 33: ฐานค่าจ้างขั้นต่ำ/สูงสุด/เพดานหัก ตามกฎที่ "มีผลบังคับใช้" ตรงกับเดือนที่คำนวณ (ดู ssoRules)
   // พนักงานรายเดือน: ใช้เงินเดือนในโปรไฟล์เป็นฐาน (คงเดิม)
   // พนักงานรายวัน: ใช้ "ค่าแรงปกติจริงที่ทำได้เดือนนั้น" (ไม่รวม OT) เป็นฐานแทน ถ้ามีค่าส่งมาให้ — ไม่ใช่เงินเดือนในโปรไฟล์ที่มักไม่ได้กรอกไว้ (เป็น 0)
   let baseSalary;
@@ -1653,9 +1680,11 @@ function calcAutoSSO(emp,actualRegPay){
   } else {
     baseSalary=parseFloat(emp.salary)||0;
   }
-  const base=Math.min(Math.max(baseSalary,ssoConfig.min),ssoConfig.max);
-  let sso=Math.round(base*(ssoConfig.rate/100));
-  if(sso>ssoConfig.cap)sso=ssoConfig.cap;
+  const yr=year!=null?year:new Date().getFullYear(), mo=month!=null?month:new Date().getMonth();
+  const cfg=getSSOConfigForMonth(yr,mo);
+  const base=Math.min(Math.max(baseSalary,cfg.min),cfg.max);
+  let sso=Math.round(base*(cfg.rate/100));
+  if(sso>cfg.cap)sso=cfg.cap;
   return sso;
 }
 function getMonthlySalary(empId,month){
@@ -1709,8 +1738,8 @@ function getMonthlySalary(empId,month){
   const attendanceBonus=bonusEligible?(parseFloat(emp.attendanceBonus)||0):0;
   const gross=rp+op+positionAllowance+attendanceBonus;
   const dk=dedKey(empId,yr,month);
-  const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp,rp),otherLabel:'',otherAmount:0};
-  const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+(parseFloat(ded.otherAmount)||0)+absentDeduction;
+  const ded=deductions[dk]||{rent:0,utility:0,social:calcAutoSSO(emp,rp,yr,month),otherLabel:'',otherAmount:0};
+  const dedTotal=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0)+(parseFloat(ded.social)||0)+sumOtherDedItems(ded)+absentDeduction;
   const net=gross-dedTotal;
   return{emp,days:recs.length,rh:rh.toFixed(2),ot:ot.toFixed(2),
     ot10:ot10.toFixed(2),ot15:ot15.toFixed(2),
@@ -1751,35 +1780,97 @@ function openDeductModal(empId,month){
   if(!ded){
     // ยังไม่เคยตั้งเดือนนี้ -> คำนวณประกันสังคมอัตโนมัติจากสูตร % ที่ตั้งไว้ในหน้า "การตั้งค่า" ให้ทันที (ใช้ค่าแรงปกติจริงของเดือนนั้นถ้าเป็นพนักงานรายวัน)
     const actualRegPay=parseFloat(getMonthlySalary(empId,month).rp)||0;
-    ded={rent:0,utility:0,social:calcAutoSSO(emp,actualRegPay),otherLabel:'',otherAmount:0};
+    ded={rent:0,utility:0,social:calcAutoSSO(emp,actualRegPay,yr,month),otherLabel:'',otherAmount:0};
   }
   document.getElementById('dRent').value=ded.rent||0;
   document.getElementById('dUtility').value=ded.utility||0;
   document.getElementById('dSocial').value=ded.social||0;
-  document.getElementById('dOtherLabel').value=ded.otherLabel||'';
-  document.getElementById('dOtherAmount').value=ded.otherAmount||0;
+  // รายการอื่นๆ: รองรับทั้งฟอร์แมตใหม่ (items array) และเก่า (otherLabel/otherAmount รายการเดียว)
+  if(Array.isArray(ded.items)){
+    curOtherItems=ded.items.map(it=>({label:it.label||'',amount:parseFloat(it.amount)||0}));
+  } else if(ded.otherLabel||parseFloat(ded.otherAmount)>0){
+    curOtherItems=[{label:ded.otherLabel||'',amount:parseFloat(ded.otherAmount)||0}];
+  } else {
+    curOtherItems=[];
+  }
+  renderOtherDedItems();
   updateDedPreview();
   document.getElementById('deductModal').classList.add('show');
 }
-function closeDeductModal(){document.getElementById('deductModal').classList.remove('show');curDeductKey=null;curDeductEmpId=null;curDeductMonth=null;}
+function closeDeductModal(){document.getElementById('deductModal').classList.remove('show');curDeductKey=null;curDeductEmpId=null;curDeductMonth=null;curOtherItems=[];}
 function autoCalcSSO(){
   if(!curDeductEmpId)return;
   const emp=EMPLOYEES.find(e=>e.id===curDeductEmpId);
   const actualRegPay=curDeductMonth!=null?(parseFloat(getMonthlySalary(curDeductEmpId,curDeductMonth).rp)||0):null;
-  document.getElementById('dSocial').value=calcAutoSSO(emp,actualRegPay);
+  const yr=new Date().getFullYear();
+  document.getElementById('dSocial').value=calcAutoSSO(emp,actualRegPay,yr,curDeductMonth);
   updateDedPreview();
 }
-function saveSSOConfig(){
-  ssoConfig={
+function saveSSORulesToStore(){
+  ssoRules.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+  localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+  fbPut('/hr/ssoRules',ssoRules);
+}
+function addSSORule(){
+  const dateEl=document.getElementById('ssoEffDate');
+  const date=dateEl.value;
+  if(!date){const el=document.getElementById('ssoConfigMsg');if(el){el.innerHTML='<div class="alert alert-err" style="margin-top:10px;">❌ กรุณาเลือกวันที่มีผลบังคับใช้</div>';setTimeout(()=>el.innerHTML='',3000);}return;}
+  const rule={
+    date,
     rate:parseFloat(document.getElementById('ssoRate').value)||5,
     min:parseFloat(document.getElementById('ssoMin').value)||1650,
     max:parseFloat(document.getElementById('ssoMax').value)||15000,
     cap:parseFloat(document.getElementById('ssoCap').value)||750
   };
-  localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));
-  fbPut('/hr/ssoConfig',ssoConfig);
+  const idx=ssoRules.findIndex(r=>r.date===date);
+  if(idx>=0)ssoRules[idx]=rule;else ssoRules.push(rule);
+  saveSSORulesToStore();
+  renderSSORulesTable();
   const el=document.getElementById('ssoConfigMsg');
-  if(el){el.innerHTML='<div class="alert alert-success" style="margin-top:10px;">✅ บันทึกสูตรประกันสังคมแล้ว — ใช้ได้ทันทีโดยไม่ต้องแก้ไฟล์ระบบ</div>';setTimeout(()=>el.innerHTML='',3000);}
+  if(el){el.innerHTML=`<div class="alert alert-success" style="margin-top:10px;">✅ บันทึกกฎประกันสังคม มีผลตั้งแต่ ${fmtThaiDate(date)} แล้ว — ใช้ได้ทันทีโดยไม่ต้องแก้ไฟล์ระบบ</div>`;setTimeout(()=>el.innerHTML='',3500);}
+}
+function editSSORule(date){
+  const r=ssoRules.find(x=>x.date===date);
+  if(!r)return;
+  document.getElementById('ssoEffDate').value=r.date;
+  document.getElementById('ssoRate').value=r.rate;
+  document.getElementById('ssoMin').value=r.min;
+  document.getElementById('ssoMax').value=r.max;
+  document.getElementById('ssoCap').value=r.cap;
+  window.scrollTo({top:document.getElementById('ssoEffDate').getBoundingClientRect().top+window.scrollY-100,behavior:'smooth'});
+}
+function deleteSSORule(date){
+  if(ssoRules.length<=1){alert('ต้องมีกฎเหลืออย่างน้อย 1 รายการเสมอ');return;}
+  if(!confirm(`ลบกฎที่มีผลตั้งแต่ ${fmtThaiDate(date)} ?`))return;
+  ssoRules=ssoRules.filter(r=>r.date!==date);
+  saveSSORulesToStore();
+  renderSSORulesTable();
+}
+function fmtThaiDate(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+}
+function renderSSORulesTable(){
+  const wrap=document.getElementById('ssoRulesTable');
+  if(!wrap)return;
+  const sorted=[...ssoRules].sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0));
+  const nowCfg=getSSOConfigForMonth(new Date().getFullYear(),new Date().getMonth());
+  let h='<table class="data"><thead><tr><th>มีผลบังคับใช้ตั้งแต่</th><th>อัตรา</th><th>ฐานขั้นต่ำ</th><th>ฐานสูงสุด</th><th>เพดานหัก</th><th></th><th></th></tr></thead><tbody>';
+  sorted.forEach(r=>{
+    const isActive=r.date===nowCfg.date;
+    h+=`<tr style="${isActive?'background:#ecfdf5;':''}">
+      <td>${fmtThaiDate(r.date)}${isActive?' <span class="badge" style="background:#10b98122;color:#059669;border:1.5px solid #059669;">ใช้งานอยู่ตอนนี้</span>':''}</td>
+      <td>${r.rate}%</td>
+      <td>฿${fmtMoney(r.min)}</td>
+      <td>฿${fmtMoney(r.max)}</td>
+      <td>฿${fmtMoney(r.cap)}</td>
+      <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:0.78em;" onclick="editSSORule('${r.date}')">✏️ แก้ไข</button></td>
+      <td><button class="btn btn-danger" style="padding:4px 10px;font-size:0.78em;" onclick="deleteSSORule('${r.date}')">🗑️ ลบ</button></td>
+    </tr>`;
+  });
+  wrap.innerHTML=h+'</tbody></table>';
+  const activeEl=document.getElementById('ssoActiveNow');
+  if(activeEl)activeEl.innerHTML=`<div class="alert alert-success" style="margin:0;">🟢 กฎที่ใช้อยู่ตอนนี้ (เดือนปัจจุบัน): อัตรา <b>${nowCfg.rate}%</b> ฐาน ${fmtMoney(nowCfg.min)}–${fmtMoney(nowCfg.max)} บาท เพดานหัก ${fmtMoney(nowCfg.cap)} บาท</div>`;
 }
 function saveOTConfig(){
   otConfig={
@@ -1793,8 +1884,40 @@ function saveOTConfig(){
   const el=document.getElementById('otConfigMsg');
   if(el){el.innerHTML='<div class="alert alert-success" style="margin-top:10px;">✅ บันทึกการตั้งค่าแล้ว — กำลังคำนวณข้อมูลใหม่</div>';setTimeout(()=>el.innerHTML='',3000);}
 }
+// ========== รายการหักอื่นๆ แบบเพิ่ม/ลบได้เอง ==========
+let curOtherItems=[]; // [{label, amount}] ระหว่างเปิด modal อยู่
+function renderOtherDedItems(){
+  const wrap=document.getElementById('dOtherItemsList');
+  if(!wrap)return;
+  if(!curOtherItems.length){
+    wrap.innerHTML='<p style="color:#9ca3af;font-size:0.82em;margin:0;">— ไม่มีรายการอื่นๆ —</p>';
+    return;
+  }
+  wrap.innerHTML=curOtherItems.map((it,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" value="${(it.label||'').replace(/"/g,'&quot;')}" placeholder="เช่น ค่าปรับ, เงินยืม" oninput="updateOtherDedItem(${i},'label',this.value)" style="flex:1.4;padding:9px 12px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;">
+      <input type="number" value="${it.amount||0}" oninput="updateOtherDedItem(${i},'amount',this.value)" style="flex:1;padding:9px 12px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;">
+      <button type="button" class="btn btn-danger" style="padding:6px 10px;font-size:0.8em;" onclick="removeOtherDedItem(${i})">🗑️</button>
+    </div>`).join('');
+}
+function addOtherDedItem(){
+  curOtherItems.push({label:'',amount:0});
+  renderOtherDedItems();
+  updateDedPreview();
+}
+function removeOtherDedItem(idx){
+  curOtherItems.splice(idx,1);
+  renderOtherDedItems();
+  updateDedPreview();
+}
+function updateOtherDedItem(idx,field,val){
+  if(!curOtherItems[idx])return;
+  curOtherItems[idx][field]=field==='amount'?(parseFloat(val)||0):val;
+  updateDedPreview();
+}
 function updateDedPreview(){
-  const t=(parseFloat(document.getElementById('dRent').value)||0)+(parseFloat(document.getElementById('dUtility').value)||0)+(parseFloat(document.getElementById('dSocial').value)||0)+(parseFloat(document.getElementById('dOtherAmount').value)||0);
+  const otherTotal=curOtherItems.reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+  const t=(parseFloat(document.getElementById('dRent').value)||0)+(parseFloat(document.getElementById('dUtility').value)||0)+(parseFloat(document.getElementById('dSocial').value)||0)+otherTotal;
   document.getElementById('dedTotalPreview').textContent=`รวมหักทั้งหมด: ฿${t.toFixed(2)}`;
 }
 function saveDeduct(){
@@ -1803,8 +1926,7 @@ function saveDeduct(){
     rent:parseFloat(document.getElementById('dRent').value)||0,
     utility:parseFloat(document.getElementById('dUtility').value)||0,
     social:parseFloat(document.getElementById('dSocial').value)||0,
-    otherLabel:document.getElementById('dOtherLabel').value.trim(),
-    otherAmount:parseFloat(document.getElementById('dOtherAmount').value)||0
+    items:curOtherItems.filter(it=>(it.label&&it.label.trim())||parseFloat(it.amount)>0).map(it=>({label:(it.label||'').trim(),amount:parseFloat(it.amount)||0}))
   };
   localStorage.setItem('apk_deductions',JSON.stringify(deductions));
   fbPut('/hr/deductions/'+curDeductKey, deductions[curDeductKey]);
@@ -1839,7 +1961,11 @@ function showPayslip(empId,month){
   const housingCombined=(parseFloat(ded.rent)||0)+(parseFloat(ded.utility)||0);
   if(parseFloat(ded.social)>0)dedRows+=`<tr><td>เงินสมทบประกันสังคม</td><td style="text-align:right;">${fmtMoney(ded.social)}</td></tr>`;
   if(housingCombined>0)dedRows+=`<tr><td>ค่าที่พัก-น้ำ-ไฟ</td><td style="text-align:right;">${fmtMoney(housingCombined)}</td></tr>`;
-  if(parseFloat(ded.otherAmount)>0)dedRows+=`<tr><td>${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;">${fmtMoney(ded.otherAmount)}</td></tr>`;
+  if(Array.isArray(ded.items)){
+    ded.items.forEach(it=>{if(parseFloat(it.amount)>0)dedRows+=`<tr><td>${it.label||'อื่นๆ'}</td><td style="text-align:right;">${fmtMoney(it.amount)}</td></tr>`;});
+  } else if(parseFloat(ded.otherAmount)>0){
+    dedRows+=`<tr><td>${ded.otherLabel||'อื่นๆ'}</td><td style="text-align:right;">${fmtMoney(ded.otherAmount)}</td></tr>`;
+  }
   if(d.absentDays>0)dedRows+=`<tr><td>ขาดงาน ${d.absentDays} วัน</td><td style="text-align:right;">${fmtMoney(d.absentDeduction)}</td></tr>`;
   const ytd=getYTDSummary(empId,month);
   const isMonthly=d.emp.payType==='รายเดือน';
@@ -2066,8 +2192,11 @@ async function sendReport(){
 
 // ========== SETTINGS ==========
 function renderSettings(){
+  const dateEl=document.getElementById('ssoEffDate');
+  if(dateEl&&!dateEl.value){const t=new Date();dateEl.value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
   const rEl=document.getElementById('ssoRate'),mnEl=document.getElementById('ssoMin'),mxEl=document.getElementById('ssoMax'),cpEl=document.getElementById('ssoCap');
-  if(rEl){rEl.value=ssoConfig.rate;mnEl.value=ssoConfig.min;mxEl.value=ssoConfig.max;cpEl.value=ssoConfig.cap;}
+  if(rEl){const c=getSSOConfigForMonth(new Date().getFullYear(),new Date().getMonth());rEl.value=c.rate;mnEl.value=c.min;mxEl.value=c.max;cpEl.value=c.cap;}
+  renderSSORulesTable();
   const lgEl=document.getElementById('lateGraceMin'),ogEl=document.getElementById('otGraceMin'),qcEl=document.getElementById('qcBreakMin');
   if(lgEl){lgEl.value=otConfig.lateGraceMin;ogEl.value=otConfig.otGraceMin;qcEl.value=otConfig.qcBreakMin!=null?otConfig.qcBreakMin:60;}
   renderShiftDefTable();
