@@ -354,6 +354,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <div class="card-title">🧹 ล้างข้อมูลบันทึกเวลาที่ซ้ำซ้อน (กรอกมือ)</div>
         <p style="font-size:0.82em;color:#6b7280;margin-bottom:14px;">เดิมมีบั๊กที่ทำให้บางวันที่กรอกเวลามือซ้ำหลายรอบเกิด record ซ้ำในระบบ (บั๊กแก้แล้ว แต่ข้อมูลเก่าที่ซ้ำอยู่ก่อนหน้านี้ยังตกค้างอยู่ ต้องล้างด้วยมือ 1 ครั้ง) — เครื่องมือนี้จะตรวจหาวัน/พนักงานที่มี record กรอกมือซ้ำกันมากกว่า 1 รายการ แล้วลบส่วนเกินออก เหลือไว้แค่รายการล่าสุด 1 รายการต่อวัน</p>
         <button class="btn btn-primary" onclick="scanDuplicateManualRecords()">🔍 ตรวจสอบข้อมูลซ้ำ</button>
+        <button class="btn btn-secondary" onclick="clearLocalAttCache()">🧹 ล้างแคชเบราว์เซอร์นี้ (ถ้าลบซ้ำแล้วแต่ยังโผล่มาอีก)</button>
         <div id="dedupeMsg" style="margin-top:12px;font-size:0.85em;"></div>
       </div>
       <div class="card">
@@ -1083,6 +1084,7 @@ async function loadFromFirebase(){
     });
   }
   window._zkUnmatched=zkUnmatched;
+  merged.forEach(m=>{m.synced=true;}); // สำคัญมาก: record ทุกตัวที่โหลดมาจาก Firebase ต้องมาร์คว่า synced แล้วเสมอ — ถ้าไม่มาร์ค จะทำให้ localStorage ของเบราว์เซอร์นี้ "ฟื้นคืนชีพ" record ที่ถูกลบไปจาก Firebase แล้ว (เช่นจากเครื่องมือล้างข้อมูลซ้ำ) กลับมาใหม่ทุกครั้งที่โหลดหน้า เพราะระบบเข้าใจผิดว่าเป็น record ค้างส่งที่ยังไม่ได้ sync
   const local=JSON.parse(localStorage.getItem('apk_att')||'[]');
   const localPending=local.filter(l=>!l.synced&&!merged.find(m=>m.id===l.id));
   attendance=[...merged,...localPending];
@@ -1978,6 +1980,13 @@ function renderSSORulesTable(){
   wrap.innerHTML=h+'</tbody></table>';
   const activeEl=document.getElementById('ssoActiveNow');
   if(activeEl)activeEl.innerHTML=`<div class="alert alert-success" style="margin:0;">🟢 กฎที่ใช้อยู่ตอนนี้ (เดือนปัจจุบัน): อัตรา <b>${nowCfg.rate}%</b> ฐาน ${fmtMoney(nowCfg.min)}–${fmtMoney(nowCfg.max)} บาท เพดานหัก ${fmtMoney(nowCfg.cap)} บาท</div>`;
+}
+// ล้าง cache บันทึกเวลาในเบราว์เซอร์นี้ (localStorage) — ใช้แก้ปัญหา record ที่ถูกลบจาก Firebase แล้วแต่ "ฟื้นคืนชีพ" กลับมาอีกในเบราว์เซอร์เครื่องที่เคยสร้างมันขึ้นมา
+function clearLocalAttCache(){
+  if(!confirm('ล้างแคชบันทึกเวลาในเบราว์เซอร์นี้ และโหลดข้อมูลใหม่จาก Firebase ทั้งหมด?\n\n(ใช้เมื่อลบข้อมูลซ้ำผ่านเครื่องมือด้านบนแล้ว แต่ยังเห็นข้อมูลเดิมโผล่มาซ้ำอีกในเบราว์เซอร์นี้)'))return;
+  localStorage.removeItem('apk_att');
+  showToast('✅ ล้างแคชแล้ว กำลังโหลดข้อมูลใหม่จาก Firebase...');
+  loadFromFirebase();
 }
 // ========== ตรวจ/ลบข้อมูลบันทึกเวลาที่ซ้ำซ้อน (จากบั๊กเดิมที่แก้ไปแล้ว) ==========
 let dedupeCandidates=null;
