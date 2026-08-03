@@ -979,7 +979,13 @@ function normalizeZKRecord(dateKey,empKey,raw){
   if(coISO){
     // กะดึก (21:00-05:00): ถ้าเวลาออก "น้อยกว่า" เวลาเข้า แปลว่าออกงานข้ามวันถัดไป
     const ciH=parseInt(rawCheckIn.slice(0,2),10),coH=parseInt(rawCheckOut.slice(0,2),10);
-    if(!isNaN(ciH)&&!isNaN(coH)&&coH<ciH){const nx=new Date(coISO);nx.setDate(nx.getDate()+1);coISO=nx.toISOString().slice(0,19);}
+    if(!isNaN(ciH)&&!isNaN(coH)&&coH<ciH){
+      // เลื่อนวันที่ +1 วันแบบ local (ห้ามใช้ .toISOString() เพราะแปลงเป็น UTC จะเลื่อนเวลาผิด -7 ชม. สำหรับไทย ทำให้ 05:00 ของวันถัดไปกลายเป็น 22:00 ของวันเดิมแทน)
+      const nx=new Date(dateKey.slice(0,4)+'-'+dateKey.slice(4,6)+'-'+dateKey.slice(6,8));
+      nx.setDate(nx.getDate()+1);
+      const ny=nx.getFullYear(),nm=String(nx.getMonth()+1).padStart(2,'0'),nd=String(nx.getDate()).padStart(2,'0');
+      coISO=`${ny}-${nm}-${nd}T${rawCheckOut}`;
+    }
   }
   const ciDate=new Date(ciISO);
   const calc=computeAttendanceCalc(emp,ciDate,coISO?new Date(coISO):ciDate);
