@@ -555,6 +555,13 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
       <div>
         <label style="font-size:0.82em;color:#6b7280;display:block;margin-bottom:4px;">หมายเหตุ (ไม่บังคับ)</label>
         <input type="text" id="aeNote" placeholder="เช่น ลืมสแกนออก, สแกนผิดคน" style="width:100%;padding:10px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.9em;outline:none;">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.76em;" onclick="document.getElementById('aeNote').value='ลืมสแกนเข้า'">ลืมสแกนเข้า</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.76em;" onclick="document.getElementById('aeNote').value='ลืมสแกนออก'">ลืมสแกนออก</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.76em;" onclick="document.getElementById('aeNote').value='ไม่สแกนบัตร'">ไม่สแกนบัตร</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.76em;" onclick="document.getElementById('aeNote').value='เครื่องสแกนขัดข้อง'">เครื่องสแกนขัดข้อง</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.76em;" onclick="document.getElementById('aeNote').value='สแกนผิดคน'">สแกนผิดคน</button>
+        </div>
       </div>
       <div id="aeOriginalInfo" style="font-size:0.78em;color:#9ca3af;"></div>
     </div>
@@ -939,10 +946,12 @@ function computeAttendanceCalc(emp,ciDate,coDate){
     const beforeStartMs=win.start-ciDate;
     const otGraceMsBefore=(sd.otGraceBefore!=null?sd.otGraceBefore:otConfig.otGraceMin||0)*60000;
     if(beforeStartMs>otGraceMsBefore)ot15+=beforeStartMs/3600000;
-    let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciDate,win.start))/3600000);
+    // ถ้ามาสายอยู่ในเกณฑ์อนุโลม (ไม่ถือว่า "สาย") ให้ถือว่าเข้างานตรงเวลาเต็มสำหรับการนับชั่วโมงปกติ ไม่หักเศษนาที/วินาทีที่มาช้าออกจาก regH
+    const ciForReg=isLate?ciDate:(ciDate>win.start?win.start:ciDate);
+    let workedInWindow=Math.max(0,(Math.min(coDate,win.end)-Math.max(ciForReg,win.start))/3600000);
     if(win.breakStart&&win.breakEnd){
       // หักเวลาพักออกจากชั่วโมงปกติ (ไม่นับเป็นเวลาทำงาน)
-      const breakOverlap=Math.max(0,(Math.min(coDate,win.breakEnd)-Math.max(ciDate,win.breakStart))/3600000);
+      const breakOverlap=Math.max(0,(Math.min(coDate,win.breakEnd)-Math.max(ciForReg,win.breakStart))/3600000);
       workedInWindow=Math.max(0,workedInWindow-breakOverlap);
     }
     regH=workedInWindow;
@@ -1710,6 +1719,23 @@ function calcAutoSSO(emp,actualRegPay,year,month){
   if(sso>cfg.cap)sso=cfg.cap;
   return sso;
 }
+// หาวันที่ตั้งตารางกะไว้ให้ทำงาน แต่ไม่มีบันทึกเวลาเข้า-ออกครบ (ไม่ได้สแกนบัตร/ลืมสแกน) และไม่ได้ถูกมาร์คลา/ขาดงานไว้อธิบายแล้ว — ใช้ตัดสิทธิ์เบี้ยขยันเพิ่มเติมจากสาย/ลา/ขาด
+function getMissingScanDaysInMonth(empId,year,month){
+  const items=[];
+  const today=new Date();today.setHours(0,0,0,0);
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const isCurrentMonth=(year===today.getFullYear()&&month===today.getMonth());
+  const lastDay=isCurrentMonth?Math.min(daysInMonth,today.getDate()-1):daysInMonth; // ไม่นับวันนี้/วันที่ยังไม่ถึง เพราะยังไม่จบวัน
+  for(let day=1;day<=lastDay;day++){
+    const assigned=schedule[schedKey(empId,year,month,day)];
+    if(!assigned||assigned==='off')continue; // ไม่ได้ตั้งกะไว้ หรือเป็นวันหยุด -> ไม่ใช่วันที่ต้องสแกน ข้าม
+    const dateKey=year+String(month+1).padStart(2,'0')+String(day).padStart(2,'0');
+    if(leaveRecords[leaveKey(dateKey,empId)])continue; // มีมาร์คลา/ขาดงาน/พักร้อนไว้แล้ว ถือว่าอธิบายเหตุผลแล้ว ไม่ต้องนับซ้ำ
+    const hasCompletedRec=attendance.some(r=>r.empId===empId&&attDateKeyOf(r)===dateKey&&r.checkOut);
+    if(!hasCompletedRec)items.push({dateKey});
+  }
+  return{count:items.length,items};
+}
 function getMonthlySalary(empId,month){
   const emp=EMPLOYEES.find(e=>e.id===empId),yr=new Date().getFullYear();
   const recs=attendance.filter(r=>{const d=new Date(r.checkIn);return r.empId===empId&&d.getMonth()===month&&d.getFullYear()===yr&&r.checkOut;});
@@ -1745,7 +1771,8 @@ function getMonthlySalary(empId,month){
   const leaveNopayInfo=getLeaveDaysInMonth(empId,yr,month,'leave_nopay');
   const vacationInfo=getLeaveDaysInMonth(empId,yr,month,'vacation');
   const leaveNopayCount=leaveNopayInfo.count+vacationInfo.count;
-  const bonusEligible=recs.length>0&&lateRecs.length===0&&absentInfoForBonus.count===0&&leaveNopayCount===0;
+  const missingScanInfo=getMissingScanDaysInMonth(empId,yr,month);
+  const bonusEligible=recs.length>0&&lateRecs.length===0&&absentInfoForBonus.count===0&&leaveNopayCount===0&&missingScanInfo.count===0;
   let bonusReason='',bonusReasonDetail='';
   if(recs.length===0){
     bonusReason='ไม่มีข้อมูลบันทึกเวลาในเดือนนี้';
@@ -1755,8 +1782,9 @@ function getMonthlySalary(empId,month){
     if(lateRecs.length>0)parts.push(`สาย ${lateRecs.length} วัน`);
     if(leaveNopayCount>0)parts.push(`ลา ${leaveNopayCount} วัน`);
     if(absentInfoForBonus.count>0)parts.push(`ขาด ${absentInfoForBonus.count} วัน`);
+    if(missingScanInfo.count>0)parts.push(`ไม่สแกนบัตรเข้า/ออก ${missingScanInfo.count} วัน`);
     bonusReason=parts.join(' / ');
-    // รายละเอียดเต็ม (วันที่ + นาทีที่สาย / วันที่ + ประเภทลา) — ใช้แสดงตอนกดปุ่ม "ดูรายละเอียด" ในสลิปเท่านั้น
+    // รายละเอียดเต็ม (วันที่ + นาทีที่สาย / วันที่ + ประเภทลา / วันที่ไม่สแกนบัตร) — ใช้แสดงตอนกดปุ่ม "ดูรายละเอียด" ในสลิปเท่านั้น
     const detailParts=[];
     if(lateRecs.length>0){
       const lines=lateRecs.map(r=>{const dt=new Date(r.checkIn);return `- ${dt.getDate()} ${TH_MONTHS[dt.getMonth()]} : สาย ${r.lateMin||0} นาที`;}).join('\n');
@@ -1766,6 +1794,10 @@ function getMonthlySalary(empId,month){
     if(allLeaveItems.length>0){
       const lines=allLeaveItems.map(it=>{const day=parseInt(it.dateKey.slice(6,8),10);const mo=parseInt(it.dateKey.slice(4,6),10)-1;const lt=LEAVE_TYPES[it.type];return `- ${day} ${TH_MONTHS[mo]} : ${lt?lt.label:it.type}${it.note?' ('+it.note+')':''}`;}).join('\n');
       detailParts.push(`ลา/ขาดงาน ${allLeaveItems.length} วัน:\n${lines}`);
+    }
+    if(missingScanInfo.count>0){
+      const lines=missingScanInfo.items.map(it=>{const day=parseInt(it.dateKey.slice(6,8),10);const mo=parseInt(it.dateKey.slice(4,6),10)-1;return `- ${day} ${TH_MONTHS[mo]} : ไม่มีบันทึกเวลาเข้า-ออกงาน (ไม่สแกนบัตร/ลืมสแกน)`;}).join('\n');
+      detailParts.push(`ไม่สแกนบัตรเข้า/ออก ${missingScanInfo.count} วัน:\n${lines}`);
     }
     bonusReasonDetail=detailParts.join('\n\n')||bonusReason;
   }
