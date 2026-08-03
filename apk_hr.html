@@ -257,6 +257,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <label style="font-weight:600;font-size:0.9em;">เดือน:</label>
           <select id="salaryMonth" onchange="renderSalary()" style="padding:9px 13px;border:2px solid #e5e7eb;border-radius:8px;font-size:0.88em;outline:none;"></select>
+          <button class="btn btn-secondary" onclick="exportMonthlyAttendanceCSV()">📥 ส่งออกข้อมูลเข้า-ออก/OT รายวันทั้งเดือน (CSV)</button>
         </div>
         <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
           <input type="text" id="salaryNote" placeholder="📝 หมายเหตุประจำเดือน (เช่น เดือนนี้เป็นเดือนทดสอบระบบ เวลาเข้า-ออกอาจไม่ตรงกับความเป็นจริง)" style="flex:1;padding:10px 13px;border:2px solid #fbbf24;border-radius:8px;font-size:0.85em;outline:none;background:#fffbeb;">
@@ -1828,6 +1829,36 @@ function renderSalary(){
   });
   h+=`</tbody><tfoot><tr style="background:#f0fdf4;font-weight:700;border-top:2px solid #10b981;"><td colspan="4" style="text-align:right;">🧮 รวมทั้งหมด (${EMPLOYEES.length} คน)</td><td>${sumRegH.toFixed(2)}</td><td style="color:#3b82f6;">${sumOtH.toFixed(2)}</td><td>฿${fmtMoney(sumRp)}</td><td style="color:#3b82f6;">฿${fmtMoney(sumOp)}</td><td style="color:#ef4444;">฿${fmtMoney(sumDed)}</td><td style="color:#10b981;">฿${fmtMoney(sumNet)}</td><td></td></tr></tfoot></table>`;
   document.getElementById('salaryTable').innerHTML=h;
+}
+// ส่งออกข้อมูลเข้า-ออกงาน/ชม.OT แบบรายวัน ของพนักงานทุกคน ทั้งเดือนที่เลือก เป็นไฟล์ CSV (เปิดใน Excel ได้) — ใช้ตรวจสอบเวลาเข้า-ออก/OT ที่ไม่ตรงของแต่ละคนแบบละเอียดทีละวัน
+function exportMonthlyAttendanceCSV(){
+  const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
+  const rows=attendance.filter(r=>{const d=new Date(r.checkIn);return d.getMonth()===m&&d.getFullYear()===yr;});
+  if(!rows.length){alert('ไม่มีข้อมูลบันทึกเวลาในเดือนนี้');return;}
+  rows.sort((a,b)=>{
+    if(a.empId!==b.empId)return a.empId.localeCompare(b.empId,undefined,{numeric:true});
+    return new Date(a.checkIn)-new Date(b.checkIn);
+  });
+  const header=['รหัส','ชื่อ','แผนก','วันที่','กะ','เวลาเข้า','เวลาออก','ชม.ปกติ','ชม.OT','มาสาย(นาที)','วันหยุด(OT เต็ม)','แก้ไขเวลาแล้ว'];
+  const esc=v=>{const s=String(v==null?'':v);return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s;};
+  const lines=[header.map(esc).join(',')];
+  rows.forEach(r=>{
+    const emp=EMPLOYEES.find(e=>e.id===r.empId);
+    const s=SHIFTS[r.shift]||SHIFTS[1];
+    const ci=new Date(r.checkIn);
+    const dateStr=String(ci.getDate()).padStart(2,'0')+'/'+String(ci.getMonth()+1).padStart(2,'0')+'/'+ci.getFullYear();
+    const ciStr=timeStrFromISO(r.checkIn);
+    const coStr=r.checkOut?timeStrFromISO(r.checkOut):'ยังไม่ออก';
+    lines.push([r.empId,r.empName||(emp?emp.name:''),emp?emp.dept:'',dateStr,s.name,ciStr,coStr,r.regH||'0',r.otH||'0',r.isLate?(r.lateMin||0):'',r.workingOnDayOff?'ใช่':'',r.corrected?'ใช่':''].map(esc).join(','));
+  });
+  const csvContent='\uFEFF'+lines.join('\r\n'); // ใส่ BOM กัน Excel อ่านภาษาไทยเพี้ยน
+  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`บันทึกเวลา_${TH_MONTHS[m]}_${yr+543}.csv`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 function saveSalaryNote(){
   const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
