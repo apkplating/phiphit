@@ -342,20 +342,31 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
   <div class="card" style="margin-top:0;">
     <div class="card-label">📎 Certificate / เอกสารแนบ</div>
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">
-      ถ่ายรูป Certificate แล้วอัปโหลดใน Google Drive → กด Share → Copy Link แล้ววางที่นี่
+      ถ่ายรูป Certificate หรือแนบไฟล์ PDF ได้เลย (เก็บในระบบโดยตรง ไม่ต้องอัปโหลด Google Drive)
     </div>
     <div id="certList" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:6px;">
-      <input type="text" id="certLinkInput" placeholder="วาง Google Drive link ที่นี่..."
-        style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:monospace;">
-      <button onclick="addCertLink()"
-        style="padding:9px 16px;border-radius:8px;background:var(--blue);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">
-        + แนบ
-      </button>
-    </div>
-    <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
-      💡 วิธีรับ link: Google Drive → คลิกขวาไฟล์ → Share → Copy link
-    </div>
+
+    <input type="file" id="certFileInput" accept="application/pdf,image/*" style="display:none;" onchange="uploadCertFile()">
+    <button type="button" onclick="document.getElementById('certFileInput').click()" id="certFilePickBtn"
+      style="width:100%;padding:10px;border-radius:8px;background:var(--blue);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">
+      📎 แนบไฟล์ (PDF / รูปภาพ)
+    </button>
+    <div id="certUploadStatus" style="font-size:11px;color:var(--text-muted);margin-top:5px;display:none;"></div>
+
+    <details style="margin-top:10px;">
+      <summary style="font-size:11px;color:var(--text-muted);cursor:pointer;">หรือวาง Google Drive link แทน</summary>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <input type="text" id="certLinkInput" placeholder="วาง Google Drive link ที่นี่..."
+          style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:monospace;">
+        <button onclick="addCertLink()"
+          style="padding:9px 16px;border-radius:8px;background:var(--blue);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">
+          + แนบ
+        </button>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">
+        💡 วิธีรับ link: Google Drive → คลิกขวาไฟล์ → Share → Copy link
+      </div>
+    </details>
   </div>
 
   <div style="padding:0 0 12px;">
@@ -477,6 +488,7 @@ var FIREBASE_CONFIG = {
 };
 var FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master';
 var PO_FB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/po-master';
+var FB_FILES_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/chem-master-files'; // เก็บไฟล์แนบ (base64) แยกจาก records หลัก กัน sync หนักทุกครั้ง
 var poListCache = []; // cache ของ po_master.html — ใช้ผูก PO ตอนบันทึกรับเข้า เพื่อคำนวณ "จัดส่งตรงเวลา" อัตโนมัติ (เทียบ date กับ dueDate)
 var poVendorsCache = [];
 
@@ -805,7 +817,11 @@ function renderStockCard() {
           ir.receiver ? '<span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;margin-left:3px;">👤'+ir.receiver+'</span>' : '',
           ir.qcResult === 'pass' ? '<span style="font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:3px;">✅ QC</span>' :
           ir.qcResult === 'fail' ? '<span style="font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px;">❌ QC</span>' : '',
-          (ir.certLinks&&ir.certLinks.length) ? '<a href="'+ir.certLinks[0].url+'" target="_blank" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>' : '',
+          (ir.certLinks&&ir.certLinks.length) ? (
+            ir.certLinks[0].url
+              ? '<a href="'+ir.certLinks[0].url+'" target="_blank" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>'
+              : '<a href="javascript:void(0)" onclick="viewCertFile(\''+ir.certLinks[0].fileId+'\',\''+(ir.certLinks[0].name||'').replace(/\'/g,"")+'\')" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>'
+          ) : '',
         ].filter(Boolean).join('') : '—') +
       '</td>' +
       '<td style="font-weight:700;color:var(--green);">'+(ir?ir.liter.toFixed(2):'')+'</td>' +
@@ -1085,13 +1101,26 @@ function setQCResult(val) {
   }
 }
 
-// ══ Cert Links ══
+// ══ Cert Links / ไฟล์แนบ ══
+// certLinks รายการละ: {name, url} = ลิงก์ Google Drive (แบบเดิม), หรือ {name, fileId, mime} = ไฟล์ที่อัปโหลดเข้าระบบโดยตรง
+function fileToBase64(file){
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onload = function(){ resolve(r.result.split(',')[1]); };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
 function renderCertLinks() {
   var el = document.getElementById('certList');
   if (!certLinks.length) { el.innerHTML=''; return; }
   el.innerHTML = certLinks.map(function(c, i) {
+    var openAttr = c.url
+      ? 'href="'+c.url+'" target="_blank"'
+      : 'href="javascript:void(0)" onclick="viewCertFile(\''+c.fileId+'\',\''+(c.name||'').replace(/'/g,"")+'\')"';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;margin-bottom:5px;">' +
-      '<a href="'+c.url+'" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">📄 '+c.name+'</a>' +
+      '<a '+openAttr+' style="font-size:11px;color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">📄 '+c.name+'</a>' +
       '<button onclick="removeCertLink('+i+')" style="background:none;border:none;color:#dc2626;font-size:12px;cursor:pointer;flex-shrink:0;">✕</button>' +
     '</div>';
   }).join('');
@@ -1112,6 +1141,57 @@ function addCertLink() {
 function removeCertLink(i) {
   certLinks.splice(i, 1);
   renderCertLinks();
+}
+
+// อัปโหลดไฟล์ PDF/รูปจากเครื่อง → แปลง base64 → เก็บที่โหนดแยก chem-master-files (ไม่ปนกับ records หลัก)
+function uploadCertFile() {
+  var inp = document.getElementById('certFileInput');
+  var file = inp.files[0];
+  if (!file) return;
+  if (file.size > 8*1024*1024) {
+    showToast('in','ไฟล์ใหญ่เกินไป (จำกัด 8MB)','err');
+    inp.value = '';
+    return;
+  }
+  var statusEl = document.getElementById('certUploadStatus');
+  var btn = document.getElementById('certFilePickBtn');
+  statusEl.style.display = 'block'; statusEl.textContent = '⏳ กำลังอัปโหลด...';
+  btn.disabled = true;
+
+  fileToBase64(file).then(function(b64){
+    var fileId = 'cf_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    return fetch(FB_FILES_PATH + '/' + fileId + '.json', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ fileName: file.name, mime: file.type, data: b64, uploadedAt: new Date().toISOString() })
+    }).then(function(res){
+      if (!res.ok) throw new Error('upload failed');
+      certLinks.push({ name: file.name, fileId: fileId, mime: file.type });
+      renderCertLinks();
+      statusEl.textContent = '✅ แนบไฟล์แล้ว: ' + file.name;
+      setTimeout(function(){ statusEl.style.display='none'; }, 3000);
+    });
+  }).catch(function(e){
+    statusEl.textContent = '❌ อัปโหลดไม่สำเร็จ: ' + e.message;
+  }).finally(function(){
+    btn.disabled = false;
+    inp.value = '';
+  });
+}
+
+// เปิดดูไฟล์แนบที่อัปโหลดไว้ (ดึง base64 มาสร้างเป็น Blob แล้วเปิดแท็บใหม่)
+function viewCertFile(fileId, name) {
+  fetch(FB_FILES_PATH + '/' + fileId + '.json').then(function(res){ return res.json(); }).then(function(f){
+    if (!f || !f.data) { showToast('in','ไม่พบไฟล์แนบนี้ (อาจถูกลบ)','err'); return; }
+    var mime = f.mime || 'application/octet-stream';
+    var byteChars = atob(f.data);
+    var bytes = new Uint8Array(byteChars.length);
+    for (var i=0;i<byteChars.length;i++) bytes[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([bytes], {type: mime});
+    var blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, '_blank');
+  }).catch(function(){
+    showToast('in','เปิดไฟล์ไม่สำเร็จ','err');
+  });
 }
 
 function addChemIn() {
