@@ -315,6 +315,10 @@ tr:hover td{background:var(--steel-3);}
         <h2>บัญชีแม่บทเอกสาร</h2>
         <div class="sub">เอกสารที่เผยแพร่แล้ว — แสดงเฉพาะที่แผนกคุณมีสิทธิ์ดู</div>
         <div class="row">
+          <div class="field" style="max-width:260px;">
+            <label>ค้นหา</label>
+            <input type="text" id="libSearch" placeholder="พิมพ์รหัสหรือชื่อเอกสาร...">
+          </div>
           <div class="field" style="max-width:220px;">
             <label>กรองตามประเภท</label>
             <select id="libFilterType"><option value="">ทั้งหมด</option></select>
@@ -1159,14 +1163,19 @@ function refreshLibrary(){
 }
 function renderLibrary(){
   var filterType = $('libFilterType').value;
+  var q = ($('libSearch') ? $('libSearch').value : '').trim().toLowerCase();
   var codes = Object.keys(allMaster).filter(function(c){
     var d = allMaster[c];
     if (d.status === 'cancelled') return false;
     if (filterType && d.docType !== filterType) return false;
+    if (q && c.toLowerCase().indexOf(q) === -1 && (d.docName||'').toLowerCase().indexOf(q) === -1) return false;
     return canViewDoc(d.viewDepts);
   }).sort();
   var wrap = $('libraryList');
-  if (!codes.length){ wrap.innerHTML = '<div class="empty">ไม่มีเอกสารที่คุณมีสิทธิ์ดู</div>'; return; }
+  if (!codes.length){
+    wrap.innerHTML = '<div class="empty">' + ((q || filterType) ? 'ไม่พบเอกสารที่ตรงกับเงื่อนไข' : 'ไม่มีเอกสารที่คุณมีสิทธิ์ดู') + '</div>';
+    return;
+  }
   var rows = codes.map(function(c){
     var d = allMaster[c];
     var rev = d.revisions && d.revisions.length ? d.revisions[d.revisions.length-1] : {};
@@ -1569,6 +1578,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // library filter
   $('libFilterType').addEventListener('change', renderLibrary);
+  $('libSearch').addEventListener('input', renderLibrary);
 
   // publish modal
   $('publishCancel').addEventListener('click', closePublishModal);
