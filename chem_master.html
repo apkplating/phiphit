@@ -467,6 +467,17 @@ body.viewer-mode [onclick^="addCertLink"]{display:none !important;}
   </div>
 </div>
 
+<div id="qcDetailModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:500;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;padding:18px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;color:var(--navy);">🔍 รายละเอียดการตรวจสอบ (QC)</div>
+      <button onclick="closeQCDetailModal()" style="background:none;border:none;font-size:18px;color:var(--text-muted);cursor:pointer;">✕</button>
+    </div>
+    <div id="qcDetailBody" style="font-size:12.5px;"></div>
+    <button onclick="closeQCDetailModal()" style="width:100%;margin-top:14px;padding:10px;background:#fff;border:1.5px solid var(--border);border-radius:10px;font-size:13px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">ปิด</button>
+  </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
@@ -815,13 +826,9 @@ function renderStockCard() {
         (ir ? [
           ir.bill||'',
           ir.receiver ? '<span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;margin-left:3px;">👤'+ir.receiver+'</span>' : '',
-          ir.qcResult === 'pass' ? '<span style="font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:3px;">✅ QC</span>' :
-          ir.qcResult === 'fail' ? '<span style="font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px;">❌ QC</span>' : '',
-          (ir.certLinks&&ir.certLinks.length) ? (
-            ir.certLinks[0].url
-              ? '<a href="'+ir.certLinks[0].url+'" target="_blank" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>'
-              : '<a href="javascript:void(0)" onclick="viewCertFile(\''+ir.certLinks[0].fileId+'\',\''+(ir.certLinks[0].name||'').replace(/\'/g,"")+'\')" style="font-size:9px;color:var(--blue);margin-left:3px;">📎Cert</a>'
-          ) : '',
+          ir.qcResult === 'pass' ? '<button onclick="showQCDetail(\''+ir.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:3px;font-family:inherit;">✅ QC</button>' :
+          ir.qcResult === 'fail' ? '<button onclick="showQCDetail(\''+ir.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;margin-left:3px;font-family:inherit;">❌ QC</button>' : '',
+          (ir.certLinks&&ir.certLinks.length) ? '<span onclick="showQCDetail(\''+ir.id+'\')" style="cursor:pointer;font-size:9px;color:var(--blue);margin-left:3px;">📎'+(ir.certLinks.length>1?ir.certLinks.length+' ไฟล์':'Cert')+'</span>' : '',
         ].filter(Boolean).join('') : '—') +
       '</td>' +
       '<td style="font-weight:700;color:var(--green);">'+(ir?ir.liter.toFixed(2):'')+'</td>' +
@@ -916,8 +923,8 @@ function renderMonthlyIn() {
           '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:var(--green);">'+r.liter.toFixed(2)+' L</td>' +
           '<td style="padding:6px 10px;width:15%;text-align:center;color:var(--text-mid);">'+(r.bucket||'—')+' ถัง</td>' +
           '<td style="padding:6px 10px;width:15%;text-align:center;">' +
-            (r.qcResult === 'pass' ? '<span style="font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;">✅ QC</span>' :
-             r.qcResult === 'fail' ? '<span style="font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;">❌ QC</span>' : '—') +
+            (r.qcResult === 'pass' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;font-family:inherit;">✅ QC</button>' :
+             r.qcResult === 'fail' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;font-family:inherit;">❌ QC</button>' : '—') +
           '</td>' +
         '</tr>';
       }).join('') +
@@ -1385,6 +1392,64 @@ function deleteRecord(id){
   if (!id||!confirm('ลบรายการนี้?')) return;
   chemRecords=chemRecords.filter(function(r){return String(r.id)!==String(id);});
   saveLocal(); fbSave(); renderStockCard();
+}
+
+// ══ ดูรายละเอียดผล QC + Certificate ทั้งหมดของรายการรับเข้า ══
+function showQCDetail(id) {
+  var rec = chemRecords.find(function(r){ return String(r.id)===String(id) && r.type==='in'; });
+  if (!rec) return;
+  var body = document.getElementById('qcDetailBody');
+  var html = '';
+
+  html += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;">' +
+    '<div style="font-size:11px;color:var(--text-muted);">เลขที่ใบรับ: <b>'+(rec.bill||'—')+'</b> · วันที่: '+(rec.date||'—')+'</div>' +
+    (rec.receiver ? '<div style="font-size:11px;color:var(--text-muted);">ผู้รับของ: '+rec.receiver+'</div>' : '') +
+  '</div>';
+
+  html += '<div style="font-weight:700;color:var(--navy);margin-bottom:6px;">ผลรวม: ' +
+    (rec.qcResult==='pass' ? '<span style="color:#16a34a;">✅ ผ่าน</span>' :
+     rec.qcResult==='fail' ? '<span style="color:#dc2626;">❌ ไม่ผ่าน</span>' : '<span style="color:var(--text-muted);">— ไม่ระบุ</span>') +
+  '</div>';
+
+  if (rec.qcResult === 'fail' && rec.qcFailReason) {
+    html += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:11.5px;">สาเหตุ: '+rec.qcFailReason+'</div>';
+  }
+
+  var names = rec.qcTopicNames || [];
+  var results = rec.qcTopicResults || {};
+  if (names.length) {
+    html += '<div style="font-weight:600;color:var(--navy);margin:10px 0 6px;">รายหัวข้อ</div>';
+    names.forEach(function(name, i){
+      var v = results[i] || '';
+      var badge = v==='pass' ? '<span style="color:#16a34a;font-weight:700;">✅ ผ่าน</span>' :
+                  v==='fail' ? '<span style="color:#dc2626;font-weight:700;">❌ ไม่ผ่าน</span>' :
+                  '<span style="color:var(--text-muted);">— ไม่ระบุ</span>';
+      html += '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">' +
+        '<span>'+name+'</span>'+badge+'</div>';
+    });
+  } else {
+    html += '<div style="color:var(--text-muted);font-size:11.5px;">ไม่มีข้อมูลหัวข้อตรวจสอบรายหัวข้อสำหรับรายการนี้</div>';
+  }
+
+  var certs = rec.certLinks || [];
+  html += '<div style="font-weight:600;color:var(--navy);margin:14px 0 6px;">📎 Certificate / เอกสารแนบ ('+certs.length+')</div>';
+  if (certs.length) {
+    html += certs.map(function(c){
+      var attr = c.url
+        ? 'href="'+c.url+'" target="_blank"'
+        : 'href="javascript:void(0)" onclick="viewCertFile(\''+c.fileId+'\',\''+(c.name||'').replace(/\'/g,"")+'\')"';
+      return '<div style="padding:6px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;margin-bottom:5px;">' +
+        '<a '+attr+' style="font-size:11.5px;color:var(--blue);text-decoration:none;">'+(c.fileId?'📄':'🔗')+' '+(c.name||'ไฟล์แนบ')+'</a></div>';
+    }).join('');
+  } else {
+    html += '<div style="color:var(--text-muted);font-size:11.5px;">ไม่มีไฟล์แนบสำหรับรายการนี้</div>';
+  }
+
+  body.innerHTML = html;
+  document.getElementById('qcDetailModal').style.display = 'flex';
+}
+function closeQCDetailModal() {
+  document.getElementById('qcDetailModal').style.display = 'none';
 }
 
 // ══ แก้ไขรายการรับเข้า (ฝั่งจัดซื้อ) — ต้องได้รับอนุมัติก่อนบันทึกทุกครั้ง (สิทธิ์ "แก้ไขรับเข้า" ตั้งจากหน้า auth_admin) ══
