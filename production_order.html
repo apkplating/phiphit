@@ -1380,19 +1380,14 @@ function renderJigList(idx) {
 
 function updateJigCalc(idx) {
   var calcEl = document.getElementById('poj-calc-' + idx);
-  var reasonWrap = document.getElementById('poj-reason-wrap-' + idx);
   if (!calcEl) return;
   var entries = poJigEntries[idx] || [];
   var qty = parseFloat((document.getElementById('poq-'+idx)||{}).value) || 0;
-  if (!entries.length) { calcEl.textContent = ''; if (reasonWrap) reasonWrap.style.display = 'none'; return; }
+  if (!entries.length) { calcEl.textContent = ''; return; }
   var total = entries.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
-  var diff  = total - qty;
-  var within = Math.abs(diff) <= 10;
-  calcEl.innerHTML = 'รวมทุกจิ๊ก ' + total.toLocaleString() + ' ชิ้น (เป้า ' + qty.toLocaleString() + ' ชิ้น) — ' +
-    (within
-      ? '<span style="color:var(--green);font-weight:700;">✓ ห่างจากเป้า ' + Math.abs(diff).toLocaleString() + ' ชิ้น (อยู่ในเกณฑ์ ±10)</span>'
-      : '<span style="color:var(--red);font-weight:700;">⚠️ ห่างจากเป้า ' + Math.abs(diff).toLocaleString() + ' ชิ้น (เกิน ±10 — ต้องระบุเหตุผล)</span>');
-  if (reasonWrap) reasonWrap.style.display = within ? 'none' : 'block';
+  // ข้อมูลนี้เพื่ออ้างอิงหน้างานเท่านั้น — ไม่บังคับให้ยอดต่อรอบเท่ากับเป้ารวม เพราะงาน R1 อาจต้องผลิตซ้ำหลายรอบ/หลายกะกว่าจะครบเป้า
+  calcEl.innerHTML = 'รวมต่อรอบจากจิ๊กที่ระบุ: <b>' + total.toLocaleString() + ' ชิ้น/รอบ</b>' +
+    (qty ? ' (เป้าออเดอร์ ' + qty.toLocaleString() + ' ชิ้น — ถ้าไม่ครบใน 1 รอบ ให้ทำซ้ำหลายรอบ/กะจนครบ)' : '');
 }
 
 function attachRowEvents(idx) {
@@ -1471,10 +1466,10 @@ function buildRowHTML(idx) {
         '<div class="field" style="margin:0;"><label>จำนวนจิ๊กที่ใช้</label><input type="number" id="poj-cnt-'+idx+'" placeholder="0" min="0"></div>' +
       '</div>' +
       '<button type="button" class="btn btn-outline btn-sm" style="margin-top:2px;" onclick="addJigEntry('+idx+')">➕ เพิ่มจิ๊กนี้</button>' +
-      '<div id="poj-calc-'+idx+'" style="font-size:11px;margin-top:6px;"></div>' +
-      '<div class="field" id="poj-reason-wrap-'+idx+'" style="display:none;margin-top:6px;">' +
-        '<label style="color:var(--red);">⚠️ เหตุผลที่จำนวนไม่ตรง (บังคับกรอกถ้าห่างเกิน ±10 ชิ้นจากเป้า)</label>' +
-        '<input type="text" id="poj-reason-'+idx+'" placeholder="เช่น ใช้จิ๊กสำรองแทนจิ๊กมาตรฐาน เพราะจิ๊กหลักซ่อมบำรุง">' +
+      '<div id="poj-calc-'+idx+'" style="font-size:11px;margin-top:6px;color:var(--text-mid);"></div>' +
+      '<div class="field" style="margin-top:6px;">' +
+        '<label>หมายเหตุจิ๊ก (ถ้ามี — เช่น สลับจิ๊ก/ผลิตกี่กะ)</label>' +
+        '<input type="text" id="poj-reason-'+idx+'" placeholder="เช่น ทำงาน 3 กะจนครบเป้า, จิ๊กหลักซ่อมบำรุงจึงใช้จิ๊กสำรอง">' +
       '</div>' +
     '</div>' +
     '<div class="field" style="margin:8px 0 0;">' +
@@ -1531,18 +1526,14 @@ function addItemToStaged() {
     }
   }
 
-  // สาย R1 — บังคับเพิ่มรายการจิ๊กอย่างน้อย 1 รายการ (เพิ่มได้หลายจิ๊กถ้าใช้ร่วมกัน) และเช็คว่ารวมแล้วตรงกับเป้าในเกณฑ์ ±10 ชิ้น
+  // สาย R1 — บังคับเพิ่มรายการจิ๊กอย่างน้อย 1 รายการ (เพิ่มได้หลายจิ๊กถ้าใช้ร่วมกัน)
+  // หมายเหตุ: ไม่บังคับให้ยอดต่อรอบเท่ากับเป้ารวม เพราะงาน R1 อาจต้องผลิตซ้ำหลายรอบ/หลายกะกว่าจะครบเป้า — จุดประสงค์คือให้หน้างานรู้ว่าต้องใช้จิ๊กอะไรเท่านั้น
   var jigs = [], jigReason = '';
   if (line === 'R1') {
     jigs = (poJigEntries[idx] || []).slice();
     jigReason = ((document.getElementById('poj-reason-'+idx)||{}).value||'').trim();
     if (!jigs.length) {
       showToast('toast-po','สาย R1 ต้องเพิ่มข้อมูลจิ๊กอย่างน้อย 1 รายการ (กดปุ่ม "เพิ่มจิ๊กนี้")','err');
-      return;
-    }
-    var jigTotal = jigs.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
-    if (Math.abs(jigTotal - qty) > 10 && !jigReason) {
-      showToast('toast-po','รวมจำนวนจากจิ๊กทั้งหมด (' + jigTotal.toLocaleString() + ' ชิ้น) ห่างจากเป้า (' + qty.toLocaleString() + ' ชิ้น) เกิน ±10 — กรุณาระบุเหตุผล','err');
       return;
     }
   }
@@ -1585,12 +1576,11 @@ function renderStagedList() {
     var badgeClass = lineBadge[it.line]||'badge-b1';
     var jigsArr = it.jigs || [];
     var jigTotal = jigsArr.reduce(function(sum, e){ return sum + (e.perUnit||0)*(e.count||0); }, 0);
-    var jigOff = jigsArr.length && Math.abs(jigTotal - it.qty) > 10;
     var jigInfo = (it.line==='R1' && jigsArr.length)
-      ? '<div style="flex-basis:100%;font-size:10px;color:'+(jigOff?'var(--red)':'var(--text-mid)')+';">🔧 จิ๊ก: ' +
+      ? '<div style="flex-basis:100%;font-size:10px;color:var(--text-mid);">🔧 จิ๊ก: ' +
           jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
-          ' = รวม ' + jigTotal.toLocaleString() + ' ชิ้น' +
-          (it.jigReason ? ' — เหตุผล: ' + esc(it.jigReason) : '') + '</div>'
+          ' = รวม ' + jigTotal.toLocaleString() + ' ชิ้น/รอบ' +
+          (it.jigReason ? ' — หมายเหตุ: ' + esc(it.jigReason) : '') + '</div>'
       : '';
     return '<div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;gap:8px;flex-wrap:wrap;">' +
       '<span class="badge ' + badgeClass + '">' + esc(it.line) + '</span>' +
@@ -1776,12 +1766,10 @@ function renderPOList() {
       ? '<div style="font-size:9px;color:var(--red);margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master (แปลงหน่วยไม่ได้)</div>'
       : '';
     var jigsArr = r.it.jigs || (r.it.jig ? [{ jig: r.it.jig, perUnit: r.it.jigPerUnit||0, count: r.it.jigCount||0 }] : []);
-    var jigTotal = jigsArr.reduce(function(sum, e){ return sum + (e.perUnit||0)*(e.count||0); }, 0);
-    var jigOff = jigsArr.length && Math.abs(jigTotal - (r.it.qty||0)) > 10;
     var jigInfo = (r.it.line==='R1' && jigsArr.length)
-      ? '<div style="font-size:9px;color:'+(jigOff?'var(--red)':'var(--text-muted)')+';margin-top:2px;">🔧 จิ๊ก: ' +
+      ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">🔧 จิ๊ก: ' +
           jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
-          (r.it.jigReason ? '<br>เหตุผล: ' + esc(r.it.jigReason) : '') + '</div>'
+          (r.it.jigReason ? '<br>หมายเหตุ: ' + esc(r.it.jigReason) : '') + '</div>'
       : '';
     return '<tr>' +
       '<td style="white-space:nowrap;font-size:11px;">' + esc(r.po.timestamp || r.po.date) + '</td>' +
@@ -1806,7 +1794,8 @@ function renderPOList() {
 
 // ══════════════════════════════════════════════
 //  PUBLIC API — ให้ v4/v5/v6 fetch ไปแสดง popup
-//  โครงสร้างที่ return: [{customer,partNo,partName,line,qty,actual,pct}]
+//  โครงสร้างที่ return: [{customer,partNo,partName,line,qty,actual,pct,jigs,jigReason}]
+//  จิ๊ก (jigs) มีเฉพาะสาย R1 — array ของ {jig, perUnit, count} ไว้โชว์หน้างานว่าต้องใช้จิ๊กอะไร/กี่ชุด
 // ══════════════════════════════════════════════
 window.fetchProductionOrders = async function(lineFilter) {
   try {
@@ -1817,6 +1806,7 @@ window.fetchProductionOrders = async function(lineFilter) {
     orders.forEach(function(po) {
       (po.items||[]).forEach(function(it) {
         if (lineFilter && it.line !== lineFilter && it.line !== 'ALL') return;
+        var jigsArr = it.jigs || (it.jig ? [{ jig: it.jig, perUnit: it.jigPerUnit||0, count: it.jigCount||0 }] : []);
         result.push({
           poDate:   po.date,
           planner:  po.planner,
@@ -1826,6 +1816,8 @@ window.fetchProductionOrders = async function(lineFilter) {
           line:     it.line,
           qty:      it.qty || 0,
           unit:     it.unit || 'pcs',
+          jigs:     jigsArr,
+          jigReason: it.jigReason || '',
         });
       });
     });

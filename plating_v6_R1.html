@@ -1700,6 +1700,19 @@ function addBarrel() {
   }
   if (!pcs) { showToast('entry','กรุณากรอกจำนวนชิ้น (Pcs)','err'); return; }
 
+  // ── เช็คจำนวน/รอบ เทียบกับจิ๊กที่กำหนดไว้ในใบสั่งผลิตวันนี้ (ถ้ามี) ──
+  // จำนวนที่กรอกต่อรอบต้องตรงกับ "จำนวน/จิ๊ก" ตัวใดตัวหนึ่ง ±10 ชิ้น จึงจะเพิ่มรอบได้
+  var _partNoForJig = (document.getElementById('bPartSearch')||{}).value || '';
+  var _jigConfigs = getR1JigConfigs(_partNoForJig);
+  if (_jigConfigs.length) {
+    var _jigMatch = _jigConfigs.some(function(cfg){ return Math.abs(cfg.perUnit - pcs) <= 10; });
+    if (!_jigMatch) {
+      var _expectedStr = _jigConfigs.map(function(cfg){ return cfg.jig + ' (' + cfg.perUnit.toLocaleString() + ' ชิ้น)'; }).join(' หรือ ');
+      showToast('entry','🚫 จำนวนที่กรอก ('+pcs.toLocaleString()+' ชิ้น) ไม่ตรงกับจิ๊กที่กำหนดในใบสั่งผลิต — ต้องใกล้เคียง '+_expectedStr+' (±10 ชิ้น) กรุณาตรวจสอบว่าใช้จิ๊กถูกต้องหรือไม่','err');
+      return;
+    }
+  }
+
   var _billJobId = document.getElementById('bJobPick').value || '';
 
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — ปล่อยผ่านได้เลย ไม่ต้องเช็คยอดเกิน ไม่ต้องขออนุมัติ NOBILL ──
@@ -6708,6 +6721,10 @@ function barrelPmAcPick(idx) {
   document.getElementById('bPartName').value = partNo + (nm && nm !== partNo ? ' '+nm : '');
   if (cust) document.getElementById('bCustomer').value = cust;
 
+  // auto-เลือกสีชุบ (B/C/K) ตามที่ตั้งไว้ใน Part Master ของชิ้นงานนี้ (ถ้ามีระบุ)
+  _barrelPartWeightG = p.weightG || 0;
+  if (p.color && (p.color==='B' || p.color==='C' || p.color==='K')) selColor(p.color);
+
   var statusEl = document.getElementById('bPartSearchStatus');
 
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — ข้ามการค้นหา/แสดงรายชื่อบิลไปเลย ──
@@ -9373,6 +9390,25 @@ function getWeightGForPO(partNo) {
   return ucGetWeightG(partNo, (typeof partList !== 'undefined') ? partList : []);
 }
 
+// หา configs จิ๊กที่กำหนดไว้ในใบสั่งผลิตวันนี้ (สาย R1) สำหรับ P/No ที่ระบุ — ใช้เช็คตอนกด "เพิ่มรอบ"
+// return array ของ {jig, perUnit, count} จากทุกใบสั่งผลิตวันนี้ที่ตรงกับ P/No นี้ (รองรับข้อมูลเก่าแบบจิ๊กเดี่ยว)
+function getR1JigConfigs(partNo) {
+  var pno = (partNo || '').trim().toUpperCase();
+  if (!pno || !_poOrdersCache) return [];
+  var today = isoDate(new Date());
+  var configs = [];
+  _poOrdersCache.forEach(function(po) {
+    if (po.date !== today) return;
+    (po.items || []).forEach(function(it) {
+      if (it.line !== 'R1' && it.line !== 'ALL') return;
+      if ((it.partNo || '').trim().toUpperCase() !== pno) return;
+      var jigsArr = it.jigs || (it.jig ? [{ jig: it.jig, perUnit: it.jigPerUnit||0, count: it.jigCount||0 }] : []);
+      jigsArr.forEach(function(j) { if (j.perUnit) configs.push(j); });
+    });
+  });
+  return configs;
+}
+
 function _buildItems(orders, liveRows, lineFilter) {
   var items = [];
   var today = isoDate(new Date());
@@ -9518,8 +9554,10 @@ async function showPOPopup(lineFilter) {
     (po.items||[]).forEach(function(it) {
       if (it.line !== lineFilter && it.line !== 'ALL') return;
       if (!it.qty) return;
+      var jigsArr = it.jigs || (it.jig ? [{ jig: it.jig, perUnit: it.jigPerUnit||0, count: it.jigCount||0 }] : []);
       pending.push({ poDate:po.date, customer:it.customer, partNo:it.partNo,
-        partName:it.partName, qty:it.qty, unit:it.unit||'pcs', done:0, pct:0, complete:false });
+        partName:it.partName, qty:it.qty, unit:it.unit||'pcs', done:0, pct:0, complete:false,
+        jigs: jigsArr, jigReason: it.jigReason||'' });
     });
   });
 
@@ -9528,11 +9566,16 @@ async function showPOPopup(lineFilter) {
   var esc2 = function(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
 
   var rows = pending.map(function(it) {
+    var jigCell = it.jigs.length
+      ? it.jigs.map(function(j){ return '<div>🔧 '+esc2(j.jig)+' — '+Number(j.perUnit).toLocaleString()+' ชิ้น/รอบ</div>'; }).join('') +
+        (it.jigReason ? '<div style="color:#94a3b8;">หมายเหตุ: '+esc2(it.jigReason)+'</div>' : '')
+      : '<span style="color:#cbd5e1;">—</span>';
     return '<tr style="border-top:1px solid #e2e8f0;">' +
       '<td style="padding:7px 10px;font-size:11px;color:#64748b;">' + esc2(it.poDate) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;font-weight:600;">' + esc2(it.customer) + '</td>' +
       '<td style="padding:7px 10px;font-size:11px;font-family:monospace;">' + esc2(it.partNo) + '</td>' +
       '<td style="padding:7px 10px;font-size:12px;">' + esc2(it.partName) + '</td>' +
+      '<td style="padding:7px 10px;font-size:10px;">' + jigCell + '</td>' +
       '<td style="padding:7px 10px;text-align:center;">' +
         '<div style="font-size:13px;font-weight:800;color:#0f2044;">' + Number(it.qty).toLocaleString() + ' <span style="font-size:10px;color:#94a3b8;">' + (it.unit==='kg'?'กก.':'ชิ้น') + '</span></div>' +
         '<div style="background:#e2e8f0;border-radius:99px;height:5px;margin-top:4px;"><div style="height:100%;width:0%;background:#3b82f6;border-radius:99px;" class="po-pbar-' + esc2(it.partNo) + '"></div></div>' +
@@ -9545,7 +9588,7 @@ async function showPOPopup(lineFilter) {
   overlay.id = 'poPopupOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,32,68,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35);">' +
+    '<div style="background:#fff;border-radius:16px;width:100%;max-width:760px;max-height:85vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.35);">' +
       '<div style="background:linear-gradient(135deg,#0f2044,#16305e);color:#fff;padding:14px 18px;border-radius:16px 16px 0 0;display:flex;align-items:center;justify-content:space-between;">' +
         '<div>' +
           '<div style="font-size:14px;font-weight:700;">📋 ใบสั่งผลิตวันนี้ — สาย ' + lineFilter + '</div>' +
@@ -9559,6 +9602,7 @@ async function showPOPopup(lineFilter) {
           '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">ลูกค้า</th>' +
           '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">หมายเลขชิ้นงาน</th>' +
           '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">ชื่อชิ้นงาน</th>' +
+          '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:left;font-weight:700;">จิ๊กที่ต้องใช้</th>' +
           '<th style="padding:8px 10px;font-size:11px;color:#475569;text-align:center;font-weight:700;">เป้าหมาย</th>' +
         '</tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
