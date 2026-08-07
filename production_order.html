@@ -1332,12 +1332,92 @@ function dispatchSearch(idx, val) {
 
 var poJigEntries = {}; // idx -> [{jig, perUnit, count}] — รายการจิ๊กหลายรายการต่อ 1 ชิ้นงาน (สาย R1)
 
+// ══════════════════════════════════════════════
+//  R1 CYCLE TIME — ดึงจากแหล่งข้อมูลเดียวกับ analytics.html (plating-r1.json)
+//  สูตรเดียวกัน: ผลต่างเวลาระหว่างรอบที่ติดกัน (0–120 นาที) แล้วหาค่าเฉลี่ย จากข้อมูล 30 วันล่าสุดที่มีจริง
+// ══════════════════════════════════════════════
+var R1_FB_URL = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app/plating-r1.json';
+var _r1CycleTimeMin  = null;  // นาที/รอบ เฉลี่ย (null = ยังไม่ได้โหลด/ไม่มีข้อมูล)
+var _r1CycleTimeInfo = '';    // ข้อความอธิบายช่วงข้อมูลที่ใช้คำนวณ
+
+function timeToMinPO(t) {
+  if (!t) return 0;
+  var parts = String(t).split(':');
+  return (parseInt(parts[0])||0)*60 + (parseInt(parts[1])||0);
+}
+
+async function loadR1CycleTime(forceRefresh) {
+  if (_r1CycleTimeMin !== null && !forceRefresh) return _r1CycleTimeMin;
+  try {
+    var r = await fetch(R1_FB_URL);
+    var d = await r.json();
+    var dayRecords = (d && Array.isArray(d.dayRecords)) ? d.dayRecords : [];
+    var sorted = dayRecords.filter(function(x){ return x && x.date; })
+      .sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    var recent = sorted.slice(0, 30); // 30 วันล่าสุดที่มีข้อมูลจริง
+    var diffs = [];
+    recent.forEach(function(day) {
+      var rows = Array.isArray(day.rows) ? day.rows.slice() : [];
+      rows.sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+      for (var i=1; i<rows.length; i++) {
+        var diff = timeToMinPO(rows[i].time) - timeToMinPO(rows[i-1].time);
+        if (diff > 0 && diff < 120) diffs.push(diff);
+      }
+    });
+    _r1CycleTimeMin  = diffs.length ? (diffs.reduce(function(a,b){return a+b;},0)/diffs.length) : null;
+    _r1CycleTimeInfo = recent.length ? ('อ้างอิงข้อมูล ' + recent.length + ' วันล่าสุด') : 'ยังไม่มีข้อมูลย้อนหลัง';
+  } catch(e) { _r1CycleTimeMin = null; _r1CycleTimeInfo = 'ดึงข้อมูล Cycle Time ไม่ได้'; }
+  return _r1CycleTimeMin;
+}
+
+async function refreshR1CycleTime(idx) {
+  var ctEl = document.getElementById('poj-ct-' + idx);
+  if (ctEl) ctEl.textContent = 'กำลังโหลด...';
+  await loadR1CycleTime(true);
+  estimateR1Production(idx);
+}
+
+function estimateR1Production(idx) {
+  var ctEl     = document.getElementById('poj-ct-' + idx);
+  var resultEl = document.getElementById('poj-est-result-' + idx);
+  if (!ctEl || !resultEl) return;
+  var ct = _r1CycleTimeMin;
+  ctEl.textContent = ct ? (ct.toFixed(1) + ' นาที/รอบ (' + _r1CycleTimeInfo + ')') : (_r1CycleTimeInfo || 'กำลังโหลด...');
+
+  var entries  = poJigEntries[idx] || [];
+  var perRound = entries.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
+  var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value) || 0;
+  var hours    = parseFloat((document.getElementById('poj-hours-'+idx)||{}).value) || 0;
+
+  if (!perRound || !hours || !ct) { resultEl.textContent = ''; return; }
+
+  var roundsPossible = Math.floor((hours*60) / ct);
+  var totalPossible  = roundsPossible * perRound;
+  var msg = 'ใน ' + hours + ' ชม. ทำได้ประมาณ <b>' + roundsPossible.toLocaleString() + ' รอบ</b> = ' +
+    totalPossible.toLocaleString() + ' ชิ้น';
+
+  if (qty) {
+    var enough = totalPossible >= qty;
+    if (enough) {
+      msg += ' — <span style="color:var(--green);font-weight:700;">✓ ครบเป้า (' + qty.toLocaleString() + ' ชิ้น)</span>';
+    } else {
+      var neededRounds = Math.ceil(qty / perRound);
+      var neededHours  = (neededRounds * ct) / 60;
+      msg += ' — <span style="color:var(--red);font-weight:700;">⚠️ ไม่ครบเป้า (' + qty.toLocaleString() + ' ชิ้น) ต้องใช้เวลาอย่างน้อย ~' +
+        neededHours.toFixed(1) + ' ชม. (' + neededRounds.toLocaleString() + ' รอบ)</span>';
+    }
+  }
+  resultEl.innerHTML = msg;
+}
+
 function toggleJigFields(idx) {
   var lineEl = document.getElementById('pol-' + idx);
   var wrap = document.getElementById('poJigWrap-' + idx);
   if (!lineEl || !wrap) return;
-  wrap.style.display = (lineEl.value === 'R1') ? 'block' : 'none';
+  var isR1 = lineEl.value === 'R1';
+  wrap.style.display = isR1 ? 'block' : 'none';
   updateJigCalc(idx);
+  if (isR1) loadR1CycleTime(false).then(function(){ estimateR1Production(idx); });
 }
 
 function addJigEntry(idx) {
@@ -1383,11 +1463,13 @@ function updateJigCalc(idx) {
   if (!calcEl) return;
   var entries = poJigEntries[idx] || [];
   var qty = parseFloat((document.getElementById('poq-'+idx)||{}).value) || 0;
-  if (!entries.length) { calcEl.textContent = ''; return; }
-  var total = entries.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
-  // ข้อมูลนี้เพื่ออ้างอิงหน้างานเท่านั้น — ไม่บังคับให้ยอดต่อรอบเท่ากับเป้ารวม เพราะงาน R1 อาจต้องผลิตซ้ำหลายรอบ/หลายกะกว่าจะครบเป้า
-  calcEl.innerHTML = 'รวมต่อรอบจากจิ๊กที่ระบุ: <b>' + total.toLocaleString() + ' ชิ้น/รอบ</b>' +
-    (qty ? ' (เป้าออเดอร์ ' + qty.toLocaleString() + ' ชิ้น — ถ้าไม่ครบใน 1 รอบ ให้ทำซ้ำหลายรอบ/กะจนครบ)' : '');
+  if (!entries.length) { calcEl.textContent = ''; } else {
+    var total = entries.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
+    // ข้อมูลนี้เพื่ออ้างอิงหน้างานเท่านั้น — ไม่บังคับให้ยอดต่อรอบเท่ากับเป้ารวม เพราะงาน R1 อาจต้องผลิตซ้ำหลายรอบ/หลายกะกว่าจะครบเป้า
+    calcEl.innerHTML = 'รวมต่อรอบจากจิ๊กที่ระบุ: <b>' + total.toLocaleString() + ' ชิ้น/รอบ</b>' +
+      (qty ? ' (เป้าออเดอร์ ' + qty.toLocaleString() + ' ชิ้น — ถ้าไม่ครบใน 1 รอบ ให้ทำซ้ำหลายรอบ/กะจนครบ)' : '');
+  }
+  estimateR1Production(idx);
 }
 
 function attachRowEvents(idx) {
@@ -1416,6 +1498,8 @@ function attachRowEvents(idx) {
         updateJigCalc(idx);
       });
     }
+    var hoursEl = document.getElementById('poj-hours-' + idx);
+    if (hoursEl) hoursEl.addEventListener('input', function(){ estimateR1Production(idx); });
     toggleJigFields(idx);
     renderJigList(idx);
     populateBillDropdown(idx);
@@ -1467,6 +1551,14 @@ function buildRowHTML(idx) {
       '</div>' +
       '<button type="button" class="btn btn-outline btn-sm" style="margin-top:2px;" onclick="addJigEntry('+idx+')">➕ เพิ่มจิ๊กนี้</button>' +
       '<div id="poj-calc-'+idx+'" style="font-size:11px;margin-top:6px;color:var(--text-mid);"></div>' +
+      '<div style="margin-top:8px;padding:8px;background:#fff;border:1px solid var(--border);border-radius:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">' +
+          '<div style="font-size:11px;color:var(--text-mid);">📊 Cycle Time เฉลี่ย (R1): <b id="poj-ct-'+idx+'">กำลังโหลด...</b></div>' +
+          '<button type="button" class="btn btn-outline btn-sm" style="margin:0;padding:3px 8px;" onclick="refreshR1CycleTime('+idx+')" title="โหลด Cycle Time ใหม่">🔄</button>' +
+        '</div>' +
+        '<div class="field" style="margin:6px 0 0;"><label>ชั่วโมงทำงานที่วางแผนไว้ (ชม.) <span style="color:var(--text-muted);font-weight:400;">— จะบันทึกไว้ในใบสั่งผลิตนี้</span></label><input type="number" id="poj-hours-'+idx+'" placeholder="เช่น 8" min="0" step="0.5"></div>' +
+        '<div id="poj-est-result-'+idx+'" style="font-size:11px;margin-top:6px;"></div>' +
+      '</div>' +
       '<div class="field" style="margin-top:6px;">' +
         '<label>หมายเหตุจิ๊ก (ถ้ามี — เช่น สลับจิ๊ก/ผลิตกี่กะ)</label>' +
         '<input type="text" id="poj-reason-'+idx+'" placeholder="เช่น ทำงาน 3 กะจนครบเป้า, จิ๊กหลักซ่อมบำรุงจึงใช้จิ๊กสำรอง">' +
@@ -1528,10 +1620,11 @@ function addItemToStaged() {
 
   // สาย R1 — บังคับเพิ่มรายการจิ๊กอย่างน้อย 1 รายการ (เพิ่มได้หลายจิ๊กถ้าใช้ร่วมกัน)
   // หมายเหตุ: ไม่บังคับให้ยอดต่อรอบเท่ากับเป้ารวม เพราะงาน R1 อาจต้องผลิตซ้ำหลายรอบ/หลายกะกว่าจะครบเป้า — จุดประสงค์คือให้หน้างานรู้ว่าต้องใช้จิ๊กอะไรเท่านั้น
-  var jigs = [], jigReason = '';
+  var jigs = [], jigReason = '', plannedHours = 0;
   if (line === 'R1') {
     jigs = (poJigEntries[idx] || []).slice();
     jigReason = ((document.getElementById('poj-reason-'+idx)||{}).value||'').trim();
+    plannedHours = parseFloat((document.getElementById('poj-hours-'+idx)||{}).value)||0;
     if (!jigs.length) {
       showToast('toast-po','สาย R1 ต้องเพิ่มข้อมูลจิ๊กอย่างน้อย 1 รายการ (กดปุ่ม "เพิ่มจิ๊กนี้")','err');
       return;
@@ -1539,7 +1632,7 @@ function addItemToStaged() {
   }
 
   stagedItems.push({customer, partNo, partName, line, qty, unit, bill, backlogId: backlogId || null,
-    jigs: jigs, jigReason: jigReason||''});
+    jigs: jigs, jigReason: jigReason||'', plannedHours: plannedHours||0});
   renderStagedList();
   // เคลียร์ฟอร์ม (reset fields แต่คง line ไว้ถ้าเป็นโหมด Part Master/manual)
   var curLine = line;
@@ -1580,6 +1673,7 @@ function renderStagedList() {
       ? '<div style="flex-basis:100%;font-size:10px;color:var(--text-mid);">🔧 จิ๊ก: ' +
           jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
           ' = รวม ' + jigTotal.toLocaleString() + ' ชิ้น/รอบ' +
+          (it.plannedHours ? ' · ⏱️ ' + it.plannedHours + ' ชม.' : '') +
           (it.jigReason ? ' — หมายเหตุ: ' + esc(it.jigReason) : '') + '</div>'
       : '';
     return '<div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;gap:8px;flex-wrap:wrap;">' +
@@ -1699,7 +1793,7 @@ function editPO(id) {
     var jigsArr = it.jigs || (it.jig ? [{ jig: it.jig, perUnit: it.jigPerUnit||0, count: it.jigCount||0 }] : []);
     return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
              line:it.line||'B1', qty:it.qty||0, unit:it.unit||'pcs', bill:it.bill||'', backlogId: it.backlogId||null,
-             jigs: jigsArr, jigReason: it.jigReason||'' };
+             jigs: jigsArr, jigReason: it.jigReason||'', plannedHours: it.plannedHours||0 };
   });
   poSourceMode[1] = 'pm'; // ฟอร์มเพิ่มรายการใหม่ระหว่างแก้ไข เริ่มที่โหมด Part Master เสมอ
   renderStagedList();
@@ -1769,6 +1863,7 @@ function renderPOList() {
     var jigInfo = (r.it.line==='R1' && jigsArr.length)
       ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">🔧 จิ๊ก: ' +
           jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
+          (r.it.plannedHours ? ' · ⏱️ ' + r.it.plannedHours + ' ชม.' : '') +
           (r.it.jigReason ? '<br>หมายเหตุ: ' + esc(r.it.jigReason) : '') + '</div>'
       : '';
     return '<tr>' +
