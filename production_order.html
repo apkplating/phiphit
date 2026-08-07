@@ -1174,6 +1174,7 @@ function pmSelect(idx, pmIdx) {
 
 function initSingleRow() {
   poRowCount = 1;
+  poJigEntries[1] = []; // เคลียร์รายการจิ๊กทุกครั้งที่สร้างฟอร์มใหม่
   var wrap = document.getElementById('poSingleRow');
   if (!wrap) return;
   wrap.innerHTML = ''; // clear เก่าออก
@@ -1329,6 +1330,8 @@ function dispatchSearch(idx, val) {
   else pmSearch(val, idx);
 }
 
+var poJigEntries = {}; // idx -> [{jig, perUnit, count}] — รายการจิ๊กหลายรายการต่อ 1 ชิ้นงาน (สาย R1)
+
 function toggleJigFields(idx) {
   var lineEl = document.getElementById('pol-' + idx);
   var wrap = document.getElementById('poJigWrap-' + idx);
@@ -1337,18 +1340,55 @@ function toggleJigFields(idx) {
   updateJigCalc(idx);
 }
 
+function addJigEntry(idx) {
+  var nameEl = document.getElementById('poj-name-' + idx);
+  var perEl  = document.getElementById('poj-per-' + idx);
+  var cntEl  = document.getElementById('poj-cnt-' + idx);
+  var jig = ((nameEl||{}).value||'').trim();
+  var per = parseFloat((perEl||{}).value)||0;
+  var cnt = parseFloat((cntEl||{}).value)||0;
+  if (!jig || !per || !cnt) { showToast('toast-po','กรุณากรอกจิ๊กที่ใช้ / จำนวนต่อจิ๊ก / จำนวนจิ๊ก ให้ครบก่อนกดเพิ่ม','err'); return; }
+  if (!poJigEntries[idx]) poJigEntries[idx] = [];
+  poJigEntries[idx].push({ jig: jig, perUnit: per, count: cnt });
+  if (nameEl) nameEl.value = '';
+  if (perEl) perEl.value = '';
+  if (cntEl) cntEl.value = '';
+  renderJigList(idx);
+  updateJigCalc(idx);
+}
+
+function removeJigEntry(idx, i) {
+  if (!poJigEntries[idx]) return;
+  poJigEntries[idx].splice(i, 1);
+  renderJigList(idx);
+  updateJigCalc(idx);
+}
+
+function renderJigList(idx) {
+  var listEl = document.getElementById('poJigList-' + idx);
+  if (!listEl) return;
+  var entries = poJigEntries[idx] || [];
+  if (!entries.length) { listEl.innerHTML = ''; return; }
+  listEl.innerHTML = entries.map(function(e, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;">' +
+      '<span style="font-weight:700;color:var(--navy);flex:1;">🔧 ' + esc(e.jig) + '</span>' +
+      '<span>' + e.count + ' × ' + e.perUnit + ' = <b>' + (e.count*e.perUnit).toLocaleString() + ' ชิ้น</b></span>' +
+      '<button type="button" onclick="removeJigEntry(' + idx + ',' + i + ')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 4px;font-family:inherit;">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
 function updateJigCalc(idx) {
   var calcEl = document.getElementById('poj-calc-' + idx);
   var reasonWrap = document.getElementById('poj-reason-wrap-' + idx);
   if (!calcEl) return;
-  var perJig   = parseFloat((document.getElementById('pojpu-'+idx)||{}).value) || 0;
-  var jigCount = parseFloat((document.getElementById('pojct-'+idx)||{}).value) || 0;
-  var qty      = parseFloat((document.getElementById('poq-'+idx)||{}).value) || 0;
-  if (!perJig || !jigCount) { calcEl.textContent = ''; if (reasonWrap) reasonWrap.style.display = 'none'; return; }
-  var total = perJig * jigCount;
+  var entries = poJigEntries[idx] || [];
+  var qty = parseFloat((document.getElementById('poq-'+idx)||{}).value) || 0;
+  if (!entries.length) { calcEl.textContent = ''; if (reasonWrap) reasonWrap.style.display = 'none'; return; }
+  var total = entries.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
   var diff  = total - qty;
   var within = Math.abs(diff) <= 10;
-  calcEl.innerHTML = 'รวม ' + total.toLocaleString() + ' ชิ้น (เป้า ' + qty.toLocaleString() + ' ชิ้น) — ' +
+  calcEl.innerHTML = 'รวมทุกจิ๊ก ' + total.toLocaleString() + ' ชิ้น (เป้า ' + qty.toLocaleString() + ' ชิ้น) — ' +
     (within
       ? '<span style="color:var(--green);font-weight:700;">✓ ห่างจากเป้า ' + Math.abs(diff).toLocaleString() + ' ชิ้น (อยู่ในเกณฑ์ ±10)</span>'
       : '<span style="color:var(--red);font-weight:700;">⚠️ ห่างจากเป้า ' + Math.abs(diff).toLocaleString() + ' ชิ้น (เกิน ±10 — ต้องระบุเหตุผล)</span>');
@@ -1381,11 +1421,8 @@ function attachRowEvents(idx) {
         updateJigCalc(idx);
       });
     }
-    var pojpuEl = document.getElementById('pojpu-' + idx);
-    if (pojpuEl) pojpuEl.addEventListener('input', function(){ updateJigCalc(idx); });
-    var pojctEl = document.getElementById('pojct-' + idx);
-    if (pojctEl) pojctEl.addEventListener('input', function(){ updateJigCalc(idx); });
     toggleJigFields(idx);
+    renderJigList(idx);
     populateBillDropdown(idx);
   }, 0);
 }
@@ -1426,13 +1463,15 @@ function buildRowHTML(idx) {
       '</div>' +
     '</div>' +
     '<div class="field" id="poJigWrap-'+idx+'" style="display:none;margin-top:8px;padding:10px;background:#fdf2f8;border:1.5px dashed #f472b6;border-radius:9px;">' +
-      '<label style="color:var(--navy);font-weight:700;">🔧 ข้อมูลจิ๊ก (สาย R1 เท่านั้น)</label>' +
-      '<div class="grid3" style="margin-top:4px;">' +
-        '<div class="field" style="margin:0;"><label>จิ๊กที่ใช้</label><input type="text" id="poj-'+idx+'" placeholder="เช่น JIG-A12"></div>' +
-        '<div class="field" style="margin:0;"><label>จำนวน/จิ๊ก (ชิ้น)</label><input type="number" id="pojpu-'+idx+'" placeholder="0" min="0"></div>' +
-        '<div class="field" style="margin:0;"><label>จำนวนจิ๊กที่ใช้</label><input type="number" id="pojct-'+idx+'" placeholder="0" min="0"></div>' +
+      '<label style="color:var(--navy);font-weight:700;">🔧 ข้อมูลจิ๊ก (สาย R1 เท่านั้น — เพิ่มได้หลายจิ๊กถ้าต้องใช้หลายแบบ)</label>' +
+      '<div id="poJigList-'+idx+'" style="margin-top:6px;"></div>' +
+      '<div class="grid3" style="margin-top:6px;">' +
+        '<div class="field" style="margin:0;"><label>จิ๊กที่ใช้</label><input type="text" id="poj-name-'+idx+'" placeholder="เช่น JIG-A12"></div>' +
+        '<div class="field" style="margin:0;"><label>จำนวน/จิ๊ก (ชิ้น)</label><input type="number" id="poj-per-'+idx+'" placeholder="0" min="0"></div>' +
+        '<div class="field" style="margin:0;"><label>จำนวนจิ๊กที่ใช้</label><input type="number" id="poj-cnt-'+idx+'" placeholder="0" min="0"></div>' +
       '</div>' +
-      '<div id="poj-calc-'+idx+'" style="font-size:11px;margin-top:4px;"></div>' +
+      '<button type="button" class="btn btn-outline btn-sm" style="margin-top:2px;" onclick="addJigEntry('+idx+')">➕ เพิ่มจิ๊กนี้</button>' +
+      '<div id="poj-calc-'+idx+'" style="font-size:11px;margin-top:6px;"></div>' +
       '<div class="field" id="poj-reason-wrap-'+idx+'" style="display:none;margin-top:6px;">' +
         '<label style="color:var(--red);">⚠️ เหตุผลที่จำนวนไม่ตรง (บังคับกรอกถ้าห่างเกิน ±10 ชิ้นจากเป้า)</label>' +
         '<input type="text" id="poj-reason-'+idx+'" placeholder="เช่น ใช้จิ๊กสำรองแทนจิ๊กมาตรฐาน เพราะจิ๊กหลักซ่อมบำรุง">' +
@@ -1492,26 +1531,24 @@ function addItemToStaged() {
     }
   }
 
-  // สาย R1 — บังคับกรอกข้อมูลจิ๊ก (จิ๊กที่ใช้ / จำนวนต่อจิ๊ก / จำนวนจิ๊ก) และเช็คว่ารวมแล้วตรงกับเป้าในเกณฑ์ ±10 ชิ้น
-  var jig = '', jigPerUnit = 0, jigCount = 0, jigReason = '';
+  // สาย R1 — บังคับเพิ่มรายการจิ๊กอย่างน้อย 1 รายการ (เพิ่มได้หลายจิ๊กถ้าใช้ร่วมกัน) และเช็คว่ารวมแล้วตรงกับเป้าในเกณฑ์ ±10 ชิ้น
+  var jigs = [], jigReason = '';
   if (line === 'R1') {
-    jig        = ((document.getElementById('poj-'+idx)||{}).value||'').trim();
-    jigPerUnit = parseFloat((document.getElementById('pojpu-'+idx)||{}).value)||0;
-    jigCount   = parseFloat((document.getElementById('pojct-'+idx)||{}).value)||0;
-    jigReason  = ((document.getElementById('poj-reason-'+idx)||{}).value||'').trim();
-    if (!jig || !jigPerUnit || !jigCount) {
-      showToast('toast-po','สาย R1 ต้องระบุข้อมูลจิ๊กให้ครบ: จิ๊กที่ใช้ / จำนวนต่อจิ๊ก / จำนวนจิ๊ก','err');
+    jigs = (poJigEntries[idx] || []).slice();
+    jigReason = ((document.getElementById('poj-reason-'+idx)||{}).value||'').trim();
+    if (!jigs.length) {
+      showToast('toast-po','สาย R1 ต้องเพิ่มข้อมูลจิ๊กอย่างน้อย 1 รายการ (กดปุ่ม "เพิ่มจิ๊กนี้")','err');
       return;
     }
-    var jigTotal = jigPerUnit * jigCount;
+    var jigTotal = jigs.reduce(function(sum, e){ return sum + e.perUnit*e.count; }, 0);
     if (Math.abs(jigTotal - qty) > 10 && !jigReason) {
-      showToast('toast-po','จำนวนจิ๊ก×จำนวน/จิ๊ก (' + jigTotal.toLocaleString() + ' ชิ้น) ห่างจากเป้า (' + qty.toLocaleString() + ' ชิ้น) เกิน ±10 — กรุณาระบุเหตุผล','err');
+      showToast('toast-po','รวมจำนวนจากจิ๊กทั้งหมด (' + jigTotal.toLocaleString() + ' ชิ้น) ห่างจากเป้า (' + qty.toLocaleString() + ' ชิ้น) เกิน ±10 — กรุณาระบุเหตุผล','err');
       return;
     }
   }
 
   stagedItems.push({customer, partNo, partName, line, qty, unit, bill, backlogId: backlogId || null,
-    jig: jig||'', jigPerUnit: jigPerUnit||0, jigCount: jigCount||0, jigReason: jigReason||''});
+    jigs: jigs, jigReason: jigReason||''});
   renderStagedList();
   // เคลียร์ฟอร์ม (reset fields แต่คง line ไว้ถ้าเป็นโหมด Part Master/manual)
   var curLine = line;
@@ -1546,10 +1583,13 @@ function renderStagedList() {
   var lineBadge = {B1:'badge-b1',B2:'badge-b2',R1:'badge-r1',ALL:'badge-all'};
   wrap.innerHTML = stagedItems.map(function(it, i) {
     var badgeClass = lineBadge[it.line]||'badge-b1';
-    var jigTotal = (it.jigPerUnit||0) * (it.jigCount||0);
-    var jigOff = Math.abs(jigTotal - it.qty) > 10;
-    var jigInfo = (it.line==='R1' && it.jig)
-      ? '<div style="flex-basis:100%;font-size:10px;color:'+(jigOff?'var(--red)':'var(--text-mid)')+';">🔧 จิ๊ก: ' + esc(it.jig) + ' (' + (it.jigCount||0) + '×' + (it.jigPerUnit||0) + ' ชิ้น = ' + jigTotal.toLocaleString() + ')' +
+    var jigsArr = it.jigs || [];
+    var jigTotal = jigsArr.reduce(function(sum, e){ return sum + (e.perUnit||0)*(e.count||0); }, 0);
+    var jigOff = jigsArr.length && Math.abs(jigTotal - it.qty) > 10;
+    var jigInfo = (it.line==='R1' && jigsArr.length)
+      ? '<div style="flex-basis:100%;font-size:10px;color:'+(jigOff?'var(--red)':'var(--text-mid)')+';">🔧 จิ๊ก: ' +
+          jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
+          ' = รวม ' + jigTotal.toLocaleString() + ' ชิ้น' +
           (it.jigReason ? ' — เหตุผล: ' + esc(it.jigReason) : '') + '</div>'
       : '';
     return '<div style="display:flex;align-items:center;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;gap:8px;flex-wrap:wrap;">' +
@@ -1665,9 +1705,11 @@ function editPO(id) {
   }
   // โหลดรายการเดิมเข้า stagedItems
   stagedItems = (po.items||[]).map(function(it){
+    // รองรับข้อมูลเก่าที่ยังเป็นจิ๊กเดี่ยว (jig/jigPerUnit/jigCount) แปลงเป็น array ใหม่อัตโนมัติ
+    var jigsArr = it.jigs || (it.jig ? [{ jig: it.jig, perUnit: it.jigPerUnit||0, count: it.jigCount||0 }] : []);
     return { customer:it.customer||'', partNo:it.partNo||'', partName:it.partName||'',
              line:it.line||'B1', qty:it.qty||0, unit:it.unit||'pcs', bill:it.bill||'', backlogId: it.backlogId||null,
-             jig: it.jig||'', jigPerUnit: it.jigPerUnit||0, jigCount: it.jigCount||0, jigReason: it.jigReason||'' };
+             jigs: jigsArr, jigReason: it.jigReason||'' };
   });
   poSourceMode[1] = 'pm'; // ฟอร์มเพิ่มรายการใหม่ระหว่างแก้ไข เริ่มที่โหมด Part Master เสมอ
   renderStagedList();
@@ -1733,10 +1775,12 @@ function renderPOList() {
     var weightWarn = r.missingWeight
       ? '<div style="font-size:9px;color:var(--red);margin-top:2px;">⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master (แปลงหน่วยไม่ได้)</div>'
       : '';
-    var jigTotal = (r.it.jigPerUnit||0) * (r.it.jigCount||0);
-    var jigOff = Math.abs(jigTotal - (r.it.qty||0)) > 10;
-    var jigInfo = (r.it.line==='R1' && r.it.jig)
-      ? '<div style="font-size:9px;color:'+(jigOff?'var(--red)':'var(--text-muted)')+';margin-top:2px;">🔧 จิ๊ก: ' + esc(r.it.jig) + ' (' + (r.it.jigCount||0) + '×' + (r.it.jigPerUnit||0) + ')' +
+    var jigsArr = r.it.jigs || (r.it.jig ? [{ jig: r.it.jig, perUnit: r.it.jigPerUnit||0, count: r.it.jigCount||0 }] : []);
+    var jigTotal = jigsArr.reduce(function(sum, e){ return sum + (e.perUnit||0)*(e.count||0); }, 0);
+    var jigOff = jigsArr.length && Math.abs(jigTotal - (r.it.qty||0)) > 10;
+    var jigInfo = (r.it.line==='R1' && jigsArr.length)
+      ? '<div style="font-size:9px;color:'+(jigOff?'var(--red)':'var(--text-muted)')+';margin-top:2px;">🔧 จิ๊ก: ' +
+          jigsArr.map(function(e){ return esc(e.jig)+' ('+e.count+'×'+e.perUnit+')'; }).join(', ') +
           (r.it.jigReason ? '<br>เหตุผล: ' + esc(r.it.jigReason) : '') + '</div>'
       : '';
     return '<tr>' +
