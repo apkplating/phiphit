@@ -161,29 +161,31 @@ input:focus,select:focus{border-color:var(--blue2);}
     </div>
   </div>
 
-  <!-- summary -->
+  <!-- summary — สลับโหมดอัตโนมัติ: ถ้าไม่มีตัวกรอง (ค้นหา/เดือน/สถานะ) โชว์ภาพรวมทั้งหมดแบบเดิม
+       ถ้ามีตัวกรองอยู่ โชว์สรุปเฉพาะรายการที่กรองได้แทน (จำนวนบิล/รับเข้า/จ่ายออก/คงเหลือ) กันต้องมานั่งบวกเลขเอง -->
   <div class="sum-row">
     <div class="sum-chip" style="background:#f0fdf4;border-color:#86efac;">
-      <div class="sum-chip-label">งานทั้งหมด</div>
+      <div class="sum-chip-label" id="sumLbl1">งานทั้งหมด</div>
       <div class="sum-chip-val" style="color:var(--navy);" id="sumTotal">0</div>
-      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+      <div style="font-size:9px;color:var(--text-muted);" id="sumCap1">บิล</div>
     </div>
     <div class="sum-chip" style="background:#fff7ed;border-color:#fed7aa;">
-      <div class="sum-chip-label">กำลังดำเนินการ</div>
+      <div class="sum-chip-label" id="sumLbl2">กำลังดำเนินการ</div>
       <div class="sum-chip-val" style="color:var(--orange);" id="sumActive">0</div>
-      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+      <div style="font-size:9px;color:var(--text-muted);" id="sumCap2">บิล</div>
     </div>
     <div class="sum-chip" style="background:#fef2f2;border-color:#fca5a5;">
-      <div class="sum-chip-label">เกินกำหนด</div>
+      <div class="sum-chip-label" id="sumLbl3">เกินกำหนด</div>
       <div class="sum-chip-val" style="color:var(--red);" id="sumOver">0</div>
-      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+      <div style="font-size:9px;color:var(--text-muted);" id="sumCap3">บิล</div>
     </div>
     <div class="sum-chip" style="background:#f1f5f9;border-color:#cbd5e1;">
-      <div class="sum-chip-label">จ่ายครบ</div>
+      <div class="sum-chip-label" id="sumLbl4">จ่ายครบ</div>
       <div class="sum-chip-val" style="color:#64748b;" id="sumDone">0</div>
-      <div style="font-size:9px;color:var(--text-muted);">บิล</div>
+      <div style="font-size:9px;color:var(--text-muted);" id="sumCap4">บิล</div>
     </div>
   </div>
+
 
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -1396,12 +1398,55 @@ function renderBoard() {
     return true;
   });
 
-  // summary
-  var allStatus = jobItems.map(function(j){ return getStatus(j); });
-  document.getElementById('sumTotal').textContent  = jobItems.length;
-  document.getElementById('sumActive').textContent = allStatus.filter(function(s){ return s==='ปกติ'||s==='ใกล้ครบกำหนด'; }).length;
-  document.getElementById('sumOver').textContent   = allStatus.filter(function(s){ return s==='เกินกำหนด'; }).length;
-  document.getElementById('sumDone').textContent   = allStatus.filter(function(s){ return s==='จ่ายครบ'; }).length;
+  // summary — สลับโหมด: มีตัวกรอง (ค้นหา/เดือน/สถานะ) อยู่ไหม
+  var hasFilter = !!(search || statusFilter || monthFilter);
+  if (hasFilter) {
+    // โหมดกรอง: โชว์สรุปเฉพาะรายการที่กรองได้ — จำนวนบิล / รับเข้ารวม / จ่ายออกรวม / คงเหลือรวม
+    var sInPcs=0, sInKg=0, sOutPcs=0, sOutKg=0, sRemPcs=0, sRemKg=0;
+    rows.forEach(function(job){
+      var bb = calcJob(job.id);
+      sInPcs  += bb.totalIn;  sInKg  += bb.totalInKg;
+      sOutPcs += bb.totalOut; sOutKg += bb.totalOutKg;
+      sRemPcs += bb.remain;   sRemKg += bb.remainKg;
+    });
+    function fmtQtyChip(pcs, kg) {
+      // โชว์หน่วยที่มีค่าเป็นตัวหลัก ถ้ามีทั้ง 2 หน่วยปนกัน (บิลหลายหน่วยในผลลัพธ์เดียวกัน) ต่อท้ายอีกหน่วยด้วย + ในวงเล็บเล็กๆ
+      if (pcs > 0 && kg > 0) return { val: pcs.toLocaleString(), cap: 'ชิ้น (+'+kg.toFixed(2)+' กก.)' };
+      if (pcs > 0) return { val: pcs.toLocaleString(), cap: 'ชิ้น' };
+      if (kg  > 0) return { val: kg.toFixed(2), cap: 'กก.' };
+      return { val: '0', cap: '—' };
+    }
+    var qIn  = fmtQtyChip(sInPcs, sInKg);
+    var qOut = fmtQtyChip(sOutPcs, sOutKg);
+    var qRem = fmtQtyChip(sRemPcs, sRemKg);
+    document.getElementById('sumLbl1').textContent = 'บิลที่พบ';
+    document.getElementById('sumTotal').textContent = rows.length;
+    document.getElementById('sumCap1').textContent  = 'บิล';
+    document.getElementById('sumLbl2').textContent = 'รับเข้ารวม';
+    document.getElementById('sumActive').textContent = qIn.val;
+    document.getElementById('sumCap2').textContent  = qIn.cap;
+    document.getElementById('sumLbl3').textContent = 'จ่ายออกรวม';
+    document.getElementById('sumOver').textContent = qOut.val;
+    document.getElementById('sumCap3').textContent = qOut.cap;
+    document.getElementById('sumLbl4').textContent = 'คงเหลือรวม';
+    document.getElementById('sumDone').textContent = qRem.val;
+    document.getElementById('sumCap4').textContent = qRem.cap;
+  } else {
+    // โหมดปกติ: ภาพรวมทั้งหมด (ไม่กรอง) — เหมือนของเดิม
+    var allStatus = jobItems.map(function(j){ return getStatus(j); });
+    document.getElementById('sumLbl1').textContent = 'งานทั้งหมด';
+    document.getElementById('sumTotal').textContent  = jobItems.length;
+    document.getElementById('sumCap1').textContent  = 'บิล';
+    document.getElementById('sumLbl2').textContent = 'กำลังดำเนินการ';
+    document.getElementById('sumActive').textContent = allStatus.filter(function(s){ return s==='ปกติ'||s==='ใกล้ครบกำหนด'; }).length;
+    document.getElementById('sumCap2').textContent  = 'บิล';
+    document.getElementById('sumLbl3').textContent = 'เกินกำหนด';
+    document.getElementById('sumOver').textContent   = allStatus.filter(function(s){ return s==='เกินกำหนด'; }).length;
+    document.getElementById('sumCap3').textContent  = 'บิล';
+    document.getElementById('sumLbl4').textContent = 'จ่ายครบ';
+    document.getElementById('sumDone').textContent   = allStatus.filter(function(s){ return s==='จ่ายครบ'; }).length;
+    document.getElementById('sumCap4').textContent  = 'บิล';
+  }
 
   var tbody = document.getElementById('boardBody');
   if (!rows.length) {
