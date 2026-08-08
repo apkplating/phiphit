@@ -635,22 +635,11 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
   <div id="toast-entry" class="toast"></div>
 
-  <!-- Live status indicator + Auto Discord toggle -->
+  <!-- Live status indicator (sync กับ monitor.html เท่านั้น ไม่ส่ง Discord อัตโนมัติแล้ว — ยกเลิก Auto Discord toggle ออก
+       เหลือแค่ live sync เงียบๆ + ปุ่มส่ง Discord แบบกดเอง 2 ปุ่ม ("ส่งตอนนี้" และ "บันทึก+ส่ง Discord" ท้ายวัน) -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:8px 12px;background:var(--sky-pale);border-radius:10px;border:1px solid var(--border);">
     <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
       <span id="liveIndicator" style="font-size:11px;font-weight:600;color:var(--text-muted);white-space:nowrap;">⚪ ยังไม่ได้ sync</span>
-      <!-- Auto Discord Toggle -->
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;margin-left:4px;">
-        <div style="position:relative;width:36px;height:20px;flex-shrink:0;">
-          <input type="checkbox" id="autoDiscordToggle"
-            onchange="localStorage.setItem('r1_autoDiscordOnAdd',this.checked?'1':'0');updateAutoDiscordUI();"
-            style="opacity:0;width:0;height:0;position:absolute;">
-          <span id="autoDiscordKnob" style="position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:20px;transition:.3s;">
-            <span style="position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;"></span>
-          </span>
-        </div>
-        <span style="font-size:10px;color:var(--navy);font-weight:600;white-space:nowrap;">Auto Discord</span>
-      </label>
     </div>
     <button onclick="sendLiveDiscord()" style="padding:5px 10px;border-radius:8px;background:#5865F2;color:#fff;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;white-space:nowrap;flex-shrink:0;margin-left:8px;">
       📣 ส่งตอนนี้
@@ -1549,7 +1538,6 @@ function init() {
   setTimeout(jobMasterLoad, 1800); // โหลด Job Master ตั้งแต่เริ่มต้น กันบิลไม่ขึ้นตอนเลือก P/No ครั้งแรก
   if (!fbIsConfigured()) gdriveAutoLoad(); // fallback apps script ถ้ายังไม่ตั้ง firebase
   loadAlertConfig();
-  loadAutoDiscordSetting();
   renderSummaryMonthTable();    // โหลดการตั้งค่าแจ้งเตือนสต็อค
   setTimeout(jobMasterLoad, 1800); // โหลด Job Master สำหรับ dropdown P/No
   tab('entry'); // ตั้ง default view หลัง DOM พร้อม
@@ -3754,31 +3742,13 @@ async function livePushNow() {
       updateLiveIndicator(true, liveData);
     } catch(e) { updateLiveIndicator(false); }
   }
-
-  // ── Auto Discord (ถ้าเปิด toggle) ──
-  var autoDisc = localStorage.getItem('r1_autoDiscordOnAdd') === '1';
-  if (autoDisc) {
-    var wh = discordWH || localStorage.getItem('r1_discordWH') || '';
-    if (!wh) {
-      showToast('entry','⚠️ Auto Discord: กรุณาตั้งค่า Webhook URL ก่อน','err');
-    } else if (todayBarrels.length) {
-      try {
-        await sendLiveDiscordSilent(wh, s, liveData);
-        updateLiveIndicator(true);
-        showToast('entry','📣 ส่ง Discord อัตโนมัติแล้ว ✓','ok');
-      } catch(e) {
-        console.warn('Auto Discord failed:', e.message);
-        showToast('entry','❌ Discord ส่งไม่ได้: ' + e.message,'err');
-        updateLiveIndicator(false);
-      }
-    }
-  }
+  // หมายเหตุ: ยกเลิก Auto Discord (ส่งอัตโนมัติทุกรอบ) แล้ว — เหลือแค่ live sync เงียบๆ ด้านบน
+  // ถ้าอยากแจ้ง Discord ใช้ปุ่ม "📣 ส่งตอนนี้" (sendLiveDiscord) หรือ "บันทึก + ส่ง Discord" ท้ายวันแทน
 }
 
 function updateLiveIndicator(ok, data) {
   var el = document.getElementById('liveIndicator');
   if (!el) return;
-  var autoOn = localStorage.getItem('r1_autoDiscordOnAdd') === '1';
   if (ok) {
     var barrels = data ? (data.barrels||todayBarrels.length) : todayBarrels.length;
     var recorder = data ? (data.recorder||'') : '';
@@ -3793,57 +3763,6 @@ function updateLiveIndicator(ok, data) {
     el.textContent = '🔴 sync ไม่ได้ · ตรวจ internet';
     el.style.color = '#9b2c2c';
   }
-}
-
-function updateAutoDiscordUI() {
-  var chk  = document.getElementById('autoDiscordToggle');
-  var knob = document.getElementById('autoDiscordKnob');
-  if (!chk || !knob) return;
-  var on = chk.checked;
-  knob.style.background = on ? '#5865F2' : '#ccc';
-  var dot = knob.querySelector('span');
-  if (dot) dot.style.transform = on ? 'translateX(16px)' : 'translateX(0)';
-}
-
-function loadAutoDiscordSetting() {
-  var on = localStorage.getItem('r1_autoDiscordOnAdd') === '1';
-  var chk = document.getElementById('autoDiscordToggle');
-  if (chk) { chk.checked = on; updateAutoDiscordUI(); }
-}
-
-// ส่ง Discord อัตโนมัติ (ไม่โชว์ toast)
-async function sendLiveDiscordSilent(wh, s, liveData) {
-  var now = new Date();
-  var dateStr = now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
-  var timeStr = now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-  var allRowLines = todayBarrels.map(function(b,i){
-    return (i+1)+'. '+b.time+' โม่'+b.barrel+' ['+b.type+'/'+b.color+'] '+(b.pcs||0)+'Pcs'
-      +(b.partName?' — '+b.partName:'')+(b.customer?' ('+b.customer+')':'')+(b.lotNo?' Lot:'+b.lotNo:'');
-  });
-  var barrelField = {
-    name: '🔩 รายรอบ ('+todayBarrels.length+' รอบ)',
-    value: allRowLines.join('\n').slice(0,1024)||'–', inline:false
-  };
-  var payload = { username:'ใบรายงานชุบ RACK-1 (Auto Live)', embeds:[{
-    title: '🔴 Live Update — ' + dateStr,
-    description: '> อัปเดตอัตโนมัติ **'+timeStr+' น.** เมื่อเพิ่มรอบชุบ',
-    color: 0xe67e22,
-    fields: [
-      {name:'📅 วันที่',value:dateStr,inline:true},
-      {name:'🔖 Pro Lot No',value:liveData.lotNo||'–',inline:true},
-      {name:'👤 ผู้บันทึก',value:liveData.recorder||'–',inline:true},
-      {name:'\u200b',value:'\u200b',inline:false},
-      {name:'⚖️ รวม Kgs ('+todayBarrels.length+' รอบ)',value:'**'+fmt(s.totalKg)+' Kgs**',inline:true},
-      {name:'⚡ AH',value:'**'+(s.ah||0).toLocaleString()+'**',inline:true},
-      {name:'\u200b',value:'\u200b',inline:false},
-      {name:'🎨 แยกสี',value:'🔵 B: **'+fmt(s.kgB)+'**\n🌈 C: **'+fmt(s.kgC)+'**\n⬛ K: **'+fmt(s.kgK)+'**',inline:true},
-      {name:'📊 N / R',value:'🆕 N: **'+fmt(s.newKg)+'**\n🔄 R: **'+fmt(s.reworkKg)+'**\n📈 '+s.ratio+'%',inline:true},
-      barrelField
-    ],
-    timestamp: now.toISOString(),
-    footer: {text:'🔴 LIVE AUTO · อัปเดตทุกครั้งที่เพิ่มรอบ'}
-  }]};
-  await fetch(wh, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
 }
 
 // ── ส่ง Live Report → Discord ────────────────────────────────
