@@ -275,8 +275,12 @@ body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
             onblur="setTimeout(traceAcHide,200)">
           <div id="ac-trace" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 10px 10px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12);"></div>
         </div>
+        <select id="tracePeriodSel" onchange="traceSearch()" style="font-size:12px;padding:9px 10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;outline:none;background:#fff;color:var(--navy);white-space:nowrap;">
+          <option value="">— ทั้งหมด (ทุกช่วงเวลา) —</option>
+        </select>
         <button onclick="traceSearch()" style="padding:9px 18px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">ค้นหา</button>
       </div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:6px;">📅 เลือกช่วงเวลาเพื่อดูเฉพาะยอดรับ/ชุบ/ส่งออกที่เกิดขึ้นในเดือนนั้น (อิงวันที่ของแต่ละรายการ ไม่ใช่แค่วันรับบิล)</div>
     </div>
     <div id="traceResult"></div>
   </div>
@@ -415,6 +419,7 @@ function isRealInvRef(r) {
 var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
 var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
 var wipByJob  = {};  // jobId → [{date, line, pcs, kg}] — ไม่จำกัด 30 วัน ใช้เฉพาะ Traceability drill-down รายบิล
+var wipRows   = {};  // normKey(partName) → [{date, line, jobId, pcs, kg, linked}] — บันทึกดิบทุกแถว ไว้กรองตามช่วงเวลา + ตรวจ NOBILL
 var pmParts   = [];  // Part Master [{id,partNo,name,customer,colors,weightPerPc,pcsPerRack}]
 
 // ══════════════════════════════════════════════════════
@@ -473,6 +478,7 @@ async function loadAll(manual) {
     renderDHist();
     populateDeliverySel();
     buildHistFilters();
+    buildTracePeriodOptions();
     renderHist();
   } catch(e) {
     setSyncing(false, false, e.message);
@@ -588,6 +594,7 @@ async function loadBLDel() {
 async function loadWIP() {
   wipMap = {};
   wipByJob = {};
+  wipRows = {};
   var lines = [
     { url: DB_B1+'/plating-b1.json', label:'B1' },
     { url: DB_B2+'/plating-b2.json', label:'B2' },
@@ -610,20 +617,28 @@ async function loadWIP() {
           var pn = (row.partName||'').trim();
           if (!pn) return;
           var k = norm(pn);
+          var hasBillLink = !!(row.jobId && row.jobId !== 'NOBILL');
+          var rPcs = Number(row.pcs||0), rKg = Number(row.kg||0);
 
           // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
-          if (row.jobId && row.jobId !== 'NOBILL') {
+          if (hasBillLink) {
             if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
-            wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: Number(row.pcs||0), kg: Number(row.kg||0) });
+            wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: rPcs, kg: rKg });
           }
+
+          // เก็บทุกแถวดิบแยกตาม P/No (ไม่รวมยอด) ไว้ใช้กรองตามช่วงเวลา (เดือน) และตรวจ "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
+          // แถวที่ไม่ผูกบิลจะรวมอยู่ใน wipMap[k].pcs (ยอดชุบรวม) แต่ไม่มีทางสอบกลับไปยังบิลรับเข้าใดได้ — มักเป็นสาเหตุที่ "ยอดชุบ" เกิน "ยอดรับ"
+          if (!wipRows[k]) wipRows[k] = [];
+          wipRows[k].push({ date: dr.date||'', line: ln.label, jobId: row.jobId||'', pcs: rPcs, kg: rKg, linked: hasBillLink });
 
           // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
           // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
 
-          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, lines:{}, dates:[] };
-          wipMap[k].pcs += Number(row.pcs||0);
-          wipMap[k].kgs += Number(row.kg||0);
-          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + Number(row.pcs||0);
+          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, pcsUnlinked:0, kgsUnlinked:0, lines:{}, dates:[] };
+          wipMap[k].pcs += rPcs;
+          wipMap[k].kgs += rKg;
+          if (!hasBillLink) { wipMap[k].pcsUnlinked += rPcs; wipMap[k].kgsUnlinked += rKg; }
+          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + rPcs;
           if (dr.date && wipMap[k].dates.indexOf(dr.date) < 0) wipMap[k].dates.push(dr.date);
         });
       });
@@ -1542,18 +1557,63 @@ function traceSearch(){
     return;
   }
 
-  var html = matched.map(function(pn){ return renderTraceCard(pn); }).join('');
+  var periodEl = document.getElementById('tracePeriodSel');
+  var period = periodEl ? periodEl.value : '';
+  var html = matched.map(function(pn){ return renderTraceCard(pn, period); }).join('');
   el.innerHTML = html;
 }
 
-function renderTraceCard(partNo){
+// สร้างตัวเลือกช่วงเวลา (เดือน) ในดรอปดาวน์ Traceability จากวันที่จริงที่พบในข้อมูล (jmItems + wipRows)
+// เรียกทุกครั้งหลัง loadAll() เสร็จ เผื่อมีเดือนใหม่เพิ่มเข้ามา
+function buildTracePeriodOptions(){
+  var sel = document.getElementById('tracePeriodSel');
+  if (!sel) return;
+  var prevVal = sel.value || '';
+  var months = {};
+  jmItems.forEach(function(j){ if(j.date) months[String(j.date).slice(0,7)]=1; });
+  Object.keys(wipRows).forEach(function(k){
+    wipRows[k].forEach(function(rw){ if(rw.date) months[String(rw.date).slice(0,7)]=1; });
+  });
+  var monthList = Object.keys(months).sort().reverse();
+  var opts = '<option value="">— ทั้งหมด (ทุกช่วงเวลา) —</option>'
+    + monthList.map(function(mo){ return '<option value="'+mo+'">'+esc(monthLabel(mo))+'</option>'; }).join('');
+  sel.innerHTML = opts;
+  // คงค่าที่เลือกไว้เดิมถ้ายังมีอยู่ในลิสต์ใหม่
+  if (monthList.indexOf(prevVal) >= 0 || prevVal === '') sel.value = prevVal;
+}
+
+// getWipRows — เหมือน getWip() แต่คืน array ของแถวดิบ (ไม่รวมยอด) ไว้กรองตามช่วงเวลา + แยก NOBILL
+function getWipRows(partNo) {
+  var k = norm(partNo);
+  var rows = wipRows[k];
+  if (!rows) {
+    var pm = pmLookup(partNo);
+    if (pm && pm.name) { var kn = norm(pm.name); if (wipRows[kn]) rows = wipRows[kn]; }
+  }
+  if (!rows) {
+    var keys = Object.keys(wipRows);
+    for (var i=0; i<keys.length; i++) {
+      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { rows = wipRows[keys[i]]; break; }
+    }
+  }
+  return rows || [];
+}
+
+// inPeriod — เช็คว่าวันที่ (YYYY-MM-DD) อยู่ในเดือนที่เลือกหรือไม่ (period = 'YYYY-MM' หรือ '' = ทั้งหมด)
+function inPeriod(dateStr, period) {
+  if (!period) return true;
+  return String(dateStr||'').slice(0,7) === period;
+}
+
+function renderTraceCard(partNo, period){
+  period = period || '';
   var k    = norm(partNo);
   var pm   = pmLookup(partNo);
   var name = (pm && pm.name) ? pm.name : '';
   var cust = (pm && pm.customer) ? pm.customer : '';
 
-  // ── Stock 1: รับเข้า (Job Master) ──
-  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  // ── Stock 1: รับเข้า (Job Master) — กรองตามช่วงเวลาที่เลือก (ถ้ามี) ──
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k && inPeriod(j.date, period); });
   var s1In  = bills.reduce(function(a,j){ return a+jobQty(j); },0);
   var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
   // จ่ายออกจาก Job Master records — แปลง qty(ชิ้น)/qtyKg(กก.) เป็นชิ้นเสมอผ่าน Part Master
@@ -1563,6 +1623,7 @@ function renderTraceCard(partNo){
   var s1Out = 0, s1OutKg = 0, s4Out = 0, s4OutKg = 0;
   jmRecords.forEach(function(r){
     if(r.type!=='out') return;
+    if(!inPeriod(r.date, period)) return;
     var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
     if(!j||norm(jobPartNo(j))!==k) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
@@ -1580,6 +1641,7 @@ function renderTraceCard(partNo){
   });
   blDel.forEach(function(d){
     if(norm(d.partNo||'')!==k) return;
+    if(!inPeriod(d.date, period)) return;
     s1Out   += Number(d.qty||0);
     s1OutKg += Number(d.qtyKg||0);
     s4Out   += Number(d.qty||0);
@@ -1589,21 +1651,31 @@ function renderTraceCard(partNo){
   //           STOCK2 (WIP) = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
   //           STOCK3 = ขายจริงผ่าน INV
   // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
-  var wo      = getWip(partNo)||{};
-  var s2Lines = wo.lines||{};
-  // บางรอบชุบกรอกแต่ กก. ไม่กรอกจำนวนชิ้น ทำให้ wo.pcs=0 ทั้งที่ wo.kgs มีค่าจริง ต้องแปลงผ่าน Part Master ก่อนใช้
-  var platedPcs = wo.pcs||0;
-  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) {
-    platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
-  }
+  //
+  // คำนวณจากแถวดิบ (wipRows) แทน wipMap รวมยอด เพื่อ (1) กรองตามช่วงเวลาได้ (2) แยก "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
+  // ออกมาต่างหาก — แถวไม่ผูกบิลพวกนี้นับรวมอยู่ใน "ยอดชุบ" แต่สอบกลับไปยังบิลรับเข้าไม่ได้ มักเป็นสาเหตุที่ยอดชุบเกินยอดรับ
+  var wipRowsForPart = getWipRows(partNo).filter(function(rw){ return inPeriod(rw.date, period); });
+  var platedPcs = 0, platedKg = 0, unlinkedPcs = 0, unlinkedKg = 0;
+  var s2Lines = {};
+  wipRowsForPart.forEach(function(rw){
+    var pcsEq = rw.pcs;
+    if (!pcsEq && rw.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(rw.kg, pm.weightPerPc);
+    pcsEq = pcsEq || 0;
+    platedPcs += pcsEq;
+    platedKg  += rw.kg||0;
+    s2Lines[rw.line] = (s2Lines[rw.line]||0) + pcsEq;
+    if (!rw.linked) { unlinkedPcs += pcsEq; unlinkedKg += rw.kg||0; }
+  });
 
   // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
   var s1Rem   = Math.max(0, s1In   - platedPcs);
-  var s1RemKg = Math.max(0, s1InKg - (wo.kgs||0));
+  var s1RemKg = Math.max(0, s1InKg - platedKg);
+  // เกินยอดจริง (ไม่ตัด 0) ไว้ใช้เตือน — s1Rem/s1RemKg ด้านบน clamp ที่ 0 อยู่แล้วสำหรับแสดงผลปกติ
+  var s1Over = platedPcs - s1In; // >0 = ชุบเกินยอดรับ
 
   // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
   var s2Pcs = Math.max(0, platedPcs - s4Out);
-  var s2Kg  = Math.max(0, (wo.kgs||0) - s4OutKg);
+  var s2Kg  = Math.max(0, platedKg - s4OutKg);
 
   // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
   // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
@@ -1730,6 +1802,20 @@ function renderTraceCard(partNo){
   // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
   var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
 
+  var periodLbl = period ? monthLabel(period) : 'ทั้งหมด (ทุกช่วงเวลา)';
+
+  // ── แจ้งเตือน "ชุบเกินยอดรับ" — เกิดขึ้นได้เพราะมีแถวชุบที่ไม่ได้ผูกกับบิลรับเข้าใด (NOBILL/ไม่มี jobId)
+  // นับรวมอยู่ใน "ยอดชุบ" แต่ไม่มีบิลให้หักลบ จึงสอบกลับไม่ได้ว่าชุบวัตถุดิบมาจากไหน — เป็นจุดที่ควรไปตรวจกับหน้าไลน์ชุบ (v4/v5/v6)
+  var overWarnHtml = '';
+  if (s1Over > 0) {
+    overWarnHtml = '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#9b2c2c;line-height:1.6;">'
+      + '⚠️ <b>ยอดชุบเกินยอดรับ '+s1Over.toLocaleString()+' ชิ้น</b>'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
+      + (unlinkedPcs>0
+          ? 'พบยอดชุบที่<b>ไม่ได้ผูกกับบิลรับเข้าใด</b> (NOBILL/ไม่มีเลขบิล) รวม '+unlinkedPcs.toLocaleString()+' ชิ้น'+(unlinkedPcs>=s1Over?' — เป็นสาเหตุหลักของยอดเกินนี้':' — คิดเป็นบางส่วนของยอดเกิน')+'. ควรตรวจสอบที่หน้าไลน์ชุบว่ากรอกเลขบิลผิด/ไม่ได้กรอก หรือรับของเข้าจริงแต่ยังไม่ได้บันทึกใน Job Master'
+          : 'ไม่พบยอดชุบแบบ NOBILL ในช่วงนี้ — ยอดเกินอาจมาจากพิมพ์ P/No ไม่ตรงกัน (มีสองชื่อสำหรับของชิ้นเดียวกัน) หรือชุบซ้ำ/บันทึกซ้ำในระบบไลน์')
+      + '</div>';
+  }
+
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
     +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
@@ -1739,10 +1825,13 @@ function renderTraceCard(partNo){
         +(cust?'<div style="font-size:11px;color:#3b82f6;margin-top:1px;">'+esc(cust)+'</div>':'')
       +'</div>'
       +'<div style="text-align:right;">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:2px;">📅 '+esc(periodLbl)+'</div>'
         +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
         +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
       +'</div>'
     +'</div>'
+
+    + overWarnHtml
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
@@ -1760,8 +1849,19 @@ function renderTraceCard(partNo){
         +'</tr></thead>'
         +'<tbody>'+billRows+'</tbody>'
       +'</table></div>'
-    :'')
+    : '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:10px;">ไม่มีบิลรับเข้าในช่วง '+esc(periodLbl)+'</div>')
     +'</div>';
+}
+
+// monthLabel — แปลง 'YYYY-MM' เป็นข้อความไทยอ่านง่าย เช่น 'ส.ค. 2569' (พ.ศ.)
+function monthLabel(period){
+  if(!period) return 'ทั้งหมด';
+  var parts = period.split('-');
+  if(parts.length<2) return period;
+  var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var mi = parseInt(parts[1],10);
+  var yBE = parseInt(parts[0],10) + 543;
+  return (m[mi]||parts[1])+' '+yBE;
 }
 
 // ── QC map (โหลด QC records จาก Firebase เพื่อแสดงใน Stock 3) ──
