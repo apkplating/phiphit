@@ -734,14 +734,16 @@ function buildMap() {
     }
   });
 
-  // Delivery เพิ่มเติมที่บันทึกใน bl_stock — ถือเป็น "ส่งลูกค้าจริง" เสมอ (กรอกเองในแท็บ Delivery)
+  // Delivery เพิ่มเติมที่บันทึกใน bl_stock — ไม่นับรวมเป็น "ส่งลูกค้าจริง" (shipped) อีกต่อไป
+  // เพื่อให้ตรงกับตรรกะที่ใช้ในแท็บ Traceability (renderTraceCard) และ job_master.html "จ่ายออก"
+  // ซึ่งนับจาก INV จริงเท่านั้น — แท็บ Delivery ของ bl_stock มีไว้สำหรับเคลียร์/ปรับสต๊อก ไม่ใช่หลักฐาน INV จริงเสมอไป
+  // เดิมรวมเข้าไปด้วย ทำให้ตัวเลข "ส่งลูกค้า" ของหน้า Stock Board กับ Traceability ไม่ตรงกัน — เก็บยอดนี้แยกไว้ต่างหาก
+  // (deliveryAdj/deliveryAdjKg) เผื่ออยากโชว์เป็นข้อมูลประกอบ แต่ไม่เอาไปรวมกับ delivery/shipped หลักอีก
   blDel.forEach(function(d){
     var k = norm(d.partNo||'');
     if (!k || !map[k]) return;
-    map[k].delivery   += Number(d.qty||0);
-    map[k].deliveryKg += Number(d.qtyKg||0);
-    map[k].shipped    += Number(d.qty||0);
-    map[k].shippedKg  += Number(d.qtyKg||0);
+    map[k].deliveryAdj   = (map[k].deliveryAdj||0)   + Number(d.qty||0);
+    map[k].deliveryAdjKg = (map[k].deliveryAdjKg||0) + Number(d.qtyKg||0);
   });
 
   // ── เติมข้อมูลจาก Part Master ──
