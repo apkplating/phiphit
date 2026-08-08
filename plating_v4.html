@@ -1481,6 +1481,11 @@ function init() {
   renderBarrels();
   renderSummary();
   renderHistory();
+  // เดิม jobMasterLoad() ถูกเรียกก็ต่อเมื่อผู้ใช้กดไปแท็บ "Job Master" หรือค้นหา/เลือกบิลตอนกรอกรอบชุบเท่านั้น
+  // ถ้าเปิดหน้ามาแล้วดูแท็บ "ประวัติ" เป็นอย่างแรก jobMasterItems จะยังว่าง ทำให้ป้ายบิลใน renderHistory()
+  // ด้านบน resolve ไม่ได้ (โชว์ "เพิ่มบิล" ผิดๆ) — เรียกโหลดล่วงหน้าตรงนี้เลย (ไม่ต้องรอ) แล้วให้ renderHistory()
+  // ทำงานซ้ำอัตโนมัติเมื่อโหลดเสร็จ (ดูใน jobMasterLoad() ด้านล่าง) เพื่อให้ป้ายบิลถูกต้องเร็วที่สุด
+  jobMasterLoad();
   initSmartInput();
   loadChemSettings();
   loadChemItems();
@@ -1686,44 +1691,10 @@ function addBarrel() {
     return;
   }
 
-  // ── กรณี "ไม่ระบุบิล" (ไม่เลือกบิล หรือไม่มีบิลให้เลือก) ──
-  // ต้องให้ผู้มีสิทธิ์อนุมัติ NOBILL (ตั้งจากหน้า auth_admin) ใส่ PIN ก่อนบันทึกทุกครั้ง เพื่อดักจับเคสระบบจับคู่บิลผิดพลาด
-  // (เช่น P/No ไม่ตรงกัน) ก่อนที่ยอดจะหลุดไปเป็น "ไม่ระบุบิล" โดยไม่มีใครตรวจสอบ
-  // ยกเว้นถ้าคนที่ล็อกอินอยู่ตอนนี้มีสิทธิ์นี้อยู่แล้ว (currentNobillApprove — admin ได้สิทธิ์นี้เสมอ) ก็ถือว่าอนุมัติในตัว
-  if (currentNobillApprove === true) {
-    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, { role: currentRole, name: currentUserName, by: 'self', at: new Date().toISOString() });
-    return;
-  }
-  requestNobillApproval(function(approved, approverInfo){
-    if (!approved) {
-      showToast('entry', '🚫 ยกเลิก — ไม่ได้รับอนุมัติให้บันทึกแบบไม่ระบุบิล', 'err');
-      return;
-    }
-    _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, approverInfo);
-  });
-}
-
-// ── ขออนุมัติจากผู้มีสิทธิ์อนุมัติ NOBILL ก่อนบันทึกรายรอบแบบ "ไม่ระบุบิล" ──
-// สิทธิ์นี้มาจาก CentralAuth.login().nobillApprove — ตั้งได้จากหน้า auth_admin แยกจาก role หลัก
-// (admin ได้สิทธิ์นี้เสมอโดยอัตโนมัติ, operator ต้องถูกติ๊กให้เพิ่มจึงจะอนุมัติได้)
-function requestNobillApproval(cb) {
-  var pin = prompt('⚠️ รายการนี้ "ไม่ระบุบิล" (จะไม่ตัดสต็อกจากบิลใด ๆ)\nต้องให้ผู้มีสิทธิ์อนุมัติ NOBILL ใส่ PIN เพื่ออนุมัติก่อนบันทึก:');
-  if (pin === null) { cb(false); return; } // กดยกเลิก
-  pin = pin.trim();
-  if (!pin) { cb(false); return; }
-  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
-    if (result.ok && result.nobillApprove) {
-      var approverName = (result.user && result.user.name) || '';
-      showToast('entry', '✅ อนุมัติ "ไม่ระบุบิล" โดย' + (approverName ? ' ' + approverName : 'ผู้มีสิทธิ์') + ' แล้ว', 'ok');
-      cb(true, { role: result.role, name: approverName, by: 'pin', at: new Date().toISOString() });
-    } else {
-      showToast('entry', '🚫 PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์อนุมัติ NOBILL', 'err');
-      cb(false);
-    }
-  }).catch(function(){
-    showToast('entry', '🚫 เชื่อมต่อระบบสิทธิ์ไม่ได้ — ลองใหม่อีกครั้ง', 'err');
-    cb(false);
-  });
+  // ── ยกเลิกการบันทึกแบบ "ไม่ระบุบิล" (NOBILL) แล้ว — บังคับต้องเลือกบิลจริงเสมอสำหรับงานใหม่ (N) ──
+  // เดิมมี flow ขออนุมัติ PIN ให้บันทึกแบบไม่ผูกบิลได้ (requestNobillApproval) แต่พบว่าเป็นสาเหตุหลักที่ทำให้
+  // "ยอดชุบ" เกิน "ยอดรับ" เพราะของที่ชุบแบบไม่ผูกบิลจะสอบกลับไปยังบิลรับเข้าไม่ได้เลย จึงปิดช่องทางนี้ทั้งหมด
+  showToast('entry', '🚫 บันทึกไม่ได้ — กรุณาเลือกบิลก่อนบันทึก (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว) ถ้ายังไม่มีบิลให้เลือก กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน', 'err');
 }
 
 // ── บันทึกรายรอบจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async ของกรณี "ไม่ระบุบิล") ──
@@ -6804,7 +6775,7 @@ function barrelPmAcPick(idx) {
       + '🔍 Debug — jobMasterItems โหลดแล้ว '+(jobMasterItems||[]).length+' รายการ | WipCalc โหลดแล้ว='+(typeof WipCalc!=='undefined'&&WipCalc.isLoaded()?'✅':'⏳ยัง') +' | คีย์ที่ค้นหา (ตัดอักขระคั่นแล้ว) = "'+_dbgTyped+'"'
       + (_dbgLines.length ? '\n' + _dbgLines.join('\n') : '\nไม่พบชื่อใกล้เคียงเลยแม้แต่ 4 ตัวอักษรแรก ('+(jobMasterItems||[]).length+' รายการที่โหลดมาไม่มีตัวไหนขึ้นต้นคล้ายกันเลย — เช็คว่า partName ใน Job Master พิมพ์ต่างจากนี้มากไหม)')
       + '</div>';
-    statusEl.innerHTML = '<span style="color:#d97706;">⚠️ <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือ — เลือก "ไม่ระบุบิล" เพื่อบันทึกต่อ (ไม่ตัดสต็อก)</span>' + _dbgHtml;
+    statusEl.innerHTML = '<span style="color:#dc2626;">🚫 <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน แล้วค่อยกลับมาชุบ (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว)</span>' + _dbgHtml;
     renderBillList([], '');
     document.getElementById('bBillSelWrap').style.display = 'block';
     return;
@@ -6870,13 +6841,10 @@ function renderBillList(active, selectedJobId) {
     '</div>';
   }).join('');
 
-  // เพิ่ม "ไม่ระบุบิล" ท้ายรายการ — ใช้ innerHTML เพื่อให้ delegation จับได้
-  var isNoJobSelected = selectedJobId === 'NOBILL' || selectedJobId === '';
-  listEl.innerHTML += '<div class="bill-row" data-jobid="NOBILL" data-bill="ไม่ระบุบิล" data-pn="'+pn+'" data-cust="" '+
-    'style="display:flex;align-items:center;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px dashed #cbd5e1;background:#fafafa;margin-bottom:4px;">'+
-    '<span style="font-size:12px;color:#64748b;flex:1;">— ไม่ระบุบิล (บันทึกได้แต่ไม่ตัดสต็อก) —</span>'+
-    (isNoJobSelected ? '<span style="font-size:12px;color:#16a34a;">✅</span>' : '')+
-  '</div>';
+  // ยกเลิกการใช้ "ไม่ระบุบิล" (NOBILL) แล้ว — ต้องเลือกบิลจริงเสมอสำหรับงานใหม่ (N) จึงไม่เพิ่มตัวเลือกนี้ท้ายรายการอีกต่อไป
+  if (!active.length) {
+    listEl.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#dc2626;">🚫 ไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน</div>';
+  }
 
   // event delegation — ผูกครั้งเดียวที่ container
   listEl.onclick = function(e) {
@@ -6898,23 +6866,8 @@ function renderBillList(active, selectedJobId) {
 function esc2(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function pickBillRow(jobId, billNo) {
-  // กรณีเลือก "ไม่ระบุบิล"
-  if (jobId === 'NOBILL' || jobId === '') {
-    var sel = document.getElementById('bJobPick');
-    if (sel) sel.value = '';
-    var listEl2 = document.getElementById('bBillList');
-    if (listEl2) {
-      Array.from(listEl2.children).forEach(function(row){
-        var isThis = row.dataset.jobid === jobId;
-        row.style.border = isThis ? '1.5px dashed #16a34a' : '';
-        row.style.background = isThis ? '#f0fdf4' : '';
-      });
-    }
-    var infoEl = document.getElementById('bBillInfo');
-    if (infoEl) infoEl.innerHTML = '<div style="background:#fef9c3;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-top:4px;font-size:12px;">⚠️ ไม่ระบุบิล — บันทึกได้แต่ไม่ตัดสต็อก</div>';
-    onBarrelJobPick();
-    return;
-  }
+  // ยกเลิกการใช้ "ไม่ระบุบิล" (NOBILL) แล้ว — ทางเลือกนี้ไม่แสดงในรายการอีกต่อไป (กันไว้เผื่อมี event ค้างจาก DOM เก่า)
+  if (jobId === 'NOBILL' || jobId === '') return;
 
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
   if (!job) return;
