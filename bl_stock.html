@@ -1092,6 +1092,20 @@ function getBillOutQty(job) {
   return out;
 }
 
+// getBillOutQtyInvOnly — เหมือน getBillOutQty() แต่ไม่รวม blDel (แท็บ Delivery) เลย นับจาก INV จริงล้วนๆ
+// ใช้เฉพาะที่ต้องให้ตัวเลขตรงกับ STOCK3/job_master.html "จ่ายออก" เป๊ะๆ (getBillOutQty ปกติยังรวม blDel ไว้
+// เพราะใช้เช็คยอดคงเหลือของฟอร์ม Delivery เอง ซึ่งจำเป็นต้องรู้ว่าเคยกรอก Delivery ไปแล้วเท่าไหร่ คนละจุดประสงค์กัน)
+function getBillOutQtyInvOnly(job) {
+  var out = 0;
+  var pn = jobPartNo(job);
+  jmRecords.forEach(function(r){
+    if (r.type!=='out' || r.jobId!==job.id) return;
+    if (!isRealInvRef(r)) return;
+    out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+  });
+  return out;
+}
+
 function showDInfo(){
   var val=document.getElementById('dPartSel').value;
   var box=document.getElementById('dInfoBox');
@@ -1618,6 +1632,15 @@ function renderTraceCard(partNo, period){
   var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k && inPeriod(j.date, period); });
   var s1In  = bills.reduce(function(a,j){ return a+jobQty(j); },0);
   var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
+  // billIdSet = เซ็ต id ของบิลที่อยู่ในช่วงเวลาที่เลือก (กรองจาก "วันรับ" ของบิลเอง) — ใช้เป็นเกณฑ์เดียวกันทั้งไฟล์
+  // สำคัญ: เดิมกรอง "ชุบ"/"จ่ายออก" ด้วยวันที่ของแต่ละ event เอง (วันชุบ/วันออก INV) ซึ่งอาจเป็นคนละเดือนกับวันรับบิล
+  // (เช่น รับบิลเดือน ก.ค. แต่ออก INV เดือน ส.ค.) ทำให้ยอดในกล่อง STOCK ไม่ตรงกับผลรวมคอลัมน์ "จ่ายออก" ของบิลที่โชว์อยู่
+  // ในตาราง (ซึ่งกรองด้วยวันรับบิลเท่านั้น เหมือน job_master.html) — เปลี่ยนมากรองด้วย "บิลอยู่ในช่วงที่เลือกไหม" แทน
+  // เพื่อให้ STOCK1/2/3 ตรงกับผลรวมของบิลที่แสดงในตารางเสมอ ตรงกับที่ job_master.html คำนวณ (กรองบิลด้วยวันรับ
+  // แล้วรวมยอดกิจกรรม "ทั้งชีวิต" ของบิลนั้นๆ ไม่ตัดตามวันของแต่ละ event ย่อย)
+  var billIdSet = {};
+  bills.forEach(function(j){ billIdSet[j.id] = true; });
+
   // จ่ายออกจาก Job Master records — แปลง qty(ชิ้น)/qtyKg(กก.) เป็นชิ้นเสมอผ่าน Part Master
   // (ถ้านับแต่ r.qty เฉยๆ บิลที่ขายเป็น กก. จะได้ 0 ชิ้น ทั้งที่ s1OutKg นับกก.ได้ถูกต้องอยู่แล้ว)
   // s1Out/s1OutKg = ทุกอย่างที่ออกจาก JM (รวม "Auto จากรอบชุบ" ด้วย — ถูกต้องแล้วสำหรับ STOCK1 ที่แปลว่า "วัตถุดิบออกจากคลังดิบ")
@@ -1625,7 +1648,7 @@ function renderTraceCard(partNo, period){
   var s1Out = 0, s1OutKg = 0, s4Out = 0, s4OutKg = 0;
   jmRecords.forEach(function(r){
     if(r.type!=='out') return;
-    if(!inPeriod(r.date, period)) return;
+    if(period && !billIdSet[r.jobId]) return; // นับเฉพาะบิลที่อยู่ในช่วงเวลาที่เลือก (ไม่ใช่วันที่ของ record เอง)
     var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
     if(!j||norm(jobPartNo(j))!==k) return;
     var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
@@ -1647,7 +1670,7 @@ function renderTraceCard(partNo, period){
   var delAdjPcs = 0, delAdjKg = 0;
   blDel.forEach(function(d){
     if(norm(d.partNo||'')!==k) return;
-    if(!inPeriod(d.date, period)) return;
+    if(period && !billIdSet[d.jobId]) return;
     delAdjPcs += Number(d.qty||0);
     delAdjKg  += Number(d.qtyKg||0);
   });
@@ -1659,9 +1682,11 @@ function renderTraceCard(partNo, period){
   // คำนวณจากแถวดิบ (wipRows) แทน wipMap รวมยอด เพื่อ (1) กรองตามช่วงเวลาได้ (2) นับเฉพาะแถวที่ "ผูกบิลจริง" เท่านั้น
   // (R ถูกกรองออกตั้งแต่ตอนโหลดข้อมูลแล้ว ไม่มีทางเข้ามาถึงตรงนี้) — แถว NOBILL/ไม่ผูกบิล จะไม่ถูกนับรวมใน STOCK2
   // อีกต่อไป (เดิมนับรวมแล้วแค่โชว์เตือนแยก) เพราะสอบกลับไปยังบิลรับเข้าไม่ได้ ไม่ควรถือเป็น "ของพร้อมส่ง" ของบิลไหน
-  var allWipRowsForPart = getWipRows(partNo).filter(function(rw){ return inPeriod(rw.date, period); });
-  var linkedRows   = allWipRowsForPart.filter(function(rw){ return rw.linked; });
-  var unlinkedRows = allWipRowsForPart.filter(function(rw){ return !rw.linked; });
+  // แถวที่ผูกบิล: กรองด้วย "บิลนั้นอยู่ในช่วงเวลาที่เลือกไหม" (เกณฑ์เดียวกับ s4Out ด้านบน) ไม่ใช่วันที่ชุบเอง
+  // แถวที่ไม่ผูกบิล (NOBILL): ไม่มีบิลให้เทียบ จึงยังกรองด้วยวันที่ชุบของแถวนั้นเองต่อไป (ใช้แค่โชว์ข้อมูลประกอบ)
+  var allWipRowsForPart = getWipRows(partNo);
+  var linkedRows   = allWipRowsForPart.filter(function(rw){ return rw.linked && (!period || billIdSet[rw.jobId]); });
+  var unlinkedRows = allWipRowsForPart.filter(function(rw){ return !rw.linked && inPeriod(rw.date, period); });
 
   var platedPcs = 0, platedKg = 0;
   var s2Lines = {};
@@ -1703,7 +1728,7 @@ function renderTraceCard(partNo, period){
 
   // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
   var billRows = bills.map(function(j, bi){
-    var outQty = getBillOutQty(j); // ใช้ตัวเดียวกับฟอร์ม Delivery — รวม jmRecords out + blDel ที่ผูก jobId แล้ว
+    var outQty = getBillOutQtyInvOnly(j); // นับจาก INV จริงล้วนๆ ให้ตรงกับ STOCK3/job_master.html "จ่ายออก" เป๊ะๆ (ไม่รวม blDel)
     // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
     var invEvents = getBillInvEvents(j.id);
     // แหล่งสำรอง (เผื่อ out record ไม่ได้มาจากการออก INV จริง เช่น พิมพ์อ้างอิงเองจากหน้าไลน์ชุบ)
