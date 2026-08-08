@@ -432,7 +432,10 @@ function initApp(){
     new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('dDate').value = isoToday();
   loadAll(false);
-  setInterval(function(){ loadAll(false); }, 30000);
+  // เดิม poll ทุก 30 วิ ปรับเป็น 60 วิ (1 นาที) เพื่อลดโหลดจากการดึงไฟล์ประวัติทั้งหมดบ่อยเกินไป
+  // (bl_stock ต้องโหลดข้อมูลก้อนใหญ่จาก 5 แหล่งทุกครั้ง ต่างจาก monitor.html ที่ดึงแค่ /live.json เล็กๆ)
+  // ถ้าต้องการเห็นข้อมูลสดทันทีหลังเพิ่งกรอกอะไรไป กดปุ่ม "🔄 รีเฟรช" ที่หัวหน้าเว็บได้เลย ไม่ต้องรอ
+  setInterval(function(){ loadAll(false); }, 60000);
 }
 
 window.addEventListener('load', function(){
@@ -490,8 +493,8 @@ async function loadAll(manual) {
 async function loadJobMaster() {
   // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
   var [jmRes, intakeRes] = await Promise.all([
-    fetch(JM_URL).catch(function(){ return {ok:false}; }),
-    fetch(INTAKE_URL).catch(function(){ return {ok:false}; }),
+    fetch(JM_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+    fetch(INTAKE_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
   ]);
 
   // สำคัญ: ไม่รีเซ็ตเป็น [] ก่อนเช็คผลจริงอีกต่อไป — เดิมรีเซ็ตทิ้งทันทีตรงนี้ก่อน แล้วค่อยเติมใหม่จาก fetch
@@ -521,7 +524,7 @@ async function loadJobMaster() {
     retriesLeft--;
     await new Promise(function(r){ setTimeout(r, 700); });
     try {
-      var retryRes = await fetch(JM_URL);
+      var retryRes = await fetch(JM_URL, {cache:'no-store'});
       if (retryRes.ok) {
         var retryData = await retryRes.json();
         if (retryData && Array.isArray(retryData.invoices) && retryData.invoices.length) {
@@ -584,7 +587,7 @@ function pmLookup(partNo) {
 // ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
 async function loadBLDel() {
   try {
-    var res = await fetch(DEL_URL);
+    var res = await fetch(DEL_URL, {cache:'no-store'});
     var data = res.ok ? await res.json() : null;
     blDel = Array.isArray(data && data.records) ? data.records : [];
   } catch(e){ blDel=[]; }
@@ -596,52 +599,69 @@ async function loadWIP() {
   wipByJob = {};
   wipRows = {};
   var lines = [
-    { url: DB_B1+'/plating-b1.json', label:'B1' },
-    { url: DB_B2+'/plating-b2.json', label:'B2' },
-    { url: DB_R1+'/plating-r1.json', label:'R1' },
+    { url: DB_B1+'/plating-b1.json', today: DB_B1+'/data/todayBarrels.json', label:'B1' },
+    { url: DB_B2+'/plating-b2.json', today: DB_B2+'/data/todayBarrels.json', label:'B2' },
+    { url: DB_R1+'/plating-r1.json', today: DB_R1+'/data/todayBarrels.json', label:'R1' },
   ];
+  // วันนี้ (YYYY-MM-DD ตามเวลาเครื่อง) — ใช้แปะวันที่ให้แถวจาก todayBarrels ที่ไม่มีฟิลด์วันที่ในตัวเอง
+  var todayStr = (function(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+
+  // แยกตรรกะประมวลผล 1 แถวออกมาเป็นฟังก์ชันกลาง เพื่อใช้ร่วมกันทั้งแถวจาก dayRecords (ประวัติที่บันทึกแล้ว)
+  // และแถวจาก todayBarrels (วันนี้ที่ยังไม่กด "บันทึกสรุปวันนี้") — ให้ 2 แหล่งนี้เข้าสูตรเดียวกันเป๊ะๆ
+  function processRow(row, dateStr, label) {
+    // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
+    if ((row.type||'').toUpperCase() === 'R') return;
+    var pn = (row.partName||'').trim();
+    if (!pn) return;
+    var k = norm(pn);
+    var hasBillLink = !!(row.jobId && row.jobId !== 'NOBILL');
+    var rPcs = Number(row.pcs||0), rKg = Number(row.kg||0);
+
+    // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
+    if (hasBillLink) {
+      if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
+      wipByJob[row.jobId].push({ date: dateStr||'', line: label, pcs: rPcs, kg: rKg });
+    }
+
+    // เก็บทุกแถวดิบแยกตาม P/No (ไม่รวมยอด) ไว้ใช้กรองตามช่วงเวลา (เดือน) และตรวจ "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
+    // แถวที่ไม่ผูกบิลจะรวมอยู่ใน wipMap[k].pcs (ยอดชุบรวม) แต่ไม่มีทางสอบกลับไปยังบิลรับเข้าใดได้ — มักเป็นสาเหตุที่ "ยอดชุบ" เกิน "ยอดรับ"
+    if (!wipRows[k]) wipRows[k] = [];
+    wipRows[k].push({ date: dateStr||'', line: label, jobId: row.jobId||'', pcs: rPcs, kg: rKg, linked: hasBillLink });
+
+    if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, pcsUnlinked:0, kgsUnlinked:0, lines:{}, dates:[] };
+    wipMap[k].pcs += rPcs;
+    wipMap[k].kgs += rKg;
+    if (!hasBillLink) { wipMap[k].pcsUnlinked += rPcs; wipMap[k].kgsUnlinked += rKg; }
+    wipMap[k].lines[label] = (wipMap[k].lines[label]||0) + rPcs;
+    if (dateStr && wipMap[k].dates.indexOf(dateStr) < 0) wipMap[k].dates.push(dateStr);
+  }
 
   await Promise.all(lines.map(async function(ln){
     try {
-      var res = await fetch(ln.url);
-      if (!res.ok) return;
-      var data = await res.json();
-      var recs = Array.isArray(data) ? data
-               : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
-
-      recs.forEach(function(dr){
-        if (!dr.rows) return;
-        dr.rows.forEach(function(row){
-          // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
-          if ((row.type||'').toUpperCase() === 'R') return;
-          var pn = (row.partName||'').trim();
-          if (!pn) return;
-          var k = norm(pn);
-          var hasBillLink = !!(row.jobId && row.jobId !== 'NOBILL');
-          var rPcs = Number(row.pcs||0), rKg = Number(row.kg||0);
-
-          // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
-          if (hasBillLink) {
-            if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
-            wipByJob[row.jobId].push({ date: dr.date||'', line: ln.label, pcs: rPcs, kg: rKg });
-          }
-
-          // เก็บทุกแถวดิบแยกตาม P/No (ไม่รวมยอด) ไว้ใช้กรองตามช่วงเวลา (เดือน) และตรวจ "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
-          // แถวที่ไม่ผูกบิลจะรวมอยู่ใน wipMap[k].pcs (ยอดชุบรวม) แต่ไม่มีทางสอบกลับไปยังบิลรับเข้าใดได้ — มักเป็นสาเหตุที่ "ยอดชุบ" เกิน "ยอดรับ"
-          if (!wipRows[k]) wipRows[k] = [];
-          wipRows[k].push({ date: dr.date||'', line: ln.label, jobId: row.jobId||'', pcs: rPcs, kg: rKg, linked: hasBillLink });
-
-          // หมายเหตุ: เดิมมีตัวกรอง 30 วันตรงนี้ (ใช้ withinCutoff) แต่พบว่าเป็นสาเหตุซ้ำๆ ที่ทำให้ wipMap
-          // โชว์ 0 ทั้งที่ wipByJob (อ่านจากแหล่งเดียวกัน ไม่มีตัวกรองวันที่) มีข้อมูลอยู่จริง เอาออกให้ตรงกันแล้ว
-
-          if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, pcsUnlinked:0, kgsUnlinked:0, lines:{}, dates:[] };
-          wipMap[k].pcs += rPcs;
-          wipMap[k].kgs += rKg;
-          if (!hasBillLink) { wipMap[k].pcsUnlinked += rPcs; wipMap[k].kgsUnlinked += rKg; }
-          wipMap[k].lines[ln.label] = (wipMap[k].lines[ln.label]||0) + rPcs;
-          if (dr.date && wipMap[k].dates.indexOf(dr.date) < 0) wipMap[k].dates.push(dr.date);
+      var res = await fetch(ln.url, {cache:'no-store'});
+      if (res.ok) {
+        var data = await res.json();
+        var recs = Array.isArray(data) ? data
+                 : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
+        recs.forEach(function(dr){
+          if (!dr.rows) return;
+          dr.rows.forEach(function(row){ processRow(row, dr.date||'', ln.label); });
         });
-      });
+      }
+    } catch(e){}
+
+    // ── รอบชุบ "วันนี้" ที่ยังไม่กด "บันทึกสรุปวันนี้" (todayBarrels) ──
+    // อ่านจาก /data/todayBarrels.json ของแต่ละไลน์เพิ่ม เพื่อให้ STOCK สะท้อนรอบที่เพิ่งกรอกสดๆ ทันที
+    // ไม่ต้องรอกดบันทึกสรุปก่อนแล้ว — ปลอดภัยจากการนับซ้ำ เพราะ todayBarrels จะถูกเคลียร์เป็น [] ทันทีที่กด
+    // "บันทึกสรุปวันนี้" (ย้ายเข้า dayRecords แทน) สองแหล่งนี้จึงไม่มีทางมีข้อมูลชุดเดียวกันซ้อนกันพร้อมกันได้เลย
+    try {
+      var res2 = await fetch(ln.today, {cache:'no-store'});
+      if (res2.ok) {
+        var todayRows = await res2.json();
+        if (Array.isArray(todayRows)) {
+          todayRows.forEach(function(row){ processRow(row, todayStr, ln.label); });
+        }
+      }
     } catch(e){}
   }));
 }
@@ -1386,6 +1406,9 @@ async function showDebug() {
     { label:'WIP B1',         url: DB_B1+'/plating-b1.json' },
     { label:'WIP B2',         url: DB_B2+'/plating-b2.json' },
     { label:'WIP R1',         url: DB_R1+'/plating-r1.json' },
+    { label:'Live วันนี้ B1', url: DB_B1+'/data/todayBarrels.json', isToday:true },
+    { label:'Live วันนี้ B2', url: DB_B2+'/data/todayBarrels.json', isToday:true },
+    { label:'Live วันนี้ R1', url: DB_R1+'/data/todayBarrels.json', isToday:true },
   ];
 
   for (var i = 0; i < tests.length; i++) {
@@ -1394,7 +1417,7 @@ async function showDebug() {
     info('URL: ' + t.url);
     try {
       var t0 = Date.now();
-      var res = await fetch(t.url);
+      var res = await fetch(t.url, {cache:'no-store'});
       var ms = Date.now() - t0;
       info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
       if (!res.ok) {
@@ -1428,6 +1451,16 @@ async function showDebug() {
         } else if (t.url === DEL_URL) {
           var delCnt = Array.isArray(json && json.records) ? json.records.length : '(ไม่มี records[])';
           ok('โหลดสำเร็จ — records: ' + delCnt);
+        } else if (t.isToday) {
+          // Live วันนี้ (todayBarrels) — เก็บเป็น array ดิบตรงๆ ไม่มี wrapper
+          if (Array.isArray(json)) {
+            ok('โหลดสำเร็จ — ' + json.length + ' รอบวันนี้ (ยังไม่ได้กด "บันทึกสรุปวันนี้")');
+            if (json.length > 0) info('แถวแรก: ' + JSON.stringify(json[0]).slice(0,120));
+            var m80Count = json.filter(function(r){ return (r.partName||'').indexOf('M80-164PA') >= 0; }).length;
+            if (m80Count) info('พบ M80-164PA ในนี้ ' + m80Count + ' รอบ');
+          } else {
+            warn('ข้อมูลไม่ใช่ Array (ควรเป็น array ดิบ): ' + JSON.stringify(json).slice(0,120));
+          }
         } else {
           // WIP
           var recs = Array.isArray(json) ? json
@@ -1708,11 +1741,20 @@ function renderTraceCard(partNo, period){
     unlinkedKg  += rw.kg||0;
   });
 
-  // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
-  var s1Rem   = Math.max(0, s1In   - platedPcs);
-  var s1RemKg = Math.max(0, s1InKg - platedKg);
+  // ── Stock 1: คงเหลือ (JM) = รับเข้า − ยอดที่ถือว่าใช้จากสต็อกดิบไปแล้ว ──
+  // ปกติ "ใช้ไปแล้ว" = ยอดชุบที่มีบันทึกจริง (platedPcs) แต่บางบิลมี INV ออกไปแล้วจริง (ขายได้จริง)
+  // โดยไม่เคยมีบันทึกการชุบมารองรับเลย (ข้อมูลหาย/ไม่เคยกรอก) — กรณีนี้ถ้าใช้แค่ platedPcs อย่างเดียว
+  // STOCK1 จะไม่ถูกหักออกทั้งที่ของจริงถูกใช้ไปแล้วแน่ๆ (ขายได้ = ต้องดึงออกจากสต็อกดิบไปแล้ว)
+  // จึงใช้ max(ชุบที่บันทึกไว้, ส่งลูกค้าจริงผ่าน INV) แทน — ไม่ต้องปลอมข้อมูลการชุบ แค่ยึดหลักว่า
+  // "ยอดใช้ไปจากสต็อกดิบ ต้องไม่น้อยกว่ายอดที่ขายออกไปแล้วจริง" เป็นขั้นต่ำเสมอ
+  var consumedPcs = Math.max(platedPcs, s4Out);
+  var consumedKg  = Math.max(platedKg,  s4OutKg);
+  var s1Rem   = Math.max(0, s1In   - consumedPcs);
+  var s1RemKg = Math.max(0, s1InKg - consumedKg);
   // เกินยอดจริง (ไม่ตัด 0) ไว้ใช้เตือน — s1Rem/s1RemKg ด้านบน clamp ที่ 0 อยู่แล้วสำหรับแสดงผลปกติ
   var s1Over = platedPcs - s1In; // >0 = ชุบเกินยอดรับ
+  // ส่งลูกค้าจริงเกินยอดชุบที่มีบันทึก — สัญญาณว่าบันทึกการชุบของบิลนั้นอาจหาย/ไม่เคยกรอก (แต่ของจริงถูกใช้ไปแล้ว)
+  var shipExceedsPlated = s4Out - platedPcs; // >0 = มีช่องว่างแบบนี้
 
   // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
   var s2Pcs = Math.max(0, platedPcs - s4Out);
@@ -1862,6 +1904,16 @@ function renderTraceCard(partNo, period){
       + 'ℹ️ มียอดชุบแบบ<b>ไม่ผูกบิล (NOBILL)</b> อีก '+unlinkedPcs.toLocaleString()+' ชิ้น'+(period?' ในช่วง '+esc(periodLbl):'')+' — <b>ไม่ถูกนับรวมใน STOCK2 ข้างต้นแล้ว</b> แนะนำให้ไปผูกบิลย้อนหลังที่หน้าไลน์ชุบ (ปุ่ม "✏️ เพิ่มบิล" ในแท็บประวัติ)'
       + '</div>';
   }
+  // ── แจ้งเตือน "ส่งลูกค้าจริงเกินยอดชุบที่มีบันทึก" — INV ออกได้จริงแปลว่าของถูกดึงจากสต็อกดิบไปแล้วจริง
+  // แต่ไม่มีบันทึกการชุบมารองรับ (ข้อมูลหาย/ไม่เคยกรอก) — STOCK1 ด้านล่างถูกปรับให้หักลบยอดนี้ไปแล้วอัตโนมัติ
+  // (ใช้ max(ชุบที่บันทึก, ส่งลูกค้าจริง) แทนใช้แค่ยอดชุบอย่างเดียว) กล่องนี้แค่แจ้งให้รู้ว่ามีช่องว่างข้อมูลอยู่ตรงไหน
+  var shipGapHtml = '';
+  if (shipExceedsPlated > 0) {
+    shipGapHtml = '<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#1e40af;line-height:1.6;">'
+      + 'ℹ️ มีของที่<b>ส่งลูกค้าจริงแล้ว (INV) เกินยอดชุบที่มีบันทึกไว้</b> '+shipExceedsPlated.toLocaleString()+' ชิ้น'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
+      + 'น่าจะเป็นเพราะบันทึกการชุบของบิลนั้นหาย/ไม่เคยกรอก — <b>ระบบปรับ STOCK1 ให้หักยอดนี้ออกอัตโนมัติแล้ว</b> (ถือว่าใช้จากสต็อกดิบไปแล้วจริงตามยอดขาย) ถ้าอยากให้ประวัติครบ แนะนำไปเพิ่มบันทึกการชุบย้อนหลังที่หน้าไลน์ชุบด้วย'
+      + '</div>';
+  }
 
   return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
     // header
@@ -1880,10 +1932,11 @@ function renderTraceCard(partNo, period){
 
     + overWarnHtml
     + unlinkedInfoHtml
+    + shipGapHtml
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
-      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs)
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs+(shipExceedsPlated>0?' <span style="color:#2563eb;">(นับส่งลูกค้า '+s4Out.toLocaleString()+')</span>':''))
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
       +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626',(delAdjPcs>0?'+ ปรับสต็อกเอง (Delivery) '+delAdjPcs.toLocaleString()+' ชิ้น <span style="color:#94a3b8;">(ไม่นับรวมในนี้)</span>':''))
     +'</div>'
@@ -1924,7 +1977,7 @@ async function loadQCData(){
   ];
   await Promise.all(qcPaths.map(async function(p){
     try {
-      var res = await fetch(p.url);
+      var res = await fetch(p.url, {cache:'no-store'});
       if(!res.ok) return;
       var data = await res.json();
       var recs = Array.isArray(data) ? data : (Array.isArray(data&&data.records)?data.records:[]);
