@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B/L Stock — APK Plating</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --navy-light:#1e4976;
+  --blue:#2e75b6; --blue-light:#5ba3d9; --sky:#d6eaf8; --sky-pale:#eaf4fb;
+  --green:#065f46; --green-bg:#ecfdf5; --green-border:#86efac;
+  --amber:#92400e; --amber-bg:#fffbeb; --amber-border:#fcd34d;
+  --red:#9b2c2c; --red-bg:#fef2f2; --red-border:#fca5a5;
+  --orange:#c2410c; --orange-bg:#fff7ed; --orange-border:#fed7aa;
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --border:#d1dce8; --bg:#f4f8fb; --white:#fff;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);}
+
+.app-header{background:var(--navy);padding:48px 20px 20px;position:relative;overflow:hidden;}
+.app-header::before{content:'';position:absolute;top:-60px;right:-60px;width:260px;height:260px;border-radius:50%;background:rgba(46,117,182,.12);pointer-events:none;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:24px;font-weight:800;color:#fff;letter-spacing:-.02em;}
+.hdr-sub{font-size:11px;color:var(--blue-light);margin-top:4px;}
+
+.app-body{background:var(--bg);border-radius:20px 20px 0 0;min-height:calc(100vh - 120px);padding:14px 14px 40px;}
+
+.tab-bar{display:flex;gap:4px;overflow-x:auto;padding-bottom:10px;margin-bottom:12px;scrollbar-width:none;}
+.tab-bar::-webkit-scrollbar{display:none;}
+.tab-btn{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+.tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border);}
+
+.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.sum-card{text-align:center;padding:10px 4px;border-radius:10px;border:1px solid;}
+.sum-card .val{font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;line-height:1.1;}
+.sum-card .lbl{font-size:9px;color:var(--text-muted);margin-top:3px;}
+
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table.st{width:100%;border-collapse:collapse;min-width:580px;font-size:12px;}
+table.st thead tr{background:var(--navy);color:#fff;}
+table.st thead th{padding:8px 7px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.04em;white-space:nowrap;}
+table.st thead th.tl{text-align:left;}
+table.st tbody tr{border-bottom:1px solid #f0f0f0;}
+table.st tbody tr:hover{background:#f7fafd;}
+table.st td{padding:8px 7px;text-align:center;vertical-align:middle;}
+table.st td.tl{text-align:left;}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;}
+.ok   {background:#dcfce7;color:#15803d;}
+.wip  {background:#eff6ff;color:#1d4ed8;}
+.part {background:#fff7ed;color:#c2410c;}
+.done {background:#f1f5f9;color:#64748b;}
+.over {background:#fef2f2;color:#dc2626;}
+
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.filter-bar select,.filter-bar input{font-size:12px;padding:6px 10px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--navy);font-family:inherit;outline:none;}
+.filter-bar select:focus,.filter-bar input:focus{border-color:var(--blue);}
+
+.sync-bar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);padding:8px 12px;background:var(--sky-pale);border-radius:10px;border:1px solid var(--border);margin-bottom:12px;}
+.sdot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;}
+.sdot.ok{background:#22c55e;animation:pulse 2s infinite;}
+.sdot.err{background:#ef4444;}
+.sdot.spin{background:#f59e0b;animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.detail-box{background:#f7fafd;border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:6px;}
+.detail-box table{min-width:340px;}
+.detail-box th{background:var(--navy-mid);color:#fff;padding:5px 7px;font-size:10px;font-weight:600;}
+.detail-box td{padding:5px 7px;border-bottom:1px solid #eee;font-size:11px;}
+
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);font-size:14px;font-family:inherit;outline:none;}
+.field input:focus,.field select:focus{border-color:var(--blue);}
+
+.btn{padding:12px;border-radius:10px;border:none;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;width:100%;}
+.btn-navy{background:var(--navy);color:#fff;}
+.btn-green{background:#059669;color:#fff;}
+
+.toast{display:none;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:600;text-align:center;margin-top:8px;}
+.tok{display:block;background:#dcfce7;color:#15803d;}
+.terr{display:block;background:#fef2f2;color:#9b2c2c;}
+
+.info-box{padding:10px 12px;background:var(--sky-pale);border-radius:8px;border:1px solid var(--border);margin-bottom:12px;font-size:12px;display:none;}
+
+/* ── Login ── */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),var(--navy-light));display:flex;align-items:center;justify-content:center;z-index:999;}
+.login-box{background:#fff;border-radius:20px;padding:32px 28px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.login-box .pin-input{width:100%;padding:14px;text-align:center;font-size:22px;font-family:'IBM Plex Mono',monospace;letter-spacing:6px;border:2px solid var(--border);border-radius:10px;margin-bottom:12px;box-sizing:border-box;}
+.login-box .pin-input:focus{border-color:var(--blue);outline:none;}
+.login-err{color:var(--red);font-size:12px;margin-bottom:8px;display:none;}
+.app-logout-btn{background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;}
+body.viewer-mode [onclick^="deleteBLDel"]{display:none !important;}
+</style>
+</head>
+<body>
+
+<!-- ══ Login ══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px;">📦</div>
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px;">B/L Stock</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px;">APK Plating — สต๊อกรวมทุกสายการผลิต</div>
+    <input type="password" id="pinInput" class="pin-input" placeholder="••••••" maxlength="10"
+      onkeydown="if(event.key==='Enter')checkPin()">
+    <div class="login-err" id="loginError">PIN ไม่ถูกต้อง</div>
+    <button class="btn btn-navy" onclick="checkPin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ══ App ══ -->
+<div id="appScreen" style="display:none;">
+
+<div class="app-header">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+    <div>
+      <div class="hdr-badge">APK Plating · Stock Control</div>
+      <div class="hdr-title">B/L Stock</div>
+      <div class="hdr-sub" id="hdrDate">—</div>
+    </div>
+    <button class="app-logout-btn" onclick="logoutBL()">🚪 ออกจากระบบ</button>
+  </div>
+</div>
+
+<div class="app-body">
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('stock')">📦 Stock Board</button>
+    <button class="tab-btn" onclick="switchTab('delivery')">📤 Delivery</button>
+    <button class="tab-btn" onclick="switchTab('history')">🗂 ประวัติ</button>
+    <button class="tab-btn" onclick="switchTab('trace')">🔍 Traceability</button>
+  </div>
+
+  <!-- Sync bar -->
+  <div class="sync-bar">
+    <span class="sdot" id="sdot"></span>
+    <span id="syncLbl">กำลังโหลด...</span>
+    <div style="flex:1;"></div>
+    <button onclick="loadAll(true)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--navy);">🔄 รีเฟรช</button> <button onclick="showDebug()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:#fff3cd;cursor:pointer;color:#856404;">🔍 Debug</button>
+  </div>
+
+  <!-- แถบตรวจสอบไฟล์/ข้อมูล — โชว์บนหน้าเว็บตรงๆ ไม่ต้องเปิด Console/view-source อีกต่อไป -->
+  <div id="verifyBar" style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:5px 9px;margin-bottom:10px;line-height:1.6;word-break:break-all;">
+    ⏳ กำลังตรวจสอบ...
+  </div>
+
+  <!-- ══ STOCK BOARD ══ -->
+  <div id="tab-stock">
+    <div class="sum-grid">
+      <div class="sum-card" style="background:var(--green-bg);border-color:var(--green-border);">
+        <div class="val" style="color:var(--green);" id="sItems">0</div>
+        <div class="lbl">P/No ทั้งหมด</div>
+      </div>
+      <div class="sum-card" style="background:#eff6ff;border-color:#bfdbfe;">
+        <div class="val" style="color:var(--blue);" id="sRcv">0</div>
+        <div id="sRcvKg" style="font-size:10px;color:#60a5fa;margin-top:1px;"></div>
+        <div class="lbl">รับเข้า (ชิ้น)</div>
+      </div>
+      <div class="sum-card" style="background:var(--amber-bg);border-color:var(--amber-border);">
+        <div class="val" style="color:var(--amber);" id="sWip">0</div>
+        <div id="sWipKg" style="font-size:10px;color:#d97706;margin-top:1px;"></div>
+        <div class="lbl">WIP ชุบแล้ว</div>
+      </div>
+      <div class="sum-card" style="background:var(--orange-bg);border-color:var(--orange-border);">
+        <div class="val" style="color:var(--orange);" id="sDel">0</div>
+        <div id="sDelKg" style="font-size:10px;color:#f97316;margin-top:1px;"></div>
+        <div class="lbl">Delivery</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <select id="fStatus" onchange="renderStock()">
+        <option value="all">— ทุกสถานะ —</option>
+        <option value="active">กำลังผลิต</option>
+        <option value="partial">ส่งบางส่วน</option>
+        <option value="done">ส่งครบ</option>
+        <option value="over">เกินกำหนด</option>
+      </select>
+      <select id="fMonth" onchange="renderStock()"><option value="all">— ทุกเดือน —</option></select>
+      <input id="fSearch" type="text" placeholder="🔍 ค้นหา P/No ลูกค้า..." oninput="renderStock()" style="flex:1;min-width:120px;">
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="tbl-wrap">
+        <table class="st">
+          <thead><tr>
+            <th class="tl" style="min-width:130px;">P/No · ชิ้นงาน</th>
+            <th class="tl" style="min-width:70px;">ลูกค้า</th>
+            <th style="min-width:80px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:70px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:80px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:80px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:65px;">สถานะ</th>
+            <th style="width:28px;"></th>
+          </tr></thead>
+          <tbody id="stockBody">
+            <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DELIVERY ══ -->
+  <div id="tab-delivery" style="display:none;">
+    <div class="card">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">📤 บันทึก Delivery</div>
+      <div class="field">
+        <label>P/No · ชิ้นงาน *</label>
+        <select id="dPartSel">
+          <option value="">— เลือก P/No (เฉพาะที่มีคงเหลือ) —</option>
+        </select>
+      </div>
+      <div id="dInfoBox" class="info-box"></div>
+      <div class="field" id="dBillField" style="display:none;">
+        <label>ผูกกับบิล (เพื่อสอบกลับได้ว่า INV นี้เป็นของบิลไหน)</label>
+        <select id="dBillSel" onchange="checkDQty()">
+          <option value="">— ไม่ระบุบิล —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="field">
+          <label>จำนวนส่ง (ชิ้น) *</label>
+          <input type="number" id="dQty" placeholder="0" min="1" inputmode="numeric"
+            style="font-size:20px;text-align:center;" oninput="checkDQty()">
+        </div>
+        <div class="field">
+          <label>วันที่ส่ง</label>
+          <input type="date" id="dDate">
+        </div>
+      </div>
+      <div class="field">
+        <label>เลขที่ INV / ใบส่ง</label>
+        <input type="text" id="dInv" placeholder="เช่น INV-2606-001">
+      </div>
+      <div class="field">
+        <label>หมายเหตุ</label>
+        <input type="text" id="dNote" placeholder="(ไม่บังคับ)">
+      </div>
+      <button class="btn btn-green" onclick="saveDelivery()">📤 บันทึก Delivery</button>
+      <div id="dToast" class="toast"></div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:10px 14px 6px;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">ประวัติ Delivery ล่าสุด</div>
+      <div class="tbl-wrap">
+        <table class="st" style="min-width:380px;">
+          <thead><tr>
+            <th class="tl">วันที่</th><th class="tl">P/No</th><th class="tl">ลูกค้า</th>
+            <th>จำนวน</th><th class="tl">INV</th><th></th>
+          </tr></thead>
+          <tbody id="dHistBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HISTORY ══ -->
+
+  <!-- ══ Tab: Traceability ══ -->
+  <div id="tab-trace" style="display:none;">
+    <div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">🔍 ติดตามงานตาม P/No <span style="font-size:9px;font-weight:400;color:#cbd5e1;">build-wip-derived-v3</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div style="position:relative;flex:1;min-width:200px;">
+          <input type="text" id="traceSearchInput"
+            placeholder="พิมพ์ P/No หรือชื่อชิ้นงาน..."
+            autocomplete="off"
+            style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;outline:none;"
+            oninput="traceAcShow()" onfocus="traceAcShow()"
+            onblur="setTimeout(traceAcHide,200)">
+          <div id="ac-trace" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--navy);border-top:none;border-radius:0 0 10px 10px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.12);"></div>
+        </div>
+        <select id="tracePeriodSel" onchange="traceSearch()" style="font-size:12px;padding:9px 10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;outline:none;background:#fff;color:var(--navy);white-space:nowrap;">
+          <option value="">— ทั้งหมด (ทุกช่วงเวลา) —</option>
+        </select>
+        <button onclick="traceSearch()" style="padding:9px 18px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">ค้นหา</button>
+      </div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:6px;">📅 เลือกช่วงเวลาเพื่อดูเฉพาะยอดรับ/ชุบ/ส่งออกที่เกิดขึ้นในเดือนนั้น (อิงวันที่ของแต่ละรายการ ไม่ใช่แค่วันรับบิล)</div>
+    </div>
+    <div id="traceResult"></div>
+  </div>
+  <div id="tab-history" style="display:none;">
+    <div class="filter-bar">
+      <select id="hPartSel" onchange="renderHist()" style="flex:1;"><option value="all">— ทุก P/No —</option></select>
+      <select id="hTypeSel" onchange="renderHist()">
+        <option value="all">ทุกประเภท</option>
+        <option value="in">รับเข้า (Job Master)</option>
+        <option value="wip">WIP (ชุบแล้ว)</option>
+        <option value="out">Delivery</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="tbl-wrap">
+        <table class="st" style="min-width:420px;">
+          <thead><tr>
+            <th class="tl">วันที่</th><th>ประเภท</th>
+            <th class="tl">P/No</th><th class="tl">ลูกค้า</th>
+            <th>ชิ้น</th><th class="tl">อ้างอิง</th>
+          </tr></thead>
+          <tbody id="hBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- app-body -->
+</div><!-- end appScreen -->
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script src="unit-convert.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+//  AUTH (Central Auth)
+// ══════════════════════════════════════════════════════
+var SYSTEM_KEY = 'bl_stock';
+var TAB_IDS = ['stock','delivery','history','trace'];
+var currentRole = '';
+var currentTabs = null;
+
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  var btn = document.querySelector('#loginScreen button');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+    if (!result.ok) {
+      var msg = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      if (result.reason === 'connection_error') msg = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + result.error + ') — ลองใหม่อีกครั้ง';
+      document.getElementById('loginError').textContent = msg;
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    currentRole = result.role;
+    currentTabs = result.tabs;
+    try { sessionStorage.setItem('bl_stock_pin', pin); } catch(e){}
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    applyRole();
+    initApp();
+  });
+}
+
+function logoutBL() {
+  try { sessionStorage.removeItem('bl_stock_pin'); } catch(e){}
+  currentRole = ''; currentTabs = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+// ── จำกัดสิทธิ์ตาม role/tabs ──
+//   viewer: ดูได้อย่างเดียว — ซ่อนปุ่ม "บันทึก Delivery" และปุ่มลบ 🗑
+//   admin/operator: ใช้งานได้เต็มที่
+function applyRole() {
+  var isViewer = currentRole === 'viewer';
+
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+    var tabId = TAB_IDS[i];
+    var hidden = currentTabs && currentTabs.indexOf(tabId) === -1;
+    btn.style.display = hidden ? 'none' : '';
+  });
+  // ถ้าแท็บที่ active ถูกซ่อน ให้สลับไปแท็บแรกที่อนุญาต
+  var activeBtn = document.querySelector('.tab-btn.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    var firstVisible = null;
+    document.querySelectorAll('.tab-btn').forEach(function(btn, i){
+      if (!firstVisible && btn.style.display !== 'none') firstVisible = TAB_IDS[i];
+    });
+    if (firstVisible) switchTab(firstVisible);
+  }
+
+  var saveBtn = document.querySelector('button.btn-green[onclick="saveDelivery()"]');
+  if (saveBtn) saveBtn.style.display = isViewer ? 'none' : '';
+  document.body.classList.toggle('viewer-mode', isViewer);
+}
+
+// ══════════════════════════════════════════════════════
+//  Firebase URLs
+// ══════════════════════════════════════════════════════
+var DB_B1   = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_B2   = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// Job Master อยู่ใน DB_B1 /job-master
+var JM_URL  = DB_B1 + '/job-master.json';
+var PM_URL     = DB_B1 + '/part-master.json';  // Part Master — ทะเบียนชิ้นงานกลาง
+// Delivery ที่บันทึกใน bl_stock เก็บที่ DB_B1 /bl-delivery
+var DEL_URL    = DB_B1 + '/bl-delivery.json';
+var INTAKE_URL = DB_B1 + '/intake.json';      // intakeJobs จาก v4
+
+// ── Data ──
+var jmItems   = [];  // Job Master items → รับเข้า (receive)
+var jmRecords = [];  // Job Master records (type:'out') → delivery จาก Job Master
+var blInvoices = []; // ใบ INV จริงจาก job_master.html (data.invoices) — แต่ละรายการในนั้นผูก jobId ไว้แล้ว ไม่ต้องเดา
+
+// เช็คว่า jmRecords out-record นี้ "ผูกกับเลข INV จริง" หรือไม่ — ใช้แทนการเดาจาก id prefix (เช่น "AUTO-")
+// เพราะพบว่ามีรายการเก่าที่สร้างจากโค้ดเวอร์ชันก่อนหน้าซึ่งใช้ id ขึ้นต้นด้วย "A"+timestamp (ไม่ใช่ "AUTO-")
+// การเช็คจากเลข INV จริงใน blInvoices ตรง ๆ แม่นกว่าและไม่ขึ้นกับรูปแบบ id ที่อาจเปลี่ยนไปตามเวอร์ชันโค้ด
+var _realInvNoSet = null;
+function isRealInvRef(r) {
+  if (!r || !r.inv) return false;
+  if (!_realInvNoSet) {
+    _realInvNoSet = {};
+    blInvoices.forEach(function(inv){ if (inv.invNo) _realInvNoSet[inv.invNo] = true; });
+  }
+  return !!_realInvNoSet[r.inv];
+}
+var blDel     = [];  // delivery บันทึกเพิ่มเติมใน bl_stock
+var wipMap    = {};  // normKey → {partName, pcs, kgs, lines:{B1,B2,R1}}
+var wipByJob  = {};  // jobId → [{date, line, pcs, kg}] — ไม่จำกัด 30 วัน ใช้เฉพาะ Traceability drill-down รายบิล
+var wipRows   = {};  // normKey(partName) → [{date, line, jobId, pcs, kg, linked}] — บันทึกดิบทุกแถว ไว้กรองตามช่วงเวลา + ตรวจ NOBILL
+var pmParts   = [];  // Part Master [{id,partNo,name,customer,colors,weightPerPc,pcsPerRack}]
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+function initApp(){
+  if (window._blInitDone) return;
+  window._blInitDone = true;
+  document.getElementById('hdrDate').textContent =
+    new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('dDate').value = isoToday();
+  loadAll(false);
+  // เดิม poll ทุก 30 วิ ปรับเป็น 60 วิ (1 นาที) เพื่อลดโหลดจากการดึงไฟล์ประวัติทั้งหมดบ่อยเกินไป
+  // (bl_stock ต้องโหลดข้อมูลก้อนใหญ่จาก 5 แหล่งทุกครั้ง ต่างจาก monitor.html ที่ดึงแค่ /live.json เล็กๆ)
+  // ถ้าต้องการเห็นข้อมูลสดทันทีหลังเพิ่งกรอกอะไรไป กดปุ่ม "🔄 รีเฟรช" ที่หัวหน้าเว็บได้เลย ไม่ต้องรอ
+  setInterval(function(){ loadAll(false); }, 60000);
+}
+
+window.addEventListener('load', function(){
+  var savedPin = null;
+  try { savedPin = sessionStorage.getItem('bl_stock_pin'); } catch(e){}
+  if (savedPin) {
+    document.getElementById('pinInput').value = savedPin;
+    checkPin();
+  }
+});
+
+function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function norm(s){
+  return String(s||'').trim().toUpperCase()
+    .replace(/[\s\-_\.]+/g,'')  // ลบ space, dash, underscore, dot
+    .replace(/O/g,'0');           // แทน O (อักษร) → 0 (ตัวเลข) ป้องกัน typo
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function fmtD(s){
+  if(!s||s==='–') return '–';
+  try{ var d=new Date(s+'T00:00:00');
+    var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return d.getDate()+' '+m[d.getMonth()+1]; }catch(e){return s;}
+}
+
+// ══════════════════════════════════════════════════════
+//  LOAD ALL
+// ══════════════════════════════════════════════════════
+async function loadAll(manual) {
+  setSyncing(true);
+  try {
+    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster(), loadQCData() ]);
+    // debug: แสดง path ที่ดึง
+    console.log('[BL Stock] intake:', INTAKE_URL);
+    console.log('[BL Stock] job-master:', JM_URL);
+    console.log('[BL Stock] jmItems:', jmItems.length, 'jmRecords:', jmRecords.length);
+    console.log('[BL Stock] WIP parts:', Object.keys(wipMap).length);
+    setSyncing(false, true);
+    updateVerifyBar();
+    renderStock();
+    renderDHist();
+    populateDeliverySel();
+    buildHistFilters();
+    buildTracePeriodOptions();
+    renderHist();
+  } catch(e) {
+    setSyncing(false, false, e.message);
+    updateVerifyBar();
+  }
+}
+
+// ── Job Master + Intake ─────────────────────────────
+async function loadJobMaster() {
+  // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
+  var [jmRes, intakeRes] = await Promise.all([
+    fetch(JM_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+    fetch(INTAKE_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+  ]);
+
+  // สำคัญ: ไม่รีเซ็ตเป็น [] ก่อนเช็คผลจริงอีกต่อไป — เดิมรีเซ็ตทิ้งทันทีตรงนี้ก่อน แล้วค่อยเติมใหม่จาก fetch
+  // ถ้า fetch รอบไหนบังเอิญตอบมาไม่ครบ/ไม่มี invoices (เช่น โดน poll ทุก 30 วิ แล้วชนจังหวะ Firebase เขียนข้อมูลพอดี)
+  // ค่าจะถูกทิ้งเป็นว่างเปล่าไปเลยและไม่มีทางกลับมาได้จนกว่าจะ fetch ใหม่สำเร็จ — พบเป็นสาเหตุจริงของ blInvoices=0
+  // ทางแก้: เก็บ "ค่าที่โหลดสำเร็จไว้ก่อนหน้า" ไว้เป็น fallback แทนการทิ้งเป็น [] ถ้ารอบนี้โหลดได้ไม่ครบ
+  var prevJmItems = jmItems, prevJmRecords = jmRecords, prevBlInvoices = blInvoices;
+  var newJmItems = [], newJmRecords = [], newBlInvoices = [];
+
+  // /job-master.json → items[] + records[] + invoices[] (ใบ INV จริง ผูก jobId ต่อรายการไว้แล้ว)
+  if (jmRes.ok) {
+    try {
+      var data = await jmRes.json();
+      if (data) {
+        newJmItems   = Array.isArray(data.items)   ? data.items   : [];
+        newJmRecords = Array.isArray(data.records) ? data.records : [];
+        newBlInvoices = Array.isArray(data.invoices) ? data.invoices : (data.invoices && typeof data.invoices==='object' ? Object.values(data.invoices) : []);
+      }
+    } catch(e) {}
+  }
+
+  // ── ลองใหม่อัตโนมัติ ถ้า invoices ว่างเปล่าผิดปกติ (ทั้งที่ items/records โหลดมาได้จริง) ──
+  // เคสนี้เกิดตอนโหลดครั้งแรก (ยังไม่มี "ค่าก่อนหน้า" ให้ fallback) เช่น เปิดหน้าใหม่/รีเฟรชวันใหม่
+  // ลองซ้ำสูงสุด 2 ครั้ง เว้นช่วงสั้นๆ ก่อนจะยอมรับว่าว่างจริง (กันจังหวะ Firebase ตอบไม่ครบชั่วคราว)
+  var retriesLeft = 2;
+  while (newJmItems.length > 0 && newBlInvoices.length === 0 && !prevBlInvoices.length && retriesLeft > 0) {
+    retriesLeft--;
+    await new Promise(function(r){ setTimeout(r, 700); });
+    try {
+      var retryRes = await fetch(JM_URL, {cache:'no-store'});
+      if (retryRes.ok) {
+        var retryData = await retryRes.json();
+        if (retryData && Array.isArray(retryData.invoices) && retryData.invoices.length) {
+          newBlInvoices = retryData.invoices;
+        } else if (retryData && retryData.invoices && typeof retryData.invoices==='object') {
+          var retryArr = Object.values(retryData.invoices);
+          if (retryArr.length) newBlInvoices = retryArr;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // ใช้ค่าใหม่ถ้ามีข้อมูลจริง (ไม่ใช่ [] ว่างเปล่า) — ถ้ารอบนี้ได้ [] ว่างเปล่ามา (โหลดพลาด/ชนจังหวะ) ให้คงค่าก่อนหน้าไว้แทนที่จะทิ้ง
+  jmItems    = newJmItems.length    ? newJmItems    : prevJmItems;
+  jmRecords  = newJmRecords.length  ? newJmRecords  : prevJmRecords;
+  blInvoices = newBlInvoices.length ? newBlInvoices : prevBlInvoices;
+  _realInvNoSet = null; // รีเซ็ต cache เสมอ — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef() จาก blInvoices ล่าสุด (ใหม่หรือค่าเดิมที่คงไว้)
+
+  // /intake.json → intakeJobs[] (รับเข้าจาก Tab กรอกรายรอบ)
+  if (intakeRes.ok) {
+    try {
+      var intakeData = await intakeRes.json();
+      if (Array.isArray(intakeData)) {
+        // merge เข้า jmItems (ใช้ id เดิม ไม่ซ้ำ)
+        var existIds = new Set(jmItems.map(function(j){ return String(j.id); }));
+        intakeData.forEach(function(job) {
+          if (!existIds.has(String(job.id))) {
+            // intake job: {id,bill,date,customer,name,lot,qty,kg,color,note}
+            // แปลงให้ตรงกับ jmItems format (ใช้ name เป็น partNo)
+            jmItems.push(job);
+          }
+        });
+      }
+    } catch(e) {}
+  }
+}
+
+// ── Part Master — ทะเบียนชิ้นงานกลาง ───────────────
+async function loadPartMaster() {
+  try {
+    var res = await fetch(PM_URL);
+    if (!res.ok) return;
+    var data = await res.json();
+    if (data && Array.isArray(data.parts)) {
+      pmParts = data.parts;
+      try { localStorage.setItem('bl_pmParts', JSON.stringify(pmParts)); } catch(e){}
+    }
+  } catch(e){
+    // fallback จาก localStorage
+    try { pmParts = JSON.parse(localStorage.getItem('bl_pmParts')||'[]'); } catch(e2){ pmParts=[]; }
+  }
+}
+
+// lookup Part Master ด้วย P/No → return object หรือ null
+function pmLookup(partNo) {
+  var k = norm(partNo);
+  return pmParts.find(function(p){ return norm(p.partNo)===k; }) || null;
+}
+
+// ── BL Delivery (บันทึกเพิ่มเติมใน bl_stock) ────────
+async function loadBLDel() {
+  try {
+    var res = await fetch(DEL_URL, {cache:'no-store'});
+    var data = res.ok ? await res.json() : null;
+    blDel = Array.isArray(data && data.records) ? data.records : [];
+  } catch(e){ blDel=[]; }
+}
+
+// ── WIP จาก 3 lines ─────────────────────────────────
+async function loadWIP() {
+  wipMap = {};
+  wipByJob = {};
+  wipRows = {};
+  var lines = [
+    { url: DB_B1+'/plating-b1.json', today: DB_B1+'/data/todayBarrels.json', label:'B1' },
+    { url: DB_B2+'/plating-b2.json', today: DB_B2+'/data/todayBarrels.json', label:'B2' },
+    { url: DB_R1+'/plating-r1.json', today: DB_R1+'/data/todayBarrels.json', label:'R1' },
+  ];
+  // วันนี้ (YYYY-MM-DD ตามเวลาเครื่อง) — ใช้แปะวันที่ให้แถวจาก todayBarrels ที่ไม่มีฟิลด์วันที่ในตัวเอง
+  var todayStr = (function(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+
+  // แยกตรรกะประมวลผล 1 แถวออกมาเป็นฟังก์ชันกลาง เพื่อใช้ร่วมกันทั้งแถวจาก dayRecords (ประวัติที่บันทึกแล้ว)
+  // และแถวจาก todayBarrels (วันนี้ที่ยังไม่กด "บันทึกสรุปวันนี้") — ให้ 2 แหล่งนี้เข้าสูตรเดียวกันเป๊ะๆ
+  function processRow(row, dateStr, label) {
+    // ข้าม R (งานซ่อม/แก้ไข) — ไม่นับเป็น WIP เพราะไม่ตัดสต็อก
+    if ((row.type||'').toUpperCase() === 'R') return;
+    var pn = (row.partName||'').trim();
+    if (!pn) return;
+    var k = norm(pn);
+    var hasBillLink = !!(row.jobId && row.jobId !== 'NOBILL');
+    var rPcs = Number(row.pcs||0), rKg = Number(row.kg||0);
+
+    // เก็บ timeline ต่อบิล (jobId) แบบไม่จำกัด 30 วัน — ไว้ใช้กับ Traceability โดยเฉพาะ
+    if (hasBillLink) {
+      if (!wipByJob[row.jobId]) wipByJob[row.jobId] = [];
+      wipByJob[row.jobId].push({ date: dateStr||'', line: label, pcs: rPcs, kg: rKg });
+    }
+
+    // เก็บทุกแถวดิบแยกตาม P/No (ไม่รวมยอด) ไว้ใช้กรองตามช่วงเวลา (เดือน) และตรวจ "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
+    // แถวที่ไม่ผูกบิลจะรวมอยู่ใน wipMap[k].pcs (ยอดชุบรวม) แต่ไม่มีทางสอบกลับไปยังบิลรับเข้าใดได้ — มักเป็นสาเหตุที่ "ยอดชุบ" เกิน "ยอดรับ"
+    if (!wipRows[k]) wipRows[k] = [];
+    wipRows[k].push({ date: dateStr||'', line: label, jobId: row.jobId||'', pcs: rPcs, kg: rKg, linked: hasBillLink });
+
+    if (!wipMap[k]) wipMap[k] = { partName:pn, pcs:0, kgs:0, pcsUnlinked:0, kgsUnlinked:0, lines:{}, dates:[] };
+    wipMap[k].pcs += rPcs;
+    wipMap[k].kgs += rKg;
+    if (!hasBillLink) { wipMap[k].pcsUnlinked += rPcs; wipMap[k].kgsUnlinked += rKg; }
+    wipMap[k].lines[label] = (wipMap[k].lines[label]||0) + rPcs;
+    if (dateStr && wipMap[k].dates.indexOf(dateStr) < 0) wipMap[k].dates.push(dateStr);
+  }
+
+  await Promise.all(lines.map(async function(ln){
+    try {
+      var res = await fetch(ln.url, {cache:'no-store'});
+      if (res.ok) {
+        var data = await res.json();
+        var recs = Array.isArray(data) ? data
+                 : Array.isArray(data && data.dayRecords) ? data.dayRecords : [];
+        recs.forEach(function(dr){
+          if (!dr.rows) return;
+          dr.rows.forEach(function(row){ processRow(row, dr.date||'', ln.label); });
+        });
+      }
+    } catch(e){}
+
+    // ── รอบชุบ "วันนี้" ที่ยังไม่กด "บันทึกสรุปวันนี้" (todayBarrels) ──
+    // อ่านจาก /data/todayBarrels.json ของแต่ละไลน์เพิ่ม เพื่อให้ STOCK สะท้อนรอบที่เพิ่งกรอกสดๆ ทันที
+    // ไม่ต้องรอกดบันทึกสรุปก่อนแล้ว — ปลอดภัยจากการนับซ้ำ เพราะ todayBarrels จะถูกเคลียร์เป็น [] ทันทีที่กด
+    // "บันทึกสรุปวันนี้" (ย้ายเข้า dayRecords แทน) สองแหล่งนี้จึงไม่มีทางมีข้อมูลชุดเดียวกันซ้อนกันพร้อมกันได้เลย
+    try {
+      var res2 = await fetch(ln.today, {cache:'no-store'});
+      if (res2.ok) {
+        var todayRows = await res2.json();
+        if (Array.isArray(todayRows)) {
+          todayRows.forEach(function(row){ processRow(row, todayStr, ln.label); });
+        }
+      }
+    } catch(e){}
+  }));
+}
+
+// ══════════════════════════════════════════════════════
+//  BUILD STOCK MAP (per P/No)
+//  receive  ← jmItems[].qty  (จำนวนรับเข้าจาก Job Master)
+//  delivery ← jmRecords[type:'out'].qty + blDel[].qty
+// ══════════════════════════════════════════════════════
+function jobPartNo(job) { return job.partName || job.name || job.partNo || job.bill || ''; }
+// jobQty = จำนวนรับเข้าเป็น "ชิ้น" เสมอ (ให้หน่วยตรงกับที่ใช้เทียบ/คำนวณทั่วทั้งไฟล์)
+// ถ้าบิลรับเข้าเป็น กก. ล้วน (ไม่มี qty/pcs เลย) ต้องแปลงผ่านน้ำหนัก/ชิ้นจาก Part Master ก่อน
+// ไม่งั้นจะได้ 0 ทั้งที่รับเข้าจริง (บั๊กแบบเดียวกับที่เจอซ้ำหลายจุดในระบบนี้)
+function jobQty(job) {
+  var raw = Number(job.qty || job.pcs || job.line || 0);
+  var kg = Number(job.qtyKg || 0);
+  return ucResolvePcs(raw, kg, jobPartNo(job), pmParts).pcs;
+}
+// jobBill = เลขที่บิล (ใช้แสดงอ้างอิง ไม่ใช่ P/No)
+function jobBill(job)  { return job.bill || job.id || ''; }
+
+// getWip — ค้นหา WIP ด้วย partNo โดย:
+// 1. ตรง key ตรงๆ (norm partNo)
+// 2. ถ้าไม่เจอ → ลองหาผ่าน Part Master name field
+// 3. fuzzy match
+// คืนค่า net WIP = wipMap - delivery ที่จ่ายออกแล้ว
+function getWip(partNo) {
+  var k = norm(partNo);
+  var wo = wipMap[k];
+  if (!wo) {
+    var pm = pmLookup(partNo);
+    if (pm && pm.name) { var kn = norm(pm.name); if (wipMap[kn]) wo = wipMap[kn]; }
+  }
+  if (!wo) {
+    var keys = Object.keys(wipMap);
+    for (var i=0; i<keys.length; i++) {
+      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { wo = wipMap[keys[i]]; break; }
+    }
+  }
+  return wo || null;
+}
+
+function buildMap() {
+  var map = {};
+
+  // รับเข้าจาก Job Master items
+  jmItems.forEach(function(job){
+    var pn = jobPartNo(job);
+    var k  = norm(pn);
+    if (!k) return;
+    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, autoConsumed:0, autoConsumedKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    map[k].receive    += jobQty(job);
+    map[k].receiveKg  += Number(job.qtyKg||0);
+    map[k].jobIds.push(job.id);
+    if (!map[k].customer && job.customer) map[k].customer=job.customer;
+    if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
+  });
+
+  // Delivery จาก Job Master records (type:'out')
+  // หมายเหตุ: r.qty (ชิ้น) และ r.qtyKg (กก.) มีค่าอย่างใดอย่างหนึ่งเท่านั้นตามหน่วยของบิล —
+  // ต้องแปลง qtyKg → ชิ้น ผ่าน Part Master ด้วย ไม่งั้นบิลที่ขายเป็น กก. จะนับ delivery (ชิ้น) ได้ 0
+  //
+  // ⚠️ สำคัญ: jobRecords type:'out' มี 2 ที่มาที่ "ความหมายไม่เหมือนกัน":
+  //   1. Auto จากรอบชุบ (id ขึ้นต้น "AUTO-") — job_master.html สร้างให้อัตโนมัติทุกรอบชุบจริง (matching ด้วยชื่อ P/No)
+  //      หมายถึง "วัตถุดิบเข้าสู่กระบวนการชุบแล้ว" (JM → WIP) ไม่ใช่ "ส่งของให้ลูกค้าแล้ว"
+  //   2. ออกจาก INV จริง (id ขึ้นต้น "R" ผูก invNo จริง) หรือกรอกเองใน bl_stock — หมายถึง "ส่งของให้ลูกค้าแล้วจริง" (WIP → ลูกค้า)
+  // เดิม "delivery" รวมทั้ง 2 แบบเข้าด้วยกัน แล้วใช้ทั้งกับสถานะ "จ่ายครบ" ของหน้า Stock Board และตัดเพดาน WIP
+  // ปัญหาคือของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) พอบวกรวมกันเลยนับซ้ำสอง
+  // ทำให้ "delivery" รวมเกินยอด "receive" ได้ (เจอจริง: รับ 16,200 แต่ delivery รวม 20,700)
+  // แก้โดยแยกเป็น 2 ตัวแปรคนละความหมาย: "delivery"/"shipped" = เฉพาะส่งลูกค้าจริง (ใช้กับสถานะ "จ่ายครบ" ให้ตรงกับ job_master.html)
+  // "autoConsumed" = เฉพาะ Auto จากรอบชุบ (JM→WIP อย่างเดียว ใช้กับเพดาน WIP โดยเฉพาะ)
+  jmRecords.forEach(function(r){
+    if (r.type!=='out') return;
+    // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
+    var job = jmItems.find(function(j){ return j.id===r.jobId; });
+    if (!job) return;
+    var pn = jobPartNo(job);
+    var k = norm(pn);
+    if (!k || !map[k]) return;
+    var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+    var kgVal  = Number(r.qtyKg||0);
+    if (isRealInvRef(r)) {
+      map[k].delivery    += pcsVal;
+      map[k].deliveryKg  += kgVal;
+      map[k].shipped      += pcsVal;
+      map[k].shippedKg    += kgVal;
+    } else {
+      map[k].autoConsumed   += pcsVal;
+      map[k].autoConsumedKg += kgVal;
+    }
+  });
+
+  // Delivery เพิ่มเติมที่บันทึกใน bl_stock — ไม่นับรวมเป็น "ส่งลูกค้าจริง" (shipped) อีกต่อไป
+  // เพื่อให้ตรงกับตรรกะที่ใช้ในแท็บ Traceability (renderTraceCard) และ job_master.html "จ่ายออก"
+  // ซึ่งนับจาก INV จริงเท่านั้น — แท็บ Delivery ของ bl_stock มีไว้สำหรับเคลียร์/ปรับสต๊อก ไม่ใช่หลักฐาน INV จริงเสมอไป
+  // เดิมรวมเข้าไปด้วย ทำให้ตัวเลข "ส่งลูกค้า" ของหน้า Stock Board กับ Traceability ไม่ตรงกัน — เก็บยอดนี้แยกไว้ต่างหาก
+  // (deliveryAdj/deliveryAdjKg) เผื่ออยากโชว์เป็นข้อมูลประกอบ แต่ไม่เอาไปรวมกับ delivery/shipped หลักอีก
+  blDel.forEach(function(d){
+    var k = norm(d.partNo||'');
+    if (!k || !map[k]) return;
+    map[k].deliveryAdj   = (map[k].deliveryAdj||0)   + Number(d.qty||0);
+    map[k].deliveryAdjKg = (map[k].deliveryAdjKg||0) + Number(d.qtyKg||0);
+  });
+
+  // ── เติมข้อมูลจาก Part Master ──
+  Object.keys(map).forEach(function(k) {
+    var pm = pmLookup(map[k].partNo);
+    if (pm) {
+      if (pm.customer)    map[k].customer    = pm.customer;
+      if (pm.name)        map[k].name        = pm.name;
+      if (pm.colors)      map[k].colors      = pm.colors;
+      if (pm.weightPerPc) map[k].weightPerPc = pm.weightPerPc;
+      if (pm.pcsPerRack)  map[k].pcsPerRack  = pm.pcsPerRack;
+    }
+
+    // ── "ชุบแล้ว แต่ยังไม่ได้ขาย" (WIP) = ชุบไปแล้ว (จาก wipMap ไฟล์ v4/5/6) − ขายออกจริง (INV) ──
+    // ไม่แก้ไข wo.pcs/wo.kgs ตรงนี้โดยตรง (wipMap เป็น object ที่ใช้ร่วมกันทั้งหน้า ถ้าแก้ค่าดิบทิ้งไปจะกระทบจุดอื่นที่อ่านค่าดิบต่อ)
+    // ไปคำนวณ "WIP หลังหักขาย" ที่จุดแสดงผลแต่ละจุดแทน โดยใช้สูตรเดียวกัน: max(0, ชุบดิบ − ขายจริง)
+  });
+
+  return map;
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER STOCK BOARD
+// ══════════════════════════════════════════════════════
+function renderStock() {
+  var map    = buildMap();
+  var parts  = Object.values(map);
+  var fSt    = document.getElementById('fStatus').value;
+  var fMonth = document.getElementById('fMonth').value;
+  var fSrch  = norm(document.getElementById('fSearch').value||'');
+
+  // Month dropdown จาก job items
+  var months={};
+  jmItems.forEach(function(j){ if(j.date) months[j.date.slice(0,7)]=1; });
+  var mSorted=Object.keys(months).sort().reverse();
+  var mSel=document.getElementById('fMonth');
+  if (mSel.options.length<=1) {
+    var mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    mSorted.forEach(function(ym){
+      var p=ym.split('-');
+      mSel.innerHTML+='<option value="'+ym+'">'+mn[parseInt(p[1])]+' '+(parseInt(p[0])+543)+'</option>';
+    });
+  }
+
+  // Month filter (จาก job items ที่มีวันที่รับในเดือนนั้น)
+  if (fMonth!=='all') {
+    var validKeys={};
+    jmItems.filter(function(j){ return (j.date||'').slice(0,7)===fMonth; })
+           .forEach(function(j){ validKeys[norm(jobPartNo(j))]=1; });
+    parts=parts.filter(function(p){ return validKeys[norm(p.partNo)]; });
+  }
+
+  if (fSrch) parts=parts.filter(function(p){
+    return norm(p.partNo).includes(fSrch)||norm(p.customer).includes(fSrch);
+  });
+
+  // Summary
+  var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
+  parts.forEach(function(p){
+    var wo=getWip(p.partNo)||{};
+    var pmw=pmLookup(p.partNo);
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pmw && pmw.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pmw.weightPerPc);
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wpcs = Math.max(0, platedPcs   - (p.shipped||0));
+    var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+    sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
+    sumWip+=wpcs;      sumWipKg+=wkg;
+    sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
+  });
+  document.getElementById('sItems').textContent=parts.length;
+  document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
+  // แสดง kg ใต้ตัวเลขชิ้น ถ้ามี
+  var rcvKgEl=document.getElementById('sRcvKg'); if(rcvKgEl) rcvKgEl.textContent=sumRcvKg>0?sumRcvKg.toFixed(1)+' kg':'';
+  var wipKgEl=document.getElementById('sWipKg'); if(wipKgEl) wipKgEl.textContent=sumWipKg>0?sumWipKg.toFixed(1)+' kg':'';
+  var delKgEl=document.getElementById('sDelKg'); if(delKgEl) delKgEl.textContent=sumDelKg>0?sumDelKg.toFixed(1)+' kg':'';
+  document.getElementById('sItems').textContent=parts.length;
+  document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
+  document.getElementById('sWip').textContent=sumWip.toLocaleString();
+  document.getElementById('sDel').textContent=sumDel.toLocaleString();
+
+  // Filter by status
+  var mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var filtParts = parts.filter(function(p){
+    if (fSt==='all') return true;
+    var st = getStatus(p);
+    if (fSt==='active')  return st==='กำลังผลิต';
+    if (fSt==='partial') return st==='จ่ายบางส่วน';
+    if (fSt==='done')    return st==='จ่ายครบ';
+    if (fSt==='over')    return st==='เกินกำหนด';
+    return true;
+  });
+
+  filtParts.sort(function(a,b){ return (b.receive-b.delivery)-(a.receive-a.delivery); });
+  window._parts = filtParts;
+
+  var tbody=document.getElementById('stockBody');
+  if (!filtParts.length) {
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">ไม่มีข้อมูล — ตรวจสอบ Job Master</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtParts.map(function(p,i){
+    var pm     = pmLookup(p.partNo);
+    var wo     = getWip(p.partNo)||{};
+    var platedPcs = wo.pcs||0;
+    if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+    var wip   = Math.max(0, platedPcs  - (p.shipped||0));
+    var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+
+    var remain   = Math.max(0, p.receive - p.delivery);
+    var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
+    var st       = getStatus(p);
+
+    var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
+
+    // helper: แสดง ชิ้น + kg ซ้อนกัน
+    function dualCell(pcs, kg, color) {
+      var pcsStr = pcs > 0 ? '<div style="font-weight:700;color:'+(color||'var(--navy)')+';">'+pcs.toLocaleString()+'</div>' : '<div style="color:#94a3b8;">–</div>';
+      var kgStr  = kg  > 0 ? '<div style="font-size:9px;color:var(--text-muted);">'+kg.toFixed(2)+' kg</div>' : '';
+      return pcsStr + kgStr;
+    }
+
+    var wipStr = (wip>0||wipKg>0)
+      ? '<div style="font-weight:700;">'+wip.toLocaleString()+'</div>'+
+        '<div style="font-size:9px;color:var(--text-muted);">'+wipKg.toFixed(2)+' kg</div>'
+      : '<div style="color:#94a3b8;">–</div>';
+
+    var remColor = remain===0&&remainKg===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
+
+    // สีชุบ + ชื่อจาก Part Master
+    var colorStr = '';
+    if (pm && pm.colors) {
+      colorStr = pm.colors.split('').filter(function(c){ return 'BCK'.includes(c); }).map(function(c){
+        var s = c==='B'?'background:#dbeafe;color:#1e40af':c==='C'?'background:#dcfce7;color:#15803d':'background:#fef9c3;color:#854d0e';
+        return '<span style="'+s+';padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;">'+c+'</span>';
+      }).join('');
+    }
+    var nameStr = pm && pm.name
+      ? '<div style="font-size:9px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">'+esc(pm.name)+'</div>'
+      : '';
+
+    return '<tr id="sr'+i+'">' +
+      '<td class="tl" style="font-weight:600;font-size:12px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+
+        esc(p.partNo)+(colorStr?' <span>'+colorStr+'</span>':'')+nameStr+
+      '</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.customer||'–')+'</td>'+
+      '<td>'+dualCell(p.receive, p.receiveKg||0, 'var(--blue)')+'</td>'+
+      '<td>'+wipStr+'</td>'+
+      '<td>'+dualCell(p.delivery, p.deliveryKg||0, '#059669')+'</td>'+
+      '<td>'+dualCell(remain, remainKg, remColor)+'</td>'+
+      '<td><span class="badge '+badgeCls+'">'+st+'</span></td>'+
+      '<td><button onclick="toggleDetail('+i+')" id="chv'+i+'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);">›</button></td>'+
+    '</tr>'+
+    '<tr id="dr'+i+'" style="display:none;"><td colspan="8" style="padding:0 6px 10px;"><div id="dc'+i+'"></div></td></tr>';
+  }).join('');
+}
+
+function getStatus(p) {
+  var wipObj = getWip(p.partNo)||{};
+  var wip = (wipObj.pcs||0) + (wipObj.kgs||0);  // ถ้ามี pcs หรือ kgs ถือว่ามี WIP
+  if (p.delivery >= p.receive && p.receive>0) return 'จ่ายครบ';
+  if (p.delivery > 0) return 'จ่ายบางส่วน';
+  if (p.dueDate && new Date(p.dueDate)<new Date()) return 'เกินกำหนด';
+  if (wip>0 || p.receive>0) return 'กำลังผลิต';
+  return 'กำลังผลิต';
+}
+
+function toggleDetail(i) {
+  var dr=document.getElementById('dr'+i);
+  var isOpen=dr.style.display!=='none';
+  // close all
+  document.querySelectorAll('[id^="dr"]').forEach(function(r){r.style.display='none';});
+  document.querySelectorAll('[id^="chv"]').forEach(function(c){c.textContent='›';});
+  if(isOpen){return;}
+  document.getElementById('chv'+i).textContent='⌄';
+  dr.style.display='';
+  var p=(window._parts||[])[i]; if(!p)return;
+  document.getElementById('dc'+i).innerHTML=buildDetail(p);
+}
+
+function buildDetail(p) {
+  var k=norm(p.partNo);
+  var pm=pmLookup(p.partNo); // Part Master data
+  var wo=getWip(p.partNo)||{};
+  var platedPcs = wo.pcs||0;
+  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+  // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
+  var wip = Math.max(0, platedPcs - (p.shipped||0));
+  var remain=Math.max(0,p.receive-p.delivery);
+
+  // Job master items ของ P/No นี้
+  var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  // Job master delivery records
+  var jmDels=[];
+  jobs.forEach(function(job){
+    jmRecords.filter(function(r){ return r.jobId===job.id && r.type==='out'; }).forEach(function(r){
+      jmDels.push({date:r.date||'–',qty:r.qty,ref:r.bill||r.inv||'–',src:'Job Master'});
+    });
+  });
+  // BL delivery
+  blDel.filter(function(d){ return norm(d.partNo||'')===k; }).forEach(function(d){
+    jmDels.push({date:d.date||'–',qty:d.qty,ref:d.inv||'–',src:'BL Stock',id:d.id});
+  });
+  jmDels.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  var html='<div class="detail-box">';
+
+  // ── Part Master info bar ──
+  if (pm) {
+    var colorBadges = (pm.colors||'').split('').filter(function(c){ return 'BCK'.includes(c); }).map(function(c){
+      var s = c==='B'?'background:#dbeafe;color:#1e40af':c==='C'?'background:#dcfce7;color:#15803d':'background:#fef9c3;color:#854d0e';
+      return '<span style="'+s+';padding:1px 6px;border-radius:5px;font-size:10px;font-weight:700;">'+c+'</span>';
+    }).join(' ');
+    html += '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;">';
+    html += '<div style="font-size:10px;font-weight:700;color:#0369a1;">📦 Part Master</div>';
+    if (pm.name)    html += '<div style="font-size:11px;color:var(--navy);font-weight:600;">'+esc(pm.name)+'</div>';
+    if (pm.colors)  html += '<div>'+colorBadges+'</div>';
+    if (pm.weightPerPc) {
+      html += '<div style="font-size:10px;color:var(--text-muted);">⚖️ '+pm.weightPerPc.toFixed(2)+' g/ชิ้น';
+      if (pm.pcsPerRack) html += ' · '+pm.pcsPerRack+' ชิ้น/rack';
+      // คำนวณ kg ที่ควรได้
+      if (wo.kgs) {
+        var calcPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
+        html += ' → WIP '+wo.kgs.toFixed(2)+'kg ≈ <strong>'+calcPcs.toLocaleString()+' ชิ้น</strong>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:7px 12px;margin-bottom:10px;font-size:10px;color:#854d0e;">'+
+      '⚠️ P/No นี้ยังไม่อยู่ใน Part Master — <a href="part_master.html" target="_blank" style="color:#1e40af;font-weight:600;">เพิ่มที่นี่</a> เพื่อให้ WIP match อัตโนมัติ'+
+      '</div>';
+  }
+
+  // Summary row
+  html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">';
+  html+='<div style="padding:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">รับเข้ารวม</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--blue);">'+p.receive.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น ('+jobs.length+' ล็อต)</div></div>';
+
+  html+='<div style="padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">WIP ชุบแล้ว</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:var(--amber);">'+wip.toLocaleString()+'</div>';
+  if(wo.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wo.kgs.toFixed(1)+' Kgs · '+Object.keys(wo.lines||{}).join('/')+'</div>';
+  else html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น</div>';
+  html+='</div>';
+
+  html+='<div style="padding:8px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">คงเหลือ</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:'+(remain===0?'#94a3b8':'var(--green)')+';">'+remain.toLocaleString()+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">ส่งแล้ว '+p.delivery+'</div></div>';
+  html+='</div>';
+
+  // Job lots (รับเข้า)
+  if (jobs.length) {
+    html+='<div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px;">📥 รับเข้า (จาก Job Master · '+jobs.length+' ล็อต)</div>';
+    html+='<div class="tbl-wrap"><table class="st" style="min-width:340px;"><thead><tr>';
+    html+='<th class="tl">วันที่รับ</th><th class="tl">Bill No</th><th class="tl">Lot No</th><th>จำนวน (ชิ้น)</th><th>น้ำหนัก (Kg)</th></tr></thead><tbody>';
+    jobs.forEach(function(j){
+      html+='<tr><td class="tl">'+fmtD(j.date)+'</td><td class="tl" style="font-size:10px;">'+esc(jobBill(j))+'</td>'+
+        '<td class="tl" style="font-size:10px;">'+esc(j.lot||'–')+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);">'+Number(j.qty||j.pcs||j.line||0).toLocaleString()+'</td>'+
+        '<td style="color:var(--text-muted);">'+(j.kg?j.kg:'–')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  // Delivery
+  if (jmDels.length) {
+    html+='<div style="font-size:10px;font-weight:700;color:#059669;margin:8px 0 4px;">📤 Delivery ('+jmDels.length+' ครั้ง)</div>';
+    html+='<div class="tbl-wrap"><table class="st" style="min-width:320px;"><thead><tr>';
+    html+='<th class="tl">วันที่</th><th>จำนวน</th><th class="tl">INV/อ้างอิง</th><th class="tl">แหล่ง</th><th></th></tr></thead><tbody>';
+    jmDels.forEach(function(d){
+      html+='<tr><td class="tl">'+fmtD(d.date)+'</td>'+
+        '<td style="font-weight:700;color:#059669;">'+Number(d.qty||0).toLocaleString()+'</td>'+
+        '<td class="tl" style="font-size:10px;">'+esc(d.ref)+'</td>'+
+        '<td class="tl" style="font-size:10px;color:var(--text-muted);">'+esc(d.src)+'</td>'+
+        '<td>'+(d.id?'<button onclick="deleteBLDel(\''+d.id+'\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑</button>':'')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+
+  html+='</div>';
+  return html;
+}
+
+// ══════════════════════════════════════════════════════
+//  DELIVERY (บันทึกเพิ่มเติม)
+// ══════════════════════════════════════════════════════
+function populateDeliverySel() {
+  var map=buildMap();
+  var sel=document.getElementById('dPartSel');
+  var cur=sel.value;
+  sel.innerHTML='<option value="">— เลือก P/No (เฉพาะที่มีคงเหลือ) —</option>';
+  Object.values(map)
+    .filter(function(p){ return p.receive>p.delivery; })
+    .sort(function(a,b){ return a.partNo.localeCompare(b.partNo); })
+    .forEach(function(p){
+      var r=p.receive-p.delivery;
+      var opt=document.createElement('option');
+      opt.value=p.partNo+'||'+p.customer;
+      opt.textContent=p.partNo+(p.customer?' ('+p.customer+')':'')+'  —  คงเหลือ '+r.toLocaleString()+' ชิ้น';
+      sel.appendChild(opt);
+    });
+  if(cur) sel.value=cur;
+  sel.onchange=showDInfo;
+}
+
+// ดึงรายการ INV จริงที่ขายชิ้นงานของบิลนี้ออกไป — จาก invoices[] ใน job_master.html โดยตรง
+// แต่ละ invoice.items[] ผูก jobId ไว้อยู่แล้วตั้งแต่ตอนออกใบ INV จริง ไม่ต้องเดา/จับคู่เอง
+function getBillInvEvents(jobId) {
+  var events = [];
+  blInvoices.forEach(function(inv) {
+    (inv.items||[]).forEach(function(l) {
+      if (l.jobId === jobId) {
+        events.push({
+          date: inv.date || '',
+          invNo: inv.invNo || inv.id || '-',
+          qty: Number(l.qty || 0),
+          unit: l.unit || 'pcs',
+          pcs: (l.pcs!=null) ? Number(l.pcs) : null // จำนวนชิ้นที่แปลงแล้ว (จาก job_master.html) — INV เก่าอาจไม่มีค่านี้
+        });
+      }
+    });
+  });
+  return events.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+}
+
+// คำนวณยอดที่ "ส่งลูกค้าจริง" แล้วของบิลเดียว (jobId) — ใช้ทั้งฟอร์ม Delivery (เช็คไม่ให้ส่งเกิน) และตาราง "รายการบิล"
+// หมายเหตุ: jmRecords type:'out' มี 2 ที่มา — (1) รายการที่ไม่ได้ผูกกับเลข INV จริง (เช่น "Auto จากรอบชุบ" หรือข้อมูลเก่าที่ไม่มีเลข INV)
+// หมายถึงวัตถุดิบเพิ่งเข้าสู่ WIP ยังไม่ได้ส่งใคร กับ (2) ออกจาก INV จริง/กรอกเองใน bl_stock ซึ่งหมายถึงส่งลูกค้าจริงแล้ว — ต้องนับเฉพาะแบบที่ 2 เท่านั้น
+// ไม่งั้น "คงเหลือ" ของบิลจะโชว์ 0 ทั้งที่จริงยังมีของอยู่ใน WIP รอส่ง (แค่ยังไม่ได้ออก INV เท่านั้น)
+// ใช้การเช็คกับเลข INV จริงใน blInvoices ตรง ๆ (isRealInvRef) แทนการเดารูปแบบ id — เพราะพบว่ามี id รูปแบบเก่าหลายแบบปนกันอยู่ในข้อมูลจริง
+function getBillOutQty(job) {
+  var out = 0;
+  var pn = jobPartNo(job);
+  jmRecords.forEach(function(r){
+    if (r.type!=='out' || r.jobId!==job.id) return;
+    if (!isRealInvRef(r)) return; // ไม่ผูกกับเลข INV จริง — ไม่นับเป็น "ส่งลูกค้า"
+    out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+  });
+  blDel.forEach(function(d){ if (d.jobId===job.id) out += Number(d.qty||0); });
+  return out;
+}
+
+// getBillOutQtyInvOnly — เหมือน getBillOutQty() แต่ไม่รวม blDel (แท็บ Delivery) เลย นับจาก INV จริงล้วนๆ
+// ใช้เฉพาะที่ต้องให้ตัวเลขตรงกับ STOCK3/job_master.html "จ่ายออก" เป๊ะๆ (getBillOutQty ปกติยังรวม blDel ไว้
+// เพราะใช้เช็คยอดคงเหลือของฟอร์ม Delivery เอง ซึ่งจำเป็นต้องรู้ว่าเคยกรอก Delivery ไปแล้วเท่าไหร่ คนละจุดประสงค์กัน)
+function getBillOutQtyInvOnly(job) {
+  var out = 0;
+  var pn = jobPartNo(job);
+  jmRecords.forEach(function(r){
+    if (r.type!=='out' || r.jobId!==job.id) return;
+    if (!isRealInvRef(r)) return;
+    out += ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), pn, pmParts).pcs;
+  });
+  return out;
+}
+
+function showDInfo(){
+  var val=document.getElementById('dPartSel').value;
+  var box=document.getElementById('dInfoBox');
+  if(!val){box.style.display='none';document.getElementById('dBillField').style.display='none';return;}
+  var pn=val.split('||')[0], cu=val.split('||')[1]||'';
+  var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+  var wip=(getWip(pn)||{}).pcs||0;
+  var remain=item.receive-item.delivery;
+  box.style.display='block';
+  box.innerHTML='<strong>'+esc(pn)+'</strong>'+(cu?' · <span style="color:var(--text-muted)">'+esc(cu)+'</span>':'')+
+    ' &nbsp;|&nbsp; รับ <strong style="color:var(--blue)">'+item.receive+'</strong>'+
+    ' &nbsp;WIP <strong style="color:var(--amber)">'+wip+'</strong>'+
+    ' &nbsp;ส่งแล้ว <strong style="color:#059669">'+item.delivery+'</strong>'+
+    ' &nbsp;→ <strong style="color:'+(remain<=0?'#94a3b8':'var(--navy)')+'">'+remain+' ชิ้น</strong>';
+  populateDBillSel(pn);
+}
+
+// เติมตัวเลือกบิลของ P/No ที่เลือกไว้ ให้ผูก Delivery เข้ากับบิลได้ (สอบกลับได้ว่า INV นี้ตัดจากบิลไหน)
+function populateDBillSel(pn) {
+  var fld = document.getElementById('dBillField');
+  var sel = document.getElementById('dBillSel');
+  if (!fld || !sel) return;
+  var k = norm(pn);
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  if (!bills.length) { fld.style.display='none'; sel.innerHTML='<option value="">— ไม่ระบุบิล —</option>'; return; }
+  sel.innerHTML = '<option value="">— ไม่ระบุบิล —</option>' +
+    bills.map(function(j){
+      var rem = Math.max(0, jobQty(j) - getBillOutQty(j));
+      return '<option value="'+esc(j.id)+'">'+esc(jobBill(j))+' — เหลือ '+rem.toLocaleString()+' ชิ้น ('+fmtD(j.date||'')+')</option>';
+    }).join('');
+  fld.style.display = 'block';
+}
+
+function checkDQty(){
+  var val=document.getElementById('dPartSel').value; if(!val)return;
+  var pn=val.split('||')[0];
+  var remain;
+  var billId=(document.getElementById('dBillSel')||{}).value;
+  if (billId) {
+    var job = jmItems.find(function(j){ return j.id===billId; });
+    remain = job ? Math.max(0, jobQty(job) - getBillOutQty(job)) : 0;
+  } else {
+    var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+    remain=item.receive-item.delivery;
+  }
+  var qty=parseInt(document.getElementById('dQty').value)||0;
+  document.getElementById('dQty').style.borderColor=qty>remain?'#ef4444':'var(--border)';
+}
+
+async function saveDelivery(){
+  if(currentRole==='viewer'){ return; }
+  var val=document.getElementById('dPartSel').value;
+  var qty=parseInt(document.getElementById('dQty').value)||0;
+  var date=document.getElementById('dDate').value;
+  var inv=document.getElementById('dInv').value.trim();
+  var note=document.getElementById('dNote').value.trim();
+  var billId=(document.getElementById('dBillSel')||{}).value||'';
+  var toast=document.getElementById('dToast');
+
+  if(!val||!qty||!date){
+    toast.className='toast terr'; toast.textContent='❌ กรุณาเลือก P/No, จำนวน และวันที่';
+    setTimeout(function(){toast.className='toast';},2500); return;
+  }
+  var pn=val.split('||')[0], cu=val.split('||')[1]||'';
+
+  var remain;
+  if (billId) {
+    var job = jmItems.find(function(j){ return j.id===billId; });
+    remain = job ? Math.max(0, jobQty(job) - getBillOutQty(job)) : 0;
+  } else {
+    var map=buildMap(); var item=map[norm(pn)]||{receive:0,delivery:0};
+    remain=item.receive-item.delivery;
+  }
+  if(qty>remain){
+    toast.className='toast terr'; toast.textContent='⚠️ เกินคงเหลือ ['+remain.toLocaleString()+' ชิ้น]'+(billId?' ของบิลนี้':'');
+    setTimeout(function(){toast.className='toast';},3000); return;
+  }
+
+  var rec={id:'DEL'+Date.now(),date:date,partNo:pn,customer:cu,qty:qty,inv:inv,note:note,jobId:billId||''};
+  blDel.unshift(rec);
+  try{
+    await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({records:blDel,savedAt:new Date().toISOString()})});
+    toast.className='toast tok'; toast.textContent='✅ บันทึก Delivery '+qty.toLocaleString()+' ชิ้น';
+    setTimeout(function(){toast.className='toast';},2500);
+    document.getElementById('dQty').value='';
+    document.getElementById('dInv').value='';
+    document.getElementById('dNote').value='';
+    document.getElementById('dInfoBox').style.display='none';
+    document.getElementById('dBillField').style.display='none';
+    document.getElementById('dPartSel').value='';
+    renderStock(); renderDHist(); populateDeliverySel();
+  }catch(e){
+    blDel.shift();
+    toast.className='toast terr'; toast.textContent='❌ บันทึกไม่สำเร็จ: '+e.message;
+    setTimeout(function(){toast.className='toast';},3000);
+  }
+}
+
+async function deleteBLDel(id){
+  if(currentRole==='viewer'){ return; }
+  if(!confirm('ลบรายการ Delivery นี้?')) return;
+  blDel=blDel.filter(function(d){return d.id!==id;});
+  await fetch(DEL_URL,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({records:blDel,savedAt:new Date().toISOString()})});
+  renderStock(); renderDHist(); populateDeliverySel();
+  // re-render open detail if any
+  document.querySelectorAll('[id^="dr"]').forEach(function(r){r.style.display='none';});
+}
+
+function renderDHist(){
+  var tbody=document.getElementById('dHistBody');
+  if(!blDel.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">ยังไม่มีรายการ</td></tr>';
+    return;
+  }
+  tbody.innerHTML=blDel.slice(0,40).map(function(d){
+    return '<tr>'+
+      '<td class="tl" style="font-size:11px;">'+fmtD(d.date)+'</td>'+
+      '<td class="tl" style="font-weight:600;font-size:12px;">'+esc(d.partNo)+'</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);">'+esc(d.customer||'–')+'</td>'+
+      '<td style="font-weight:700;color:#059669;">'+Number(d.qty).toLocaleString()+'</td>'+
+      '<td class="tl" style="font-size:11px;">'+esc(d.inv||'–')+'</td>'+
+      '<td><button onclick="deleteBLDel(\''+d.id+'\')" style="font-size:10px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════════
+function buildHistFilters(){
+  var sel=document.getElementById('hPartSel');
+  var existing=new Set(Array.from(sel.options).map(function(o){return o.value;}));
+  var parts=new Set();
+  jmItems.forEach(function(j){ var pn=jobPartNo(j); if(pn) parts.add(pn); });
+  blDel.forEach(function(d){if(d.partNo)parts.add(d.partNo);});
+  [...parts].sort().forEach(function(p){
+    if(!existing.has(p)){
+      var opt=document.createElement('option'); opt.value=p; opt.textContent=p; sel.appendChild(opt);
+    }
+  });
+}
+
+function renderHist(){
+  var pf=document.getElementById('hPartSel').value;
+  var tf=document.getElementById('hTypeSel').value;
+  var all=[];
+
+  // รับเข้า (job master items)
+  if(tf==='all'||tf==='in'){
+    jmItems.forEach(function(j){
+      var pn=jobPartNo(j);
+      if(pf!=='all'&&pn!==pf) return;
+      all.push({date:j.date||'–',type:'in',partNo:pn||'–',customer:j.customer||'–',qty:jobQty(j),ref:jobBill(j)||'–'});
+    });
+  }
+
+  // WIP
+  if(tf==='all'||tf==='wip'){
+    Object.values(wipMap).forEach(function(w){
+      if(!w.pcs&&!w.kgs) return;
+      if(pf!=='all'&&norm(w.partName)!==norm(pf)) return;
+      var lineStr=Object.entries(w.lines||{}).filter(function(e){return e[1]>0;}).map(function(e){return e[0]+':'+e[1];}).join('/');
+      all.push({date:'–',type:'wip',partNo:w.partName,customer:'',qty:w.pcs,ref:lineStr+(w.kgs?' ('+w.kgs.toFixed(1)+'kg)':'')});
+    });
+  }
+
+  // Delivery จาก Job Master
+  if(tf==='all'||tf==='out'){
+    jmRecords.filter(function(r){return r.type==='out';}).forEach(function(r){
+      var job=jmItems.find(function(j){return j.id===r.jobId;});
+      if(!job) return;
+      var pn=jobPartNo(job);
+      if(pf!=='all'&&pn!==pf) return;
+      all.push({date:r.date||'–',type:'out',partNo:pn||'–',customer:job.customer||'–',qty:r.qty||0,ref:r.bill||r.inv||'–'});
+    });
+    blDel.forEach(function(d){
+      if(pf!=='all'&&d.partNo!==pf) return;
+      all.push({date:d.date||'–',type:'out',partNo:d.partNo,customer:d.customer||'–',qty:d.qty||0,ref:d.inv||'–'});
+    });
+  }
+
+  all.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+
+  var typeMap={in:'📥 รับ',wip:'🔧 WIP',out:'📤 ส่ง'};
+  var badgeMap={in:'ok',wip:'wip',out:'part'};
+  var tbody=document.getElementById('hBody');
+  if(!all.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML=all.slice(0,120).map(function(r){
+    return '<tr>'+
+      '<td class="tl" style="font-size:11px;">'+(r.date!=='–'?fmtD(r.date):'–')+'</td>'+
+      '<td><span class="badge '+badgeMap[r.type]+'">'+typeMap[r.type]+'</span></td>'+
+      '<td class="tl" style="font-weight:600;font-size:12px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(r.partNo)+'</td>'+
+      '<td class="tl" style="font-size:11px;color:var(--text-muted);">'+esc(r.customer)+'</td>'+
+      '<td style="font-weight:700;">'+Number(r.qty).toLocaleString()+'</td>'+
+      '<td class="tl" style="font-size:10px;color:var(--text-muted);">'+esc(r.ref)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  TAB SWITCH
+// ══════════════════════════════════════════════════════
+function switchTab(name){
+  ['stock','delivery','history','trace'].forEach(function(t){
+    document.getElementById('tab-'+t).style.display=t===name?'':'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(function(btn,i){
+    btn.classList.toggle('active',['stock','delivery','history','trace'][i]===name);
+  });
+  if(name==='delivery'){ populateDeliverySel(); showDInfo(); }
+  if(name==='history') { buildHistFilters(); renderHist(); }
+  if(name==='trace')   { traceAcShow(); }
+}
+
+// ══════════════════════════════════════════════════════
+//  SYNC STATUS
+// ══════════════════════════════════════════════════════
+async function showDebug() {
+  // สร้าง overlay modal
+  var overlay = document.createElement('div');
+  overlay.id = 'debugOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#0f172a;color:#e2e8f0;border-radius:16px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-size:14px;font-weight:700;color:#60a5fa;">🔍 Debug — BL Stock</div>
+        <button onclick="document.getElementById('debugOverlay').remove()"
+          style="background:#334155;border:none;color:#e2e8f0;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;">✕ ปิด</button>
+      </div>
+      <div id="debugBody" style="line-height:1.8;">⏳ กำลังทดสอบ...</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  var out = [];
+  function line(txt, color) {
+    out.push('<div style="color:' + (color||'#e2e8f0') + ';">' + txt + '</div>');
+    document.getElementById('debugBody').innerHTML = out.join('');
+  }
+  function head(txt) { line(''); line('── ' + txt + ' ──', '#60a5fa'); }
+  function ok(txt)   { line('✅ ' + txt, '#4ade80'); }
+  function warn(txt) { line('⚠️  ' + txt, '#fbbf24'); }
+  function err(txt)  { line('❌ ' + txt, '#f87171'); }
+  function info(txt) { line('   ' + txt, '#94a3b8'); }
+
+  // ── สถานะหน่วยความจำ ──
+  head('ข้อมูลในหน่วยความจำ (ตอนนี้)');
+  info('jmItems   : ' + jmItems.length + ' รายการ');
+  info('jmRecords : ' + jmRecords.length + ' (out: ' + jmRecords.filter(function(r){return r.type==='out';}).length + ')');
+  info('blDel     : ' + blDel.length + ' รายการ');
+  info('pmParts   : ' + pmParts.length + ' P/No ใน Part Master' + (pmParts.length===0?' ⚠️ ยังไม่มีข้อมูล':''));
+  var wipKeys = Object.keys(wipMap);
+  info('wipMap : ' + wipKeys.length + ' P/No');
+  if (wipKeys.length > 0) {
+    info('wipMap sample keys: ' + wipKeys.slice(0,5).join(', '));
+    var sampleKey = wipKeys[0];
+    info('wipMap["'+sampleKey+'"]: partName="'+wipMap[sampleKey].partName+'" pcs='+wipMap[sampleKey].pcs);
+  }
+  info('jmItems partNos: ' + jmItems.slice(0,5).map(function(j){ return jobPartNo(j); }).join(', '));
+  if (jmItems.length > 0) {
+    info('jmItems[0] FULL:');
+    var fields = Object.keys(jmItems[0]);
+    fields.forEach(function(f){
+      info('  .' + f + ' = ' + JSON.stringify(jmItems[0][f]).slice(0,80));
+    });
+    info('→ jobPartNo: "' + jobPartNo(jmItems[0]) + '"  jobQty: ' + jobQty(jmItems[0]));
+  }
+
+  // ── ทดสอบ Firebase URLs ──
+  var tests = [
+    { label:'Job Master (B1)', url: JM_URL },
+    { label:'Intake (B1)',     url: INTAKE_URL },
+    { label:'BL Delivery',    url: DEL_URL },
+    { label:'WIP B1',         url: DB_B1+'/plating-b1.json' },
+    { label:'WIP B2',         url: DB_B2+'/plating-b2.json' },
+    { label:'WIP R1',         url: DB_R1+'/plating-r1.json' },
+  ];
+
+  for (var i = 0; i < tests.length; i++) {
+    var t = tests[i];
+    head(t.label);
+    info('URL: ' + t.url);
+    try {
+      var t0 = Date.now();
+      var res = await fetch(t.url, {cache:'no-store'});
+      var ms = Date.now() - t0;
+      info('HTTP Status: ' + res.status + ' (' + ms + 'ms)');
+      if (!res.ok) {
+        err('HTTP ' + res.status + ' — fetch ไม่สำเร็จ');
+        try { var errTxt = await res.text(); info('body: ' + errTxt.slice(0,120)); } catch(e2){}
+        continue;
+      }
+      var raw = await res.text();
+      if (!raw || raw === 'null') {
+        warn('Response = null / empty — ยังไม่มีข้อมูลใน Firebase path นี้');
+        continue;
+      }
+      try {
+        var json = JSON.parse(raw);
+        // ตรวจสอบโครงสร้าง
+        if (t.url === JM_URL) {
+          var items   = Array.isArray(json && json.items)   ? json.items.length   : '(ไม่ใช่ array)';
+          var records = Array.isArray(json && json.records) ? json.records.length : '(ไม่ใช่ array)';
+          ok('โหลดสำเร็จ — items: ' + items + ', records: ' + records);
+          if (json && json.items && json.items[0]) info('items[0]: ' + JSON.stringify(json.items[0]).slice(0,100));
+        } else if (t.url === INTAKE_URL) {
+          var cnt = Array.isArray(json) ? json.length : '(ไม่ใช่ array — type: ' + typeof json + ')';
+          if (Array.isArray(json) && json.length > 0) {
+            ok('โหลดสำเร็จ — ' + cnt + ' รายการ');
+            info('intake[0]: ' + JSON.stringify(json[0]).slice(0,100));
+          } else if (Array.isArray(json)) {
+            warn('Array ว่าง — 0 รายการ');
+          } else {
+            warn('ข้อมูลไม่ใช่ Array: ' + JSON.stringify(json).slice(0,120));
+          }
+        } else if (t.url === DEL_URL) {
+          var delCnt = Array.isArray(json && json.records) ? json.records.length : '(ไม่มี records[])';
+          ok('โหลดสำเร็จ — records: ' + delCnt);
+        } else {
+          // WIP
+          var recs = Array.isArray(json) ? json
+                   : Array.isArray(json && json.dayRecords) ? json.dayRecords : null;
+          if (recs) {
+            var partCount = 0;
+            recs.forEach(function(dr){ if(dr.rows) partCount += dr.rows.length; });
+            ok('โหลดสำเร็จ — ' + recs.length + ' dayRecords, ' + partCount + ' rows');
+          } else {
+            warn('โครงสร้างไม่ตรง — ' + JSON.stringify(json).slice(0,120));
+          }
+        }
+      } catch(parseErr) {
+        err('JSON parse error: ' + parseErr.message);
+        info('raw: ' + raw.slice(0, 150));
+      }
+    } catch(fetchErr) {
+      err('fetch error: ' + fetchErr.message);
+      info('→ อาจเป็น CORS, network, หรือ Firebase rules ไม่อนุญาต');
+    }
+  }
+
+  head('สรุปการวินิจฉัย');
+  if (jmItems.length === 0) {
+    err('ไม่พบ jmItems → ตรวจ job-master.json และ intake.json ด้านบน');
+    info('วิธีแก้: ตรวจสอบ Firebase Rules ว่า read = true');
+    info('หรือ path ใน DB ไม่ตรงกับที่โค้ดดึง');
+  } else {
+    ok('มีข้อมูลใน jmItems — ถ้ายังไม่แสดงใน Stock Board');
+    info('ตรวจสอบว่า field ชื่อ "name" (partNo) ไม่ว่าง');
+  }
+  line('');
+  line('── เสร็จสิ้น ──', '#60a5fa');
+}
+
+function setSyncing(loading,ok,errMsg){
+  var dot=document.getElementById('sdot');
+  var lbl=document.getElementById('syncLbl');
+  if(loading){ dot.className='sdot spin'; lbl.textContent='กำลังโหลด...'; return; }
+  if(ok){
+    dot.className='sdot ok';
+    var t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+    lbl.textContent='รับเข้า: '+jmItems.length+' ล็อต · WIP: '+Object.keys(wipMap).length+' P/No · อัปเดต '+t+' (Job Master + Intake)';
+  } else {
+    dot.className='sdot err';
+    lbl.textContent='❌ '+(errMsg||'โหลดไม่สำเร็จ');
+  }
+}
+
+// เวอร์ชันโค้ด — เปลี่ยนทุกครั้งที่แก้ไฟล์ ไว้ใช้เช็คว่าไฟล์ที่ใช้งานอยู่จริงตรงกับที่ส่งให้ล่าสุดไหม
+var BUILD_VERSION = 'bl-stock-2026-07-13-verifybar-1';
+
+function updateVerifyBar(){
+  var el = document.getElementById('verifyBar');
+  if (!el) return;
+  var t = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var invWarn = blInvoices.length === 0
+    ? ' <span style="color:#dc2626;font-weight:700;">⚠️ INV=0 (ผิดปกติถ้าเคยมี INV จริงในระบบ)</span>'
+    : ' <span style="color:#16a34a;">✅</span>';
+  el.innerHTML =
+    '🔖 build: <strong>' + esc(BUILD_VERSION) + '</strong> · หน้านี้: ' + esc(location.href) + '<br>' +
+    '📡 job-master.json: ' + esc(JM_URL) + '<br>' +
+    'jmItems=' + jmItems.length + ' · jmRecords=' + jmRecords.length +
+    ' · blInvoices=' + blInvoices.length + invWarn +
+    ' · wipMap=' + Object.keys(wipMap).length + ' P/No · เช็คล่าสุด ' + t;
+}
+
+// ══════════════════════════════════════════════════════
+//  TRACEABILITY — ติดตามงาน P/No ผ่านทุก Stock
+// ══════════════════════════════════════════════════════
+var _traceAcItems = [];
+
+function traceAcHide(){
+  var el=document.getElementById('ac-trace');
+  if(el) el.style.display='none';
+}
+
+function traceAcShow(){
+  var input = document.getElementById('traceSearchInput');
+  var list  = document.getElementById('ac-trace');
+  if(!input||!list) return;
+  var q = input.value.trim();
+  if(!q){ list.style.display='none'; return; }
+  var qn = norm(q);
+
+  // รวม P/No จาก jmItems + pmParts
+  var seen={}, items=[];
+  jmItems.forEach(function(j){
+    var pn = jobPartNo(j); if(!pn) return;
+    var k  = norm(pn);
+    if(seen[k]) return; seen[k]=1;
+    if(k.includes(qn)||norm(j.customer||'').includes(qn)) items.push({partNo:pn, customer:j.customer||''});
+  });
+  pmParts.forEach(function(p){
+    var k = norm(p.partNo||'');
+    if(!k) return;
+    if(seen[k]) return; seen[k]=1;
+    if(k.includes(qn)||norm(p.name||'').includes(qn)||norm(p.customer||'').includes(qn))
+      items.push({partNo:p.partNo||'', customer:p.customer||''});
+  });
+  items = items.slice(0,12);
+  _traceAcItems = items;
+  if(!items.length){ list.style.display='none'; return; }
+  list.innerHTML = items.map(function(it,i){
+    return '<div style="padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid #f1f5f9;" onmousedown="tracePickAc('+i+')">'
+      +'<span style="font-weight:700;color:var(--navy);">'+esc(it.partNo)+'</span>'
+      +(it.customer?'<span style="color:#64748b;font-size:11px;margin-left:6px;">'+esc(it.customer)+'</span>':'')
+      +'</div>';
+  }).join('');
+  list.style.display='block';
+}
+
+function tracePickAc(i){
+  var it = _traceAcItems[i];
+  if(!it) return;
+  document.getElementById('traceSearchInput').value = it.partNo;
+  traceAcHide();
+  traceSearch();
+}
+
+function traceSearch(){
+  var q  = (document.getElementById('traceSearchInput').value||'').trim();
+  var el = document.getElementById('traceResult');
+  if(!q){ el.innerHTML=''; return; }
+  var qn = norm(q);
+
+  // หา P/No ที่ตรงหรือใกล้เคียง
+  var matched = [];
+  var seenK={};
+  jmItems.forEach(function(j){
+    var pn=jobPartNo(j); if(!pn) return;
+    var k=norm(pn);
+    if(seenK[k]) return;
+    if(k.includes(qn)||norm(j.customer||'').includes(qn)){seenK[k]=1;matched.push(pn);}
+  });
+  pmParts.forEach(function(p){
+    var k=norm(p.partNo||''); if(!k||seenK[k]) return;
+    if(k.includes(qn)||norm(p.name||'').includes(qn)){seenK[k]=1;matched.push(p.partNo||'');}
+  });
+
+  if(!matched.length){
+    el.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;text-align:center;color:#94a3b8;">ไม่พบ P/No ที่ตรงกับ "'+esc(q)+'"</div>';
+    return;
+  }
+
+  var periodEl = document.getElementById('tracePeriodSel');
+  var period = periodEl ? periodEl.value : '';
+  var html = matched.map(function(pn){ return renderTraceCard(pn, period); }).join('');
+  el.innerHTML = html;
+}
+
+// สร้างตัวเลือกช่วงเวลา (เดือน) ในดรอปดาวน์ Traceability จากวันที่จริงที่พบในข้อมูล (jmItems + wipRows)
+// เรียกทุกครั้งหลัง loadAll() เสร็จ เผื่อมีเดือนใหม่เพิ่มเข้ามา
+function buildTracePeriodOptions(){
+  var sel = document.getElementById('tracePeriodSel');
+  if (!sel) return;
+  var prevVal = sel.value || '';
+  var months = {};
+  jmItems.forEach(function(j){ if(j.date) months[String(j.date).slice(0,7)]=1; });
+  Object.keys(wipRows).forEach(function(k){
+    wipRows[k].forEach(function(rw){ if(rw.date) months[String(rw.date).slice(0,7)]=1; });
+  });
+  var monthList = Object.keys(months).sort().reverse();
+  var opts = '<option value="">— ทั้งหมด (ทุกช่วงเวลา) —</option>'
+    + monthList.map(function(mo){ return '<option value="'+mo+'">'+esc(monthLabel(mo))+'</option>'; }).join('');
+  sel.innerHTML = opts;
+  // คงค่าที่เลือกไว้เดิมถ้ายังมีอยู่ในลิสต์ใหม่
+  if (monthList.indexOf(prevVal) >= 0 || prevVal === '') sel.value = prevVal;
+}
+
+// getWipRows — เหมือน getWip() แต่คืน array ของแถวดิบ (ไม่รวมยอด) ไว้กรองตามช่วงเวลา + แยก NOBILL
+function getWipRows(partNo) {
+  var k = norm(partNo);
+  var rows = wipRows[k];
+  if (!rows) {
+    var pm = pmLookup(partNo);
+    if (pm && pm.name) { var kn = norm(pm.name); if (wipRows[kn]) rows = wipRows[kn]; }
+  }
+  if (!rows) {
+    var keys = Object.keys(wipRows);
+    for (var i=0; i<keys.length; i++) {
+      if (k.length >= 5 && (keys[i].includes(k) || k.includes(keys[i]))) { rows = wipRows[keys[i]]; break; }
+    }
+  }
+  return rows || [];
+}
+
+// inPeriod — เช็คว่าวันที่ (YYYY-MM-DD) อยู่ในเดือนที่เลือกหรือไม่ (period = 'YYYY-MM' หรือ '' = ทั้งหมด)
+function inPeriod(dateStr, period) {
+  if (!period) return true;
+  return String(dateStr||'').slice(0,7) === period;
+}
+
+function renderTraceCard(partNo, period){
+  period = period || '';
+  var k    = norm(partNo);
+  var pm   = pmLookup(partNo);
+  var name = (pm && pm.name) ? pm.name : '';
+  var cust = (pm && pm.customer) ? pm.customer : '';
+
+  // ── Stock 1: รับเข้า (Job Master) — กรองตามช่วงเวลาที่เลือก (ถ้ามี) ──
+  var bills = jmItems.filter(function(j){ return norm(jobPartNo(j))===k && inPeriod(j.date, period); });
+  var s1In  = bills.reduce(function(a,j){ return a+jobQty(j); },0);
+  var s1InKg= bills.reduce(function(a,j){ return a+Number(j.qtyKg||0); },0);
+  // billIdSet = เซ็ต id ของบิลที่อยู่ในช่วงเวลาที่เลือก (กรองจาก "วันรับ" ของบิลเอง) — ใช้เป็นเกณฑ์เดียวกันทั้งไฟล์
+  // สำคัญ: เดิมกรอง "ชุบ"/"จ่ายออก" ด้วยวันที่ของแต่ละ event เอง (วันชุบ/วันออก INV) ซึ่งอาจเป็นคนละเดือนกับวันรับบิล
+  // (เช่น รับบิลเดือน ก.ค. แต่ออก INV เดือน ส.ค.) ทำให้ยอดในกล่อง STOCK ไม่ตรงกับผลรวมคอลัมน์ "จ่ายออก" ของบิลที่โชว์อยู่
+  // ในตาราง (ซึ่งกรองด้วยวันรับบิลเท่านั้น เหมือน job_master.html) — เปลี่ยนมากรองด้วย "บิลอยู่ในช่วงที่เลือกไหม" แทน
+  // เพื่อให้ STOCK1/2/3 ตรงกับผลรวมของบิลที่แสดงในตารางเสมอ ตรงกับที่ job_master.html คำนวณ (กรองบิลด้วยวันรับ
+  // แล้วรวมยอดกิจกรรม "ทั้งชีวิต" ของบิลนั้นๆ ไม่ตัดตามวันของแต่ละ event ย่อย)
+  var billIdSet = {};
+  bills.forEach(function(j){ billIdSet[j.id] = true; });
+
+  // จ่ายออกจาก Job Master records — แปลง qty(ชิ้น)/qtyKg(กก.) เป็นชิ้นเสมอผ่าน Part Master
+  // (ถ้านับแต่ r.qty เฉยๆ บิลที่ขายเป็น กก. จะได้ 0 ชิ้น ทั้งที่ s1OutKg นับกก.ได้ถูกต้องอยู่แล้ว)
+  // s1Out/s1OutKg = ทุกอย่างที่ออกจาก JM (รวม "Auto จากรอบชุบ" ด้วย — ถูกต้องแล้วสำหรับ STOCK1 ที่แปลว่า "วัตถุดิบออกจากคลังดิบ")
+  // s4Out/s4OutKg = เฉพาะที่ "ส่งลูกค้าจริง" เท่านั้น (ไม่รวม Auto จากรอบชุบ ซึ่งหมายถึงแค่เข้าสู่ WIP ยังไม่ได้ส่งใคร)
+  var s1Out = 0, s1OutKg = 0, s4Out = 0, s4OutKg = 0;
+  jmRecords.forEach(function(r){
+    if(r.type!=='out') return;
+    if(period && !billIdSet[r.jobId]) return; // นับเฉพาะบิลที่อยู่ในช่วงเวลาที่เลือก (ไม่ใช่วันที่ของ record เอง)
+    var j=jmItems.find(function(jj){ return jj.id===r.jobId; });
+    if(!j||norm(jobPartNo(j))!==k) return;
+    var pcsVal = ucResolvePcs(Number(r.qty||0), Number(r.qtyKg||0), partNo, pmParts).pcs;
+    var kgVal  = Number(r.qtyKg||0);
+    // สำคัญ: s1Out ต้องนับเฉพาะ "เข้า WIP" (Auto/ไม่ผูก INV จริง) เท่านั้น ไม่ใช่รวมกับ s4Out (ขายจริง) ด้วย
+    // เพราะของชิ้นเดียวกันมักมีทั้ง 2 รายการ (เข้า WIP ตอนชุบ + ขายออกตอนออก INV) ถ้าบวกรวมกันจะกลายเป็นนับซ้ำสอง
+    // ทำให้ "จ่าย" รวมเกินยอด "รับ" ได้ (เจอจริง: รับ 16,200 แต่จ่าย 20,700) — Auto คือ JM→WIP, INV จริงคือ WIP→ลูกค้า คนละขั้นตอนกัน
+    if (isRealInvRef(r)) {
+      s4Out   += pcsVal;
+      s4OutKg += kgVal;
+    } else {
+      s1Out   += pcsVal;
+      s1OutKg += kgVal;
+    }
+  });
+  // STOCK3 "ส่งลูกค้า" นับจาก INV จริงเท่านั้น (ด้านบน) — ไม่รวม blDel (แท็บ Delivery ของ bl_stock) อีกต่อไป
+  // เพราะแท็บ Delivery มีไว้สำหรับ "เคลียร์/ปรับสต๊อก" ไม่ใช่หลักฐานส่งลูกค้าจริงเสมอไป การรวมเข้าด้วยกันทำให้
+  // ตัวเลข STOCK3 ไม่ตรงกับ INV จริง — ยังคงเก็บยอด blDel แยกไว้ต่างหาก (delAdjPcs/Kg) เพื่อโชว์เป็นข้อมูลประกอบเฉยๆ
+  var delAdjPcs = 0, delAdjKg = 0;
+  blDel.forEach(function(d){
+    if(norm(d.partNo||'')!==k) return;
+    if(period && !billIdSet[d.jobId]) return;
+    delAdjPcs += Number(d.qty||0);
+    delAdjKg  += Number(d.qtyKg||0);
+  });
+  // Pipeline: STOCK1 = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6 ตรงๆ)
+  //           STOCK2 (WIP) = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
+  //           STOCK3 = ขายจริงผ่าน INV
+  // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
+  //
+  // คำนวณจากแถวดิบ (wipRows) แทน wipMap รวมยอด เพื่อ (1) กรองตามช่วงเวลาได้ (2) นับเฉพาะแถวที่ "ผูกบิลจริง" เท่านั้น
+  // (R ถูกกรองออกตั้งแต่ตอนโหลดข้อมูลแล้ว ไม่มีทางเข้ามาถึงตรงนี้) — แถว NOBILL/ไม่ผูกบิล จะไม่ถูกนับรวมใน STOCK2
+  // อีกต่อไป (เดิมนับรวมแล้วแค่โชว์เตือนแยก) เพราะสอบกลับไปยังบิลรับเข้าไม่ได้ ไม่ควรถือเป็น "ของพร้อมส่ง" ของบิลไหน
+  // แถวที่ผูกบิล: กรองด้วย "บิลนั้นอยู่ในช่วงเวลาที่เลือกไหม" (เกณฑ์เดียวกับ s4Out ด้านบน) ไม่ใช่วันที่ชุบเอง
+  // แถวที่ไม่ผูกบิล (NOBILL): ไม่มีบิลให้เทียบ จึงยังกรองด้วยวันที่ชุบของแถวนั้นเองต่อไป (ใช้แค่โชว์ข้อมูลประกอบ)
+  var allWipRowsForPart = getWipRows(partNo);
+  var linkedRows   = allWipRowsForPart.filter(function(rw){ return rw.linked && (!period || billIdSet[rw.jobId]); });
+  var unlinkedRows = allWipRowsForPart.filter(function(rw){ return !rw.linked && inPeriod(rw.date, period); });
+
+  var platedPcs = 0, platedKg = 0;
+  var s2Lines = {};
+  linkedRows.forEach(function(rw){
+    var pcsEq = rw.pcs;
+    if (!pcsEq && rw.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(rw.kg, pm.weightPerPc);
+    pcsEq = pcsEq || 0;
+    platedPcs += pcsEq;
+    platedKg  += rw.kg||0;
+    s2Lines[rw.line] = (s2Lines[rw.line]||0) + pcsEq;
+  });
+
+  // ยอดชุบไม่ผูกบิล (NOBILL) — แยกไว้ต่างหาก ไม่รวมใน platedPcs/STOCK2 ข้างต้นแล้ว เก็บไว้แค่โชว์เป็นข้อมูลประกอบ
+  var unlinkedPcs = 0, unlinkedKg = 0;
+  unlinkedRows.forEach(function(rw){
+    var pcsEq = rw.pcs;
+    if (!pcsEq && rw.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(rw.kg, pm.weightPerPc);
+    unlinkedPcs += pcsEq||0;
+    unlinkedKg  += rw.kg||0;
+  });
+
+  // ── Stock 1: คงเหลือ (JM) = รับเข้า − ยอดที่ถือว่าใช้จากสต็อกดิบไปแล้ว ──
+  // ปกติ "ใช้ไปแล้ว" = ยอดชุบที่มีบันทึกจริง (platedPcs) แต่บางบิลมี INV ออกไปแล้วจริง (ขายได้จริง)
+  // โดยไม่เคยมีบันทึกการชุบมารองรับเลย (ข้อมูลหาย/ไม่เคยกรอก) — กรณีนี้ถ้าใช้แค่ platedPcs อย่างเดียว
+  // STOCK1 จะไม่ถูกหักออกทั้งที่ของจริงถูกใช้ไปแล้วแน่ๆ (ขายได้ = ต้องดึงออกจากสต็อกดิบไปแล้ว)
+  // จึงใช้ max(ชุบที่บันทึกไว้, ส่งลูกค้าจริงผ่าน INV) แทน — ไม่ต้องปลอมข้อมูลการชุบ แค่ยึดหลักว่า
+  // "ยอดใช้ไปจากสต็อกดิบ ต้องไม่น้อยกว่ายอดที่ขายออกไปแล้วจริง" เป็นขั้นต่ำเสมอ
+  var consumedPcs = Math.max(platedPcs, s4Out);
+  var consumedKg  = Math.max(platedKg,  s4OutKg);
+  var s1Rem   = Math.max(0, s1In   - consumedPcs);
+  var s1RemKg = Math.max(0, s1InKg - consumedKg);
+  // เกินยอดจริง (ไม่ตัด 0) ไว้ใช้เตือน — s1Rem/s1RemKg ด้านบน clamp ที่ 0 อยู่แล้วสำหรับแสดงผลปกติ
+  var s1Over = platedPcs - s1In; // >0 = ชุบเกินยอดรับ
+  // ส่งลูกค้าจริงเกินยอดชุบที่มีบันทึก — สัญญาณว่าบันทึกการชุบของบิลนั้นอาจหาย/ไม่เคยกรอก (แต่ของจริงถูกใช้ไปแล้ว)
+  var shipExceedsPlated = s4Out - platedPcs; // >0 = มีช่องว่างแบบนี้
+
+  // ── Stock 2 (WIP): ชุบไปแล้ว − ขายจริง ──
+  var s2Pcs = Math.max(0, platedPcs - s4Out);
+  var s2Kg  = Math.max(0, platedKg - s4OutKg);
+
+  // ── Stock 3: QC (ข้อมูล QC จาก Firebase B1/B2/R1 /plating-b1-qa) ──
+  // ดึงจาก _qcMap ถ้ามี ไม่งั้นแสดง "โหลดแยก"
+  var s3 = (_qcMap && _qcMap[k]) || null;
+  var s3Pass=0, s3Ng=0;
+  if(s3){ s3Pass=s3.pass||0; s3Ng=s3.ng||0; }
+
+  // ── Stock 4: จ่ายออก (INV) — s4Out/s4OutKg คำนวณไว้แล้วด้านบน (เฉพาะส่งลูกค้าจริง ไม่รวม Auto จากรอบชุบ) ──
+
+  // ── บิลรายการ (พร้อมปุ่มขยายดูรายละเอียด: ชุบเมื่อไหร่ + ขายออก INV ไหนบ้าง) ──
+  var billRows = bills.map(function(j, bi){
+    var outQty = getBillOutQtyInvOnly(j); // นับจาก INV จริงล้วนๆ ให้ตรงกับ STOCK3/job_master.html "จ่ายออก" เป๊ะๆ (ไม่รวม blDel)
+    // แหล่งข้อมูลหลัก: INV จริงจาก job_master.html — แต่ละ invoice.items[] ผูก jobId ไว้แล้วตั้งแต่ตอนออกใบ ไม่ต้องเดา
+    var invEvents = getBillInvEvents(j.id);
+    // แหล่งสำรอง (เผื่อ out record ไม่ได้มาจากการออก INV จริง เช่น พิมพ์อ้างอิงเองจากหน้าไลน์ชุบ)
+    var jmOutEvents = [];
+    jmRecords.forEach(function(r){
+      if(r.type!=='out' || r.jobId!==j.id) return;
+      var rawQty = Number(r.qty||0), rawKg = Number(r.qtyKg||0);
+      var pcsVal = ucResolvePcs(rawQty, rawKg, partNo, pmParts).pcs;
+      jmOutEvents.push({ date: r.date||'', inv: r.inv||'-', qty: pcsVal, qtyKg: rawKg, convertedFromKg: (!rawQty && rawKg>0) });
+    });
+    // แหล่งสำรอง: Delivery ที่บันทึกในแท็บ Delivery ของหน้านี้ (ผูก jobId ได้เฉพาะรายการที่บันทึกหลังมีตัวเลือกบิล)
+    var delEvents = [];
+    blDel.forEach(function(d){
+      if(d.jobId===j.id) delEvents.push({ date: d.date||'', inv: d.inv||'-', qty: Number(d.qty||0) });
+    });
+    var rem=Math.max(0,jobQty(j)-outQty);
+    var pct=jobQty(j)>0?Math.round(rem/jobQty(j)*100):0;
+    var barColor=pct===0?'#22c55e':pct<30?'#f59e0b':'#3b82f6';
+    // % ความคืบหน้า = สัดส่วนที่จ่ายออกแล้ว (ตรงข้ามกับ pct ที่เป็น % คงเหลือ) — ใช้โชว์ตัวเลขกำกับแท่ง progress ที่หายไปก่อนหน้านี้
+    var shipPct = jobQty(j)>0 ? Math.max(0,Math.min(100,Math.round(100-pct))) : 0;
+    var isClosed = rem<=0 && jobQty(j)>0; // จ่ายออกครบ = ปิดบิล
+    var statusCell = isClosed
+      ? '<span style="display:inline-block;font-size:10px;font-weight:700;color:#16a34a;background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:2px 8px;white-space:nowrap;">✅ ปิดบิล</span>'
+      : '<div style="display:flex;align-items:center;gap:6px;">'
+        +'<div style="background:#e2e8f0;border-radius:4px;height:6px;width:50px;overflow:hidden;flex-shrink:0;">'
+        +'<div style="background:'+barColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div></div>'
+        +'<span style="font-size:10px;color:#64748b;white-space:nowrap;">'+shipPct+'%</span>'
+        +'</div>';
+
+    var plateEvents = (wipByJob[j.id]||[]).slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var detailId = 'bdet-'+k+'-'+bi;
+    // สรุปรวมตามวันที่+สาย แทนการโชว์ทีละแถวย่อย (บิลเดียวอาจมีบันทึกเป็นสิบๆ ครั้งในวันเดียว) — กระชับกว่าเยอะ
+    var plateGroups = {};
+    plateEvents.forEach(function(ev){
+      var gk = (ev.date||'-')+'|'+(ev.line||'-');
+      if (!plateGroups[gk]) plateGroups[gk] = { date: ev.date, line: ev.line, pcs: 0, kg: 0, count: 0 };
+      plateGroups[gk].pcs += ev.pcs;
+      plateGroups[gk].kg  += ev.kg;
+      plateGroups[gk].count++;
+    });
+    var plateGroupList = Object.keys(plateGroups).map(function(gk){ return plateGroups[gk]; })
+      .sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var plateHtml = plateGroupList.length
+      ? plateGroupList.map(function(g){
+          // แปลง กก. → ชิ้น ให้หน่วยตรงกับ "รับเข้า"/"ส่งออก" ที่นับเป็นชิ้นทั้งคู่ (สอดคล้องกันทั้งสายชุบ)
+          var pcsEq = g.pcs;
+          var convertedFromKg = false;
+          if (!pcsEq && g.kg > 0 && pm && pm.weightPerPc > 0) {
+            pcsEq = ucKgToPcs(g.kg, pm.weightPerPc);
+            convertedFromKg = true;
+          }
+          var qtyStr = pcsEq > 0
+            ? pcsEq.toLocaleString() + ' ชิ้น' + (convertedFromKg ? ' <span style="color:#94a3b8;">(≈จาก ' + g.kg.toFixed(2) + ' kg)</span>' : '')
+            : (g.kg > 0 ? g.kg.toFixed(2) + ' kg <span style="color:#dc2626;">(ไม่มีน้ำหนัก/ชิ้นใน Part Master แปลงเป็นชิ้นไม่ได้)</span>' : '-');
+          return '<div style="font-size:10px;color:#0891b2;">🧪 '+fmtD(g.date)+' · '+esc(g.line)+' · '+qtyStr+' <span style="color:#94a3b8;">('+g.count+' รอบ)</span></div>';
+        }).join('')
+      : '<div style="font-size:10px;color:#94a3b8;">ไม่พบบันทึกการชุบที่ผูกกับบิลนี้ (อาจชุบก่อนมีฟีเจอร์เลือกบิล หรือกดข้ามตอนชุบ)</div>';
+
+    // 🧾 ขายออก — ใช้ INV จริงจาก Job Master เป็นหลัก (ไม่ต้องพึ่งการกรอกซ้ำในแท็บ Delivery อีกแล้ว)
+    // แสดงจำนวนเป็น "ชิ้น" เสมอ ให้หน่วยตรงกับ "รับเข้า" (คอลัมน์ STOCK1) — ไม่งั้นดูขัดแย้งกัน (รับเป็นชิ้น แต่ขายออกโชว์ กก.)
+    var invHtml = invEvents.length
+      ? invEvents.map(function(ev){
+          var pcsVal = ev.pcs;
+          if (pcsVal == null) {
+            // fallback สำหรับ INV เก่าก่อนมีฟีเจอร์นี้ — แปลงจาก กก./ชิ้นเดิม ผ่าน Part Master เอาเอง
+            pcsVal = ucResolvePcs(ev.unit==='pcs'?ev.qty:0, ev.unit==='kg'?ev.qty:0, partNo, pmParts).pcs;
+          }
+          var qtyStr = pcsVal ? (pcsVal.toLocaleString()+' ชิ้น') : (ev.qty.toLocaleString()+' '+(ev.unit==='kg'?'kg':'ชิ้น'));
+          if (ev.unit==='kg') qtyStr += ' ('+ev.qty.toFixed(2)+' kg)';
+          return '<div style="font-size:10px;color:#dc2626;">🧾 '+fmtD(ev.date)+' · INV '+esc(ev.invNo)+' · '+qtyStr+'</div>';
+        }).join('')
+      : '<div style="font-size:10px;color:#94a3b8;">ยังไม่พบใน INV ที่ออกจริง (Job Master)</div>';
+
+    // หมายเหตุ: เคยมีบล็อกสีเทา + กล่อง diagnostic ชั่วคราวไว้ไล่หาสาเหตุยอด "จ่ายออก" ไม่ตรงกับ INV จริง
+    // เจอต้นตอแล้ว (มี id รูปแบบเก่าหลายแบบปนกันอยู่ ไม่ใช่แค่ "AUTO-") แก้ที่ isRealInvRef() ให้เช็คจากเลข INV จริงแทนแล้ว — เอากล่อง debug ออก
+    var extraHtml = '';
+
+    return '<tr>'
+      +'<td class="tl" style="font-size:11px;font-family:monospace;">'+esc(jobBill(j))+'</td>'
+      +'<td style="font-size:11px;">'+fmtD(j.date||'')+'</td>'
+      +'<td style="font-weight:700;">'+jobQty(j).toLocaleString()+'</td>'
+      +'<td style="color:#dc2626;">'+outQty.toLocaleString()+'</td>'
+      +'<td style="font-weight:700;color:'+(rem>0?'#2563eb':'#94a3b8')+';">'+rem.toLocaleString()+'</td>'
+      +'<td>'+statusCell+'</td>'
+      +'<td><button onclick="var e=document.getElementById(\''+detailId+'\');e.style.display=e.style.display===\'none\'?\'table-row\':\'none\';" style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-family:inherit;">🔍 สอบกลับ</button></td>'
+      +'</tr>'
+      +'<tr id="'+detailId+'" style="display:none;"><td colspan="7" style="background:#f8fafc;padding:10px 14px;">'
+        +'<div style="display:flex;gap:28px;flex-wrap:wrap;">'
+          +'<div><div style="font-size:10px;font-weight:700;color:#0891b2;margin-bottom:4px;">🧪 ชุบเมื่อ</div>'+plateHtml+'</div>'
+          +'<div><div style="font-size:10px;font-weight:700;color:#dc2626;margin-bottom:4px;">🧾 ขายออก (INV จริงจาก Job Master)</div>'+invHtml+extraHtml+'</div>'
+        +'</div>'
+      +'</td></tr>';
+  }).join('');
+
+  // ── สร้าง Stock bar แต่ละ Stock ──
+  function stockBox(num, label, pcs, kg, color, detail){
+    var hasPcs = pcs>0||kg>0;
+    return '<div style="flex:1;min-width:130px;background:'+(hasPcs?color+'18':'#f8fafc')+';border:1.5px solid '+(hasPcs?color:'#e2e8f0')+';border-radius:10px;padding:10px;text-align:center;">'
+      +'<div style="font-size:9px;font-weight:700;color:'+(hasPcs?color:'#94a3b8')+';margin-bottom:4px;">STOCK '+num+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-bottom:6px;">'+label+'</div>'
+      +'<div style="font-size:18px;font-weight:800;color:'+(hasPcs?color:'#cbd5e1')+';">'+(pcs>0?pcs.toLocaleString():'–')+'</div>'
+      +(kg>0?'<div style="font-size:10px;color:#94a3b8;margin-top:1px;">'+kg.toFixed(2)+' kg</div>':'')
+      +(detail?'<div style="font-size:10px;color:#64748b;margin-top:4px;">'+detail+'</div>':'')
+      +'</div>';
+  }
+
+  var lineDetail = Object.keys(s2Lines).map(function(ln){
+    return ln+':'+s2Lines[ln];
+  }).join(' · ');
+
+  var s3Detail = s3 ? ('QC ผ่าน '+s3Pass+' / NG '+s3Ng) : 'ยังไม่มีข้อมูล QC';
+  // รวมรายละเอียด WIP (แยกตามไลน์) + QC ไว้ในกล่องเดียวกัน คั่นด้วยบรรทัดใหม่
+  var s2CombinedDetail = (lineDetail || '–') + '<br>' + s3Detail;
+
+  var periodLbl = period ? monthLabel(period) : 'ทั้งหมด (ทุกช่วงเวลา)';
+
+  // ── แจ้งเตือน "ชุบเกินยอดรับ" — platedPcs ตอนนี้นับเฉพาะแถวที่ผูกบิลจริงแล้ว (ตัด NOBILL ออกไปแล้ว)
+  // ถ้ายังเกินอยู่ แปลว่า "ของที่ผูกบิลจริง" ชุบเกินยอดรับของบิลนั้นๆ เอง (ไม่ใช่เพราะ NOBILL อีกต่อไป)
+  // สาเหตุที่เป็นไปได้: เลือกบิลผิดใบตอนชุบ, บันทึกซ้ำ, หรือรับเข้าไม่ครบใน Job Master — ควรตรวจเป็นรายบิล
+  var overWarnHtml = '';
+  if (s1Over > 0) {
+    overWarnHtml = '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#9b2c2c;line-height:1.6;">'
+      + '⚠️ <b>ยอดชุบ (เฉพาะที่ผูกบิลจริง) เกินยอดรับ '+s1Over.toLocaleString()+' ชิ้น</b>'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
+      + 'ไม่ได้มาจาก NOBILL แล้ว (ตัดออกจากยอดนี้แล้ว) — น่าจะเกิดจากเลือกบิลผิดใบตอนชุบ ชุบซ้ำ/บันทึกซ้ำ หรือรับเข้าไม่ครบใน Job Master ควรตรวจสอบเป็นรายบิลด้านล่าง'
+      + '</div>';
+  }
+  // ── แจ้งข้อมูลประกอบ (ไม่ใช่ error) — มีของชุบแบบไม่ผูกบิล (NOBILL) ที่ไม่ได้นับรวมใน STOCK2 อีกต่อไป ──
+  var unlinkedInfoHtml = '';
+  if (unlinkedPcs > 0) {
+    unlinkedInfoHtml = '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#92400e;line-height:1.6;">'
+      + 'ℹ️ มียอดชุบแบบ<b>ไม่ผูกบิล (NOBILL)</b> อีก '+unlinkedPcs.toLocaleString()+' ชิ้น'+(period?' ในช่วง '+esc(periodLbl):'')+' — <b>ไม่ถูกนับรวมใน STOCK2 ข้างต้นแล้ว</b> แนะนำให้ไปผูกบิลย้อนหลังที่หน้าไลน์ชุบ (ปุ่ม "✏️ เพิ่มบิล" ในแท็บประวัติ)'
+      + '</div>';
+  }
+  // ── แจ้งเตือน "ส่งลูกค้าจริงเกินยอดชุบที่มีบันทึก" — INV ออกได้จริงแปลว่าของถูกดึงจากสต็อกดิบไปแล้วจริง
+  // แต่ไม่มีบันทึกการชุบมารองรับ (ข้อมูลหาย/ไม่เคยกรอก) — STOCK1 ด้านล่างถูกปรับให้หักลบยอดนี้ไปแล้วอัตโนมัติ
+  // (ใช้ max(ชุบที่บันทึก, ส่งลูกค้าจริง) แทนใช้แค่ยอดชุบอย่างเดียว) กล่องนี้แค่แจ้งให้รู้ว่ามีช่องว่างข้อมูลอยู่ตรงไหน
+  var shipGapHtml = '';
+  if (shipExceedsPlated > 0) {
+    shipGapHtml = '<div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#1e40af;line-height:1.6;">'
+      + 'ℹ️ มีของที่<b>ส่งลูกค้าจริงแล้ว (INV) เกินยอดชุบที่มีบันทึกไว้</b> '+shipExceedsPlated.toLocaleString()+' ชิ้น'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
+      + 'น่าจะเป็นเพราะบันทึกการชุบของบิลนั้นหาย/ไม่เคยกรอก — <b>ระบบปรับ STOCK1 ให้หักยอดนี้ออกอัตโนมัติแล้ว</b> (ถือว่าใช้จากสต็อกดิบไปแล้วจริงตามยอดขาย) ถ้าอยากให้ประวัติครบ แนะนำไปเพิ่มบันทึกการชุบย้อนหลังที่หน้าไลน์ชุบด้วย'
+      + '</div>';
+  }
+
+  return '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);">'
+    // header
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">'
+      +'<div>'
+        +'<div style="font-size:15px;font-weight:800;color:var(--navy);font-family:monospace;">'+esc(partNo)+'</div>'
+        +(name?'<div style="font-size:11px;color:#64748b;margin-top:1px;">'+esc(name)+'</div>':'')
+        +(cust?'<div style="font-size:11px;color:#3b82f6;margin-top:1px;">'+esc(cust)+'</div>':'')
+      +'</div>'
+      +'<div style="text-align:right;">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:2px;">📅 '+esc(periodLbl)+'</div>'
+        +'<div style="font-size:11px;color:#94a3b8;">'+bills.length+' บิล</div>'
+        +'<div style="font-size:10px;color:#94a3b8;margin-top:2px;">รับรวม '+s1In.toLocaleString()+' ชิ้น</div>'
+      +'</div>'
+    +'</div>'
+
+    + overWarnHtml
+    + unlinkedInfoHtml
+    + shipGapHtml
+
+    // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
+      +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs+(shipExceedsPlated>0?' <span style="color:#2563eb;">(นับส่งลูกค้า '+s4Out.toLocaleString()+')</span>':''))
+      +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
+      +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626',(delAdjPcs>0?'+ ปรับสต็อกเอง (Delivery) '+delAdjPcs.toLocaleString()+' ชิ้น <span style="color:#94a3b8;">(ไม่นับรวมในนี้)</span>':''))
+    +'</div>'
+
+    // bill table
+    +(bills.length?
+      '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:5px;">รายการบิล</div>'
+      +'<div style="overflow-x:auto;"><table class="st" style="min-width:340px;">'
+        +'<thead><tr>'
+          +'<th class="tl">Bill No</th><th>วันรับ</th><th>รับเข้า</th><th>จ่ายออก</th><th>คงเหลือ</th><th>สถานะ</th><th></th>'
+        +'</tr></thead>'
+        +'<tbody>'+billRows+'</tbody>'
+      +'</table></div>'
+    : '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:10px;">ไม่มีบิลรับเข้าในช่วง '+esc(periodLbl)+'</div>')
+    +'</div>';
+}
+
+// monthLabel — แปลง 'YYYY-MM' เป็นข้อความไทยอ่านง่าย เช่น 'ส.ค. 2569' (พ.ศ.)
+function monthLabel(period){
+  if(!period) return 'ทั้งหมด';
+  var parts = period.split('-');
+  if(parts.length<2) return period;
+  var m=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var mi = parseInt(parts[1],10);
+  var yBE = parseInt(parts[0],10) + 543;
+  return (m[mi]||parts[1])+' '+yBE;
+}
+
+// ── QC map (โหลด QC records จาก Firebase เพื่อแสดงใน Stock 3) ──
+var _qcMap = null;
+
+async function loadQCData(){
+  _qcMap = {};
+  var qcPaths = [
+    { url: DB_B1+'/plating-b1-qa.json' },
+    { url: DB_B2+'/plating-b2-qa.json' },
+    { url: DB_R1+'/plating-r1-qa.json' },
+  ];
+  await Promise.all(qcPaths.map(async function(p){
+    try {
+      var res = await fetch(p.url, {cache:'no-store'});
+      if(!res.ok) return;
+      var data = await res.json();
+      var recs = Array.isArray(data) ? data : (Array.isArray(data&&data.records)?data.records:[]);
+      recs.forEach(function(r){
+        var pn = r.partName||r.partNo||''; if(!pn) return;
+        var k  = norm(pn);
+        if(!_qcMap[k]) _qcMap[k]={pass:0,ng:0};
+        _qcMap[k].pass += Number(r.passQty||r.pass||0);
+        _qcMap[k].ng   += Number(r.ngQty||r.ng||0);
+      });
+    }catch(e){}
+  }));
+}
+</script>
+</body>
+</html>
