@@ -551,7 +551,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
     </div>
 
-    <button class="btn btn-add" onclick="addBarrel()">+ เพิ่มรายรอบนี้</button>
+    <button class="btn btn-add" id="addBarrelBtn" onclick="addBarrel()">+ เพิ่มรายรอบนี้</button>
   </div>
 
   <!-- Barrel list -->
@@ -1670,7 +1670,7 @@ function autoFillBLotNo() {
   }
 }
 
-function addBarrel() {
+async function addBarrel() {
   var time   = document.getElementById('bTime').value;
   var barrel = document.getElementById('bBarrel').value;
   var kg     = parseFloat(document.getElementById('bKg').value) || 0;
@@ -1702,6 +1702,14 @@ function addBarrel() {
 
   // ── เช็คจำนวน/รอบ เทียบกับจิ๊กที่กำหนดไว้ในใบสั่งผลิตวันนี้ (ถ้ามี) ──
   // จำนวนที่กรอกต่อรอบต้องตรงกับ "จำนวน/จิ๊ก" ตัวใดตัวหนึ่ง ±10 ชิ้น จึงจะเพิ่มรอบได้
+  // ต้อง await ให้ _poOrdersCache โหลดเสร็จก่อนเสมอ (กันกรณีกดเพิ่มรอบเร็วกว่า cache จะโหลดเสร็จ แล้วเช็คหลุดไปแบบเงียบๆ)
+  var _addBarrelBtn = document.getElementById('addBarrelBtn');
+  if (_addBarrelBtn) { _addBarrelBtn.disabled = true; _addBarrelBtn.dataset._origText = _addBarrelBtn.dataset._origText || _addBarrelBtn.textContent; _addBarrelBtn.textContent = 'กำลังตรวจสอบจิ๊ก...'; }
+  try {
+    await fetchPOStatus(PO_LINE_FILTER || 'R1');
+  } catch(e) {}
+  if (_addBarrelBtn) { _addBarrelBtn.disabled = false; _addBarrelBtn.textContent = _addBarrelBtn.dataset._origText || _addBarrelBtn.textContent; }
+
   var _partNoForJig = (document.getElementById('bPartSearch')||{}).value || '';
   var _jigConfigs = getR1JigConfigs(_partNoForJig);
   if (_jigConfigs.length) {
