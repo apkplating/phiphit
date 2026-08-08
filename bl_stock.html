@@ -1639,32 +1639,46 @@ function renderTraceCard(partNo, period){
       s1OutKg += kgVal;
     }
   });
+  // STOCK3 "ส่งลูกค้า" นับจาก INV จริงเท่านั้น (ด้านบน) — ไม่รวม blDel (แท็บ Delivery ของ bl_stock) อีกต่อไป
+  // เพราะแท็บ Delivery มีไว้สำหรับ "เคลียร์/ปรับสต๊อก" ไม่ใช่หลักฐานส่งลูกค้าจริงเสมอไป การรวมเข้าด้วยกันทำให้
+  // ตัวเลข STOCK3 ไม่ตรงกับ INV จริง — ยังคงเก็บยอด blDel แยกไว้ต่างหาก (delAdjPcs/Kg) เพื่อโชว์เป็นข้อมูลประกอบเฉยๆ
+  var delAdjPcs = 0, delAdjKg = 0;
   blDel.forEach(function(d){
     if(norm(d.partNo||'')!==k) return;
     if(!inPeriod(d.date, period)) return;
-    s1Out   += Number(d.qty||0);
-    s1OutKg += Number(d.qtyKg||0);
-    s4Out   += Number(d.qty||0);
-    s4OutKg += Number(d.qtyKg||0);
+    delAdjPcs += Number(d.qty||0);
+    delAdjKg  += Number(d.qtyKg||0);
   });
   // Pipeline: STOCK1 = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6 ตรงๆ)
   //           STOCK2 (WIP) = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
   //           STOCK3 = ขายจริงผ่าน INV
   // (ย้อนกลับมาใช้ข้อมูลชุบจาก v4,5,6 อีกครั้ง หลังจากพิพิธแก้ไขข้อมูลเลขบิลที่พนักงานกรอกผิดแล้ว ยอดชุบตอนนี้ควรครบตรงกับยอดรับ)
   //
-  // คำนวณจากแถวดิบ (wipRows) แทน wipMap รวมยอด เพื่อ (1) กรองตามช่วงเวลาได้ (2) แยก "ชุบไม่ผูกบิล" (NOBILL/ไม่มี jobId)
-  // ออกมาต่างหาก — แถวไม่ผูกบิลพวกนี้นับรวมอยู่ใน "ยอดชุบ" แต่สอบกลับไปยังบิลรับเข้าไม่ได้ มักเป็นสาเหตุที่ยอดชุบเกินยอดรับ
-  var wipRowsForPart = getWipRows(partNo).filter(function(rw){ return inPeriod(rw.date, period); });
-  var platedPcs = 0, platedKg = 0, unlinkedPcs = 0, unlinkedKg = 0;
+  // คำนวณจากแถวดิบ (wipRows) แทน wipMap รวมยอด เพื่อ (1) กรองตามช่วงเวลาได้ (2) นับเฉพาะแถวที่ "ผูกบิลจริง" เท่านั้น
+  // (R ถูกกรองออกตั้งแต่ตอนโหลดข้อมูลแล้ว ไม่มีทางเข้ามาถึงตรงนี้) — แถว NOBILL/ไม่ผูกบิล จะไม่ถูกนับรวมใน STOCK2
+  // อีกต่อไป (เดิมนับรวมแล้วแค่โชว์เตือนแยก) เพราะสอบกลับไปยังบิลรับเข้าไม่ได้ ไม่ควรถือเป็น "ของพร้อมส่ง" ของบิลไหน
+  var allWipRowsForPart = getWipRows(partNo).filter(function(rw){ return inPeriod(rw.date, period); });
+  var linkedRows   = allWipRowsForPart.filter(function(rw){ return rw.linked; });
+  var unlinkedRows = allWipRowsForPart.filter(function(rw){ return !rw.linked; });
+
+  var platedPcs = 0, platedKg = 0;
   var s2Lines = {};
-  wipRowsForPart.forEach(function(rw){
+  linkedRows.forEach(function(rw){
     var pcsEq = rw.pcs;
     if (!pcsEq && rw.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(rw.kg, pm.weightPerPc);
     pcsEq = pcsEq || 0;
     platedPcs += pcsEq;
     platedKg  += rw.kg||0;
     s2Lines[rw.line] = (s2Lines[rw.line]||0) + pcsEq;
-    if (!rw.linked) { unlinkedPcs += pcsEq; unlinkedKg += rw.kg||0; }
+  });
+
+  // ยอดชุบไม่ผูกบิล (NOBILL) — แยกไว้ต่างหาก ไม่รวมใน platedPcs/STOCK2 ข้างต้นแล้ว เก็บไว้แค่โชว์เป็นข้อมูลประกอบ
+  var unlinkedPcs = 0, unlinkedKg = 0;
+  unlinkedRows.forEach(function(rw){
+    var pcsEq = rw.pcs;
+    if (!pcsEq && rw.kg > 0 && pm && pm.weightPerPc > 0) pcsEq = ucKgToPcs(rw.kg, pm.weightPerPc);
+    unlinkedPcs += pcsEq||0;
+    unlinkedKg  += rw.kg||0;
   });
 
   // ── Stock 1: คงเหลือ (JM) = รับเข้า − ชุบไปแล้ว (จากประวัติ v4,5,6) ──
@@ -1804,15 +1818,21 @@ function renderTraceCard(partNo, period){
 
   var periodLbl = period ? monthLabel(period) : 'ทั้งหมด (ทุกช่วงเวลา)';
 
-  // ── แจ้งเตือน "ชุบเกินยอดรับ" — เกิดขึ้นได้เพราะมีแถวชุบที่ไม่ได้ผูกกับบิลรับเข้าใด (NOBILL/ไม่มี jobId)
-  // นับรวมอยู่ใน "ยอดชุบ" แต่ไม่มีบิลให้หักลบ จึงสอบกลับไม่ได้ว่าชุบวัตถุดิบมาจากไหน — เป็นจุดที่ควรไปตรวจกับหน้าไลน์ชุบ (v4/v5/v6)
+  // ── แจ้งเตือน "ชุบเกินยอดรับ" — platedPcs ตอนนี้นับเฉพาะแถวที่ผูกบิลจริงแล้ว (ตัด NOBILL ออกไปแล้ว)
+  // ถ้ายังเกินอยู่ แปลว่า "ของที่ผูกบิลจริง" ชุบเกินยอดรับของบิลนั้นๆ เอง (ไม่ใช่เพราะ NOBILL อีกต่อไป)
+  // สาเหตุที่เป็นไปได้: เลือกบิลผิดใบตอนชุบ, บันทึกซ้ำ, หรือรับเข้าไม่ครบใน Job Master — ควรตรวจเป็นรายบิล
   var overWarnHtml = '';
   if (s1Over > 0) {
     overWarnHtml = '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#9b2c2c;line-height:1.6;">'
-      + '⚠️ <b>ยอดชุบเกินยอดรับ '+s1Over.toLocaleString()+' ชิ้น</b>'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
-      + (unlinkedPcs>0
-          ? 'พบยอดชุบที่<b>ไม่ได้ผูกกับบิลรับเข้าใด</b> (NOBILL/ไม่มีเลขบิล) รวม '+unlinkedPcs.toLocaleString()+' ชิ้น'+(unlinkedPcs>=s1Over?' — เป็นสาเหตุหลักของยอดเกินนี้':' — คิดเป็นบางส่วนของยอดเกิน')+'. ควรตรวจสอบที่หน้าไลน์ชุบว่ากรอกเลขบิลผิด/ไม่ได้กรอก หรือรับของเข้าจริงแต่ยังไม่ได้บันทึกใน Job Master'
-          : 'ไม่พบยอดชุบแบบ NOBILL ในช่วงนี้ — ยอดเกินอาจมาจากพิมพ์ P/No ไม่ตรงกัน (มีสองชื่อสำหรับของชิ้นเดียวกัน) หรือชุบซ้ำ/บันทึกซ้ำในระบบไลน์')
+      + '⚠️ <b>ยอดชุบ (เฉพาะที่ผูกบิลจริง) เกินยอดรับ '+s1Over.toLocaleString()+' ชิ้น</b>'+(period?' (ในช่วง '+esc(periodLbl)+')':'')+'<br>'
+      + 'ไม่ได้มาจาก NOBILL แล้ว (ตัดออกจากยอดนี้แล้ว) — น่าจะเกิดจากเลือกบิลผิดใบตอนชุบ ชุบซ้ำ/บันทึกซ้ำ หรือรับเข้าไม่ครบใน Job Master ควรตรวจสอบเป็นรายบิลด้านล่าง'
+      + '</div>';
+  }
+  // ── แจ้งข้อมูลประกอบ (ไม่ใช่ error) — มีของชุบแบบไม่ผูกบิล (NOBILL) ที่ไม่ได้นับรวมใน STOCK2 อีกต่อไป ──
+  var unlinkedInfoHtml = '';
+  if (unlinkedPcs > 0) {
+    unlinkedInfoHtml = '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#92400e;line-height:1.6;">'
+      + 'ℹ️ มียอดชุบแบบ<b>ไม่ผูกบิล (NOBILL)</b> อีก '+unlinkedPcs.toLocaleString()+' ชิ้น'+(period?' ในช่วง '+esc(periodLbl):'')+' — <b>ไม่ถูกนับรวมใน STOCK2 ข้างต้นแล้ว</b> แนะนำให้ไปผูกบิลย้อนหลังที่หน้าไลน์ชุบ (ปุ่ม "✏️ เพิ่มบิล" ในแท็บประวัติ)'
       + '</div>';
   }
 
@@ -1832,12 +1852,13 @@ function renderTraceCard(partNo, period){
     +'</div>'
 
     + overWarnHtml
+    + unlinkedInfoHtml
 
     // stock boxes — ยุบเหลือ 3 สเตจ: 1) คงเหลือ JM  2) ชุบแล้ว/QC (รวม WIP+QC100%)  3) ส่งลูกค้า (INV)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'
       +stockBox(1,'คงเหลือ (JM)',s1Rem,s1RemKg,'#2563eb','รับ '+s1In+' ชุบ '+platedPcs)
       +stockBox(2,'ชุบแล้ว / QC',s2Pcs,s2Kg,'#0891b2',s2CombinedDetail)
-      +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626','')
+      +stockBox(3,'ส่งลูกค้า',s4Out,s4OutKg,'#dc2626',(delAdjPcs>0?'+ ปรับสต็อกเอง (Delivery) '+delAdjPcs.toLocaleString()+' ชิ้น <span style="color:#94a3b8;">(ไม่นับรวมในนี้)</span>':''))
     +'</div>'
 
     // bill table
