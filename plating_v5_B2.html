@@ -2276,7 +2276,11 @@ function renderHistory() {
           '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>' +
         '</tr></thead><tbody>' +
         (detRows || '<tr><td colspan="11" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
-        '</tbody></table></div></div></td></tr>';
+        '</tbody></table></div>' +
+        '<div style="padding:8px 4px 2px;">' +
+          '<button onclick="event.stopPropagation();openAddHistRoundModal('+r.id+')" style="font-size:11px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:6px 12px;cursor:pointer;color:#1e40af;font-family:inherit;font-weight:600;">➕ เพิ่มรอบย้อนหลังเข้าวันนี้</button>' +
+        '</div>' +
+      '</div></td></tr>';
   });
   tbody.innerHTML = html;
 }
@@ -8720,6 +8724,124 @@ function clearBillFromRow(dayId, rowIdx) {
   row.jobId = '';
   row.manualBill = '';
   persistBillEdit(dayId, rowIdx, '🗑️ ล้างค่าบิลแล้ว');
+}
+
+// ══════════════════════════════════════
+//  เพิ่มรอบชุบย้อนหลังเข้าวันที่ปิดไปแล้ว (แท็บประวัติ)
+//  หมายเหตุ: ไลน์ B-2 นี้ไม่มีการเช็คเงื่อนไขจิ๊ก ±10 ชิ้น อยู่แล้ว (มีเฉพาะไลน์ R1) จึงไม่ต้องกังวลเรื่องนี้
+// ══════════════════════════════════════
+function openAddHistRoundModal(dayId) {
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr) return;
+  var existing = document.getElementById('addHistRoundModal');
+  if (existing) existing.remove();
+
+  var dateLabel = dr.date;
+  try { dateLabel = new Date(dr.date+'T00:00:00').toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'}); } catch(e){}
+
+  var fieldStyle = 'width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:8px;font-family:inherit;';
+  var labelStyle = 'display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:3px;';
+
+  var modal = document.createElement('div');
+  modal.id = 'addHistRoundModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML =
+    '<div id="addHistRoundBox" style="background:#fff;border-radius:14px;padding:20px;width:340px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25);">' +
+      '<div id="addHistRoundDragHandle" style="cursor:move;user-select:none;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:4px;">↕️ ➕ เพิ่มรอบย้อนหลัง <span style="font-size:10px;font-weight:400;color:#94a3b8;">(ลากหัวข้อเพื่อย้าย)</span></div>' +
+      '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">วันที่ '+esc2(dateLabel)+'</div>' +
+      '<label style="'+labelStyle+'">เวลา</label><input type="text" id="hrTime" value="'+new Date().toTimeString().slice(0,5)+'" placeholder="HH:MM" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">โม่/บ่อ (ไม่บังคับ)</label><input type="text" id="hrBarrel" placeholder="เช่น 5" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">ชื่อชิ้นงาน (P/No)</label><input type="text" id="hrPartName" placeholder="พิมพ์ชื่อชิ้นงาน" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">ลูกค้า</label><input type="text" id="hrCustomer" placeholder="ชื่อลูกค้า" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">เลขบิล (พิมพ์ตรงกับ Job Master ถ้ามี — เว้นว่างได้)</label><input type="text" id="hrBill" placeholder="เช่น CL2608001" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">LOT NO</label><input type="text" id="hrLot" placeholder="เช่น 6.8.69" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">ประเภท</label><select id="hrType" style="'+fieldStyle+'"><option value="N">N (งานใหม่)</option><option value="R">R (งานซ่อม)</option></select>' +
+      '<label style="'+labelStyle+'">สี</label><select id="hrColor" style="'+fieldStyle+'"><option value="B">B</option><option value="C">C</option><option value="K">K</option></select>' +
+      '<label style="'+labelStyle+'">น้ำหนัก (กก.)</label><input type="number" id="hrKg" placeholder="20" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">จำนวน (ชิ้น — ไม่บังคับ)</label><input type="number" id="hrPcs" placeholder="0" style="'+fieldStyle+'margin-bottom:4px;">' +
+      '<div style="display:flex;gap:8px;margin-top:10px;">' +
+        '<button onclick="saveHistRound('+dayId+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:700;">💾 บันทึกรอบนี้</button>' +
+        '<button onclick="document.getElementById(&quot;addHistRoundModal&quot;).remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;font-family:inherit;">ยกเลิก</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+  makeModalDraggable('addHistRoundBox', 'addHistRoundDragHandle');
+  setTimeout(function(){ var el=document.getElementById('hrPartName'); if(el) el.focus(); }, 50);
+}
+
+function saveHistRound(dayId) {
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr) return;
+
+  var time     = (document.getElementById('hrTime')||{}).value || '';
+  var barrel   = (document.getElementById('hrBarrel')||{}).value || '';
+  var partName = (document.getElementById('hrPartName')||{}).value.trim();
+  var customer = (document.getElementById('hrCustomer')||{}).value.trim();
+  var billText = (document.getElementById('hrBill')||{}).value.trim();
+  var lotNo    = (document.getElementById('hrLot')||{}).value.trim();
+  var type     = (document.getElementById('hrType')||{}).value || 'N';
+  var color    = (document.getElementById('hrColor')||{}).value || 'B';
+  var kg       = parseFloat((document.getElementById('hrKg')||{}).value) || 0;
+  var pcs      = parseInt((document.getElementById('hrPcs')||{}).value) || 0;
+
+  if (!partName) { showToast('hist','กรุณากรอกชื่อชิ้นงาน','err'); return; }
+  if (!kg && !pcs) { showToast('hist','กรุณากรอกจำนวน (กก. หรือ ชิ้น)','err'); return; }
+
+  // หาบิลจากเลขที่พิมพ์ (ตรรกะเดียวกับ saveBillToRow) — ถ้าไม่เจอใน Job Master เก็บเป็นบิลอ้างอิงอย่างเดียว ไม่ผูกสต็อก
+  var jobId = '', manualBill = '';
+  if (billText) {
+    var matches = (jobMasterItems||[]).filter(function(j){ return String(j.bill||'').trim() === billText; });
+    if (matches.length > 1) {
+      var pref = matches.find(function(j){ return jobMatchesPartNo(j, partName); });
+      if (pref) matches = [pref];
+    }
+    if (matches.length) { jobId = matches[0].id; }
+    else { manualBill = billText; }
+  }
+
+  var row = {
+    id: Date.now(), time: time, barrel: barrel, type: type, color: color,
+    kg: kg, pcs: pcs, partName: partName, customer: customer,
+    jobId: jobId, lotNo: lotNo, batchNo: null,
+    addedRetro: true, addedRetroAt: new Date().toISOString() // กันไว้สอบกลับว่าเป็นรอบที่เพิ่มย้อนหลัง ไม่ได้กรอกสดตอนนั้นจริง
+  };
+  if (manualBill) row.manualBill = manualBill;
+
+  if (!dr.rows) dr.rows = [];
+  dr.rows.push(row);
+  recalcDayRecordSummary(dr);
+
+  try { localStorage.setItem('b2_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  var m = document.getElementById('addHistRoundModal'); if (m) m.remove();
+  renderHistory();
+  showToast('hist','➕ เพิ่มรอบย้อนหลังแล้ว — กำลัง sync...','ok');
+
+  Promise.resolve(fbSave()).then(function(ok){
+    if (ok) showToast('hist','✅ เพิ่มรอบย้อนหลังและ sync ขึ้น Firebase แล้ว','ok');
+    else showToast('hist','⚠️ เพิ่มแล้วแต่ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น ลองกดรีเฟรชแล้วเช็คอีกครั้ง','err');
+  }).catch(function(){
+    showToast('hist','⚠️ เพิ่มแล้วแต่ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น ลองกดรีเฟรชแล้วเช็คอีกครั้ง','err');
+  });
+}
+
+// คำนวณยอดรวมของวัน (totalKg/barrels/kgB-C-K/newKg/reworkKg/ratio) ใหม่จาก rows ทั้งหมด — เรียกทุกครั้งหลังแก้ไข
+// rows ของวันนั้น (เช่น เพิ่มรอบย้อนหลัง) เพื่อให้ยอดสรุปในตาราง "ประวัติ" ตรงกับรายละเอียดที่ขยายดูเสมอ
+function recalcDayRecordSummary(dr) {
+  var totalKg=0, newKg=0, reworkKg=0, kgB=0, kgC=0, kgK=0;
+  (dr.rows||[]).forEach(function(r) {
+    var v = Number(r.kg||0);
+    totalKg += v;
+    if (r.type==='N') newKg += v; else reworkKg += v;
+    if (r.color==='B') kgB += v;
+    else if (r.color==='C') kgC += v;
+    else if (r.color==='K') kgK += v;
+  });
+  dr.totalKg  = totalKg;
+  dr.barrels  = (dr.rows||[]).length;
+  dr.kgB = kgB; dr.kgC = kgC; dr.kgK = kgK;
+  dr.newKg = newKg; dr.reworkKg = reworkKg;
+  dr.ratio = totalKg > 0 ? parseFloat((reworkKg/totalKg*100).toFixed(2)) : 0;
 }
 
 // บันทึกกลับ Firebase + localStorage แล้วปิด modal / รีเฟรชตาราง — ใช้ร่วมกันทั้งกรณีผูก Job Master จริง และกรณีบิลอ้างอิง

@@ -962,8 +962,6 @@ input:focus,select:focus{border-color:var(--blue2);}
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
-<script src="unit-convert.js"></script>
-<script src="wip-calc.js"></script>
 <script>
 // ══════════════════════════════════════
 //  CONFIG
@@ -1053,9 +1051,6 @@ function checkPin() {
     startPoll();
     setTimeout(fbLoad, 800);
     loadPartMaster().then(function(){ updatePmStatusHint(); renderCustomerFilter(); pullFromLines(); });
-    // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) — ใช้เช็คตอนออก INV ว่ามี "ของที่ชุบแล้วจริง" พอส่งไหม
-    // (ไม่ใช่แค่เช็คยอดรับเข้าคงเหลือ ซึ่งไม่รู้ว่าของถูกชุบไปแล้วหรือยัง)
-    if (typeof WipCalc !== 'undefined') WipCalc.load();
   });
 }
 
@@ -1241,10 +1236,7 @@ function startPoll() {
   _pollTimer = setInterval(function(){
     _pollCount++;
     if (_pollCount%6===0) fbLoad();
-    if (_pollCount%12===0) {
-      pullFromLines(); // ทุก ~60 วินาที
-      if (typeof WipCalc !== 'undefined') WipCalc.load(); // อัปเดตยอดชุบจริงให้ทันข้อมูลล่าสุดจากหน้าไลน์ชุบ
-    }
+    if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที
   }, 5000);
 }
 function setSyncOk(){ document.getElementById('syncDot').className='sync-dot ok'; document.getElementById('syncLabel').textContent='Sync แล้ว'; }
@@ -1286,32 +1278,6 @@ function calcJob(jobId) {
   if (job.closed) { remain = 0; remainKg = 0; }
   return { totalIn:totalIn, totalOut:totalOut, remain:remain,
            totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
-}
-
-// น้ำหนัก/หน่วย (กรัม) จาก Part Master — ใช้แปลง กก.↔ชิ้น ตอนเช็คยอดชุบจริง (เหมือนที่หน้าไลน์ชุบใช้)
-function getWeightGForPO(partNo) {
-  return (typeof ucGetWeightG === 'function') ? ucGetWeightG(partNo, (typeof pmParts !== 'undefined') ? pmParts : []) : 0;
-}
-
-// ── calcJobReadyToShip — ยอด "ชุบแล้วจริง แต่ยังไม่ได้ส่งลูกค้า" ของบิลหนึ่งๆ ──
-// ต่างจาก calcJob().remain (=รับเข้า−ส่งออก) ตรงที่ตัวนี้เอา "ยอดชุบจริง" (จาก wip-calc.js ซึ่งอ่านสด
-// จากบันทึกรอบชุบ B1/B2/R1) มาลบยอดที่ส่ง INV จริงไปแล้ว แทนที่จะเทียบกับยอดรับเข้าดิบเฉยๆ
-// ป้องกันเคส "ออก INV/ตัดสต็อกทั้งที่ของยังไม่เคยถูกชุบเลย" (รับเข้ามาแต่ยังไม่ได้ชุบ ก็ออกบิลไม่ได้)
-// ถ้า WipCalc ยังโหลดไม่เสร็จ/ไม่มีข้อมูล → fallback ไปใช้ remain แบบเดิม (ไม่บล็อกเพิ่ม กันระบบใช้งานไม่ได้)
-function calcJobReadyToShip(jobId) {
-  var job = (jobItems||[]).find(function(j){ return j.id===jobId; });
-  var b = calcJob(jobId);
-  if (!job || typeof WipCalc === 'undefined' || !WipCalc.isLoaded()) {
-    return { readyPcs: b.remain, readyKg: b.remainKg, unit: b.unit, wipUnavailable: true };
-  }
-  var weightG = getWeightGForPO(job.partName || job.name || job.partNo || '');
-  var plated  = WipCalc.getPlatedForJob(jobId, weightG); // {pcs, kg} — ยอดชุบจริงสะสมของบิลนี้
-  return {
-    readyPcs: Math.max(0, plated.pcs - b.totalOut),
-    readyKg:  Math.max(0, plated.kg  - b.totalOutKg),
-    unit: job.unit || 'pcs',
-    wipUnavailable: false
-  };
 }
 
 function daysSince(dateStr) {
@@ -2221,18 +2187,6 @@ function addInvLine() {
     return;
   }
 
-  // ── ตรวจเพิ่ม: ของที่จะออก INV ต้อง "ชุบแล้วจริง" มากพอด้วย ไม่ใช่แค่มียอดรับเข้าคงเหลือพอ ──
-  // (กันเคสออก INV/ตัดสต็อกทั้งที่ของยังไม่เคยถูกชุบเลย — รับเข้ามาแต่ยังไม่ได้ชุบ ก็ออกบิลไม่ได้)
-  // ข้ามได้เฉพาะติ๊ก "โหมดแก้ไขสต๊อกเก่า" เหมือนกับการเช็คยอดรับเข้าคงเหลือด้านบน
-  var ready = calcJobReadyToShip(jobId);
-  if (!stockOverride && !ready.wipUnavailable) {
-    var readyQty = isKg ? ready.readyKg : ready.readyPcs;
-    if (stockQty + alreadyInDraft > readyQty + 0.0001) {
-      showToast('invline','🚫 "'+job.partName+'" ยังชุบไม่พอ — ชุบแล้วจริงพร้อมส่งแค่ '+(Math.max(0,readyQty-alreadyInDraft)).toLocaleString()+(isKg?' กก.':' ชิ้น')+' (รับเข้ามาแต่ยังไม่ได้ชุบส่วนหนึ่งอยู่) กรุณาตรวจสอบกับหน้าไลน์ชุบก่อนออก INV','err');
-      return;
-    }
-  }
-
   // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ (งานเคลม = 0 เสมอ)
   var amount = isClaim ? 0 : ((priceUnit==='kg') ? (totalKg * price) : (totalPcs * price));
 
@@ -2711,14 +2665,6 @@ function saveInvoice(doPrint) {
     var sameJobQty = invDraft.filter(function(x){return x.jobId===l.jobId;}).reduce(function(s,x){return s+x.qty;},0);
     if (sameJobQty > remain + 0.0001) {
       showToast('out','⚠️ '+l.partName+' เกินคงเหลือ','err'); return;
-    }
-    // ── ตรวจซ้ำอีกครั้ง (กัน race condition เช่นเดียวกับด้านบน): ของต้อง "ชุบแล้วจริง" มากพอด้วย ──
-    var ready = calcJobReadyToShip(l.jobId);
-    if (!ready.wipUnavailable) {
-      var readyQty = l.unit==='kg' ? ready.readyKg : ready.readyPcs;
-      if (sameJobQty > readyQty + 0.0001) {
-        showToast('out','🚫 '+l.partName+' ชุบไม่พอ — พร้อมส่งจริงแค่ '+Math.max(0,readyQty).toLocaleString()+(l.unit==='kg'?' กก.':' ชิ้น'),'err'); return;
-      }
     }
   }
 
