@@ -141,9 +141,10 @@
 </style>
 </head>
 <body>
-<!-- ปุ่มลอยกลับหน้าหลัก (index.html) — ย้ายมาไว้บนสุด (ไม่ใช่ล่างซ้ายเหมือนไฟล์อื่น) เพราะหน้านี้เป็นตารางยาวมาก
-     scroll เยอะ ผู้ใช้แจ้งว่าไม่เห็นปุ่มด้านล่าง (อาจเจอบั๊ก position:fixed ของ Safari กับหน้าที่ scroll สูงๆ) -->
-<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;top:8px;right:8px;z-index:99999;width:36px;height:36px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.2);">🏠</a>
+<!-- ปุ่มลอยกลับหน้าหลัก (index.html) — ย้ายมาลอยกลางขอบขวาของจอ (แนวตั้งกึ่งกลาง) แทนมุมบน/ล่าง
+     เพราะมุมบนขวาไปชนกับโซนนาฬิกา/ป้าย Live ในหัวเว็บพอดีบนจอแคบ (iPhone) ทำให้ถูกบังบางส่วน
+     กลางขอบขวาเป็นจุดที่ไม่มีเนื้อหาอะไรมาชนไม่ว่าจอกว้างแคบแค่ไหน ปลอดภัยที่สุด -->
+<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;top:50%;right:6px;transform:translateY(-50%);z-index:99999;width:34px;height:34px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.2);">🏠</a>
 
 <!-- ── Header ── -->
 <div class="header">
