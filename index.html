@@ -119,6 +119,23 @@ footer{
   padding:24px; border-top:1px solid var(--border);
 }
 </style>
+
+<!-- ── PWA: ติดตั้งเป็นแอปบนหน้าจอโทรศัพท์ได้ ── -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f2a4a">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="APK Plating">
+<script>
+  // ลงทะเบียน service worker แบบ network-first ล้วนๆ (ไม่แคชอะไรเลย) — มีไว้แค่ให้ผ่านเงื่อนไข
+  // "ติดตั้งเป็นแอปได้" ของ Chrome/Android เท่านั้น ไม่กระทบข้อมูลสดจาก Firebase ที่ทุกหน้าใช้อยู่
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function(){});
+    });
+  }
+</script>
 </head>
 <body>
 
