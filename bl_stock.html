@@ -483,6 +483,10 @@ async function loadAll(manual) {
     buildHistFilters();
     buildTracePeriodOptions();
     renderHist();
+    // สำคัญ: ถ้าหน้า Traceability เปิดค้างอยู่ (มีคำค้นหาในช่อง) ต้องสั่งค้นหาซ้ำทุกครั้งที่โหลดข้อมูลใหม่เสร็จ
+    // ไม่งั้นข้อมูลในหน่วยความจำอัปเดตแล้วจริง แต่การ์ดที่ render ค้างไว้บนจอจะไม่ขยับตามเลย (ต้องกด "ค้นหา" เองถึงเห็น)
+    var _tsInput = document.getElementById('traceSearchInput');
+    if (_tsInput && _tsInput.value.trim()) traceSearch();
   } catch(e) {
     setSyncing(false, false, e.message);
     updateVerifyBar();

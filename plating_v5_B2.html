@@ -1712,6 +1712,15 @@ function addBarrel() {
   if (_billJobId && _billJobId !== 'NOBILL') {
     var _billJob = (jobMasterItems||[]).find(function(j){ return j.id===_billJobId; });
     if (_billJob) {
+      // ── บังคับ FIFO เฉพาะพาร์ทเดียวกัน (ด่านสุดท้าย กันเคส race condition/ข้อมูลเปลี่ยนหลังจากคลิกเลือกบิล) ──
+      // จุดหลักที่กันไว้แล้วคือตอนคลิกเลือกบิลใน pickBillRow() — จุดนี้เป็นแค่ safety net เผื่อพลาดหลุดมาได้
+      var _blocker = findFifoBlocker(_billJob);
+      if (_blocker) {
+        var _qtyStr = (_blocker.remain.remainPcs||0) > 0 ? (_blocker.remain.remainPcs.toLocaleString()+' ชิ้น') : (_blocker.remain.remainKg.toFixed(2)+' กก.');
+        showToast('entry','🚫 ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน — เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+_billJob.bill+'" ที่เลือกไว้ ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)','err');
+        return;
+      }
+
       // ใช้ calcJobRemainToPlate() (wip-calc.js) — สูตรกลางที่ตรงกับ bl_stock.html แทน calcJobBal+calcTodayUsed
       // ซึ่งพึ่ง jobMasterRecords "out" record ที่มีบั๊กสะสมหลายชั้น (ดูคอมเมนต์ที่ตัวฟังก์ชัน)
       var _r = calcJobRemainToPlate(_billJobId);
@@ -6688,11 +6697,35 @@ function barrelPmAcPick(idx) {
   document.getElementById('bBillInfo').textContent = '';
 }
 
+// findFifoBlocker — คืนบิล "พาร์ทเดียวกัน" ที่รับเข้าก่อนหน้าและยังเหลือคงเหลืออยู่ (ถ้ามี) ไม่งั้นคืน null
+// ใช้ร่วมกันทั้ง 3 จุด: (1) render รายการบิลให้เห็นว่าใบไหนติดคิว (2) ตอนคลิกเลือกบิล เตือนทันทีก่อนกรอกอย่างอื่นต่อ
+// (3) ด่านสุดท้ายตอนกดบันทึกจริงใน addBarrel() (กันเคส race condition/ข้อมูลเปลี่ยนระหว่างนั้น)
+function findFifoBlocker(job) {
+  if (!job) return null;
+  var selPartKey = normalizePartKey(job.partName || job.partNo || '');
+  if (!selPartKey || !job.date) return null;
+  var earlier = (jobMasterItems||[]).filter(function(j){
+    return j.id !== job.id && !j.closed && j.date && j.date < job.date
+      && normalizePartKey(j.partName || j.partNo || '') === selPartKey;
+  }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  for (var i=0; i<earlier.length; i++) {
+    var ej = earlier[i];
+    var ejR = calcJobRemainToPlate(ej.id);
+    if (ejR && ((ejR.remainPcs||0) > 0 || (ejR.remainKg||0) > 0)) {
+      return { job: ej, remain: ejR };
+    }
+  }
+  return null;
+}
+
 function renderBillList(active, selectedJobId) {
   var listEl = document.getElementById('bBillList');
   var sel    = document.getElementById('bJobPick');
   if (!listEl) return;
   var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
+
+  // เรียงตาม FIFO (วันรับเก่าสุดก่อน) เสมอ ให้เห็นลำดับคิวชัดเจนตั้งแต่รายการ ไม่ใช่แค่ตอนกดบันทึกแล้วโดนเตือน
+  active = active.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
   // อัปเดต hidden select
   sel.innerHTML = '<option value="">—</option>' +
@@ -6722,14 +6755,26 @@ function renderBillList(active, selectedJobId) {
     var isSelected = j.id === selectedJobId;
     var bill = j.bill || '?';
     var cust = j.customer || '';
+
+    // ── FIFO: ถ้ามีบิลพาร์ทเดียวกันรับเข้าก่อนหน้ายังเหลืออยู่ ทำให้แถวนี้ "ติดคิว" — ยังคลิกได้ แต่จะโดนเตือนทันที ──
+    var blocker = findFifoBlocker(j);
+    var fifoNote = blocker
+      ? '<div style="font-size:10px;color:#dc2626;font-weight:600;margin-top:2px;">⏳ ติดคิว — ต้องชุบบิล "'+esc2(blocker.job.bill||'?')+'" ('+esc2(blocker.job.date||'')+') ให้หมดก่อน</div>'
+      : '';
+    var rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .15s,border .15s;margin-bottom:4px;'
+      + (blocker
+          ? 'border:1.5px dashed #fca5a5;background:#fef2f2;opacity:.75;'
+          : 'border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';');
+
     return '<div class="bill-row" data-jobid="'+j.id+'" data-bill="'+bill+'" data-pn="'+pn+'" data-cust="'+cust+'" '+
-      'style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;border:1.5px solid '+(isSelected?'#16a34a':'#bbf7d0')+';background:'+(isSelected?'#dcfce7':'#fff')+';transition:background .15s,border .15s;margin-bottom:4px;">' +
+      'style="'+rowStyle+'">' +
       '<div>' +
-        '<span style="font-family:monospace;font-size:13px;font-weight:700;color:#15803d;">['+bill+']</span>' +
+        '<span style="font-family:monospace;font-size:13px;font-weight:700;color:'+(blocker?'#991b1b':'#15803d')+';">['+bill+']</span>' +
         '<span style="font-size:12px;color:#0f172a;margin-left:6px;">เหลือ <b>'+remStr+'</b></span>' +
         (usedStr ? '<span style="font-size:10px;color:#94a3b8;margin-left:5px;">'+usedStr+'</span>' : '') +
         (cust ? '<div style="font-size:10px;color:#3b82f6;margin-top:1px;">'+cust+'</div>' : '') +
         (isSelected ? '<div style="font-size:10px;color:#16a34a;font-weight:600;margin-top:2px;">✅ เลือกอยู่</div>' : '') +
+        fifoNote +
         weightWarn +
       '</div>' +
       '<button class="preset-btn" data-jobid="'+j.id+'" data-bill="'+bill+'" data-pn="'+pn+'" data-cust="'+cust+'" '+
@@ -6767,6 +6812,14 @@ function pickBillRow(jobId, billNo) {
 
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
   if (!job) return;
+
+  // ── เช็ค FIFO ทันทีตอนคลิกเลือก — ไม่ต้องรอกรอกจำนวน/ประเภท/สีให้ครบก่อนแล้วโดนบล็อกตอนบันทึกจริง ──
+  var _blocker = findFifoBlocker(job);
+  if (_blocker) {
+    var _qtyStr = (_blocker.remain.remainPcs||0) > 0 ? (_blocker.remain.remainPcs.toLocaleString()+' ชิ้น') : (_blocker.remain.remainKg.toFixed(2)+' กก.');
+    showToast('entry','🚫 เลือกไม่ได้ — ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+job.bill+'" ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)','err');
+    return;
+  }
 
   // 1. set hidden select
   var sel = document.getElementById('bJobPick');
@@ -8798,6 +8851,28 @@ function saveHistRound(dayId) {
     }
     if (matches.length) { jobId = matches[0].id; }
     else { manualBill = billText; }
+  }
+
+  // ── ตรวจสอบยอดคงเหลือของบิลก่อนบันทึก (เหมือนหน้ากรอกสด) — เดิมฟีเจอร์นี้ไม่มีการเช็คนี้เลย
+  // ทำให้กดเพิ่มรอบย้อนหลังซ้ำๆ ได้เกินยอดรับจริงของบิลนั้น (เจอจริง: รับ 2,000 แต่ชุบสะสมได้ถึง 2,112)
+  // ตั้งใจปิดแค่เงื่อนไขจิ๊ก ±10 ไปตอนแรก (ไม่เกี่ยวกับข้อมูลย้อนหลัง) แต่คนละเรื่องกับการกันชุบเกินยอดรับ ต้องมีไว้เหมือนกัน
+  if (jobId) {
+    var _histJob = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
+    if (_histJob) {
+      var _histR = calcJobRemainToPlate(jobId);
+      var _histIsKg = _histJob.unit === 'kg';
+      var _histPcsChk = pcs;
+      if (!_histPcsChk && kg > 0 && !_histIsKg) {
+        var _histWG = getWeightGForPO(_histJob.partName || _histJob.partNo || '');
+        if (_histWG > 0) _histPcsChk = Math.round((kg*1000)/_histWG);
+      }
+      var _histExceeds = _histIsKg ? (kg > _histR.remainKg + 0.001) : (_histPcsChk > _histR.remainPcs);
+      if (_histExceeds) {
+        var _histRemainStr = _histIsKg ? _histR.remainKg.toFixed(2)+' กก.' : _histR.remainPcs.toLocaleString()+' ชิ้น';
+        showToast('hist','🚫 บันทึกไม่ได้ — บิล "'+billText+'" เหลือให้ชุบแค่ '+_histRemainStr+' (กรอกเกินยอดรับเข้าจริง) ตรวจสอบจำนวน/เลขบิลอีกครั้ง','err');
+        return;
+      }
+    }
   }
 
   var row = {
