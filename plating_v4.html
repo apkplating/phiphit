@@ -6763,6 +6763,13 @@ function barrelPmAcPick(idx) {
 // findFifoBlocker — คืนบิล "พาร์ทเดียวกัน" ที่รับเข้าก่อนหน้าและยังเหลือคงเหลืออยู่ (ถ้ามี) ไม่งั้นคืน null
 // ใช้ร่วมกันทั้ง 3 จุด: (1) render รายการบิลให้เห็นว่าใบไหนติดคิว (2) ตอนคลิกเลือกบิล เตือนทันทีก่อนกรอกอย่างอื่นต่อ
 // (3) ด่านสุดท้ายตอนกดบันทึกจริงใน addBarrel() (กันเคส race condition/ข้อมูลเปลี่ยนระหว่างนั้น)
+// ── ตัวติดตามยอดที่เพิ่งเพิ่มผ่าน "เพิ่มรอบย้อนหลัง" ในเซสชันนี้ (ต่อ jobId) ──
+// จำเป็นเพราะ calcJobRemainToPlate() อ่านจาก WipCalc ซึ่งเป็น cache แยกต่างหาก ไม่รู้จักรอบที่เพิ่งเพิ่ม
+// ไปหมาดๆ จนกว่าจะ WipCalc.load() ใหม่ (ดีเลย์ ~900ms+เน็ต) — ถ้ากรอกติดกันหลายรอบเร็วกว่านั้น
+// (เช่น กรอกย้อนหลังทีละหลายรอบรัวๆ) แต่ละรอบจะเช็คกับ remain เดิมที่ยังไม่อัปเดตซ้ำๆ กัน ทำให้รวมกันเกินได้
+// เกิดจริง: บิล 080826 รับ 500 แต่ชุบย้อนหลังสะสมได้ถึง 640 (4 รอบ) ทั้งที่แต่ละรอบเช็ค "ผ่าน" แยกกัน
+var _histSessionAdded = {};
+
 function findFifoBlocker(job) {
   if (!job) return null;
   var selPartKey = normalizePartKey(job.partName || job.partNo || '');
@@ -8921,6 +8928,7 @@ function saveHistRound(dayId) {
   // ── ตรวจสอบยอดคงเหลือของบิลก่อนบันทึก (เหมือนหน้ากรอกสด) — เดิมฟีเจอร์นี้ไม่มีการเช็คนี้เลย
   // ทำให้กดเพิ่มรอบย้อนหลังซ้ำๆ ได้เกินยอดรับจริงของบิลนั้น (เจอจริง: รับ 2,000 แต่ชุบสะสมได้ถึง 2,112)
   // ตั้งใจปิดแค่เงื่อนไขจิ๊ก ±10 ไปตอนแรก (ไม่เกี่ยวกับข้อมูลย้อนหลัง) แต่คนละเรื่องกับการกันชุบเกินยอดรับ ต้องมีไว้เหมือนกัน
+  // + หัก _histSessionAdded ออกด้วย กันเคสกรอกติดกันหลายรอบก่อน WipCalc จะรีเฟรชทัน (ดูคอมเมนต์ที่ตัวแปรด้านบน)
   if (jobId) {
     var _histJob = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
     if (_histJob) {
@@ -8931,12 +8939,17 @@ function saveHistRound(dayId) {
         var _histWG = getWeightGForPO(_histJob.partName || _histJob.partNo || '');
         if (_histWG > 0) _histPcsChk = Math.round((kg*1000)/_histWG);
       }
-      var _histExceeds = _histIsKg ? (kg > _histR.remainKg + 0.001) : (_histPcsChk > _histR.remainPcs);
+      var _alreadyAdded = _histSessionAdded[jobId] || { pcs:0, kg:0 };
+      var _effRemainPcs = _histR.remainPcs - _alreadyAdded.pcs;
+      var _effRemainKg  = _histR.remainKg  - _alreadyAdded.kg;
+      var _histExceeds = _histIsKg ? (kg > _effRemainKg + 0.001) : (_histPcsChk > _effRemainPcs);
       if (_histExceeds) {
-        var _histRemainStr = _histIsKg ? _histR.remainKg.toFixed(2)+' กก.' : _histR.remainPcs.toLocaleString()+' ชิ้น';
-        showToast('hist','🚫 บันทึกไม่ได้ — บิล "'+billText+'" เหลือให้ชุบแค่ '+_histRemainStr+' (กรอกเกินยอดรับเข้าจริง) ตรวจสอบจำนวน/เลขบิลอีกครั้ง','err');
+        var _histRemainStr = _histIsKg ? Math.max(0,_effRemainKg).toFixed(2)+' กก.' : Math.max(0,_effRemainPcs).toLocaleString()+' ชิ้น';
+        showToast('hist','🚫 บันทึกไม่ได้ — บิล "'+billText+'" เหลือให้ชุบแค่ '+_histRemainStr+' (กรอกเกินยอดรับเข้าจริง — รวมรอบที่เพิ่งเพิ่มไปในเซสชันนี้ด้วยแล้ว) ตรวจสอบจำนวน/เลขบิลอีกครั้ง','err');
         return;
       }
+      // บันทึกยอดที่กำลังจะเพิ่มไว้ในตัวติดตาม ก่อน WipCalc จะรีเฟรชทัน กันรอบถัดไปในเซสชันเดียวกันเช็คพลาดซ้ำ
+      _histSessionAdded[jobId] = { pcs: _alreadyAdded.pcs + _histPcsChk, kg: _alreadyAdded.kg + kg };
     }
   }
 
@@ -8960,6 +8973,8 @@ function saveHistRound(dayId) {
   Promise.resolve(fbSave()).then(function(ok){
     if (ok) showToast('hist','✅ เพิ่มรอบย้อนหลังและ sync ขึ้น Firebase แล้ว','ok');
     else showToast('hist','⚠️ เพิ่มแล้วแต่ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น ลองกดรีเฟรชแล้วเช็คอีกครั้ง','err');
+    // รีเฟรช WipCalc ให้ตามทันข้อมูลจริง (เผื่อไว้ด้วย — ตัวหลักที่กันเกินคือ _histSessionAdded ด้านบนแล้ว)
+    if (typeof WipCalc !== 'undefined') setTimeout(function(){ WipCalc.load(); }, 900);
   }).catch(function(){
     showToast('hist','⚠️ เพิ่มแล้วแต่ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น ลองกดรีเฟรชแล้วเช็คอีกครั้ง','err');
   });
