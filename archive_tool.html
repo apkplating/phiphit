@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APK Plating — เครื่องมือ Archive บิลปิดแล้ว</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0f2a4a; --blue:#2563eb; --sky-pale:#eff6ff; --border:#e2e8f0;
+    --text-mid:#475569; --text-muted:#94a3b8; --green:#15803d; --red:#dc2626; --amber:#b45309;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'IBM Plex Sans Thai',sans-serif;background:#f8fafc;margin:0;color:var(--navy);}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;background:var(--navy);color:#fff;padding:14px 20px;border-radius:0 0 14px 14px;margin-bottom:20px;}
+  .topbar h1{font-size:16px;margin:0;}
+  .topbar .sub{font-size:11px;color:#93c5fd;margin-top:2px;}
+  .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--navy);}
+  .banner{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 14px;font-size:12px;color:#92400e;line-height:1.7;margin-bottom:16px;}
+  .banner b{color:#78350f;}
+  .criteria{background:var(--sky-pale);border:1.5px solid #93c5fd;border-radius:10px;padding:12px 14px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:16px;}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:9px;font-size:13px;}
+  .btn-primary{background:var(--navy);color:#fff;padding:10px 18px;font-weight:700;}
+  .btn-primary:disabled{background:#cbd5e1;cursor:not-allowed;}
+  .btn-green{background:var(--green);color:#fff;padding:10px 18px;font-weight:700;}
+  .btn-outline{background:#f1f5f9;color:var(--navy);padding:10px 18px;}
+  .btn-disabled{background:#e5e7eb;color:#9ca3af;padding:10px 18px;font-weight:700;cursor:not-allowed;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:var(--navy);color:#fff;text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;}
+  td{padding:7px 10px;border-bottom:1px solid var(--border);}
+  tr:hover td{background:#f8fafc;}
+  .tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;}
+  .stat-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .stat{flex:1;min-width:130px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;}
+  .stat .num{font-size:22px;font-weight:800;color:var(--blue);}
+  .stat .lbl{font-size:10px;color:var(--text-muted);margin-top:2px;}
+  .badge{display:inline-block;padding:1px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+  .badge-ok{background:#dcfce7;color:#15803d;}
+  .badge-warn{background:#fef3c7;color:#92400e;}
+  #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:12px;}
+  #loginScreen input{padding:12px 16px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;text-align:center;width:200px;font-family:inherit;}
+  #loginError{color:var(--red);font-size:12px;display:none;}
+  .empty{text-align:center;color:var(--text-muted);padding:30px;font-size:12px;}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:6px;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+</style>
+<script>
+// ══════════════════════════════════════════════════════
+//  เช็คเวอร์ชันใหม่ — เทียบกับ version.json บน GitHub เป็นระยะ
+//  ถ้าไม่ตรงกับเวอร์ชันที่หน้านี้ใช้อยู่ แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
+//  ขึ้นแถบแจ้งเตือนให้กดรีเฟรชเอง แก้ปัญหา "ไม่รู้ตัวว่ากำลังดูเวอร์ชันเก่าอยู่"
+//  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
+// ══════════════════════════════════════════════════════
+(function(){
+  var CURRENT_VERSION = "2026-08-10.1"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  function checkVersion(){
+    fetch('version.json', {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.version && data.version !== CURRENT_VERSION) showVersionBanner();
+      })
+      .catch(function(){}); // เงียบไว้ถ้าเช็คไม่ได้ (ออฟไลน์ ฯลฯ) ไม่รบกวนการใช้งาน
+  }
+  function showVersionBanner(){
+    if (document.getElementById('versionUpdateBanner')) return;
+    var b = document.createElement('div');
+    b.id = 'versionUpdateBanner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#f59e0b;color:#000;text-align:center;padding:10px 14px;font-size:13px;font-weight:700;font-family:sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+    b.textContent = '🔄 มีเวอร์ชันใหม่กว่านี้ — แตะเพื่อโหลดหน้าใหม่';
+    b.onclick = function(){ location.reload(); };
+    document.body.appendChild(b);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkVersion);
+  } else {
+    checkVersion();
+  }
+  setInterval(checkVersion, 5*60*1000); // เช็คซ้ำทุก 5 นาที
+})();
+</script>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div style="font-size:20px;font-weight:800;">🗄️ APK Plating — Archive Tool</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">เฉพาะผู้ดูแลระบบ (admin) เท่านั้น</div>
+  <input type="password" id="pinInput" placeholder="PIN" onkeydown="if(event.key==='Enter')checkPin()">
+  <button class="btn-primary" onclick="checkPin()" style="width:200px;">เข้าสู่ระบบ</button>
+  <div id="loginError"></div>
+</div>
+
+<div id="appScreen" style="display:none;">
+  <div class="topbar">
+    <div>
+      <h1>🗄️ Archive Tool — บิลปิดสมบูรณ์แล้ว</h1>
+      <div class="sub">ตรวจหา + ย้ายข้อมูลบิลที่ "จ่ายครบ" (คงเหลือ = 0) ไปเก็บที่ path /archive แยกต่างหาก ไม่ลบถาวร</div>
+    </div>
+    <button class="btn-outline" onclick="location.reload()">🔄 โหลดใหม่</button>
+  </div>
+
+  <div class="wrap">
+    <div class="banner">
+      ⚠️ <b>ขั้นตอนที่ 1: ย้ายไปเก็บที่ path <code>/archive</code> แยกต่างหาก (ไม่ใช่ลบถาวร)</b><br>
+      ข้อมูลจะยังอยู่บน Firebase ครบทุกอย่าง แค่ย้ายออกจาก path หลักที่ job_master/bl_stock/ไลน์ชุบใช้งานประจำวัน ไปเก็บที่ path ใหม่แยกต่างหาก — ทำให้ไฟล์หลักที่โหลดทุกวันเล็กลง (โหลดเร็วขึ้น) แต่ยังเรียกดูย้อนหลังได้เสมอ<br>
+      ขั้นตอนที่ 2 (แปลงเป็น CSV แล้วลบออกจาก /archive ถาวร) จะเปิดให้ใช้ในรอบถัดไป หลังจากมั่นใจแล้วว่าขั้นตอนที่ 1 ทำงานถูกต้อง
+    </div>
+    <div class="criteria">
+      📋 <b>เกณฑ์ที่ใช้คัดเลือกบิลสำหรับ Archive:</b> สถานะ "จ่ายครบ" เท่านั้น (คงเหลือ = 0 ทั้งรับเข้า−ส่งออกจริงผ่าน INV) — ไม่สนใจว่าบิลนั้นเก่าหรือใหม่แค่ไหน บิลที่ยังมีคงเหลือค้างอยู่จะไม่ถูกแตะต้องเลย
+    </div>
+
+    <div class="card" id="loadingCard">
+      <div><span class="spin"></span> กำลังโหลดข้อมูลจาก Job Master, ไลน์ชุบ B1/B2/R1 และ Delivery...</div>
+    </div>
+
+    <div id="resultArea" style="display:none;">
+      <div class="stat-row">
+        <div class="stat"><div class="num" id="statBills">0</div><div class="lbl">บิลที่ปิดสมบูรณ์แล้ว</div></div>
+        <div class="stat"><div class="num" id="statPlating">0</div><div class="lbl">รอบชุบที่เกี่ยวข้อง (B1+B2+R1)</div></div>
+        <div class="stat"><div class="num" id="statDelivery">0</div><div class="lbl">รายการ Delivery ที่เกี่ยวข้อง</div></div>
+        <div class="stat"><div class="num" id="statRecords">0</div><div class="lbl">Records รับเข้า/จ่ายออกใน JM</div></div>
+      </div>
+
+      <div class="card">
+        <h2>รายการบิลที่จะ Archive</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>เลขบิล</th><th>ชื่อชิ้นงาน</th><th>ลูกค้า</th><th>วันรับ</th>
+              <th>รับเข้า</th><th>จ่ายออก</th><th>รอบชุบที่พบ</th><th>Delivery</th><th>สถานะ</th>
+            </tr></thead>
+            <tbody id="billTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="text-align:center;">
+        <button class="btn-green" id="downloadBtn" onclick="downloadBackup()">📥 ดาวน์โหลดข้อมูลสำรองทั้งหมด (JSON)</button>
+        <button class="btn-disabled" id="moveBtn" title="กรุณาดาวน์โหลดข้อมูลสำรองก่อน ปุ่มนี้จะเปิดใช้งานเอง" disabled style="margin-left:10px;" onclick="confirmMoveToArchive()">📦 ย้ายไปเก็บที่ /archive</button>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:10px;">แนะนำให้ดาวน์โหลดสำรองก่อนเสมอ ต่อให้ย้าย (ไม่ใช่ลบถาวร) ก็ตาม — เผื่อไว้เป็นหลักฐานอ้างอิงนอก Firebase ด้วย</div>
+        <div id="moveProgress" style="margin-top:14px;font-size:12px;text-align:left;display:none;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+var SYSTEM_KEY = 'job_master'; // ใช้ระบบสิทธิ์เดียวกับ Job Master (ข้อมูลที่แตะเป็นชุดเดียวกัน)
+
+var DB_B1 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_B2 = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_R1 = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+var jobItems = [], jobRecords = [], invoices = [];
+var plateDayRecords = { B1: [], B2: [], R1: [] };
+var blDelRecords = [];
+var closedBillsResult = []; // ผลลัพธ์สุดท้ายไว้ใช้ตอนดาวน์โหลด
+
+function checkPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  document.getElementById('loginError').style.display = 'none';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok) {
+      document.getElementById('loginError').textContent = 'PIN ไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าระบบนี้';
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    if (result.role !== 'admin') {
+      document.getElementById('loginError').textContent = '🚫 เครื่องมือนี้เฉพาะ admin เท่านั้น (สิทธิ์ปัจจุบัน: ' + (result.role||'-') + ')';
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('pinInput').value = '';
+      return;
+    }
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    loadAllAndAnalyze();
+  }).catch(function(e){
+    document.getElementById('loginError').textContent = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ — ลองใหม่อีกครั้ง';
+    document.getElementById('loginError').style.display = 'block';
+  });
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function loadAllAndAnalyze() {
+  try {
+    var results = await Promise.all([
+      fetch(DB_B1 + '/job-master.json').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch(DB_B1 + '/plating-b1.json').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch(DB_B2 + '/plating-b2.json').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch(DB_R1 + '/plating-r1.json').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+      fetch(DB_B1 + '/bl-delivery.json').then(function(r){ return r.json(); }).catch(function(){ return null; })
+    ]);
+
+    var jm = results[0] || {};
+    jobItems   = Array.isArray(jm.items)   ? jm.items   : [];
+    jobRecords = Array.isArray(jm.records) ? jm.records : [];
+    invoices   = Array.isArray(jm.invoices)? jm.invoices: [];
+
+    plateDayRecords.B1 = Array.isArray((results[1]||{}).dayRecords) ? results[1].dayRecords : [];
+    plateDayRecords.B2 = Array.isArray((results[2]||{}).dayRecords) ? results[2].dayRecords : [];
+    plateDayRecords.R1 = Array.isArray((results[3]||{}).dayRecords) ? results[3].dayRecords : [];
+
+    blDelRecords = Array.isArray((results[4]||{}).records) ? results[4].records : [];
+
+    analyze();
+  } catch(e) {
+    document.getElementById('loadingCard').innerHTML =
+      '<div style="color:var(--red);">❌ โหลดข้อมูลไม่สำเร็จ: ' + esc(e.message) + '<br>ลองกด "โหลดใหม่" อีกครั้ง</div>';
+  }
+}
+
+// ── isRealInvRef / calcJob / getStatus — พอร์ตมาจาก job_master.html ให้ตรงกันเป๊ะๆ ──
+var _realInvNoSet = null;
+function isRealInvRef(r) {
+  if (!r || !r.inv) return false;
+  if (!_realInvNoSet) {
+    _realInvNoSet = {};
+    invoices.forEach(function(inv){ if (inv.invNo) _realInvNoSet[inv.invNo] = true; });
+  }
+  return !!_realInvNoSet[r.inv];
+}
+
+function calcJob(jobId) {
+  var job = jobItems.find(function(j){ return j.id===jobId; }) || {};
+  var unit = job.unit || 'pcs';
+  var totalIn = 0, totalOut = 0, totalInKg = 0, totalOutKg = 0;
+  var hasInRecords = jobRecords.some(function(r){ return r.jobId===jobId && r.type==='in'; });
+  jobRecords.forEach(function(r) {
+    if (r.jobId !== jobId) return;
+    if (r.type==='in') { totalIn += Number(r.qty||0); totalInKg += Number(r.qtyKg||0); }
+    if (r.type==='out') {
+      if (!isRealInvRef(r)) return;
+      totalOut += Number(r.qty||0); totalOutKg += Number(r.qtyKg||0);
+    }
+  });
+  if (!hasInRecords) {
+    totalIn   = Number(job.qty   || job.pcs || 0);
+    totalInKg = Number(job.qtyKg || job.kg  || 0);
+  }
+  var remain   = totalIn - totalOut;
+  var remainKg = Math.max(0, parseFloat((totalInKg - totalOutKg).toFixed(3)));
+  if (job.closed) { remain = 0; remainKg = 0; }
+  return { totalIn:totalIn, totalOut:totalOut, remain:remain, totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
+}
+
+function getStatus(job) {
+  var b = calcJob(job.id);
+  var isKg = job.unit === 'kg';
+  var isDone = isKg ? (b.remainKg <= 0) : (b.remain <= 0);
+  return isDone ? 'จ่ายครบ' : 'ยังไม่ปิด';
+}
+
+function analyze() {
+  var billTableBody = document.getElementById('billTableBody');
+  var rows = '';
+  closedBillsResult = [];
+  var totalPlatingRows = 0, totalDeliveryRows = 0, totalRecordRows = 0;
+
+  jobItems.forEach(function(job) {
+    var status = getStatus(job);
+    if (status !== 'จ่ายครบ') return; // เกณฑ์: เอาเฉพาะบิลปิดสมบูรณ์แล้วเท่านั้น
+
+    var b = calcJob(job.id);
+
+    // records ที่เกี่ยวกับบิลนี้ใน job-master
+    var relatedRecords = jobRecords.filter(function(r){ return r.jobId === job.id; });
+
+    // รอบชุบที่ผูกกับบิลนี้ ค้นจากทั้ง 3 ไลน์ (เก็บ reference วัน/แถวไว้ด้วย เผื่อใช้ตอนลบจริงในอนาคต)
+    var platingHits = [];
+    ['B1','B2','R1'].forEach(function(line){
+      plateDayRecords[line].forEach(function(dr, dIdx){
+        (dr.rows||[]).forEach(function(row, rIdx){
+          if (row.jobId === job.id) {
+            platingHits.push({ line: line, date: dr.date, dayId: dr.id, rowIdx: rIdx, row: row });
+          }
+        });
+      });
+    });
+
+    // delivery ที่เกี่ยวกับบิลนี้
+    var delHits = blDelRecords.filter(function(d){ return d.jobId === job.id; });
+
+    totalPlatingRows  += platingHits.length;
+    totalDeliveryRows += delHits.length;
+    totalRecordRows   += relatedRecords.length;
+
+    closedBillsResult.push({
+      job: job, calc: b,
+      records: relatedRecords,
+      platingHits: platingHits,
+      deliveryHits: delHits
+    });
+
+    var qtyLabel = job.unit === 'kg' ? ' กก.' : ' ชิ้น';
+    var inVal  = job.unit === 'kg' ? b.totalInKg  : b.totalIn;
+    var outVal = job.unit === 'kg' ? b.totalOutKg : b.totalOut;
+
+    rows += '<tr>' +
+      '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;">' + esc(job.bill||'-') + '</td>' +
+      '<td>' + esc(job.partName||'-') + '</td>' +
+      '<td>' + esc(job.customer||'-') + '</td>' +
+      '<td>' + esc(job.date||'-') + '</td>' +
+      '<td>' + inVal.toLocaleString() + qtyLabel + '</td>' +
+      '<td>' + outVal.toLocaleString() + qtyLabel + '</td>' +
+      '<td>' + platingHits.length + ' รอบ</td>' +
+      '<td>' + delHits.length + ' รายการ</td>' +
+      '<td><span class="badge badge-ok">✅ จ่ายครบ</span></td>' +
+    '</tr>';
+  });
+
+  document.getElementById('statBills').textContent    = closedBillsResult.length.toLocaleString();
+  document.getElementById('statPlating').textContent  = totalPlatingRows.toLocaleString();
+  document.getElementById('statDelivery').textContent = totalDeliveryRows.toLocaleString();
+  document.getElementById('statRecords').textContent  = totalRecordRows.toLocaleString();
+
+  billTableBody.innerHTML = rows || '<tr><td colspan="9" class="empty">ไม่พบบิลที่ปิดสมบูรณ์แล้วในตอนนี้</td></tr>';
+
+  document.getElementById('loadingCard').style.display = 'none';
+  document.getElementById('resultArea').style.display = 'block';
+}
+
+function downloadBackup() {
+  var payload = {
+    generatedAt: new Date().toISOString(),
+    generatedBy: 'archive_tool.html',
+    criteria: 'สถานะ "จ่ายครบ" เท่านั้น (คงเหลือ = 0 ทั้งรับเข้า−ส่งออกจริงผ่าน INV) ไม่สนใจอายุของบิล',
+    note: 'ไฟล์นี้เป็นข้อมูลสำรองก่อนพิจารณาลบออกจากระบบหลัก — ยังไม่มีการลบข้อมูลจริงเกิดขึ้นจากการดาวน์โหลดไฟล์นี้',
+    summary: {
+      totalBills: closedBillsResult.length,
+      totalPlatingRows: closedBillsResult.reduce(function(s,b){ return s + b.platingHits.length; }, 0),
+      totalDeliveryRows: closedBillsResult.reduce(function(s,b){ return s + b.deliveryHits.length; }, 0),
+      totalJmRecords: closedBillsResult.reduce(function(s,b){ return s + b.records.length; }, 0)
+    },
+    bills: closedBillsResult.map(function(item){
+      return {
+        jobId: item.job.id,
+        bill: item.job.bill,
+        partName: item.job.partName,
+        customer: item.job.customer,
+        date: item.job.date,
+        unit: item.job.unit,
+        calc: item.calc,
+        jobMasterRecords: item.records,
+        platingRounds: item.platingHits.map(function(h){
+          return { line: h.line, date: h.date, dayRecordId: h.dayId, rowIndex: h.rowIdx, row: h.row };
+        }),
+        deliveryRecords: item.deliveryHits
+      };
+    })
+  };
+
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href = url;
+  a.download = 'archive-backup-closed-bills-' + ts + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  // ปลดล็อกปุ่ม "ย้ายไปเก็บที่ /archive" หลังดาวน์โหลดสำรองสำเร็จแล้วเท่านั้น
+  var moveBtn = document.getElementById('moveBtn');
+  if (moveBtn) {
+    moveBtn.className = 'btn-primary';
+    moveBtn.disabled = false;
+    moveBtn.title = '';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  ขั้นตอนที่ 1: ย้ายข้อมูลบิลปิดแล้วไปเก็บที่ path /archive แยกต่างหาก (ไม่ใช่ลบถาวร)
+//  หลักการ: เขียนลง /archive/... ให้สำเร็จก่อนเสมอ แล้วค่อยลบออกจาก path หลัก
+//  (ถ้าพลาดกลางทาง อย่างแย่ที่สุดคือข้อมูลซ้ำอยู่ทั้ง 2 ที่ ไม่ใช่ข้อมูลหาย — ปลอดภัยกว่า)
+//  ดึงข้อมูลสดจาก Firebase อีกครั้งตรงนี้ (ไม่ใช้ค่าที่โหลดค้างไว้ตอนเปิดหน้า) กันข้อมูลเปลี่ยนระหว่างนั้น
+// ══════════════════════════════════════════════════════
+function confirmMoveToArchive() {
+  if (!closedBillsResult.length) { alert('ไม่มีบิลที่เข้าเกณฑ์ให้ย้าย'); return; }
+  var msg = 'ยืนยันย้ายข้อมูล ' + closedBillsResult.length + ' บิล (จ่ายครบแล้ว) ไปเก็บที่ path /archive แยกต่างหาก?\n\n'
+    + 'ข้อมูลจะยังอยู่บน Firebase ครบ ไม่ได้ลบถาวร แค่ย้ายออกจาก path หลักที่ระบบใช้งานประจำวัน\n\n'
+    + 'กด OK เพื่อดำเนินการต่อ (จะมีให้ยืนยันอีกครั้งก่อนเขียนข้อมูลจริง)';
+  if (!confirm(msg)) return;
+  if (!confirm('ยืนยันอีกครั้ง — เริ่มย้ายข้อมูลจริงเลยไหม? ห้ามปิดหน้านี้ระหว่างดำเนินการ')) return;
+  moveToArchive();
+}
+
+function recalcArchiveDaySummary(dr, sumField) {
+  var total = 0, newQ = 0, reworkQ = 0, qB = 0, qC = 0, qK = 0;
+  (dr.rows||[]).forEach(function(r) {
+    var v = Number(r[sumField]||0);
+    total += v;
+    if (r.type === 'N') newQ += v; else reworkQ += v;
+    if (r.color === 'B') qB += v;
+    else if (r.color === 'C') qC += v;
+    else if (r.color === 'K') qK += v;
+  });
+  dr.totalKg = total; // ตั้งชื่อ field ตามของเดิมในระบบ (v6/R1 ใช้เก็บ pcs, v4/v5 ใช้เก็บ kg แต่ field ชื่อ totalKg เหมือนกัน)
+  dr.barrels = (dr.rows||[]).length;
+  dr.kgB = qB; dr.kgC = qC; dr.kgK = qK;
+  dr.newKg = newQ; dr.reworkKg = reworkQ;
+  dr.ratio = total > 0 ? parseFloat((reworkQ/total*100).toFixed(2)) : 0;
+}
+
+async function moveToArchive() {
+  var progEl = document.getElementById('moveProgress');
+  progEl.style.display = 'block';
+  var log = [];
+  function pushLog(msg, ok) {
+    log.push((ok===false ? '❌ ' : ok===true ? '✅ ' : 'ℹ️ ') + msg);
+    progEl.innerHTML = log.join('<br>');
+  }
+
+  document.getElementById('moveBtn').disabled = true;
+  document.getElementById('downloadBtn').disabled = true;
+
+  var archivedJobIds = {};
+  closedBillsResult.forEach(function(item){ archivedJobIds[item.job.id] = true; });
+
+  try {
+    // ── 1) Job Master ──
+    pushLog('กำลังย้ายข้อมูล Job Master...');
+    var freshJM = await (await fetch(DB_B1 + '/job-master.json', {cache:'no-store'})).json() || {};
+    var jmItemsAll   = Array.isArray(freshJM.items)   ? freshJM.items   : [];
+    var jmRecordsAll = Array.isArray(freshJM.records) ? freshJM.records : [];
+    var archItems   = jmItemsAll.filter(function(j){ return archivedJobIds[j.id]; });
+    var keepItems    = jmItemsAll.filter(function(j){ return !archivedJobIds[j.id]; });
+    var archRecords  = jmRecordsAll.filter(function(r){ return archivedJobIds[r.jobId]; });
+    var keepRecords  = jmRecordsAll.filter(function(r){ return !archivedJobIds[r.jobId]; });
+
+    var existingArchJM = await (await fetch(DB_B1 + '/archive/job-master.json', {cache:'no-store'})).json() || {};
+    var mergedArchJM = {
+      items:   (existingArchJM.items||[]).concat(archItems),
+      records: (existingArchJM.records||[]).concat(archRecords)
+    };
+    await fetch(DB_B1 + '/archive/job-master.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mergedArchJM)});
+    var newJM = Object.assign({}, freshJM, { items: keepItems, records: keepRecords });
+    await fetch(DB_B1 + '/job-master.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newJM)});
+    pushLog('Job Master: ย้าย ' + archItems.length + ' บิล, ' + archRecords.length + ' records สำเร็จ', true);
+
+    // ── 2) ไลน์ชุบ B1 / B2 / R1 ──
+    var lineConfigs = [
+      { label:'B1', db: DB_B1, path:'/plating-b1.json', sumField:'kg' },
+      { label:'B2', db: DB_B2, path:'/plating-b2.json', sumField:'kg' },
+      { label:'R1', db: DB_R1, path:'/plating-r1.json', sumField:'pcs' }
+    ];
+    for (var li=0; li<lineConfigs.length; li++) {
+      var lc = lineConfigs[li];
+      pushLog('กำลังย้ายข้อมูลไลน์ ' + lc.label + '...');
+      var freshLine = await (await fetch(lc.db + lc.path, {cache:'no-store'})).json() || {};
+      var dayRecordsAll = Array.isArray(freshLine.dayRecords) ? freshLine.dayRecords : [];
+      var archDayRecords = [];
+      var newDayRecords = [];
+      var movedRowCount = 0;
+      dayRecordsAll.forEach(function(dr){
+        var rows = dr.rows || [];
+        var archRows = rows.filter(function(r){ return r.jobId && archivedJobIds[r.jobId]; });
+        var keepRows = rows.filter(function(r){ return !(r.jobId && archivedJobIds[r.jobId]); });
+        if (archRows.length) {
+          movedRowCount += archRows.length;
+          var archDr = Object.assign({}, dr, { rows: archRows });
+          recalcArchiveDaySummary(archDr, lc.sumField);
+          archDayRecords.push(archDr);
+        }
+        if (keepRows.length) {
+          var keepDr = Object.assign({}, dr, { rows: keepRows });
+          recalcArchiveDaySummary(keepDr, lc.sumField);
+          newDayRecords.push(keepDr);
+        }
+        // ถ้า keepRows.length===0 และ archRows.length>0 แปลว่าทั้งวันนั้นถูกย้ายหมด ไม่ต้องเก็บ dayRecord เดิมไว้ในไฟล์หลักอีก
+      });
+
+      var existingArchLine = await (await fetch(lc.db + '/archive' + lc.path, {cache:'no-store'})).json() || {};
+      var mergedArchLine = { dayRecords: (existingArchLine.dayRecords||[]).concat(archDayRecords) };
+      await fetch(lc.db + '/archive' + lc.path, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mergedArchLine)});
+      var newLine = Object.assign({}, freshLine, { dayRecords: newDayRecords });
+      await fetch(lc.db + lc.path, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newLine)});
+      pushLog('ไลน์ ' + lc.label + ': ย้าย ' + movedRowCount + ' รอบชุบ สำเร็จ', true);
+    }
+
+    // ── 3) Delivery ──
+    pushLog('กำลังย้ายข้อมูล Delivery...');
+    var freshDel = await (await fetch(DB_B1 + '/bl-delivery.json', {cache:'no-store'})).json() || {};
+    var delAll = Array.isArray(freshDel.records) ? freshDel.records : [];
+    var archDel = delAll.filter(function(d){ return archivedJobIds[d.jobId]; });
+    var keepDel = delAll.filter(function(d){ return !archivedJobIds[d.jobId]; });
+
+    var existingArchDel = await (await fetch(DB_B1 + '/archive/bl-delivery.json', {cache:'no-store'})).json() || {};
+    var mergedArchDel = { records: (existingArchDel.records||[]).concat(archDel) };
+    await fetch(DB_B1 + '/archive/bl-delivery.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mergedArchDel)});
+    var newDel = Object.assign({}, freshDel, { records: keepDel });
+    await fetch(DB_B1 + '/bl-delivery.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newDel)});
+    pushLog('Delivery: ย้าย ' + archDel.length + ' รายการ สำเร็จ', true);
+
+    pushLog('<b>เสร็จสมบูรณ์ทั้งหมด — กดปุ่ม "🔄 โหลดใหม่" ด้านบนเพื่อดูผลลัพธ์</b>', true);
+  } catch (e) {
+    pushLog('เกิดข้อผิดพลาดระหว่างดำเนินการ: ' + e.message + ' — ตรวจสอบข้อมูลใน Firebase โดยตรงก่อนลองใหม่ (ข้อมูลที่ย้ายไปแล้วก่อนเกิด error จะยังอยู่ครบ ไม่หาย)', false);
+    document.getElementById('moveBtn').disabled = false;
+  }
+}
+</script>
+</body>
+</html>

@@ -136,6 +136,40 @@ footer{
     });
   }
 </script>
+<script>
+// ══════════════════════════════════════════════════════
+//  เช็คเวอร์ชันใหม่ — เทียบกับ version.json บน GitHub เป็นระยะ
+//  ถ้าไม่ตรงกับเวอร์ชันที่หน้านี้ใช้อยู่ แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
+//  ขึ้นแถบแจ้งเตือนให้กดรีเฟรชเอง แก้ปัญหา "ไม่รู้ตัวว่ากำลังดูเวอร์ชันเก่าอยู่"
+//  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
+// ══════════════════════════════════════════════════════
+(function(){
+  var CURRENT_VERSION = "2026-08-10.1"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  function checkVersion(){
+    fetch('version.json', {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.version && data.version !== CURRENT_VERSION) showVersionBanner();
+      })
+      .catch(function(){}); // เงียบไว้ถ้าเช็คไม่ได้ (ออฟไลน์ ฯลฯ) ไม่รบกวนการใช้งาน
+  }
+  function showVersionBanner(){
+    if (document.getElementById('versionUpdateBanner')) return;
+    var b = document.createElement('div');
+    b.id = 'versionUpdateBanner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#f59e0b;color:#000;text-align:center;padding:10px 14px;font-size:13px;font-weight:700;font-family:sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+    b.textContent = '🔄 มีเวอร์ชันใหม่กว่านี้ — แตะเพื่อโหลดหน้าใหม่';
+    b.onclick = function(){ location.reload(); };
+    document.body.appendChild(b);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkVersion);
+  } else {
+    checkVersion();
+  }
+  setInterval(checkVersion, 5*60*1000); // เช็คซ้ำทุก 5 นาที
+})();
+</script>
 </head>
 <body>
 
