@@ -112,6 +112,16 @@
       2) รับเข้ามาเกิน 60 วัน (2 เดือน) — เผื่อ buffer จาก lead time ปกติที่ไม่เกิน 30 วัน กันช่วงปลายเดือน/ต้นเดือน — ข้อนี้จะรวมบิลที่ <b>ยังไม่ปิด</b> (ยังมีคงเหลือค้างอยู่จริง) ด้วย ระบบจะขึ้นป้ายสีส้ม "⏳ เก่าเกิน...วัน (ยังไม่ปิด)" แยกให้เห็นชัด ควรตรวจสอบเป็นพิเศษก่อนย้าย เพราะของอาจจะยังค้างอยู่จริง ไม่ใช่แค่ข้อมูลเก่า
     </div>
 
+    <div class="card">
+      <h2>📊 ขนาดข้อมูลปัจจุบัน</h2>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+        วัดขนาดข้อมูลจริงทั้งโปรเจกต์ (ไม่ใช่แค่ path ที่เครื่องมือนี้จัดการ) เทียบกับเพดานแพ็กเกจฟรี Spark (1 GB ต่อโปรเจกต์)<br>
+        <b>หมายเหตุ:</b> ย้ายเข้า <code>/archive</code> ช่วยแค่ให้ไฟล์หลักที่โหลดทุกวันเล็กลง (เร็วขึ้น) — <u>ไม่ได้ลดขนาดรวมของโปรเจกต์เลย</u> เพราะข้อมูลยังอยู่ในโปรเจกต์เดิม ถ้าจะได้พื้นที่คืนจริงต้องลบถาวร (ขั้นตอนที่ 2 ที่ยังไม่เปิดใช้)
+      </div>
+      <button class="btn-primary" onclick="checkStorageSize()" id="sizeCheckBtn">📊 เช็คขนาดข้อมูลตอนนี้</button>
+      <div id="sizeResultArea" style="margin-top:14px;display:none;"></div>
+    </div>
+
     <div class="card" id="loadingCard">
       <div><span class="spin"></span> กำลังโหลดข้อมูลจาก Job Master, ไลน์ชุบ B1/B2/R1 และ Delivery...</div>
     </div>
@@ -347,6 +357,70 @@ function analyze() {
 
   document.getElementById('loadingCard').style.display = 'none';
   document.getElementById('resultArea').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════
+//  เช็คขนาดข้อมูลจริงของแต่ละโปรเจกต์ Firebase (ดึงทั้ง root มาวัด byte จริง)
+//  เทียบกับเพดานแพ็กเกจฟรี Spark (1 GB ต่อโปรเจกต์) — ไม่ใช่แค่ path ที่เครื่องมือนี้จัดการ
+//  เพื่อให้เห็นภาพรวมจริงว่าทั้งโปรเจกต์ (รวม chem-master/part-master/po-master ฯลฯ ที่อาจอยู่ร่วมด้วย) ใช้ไปเท่าไหร่
+// ══════════════════════════════════════════════════════
+var SPARK_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
+
+function fmtBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(2) + ' MB';
+  return (bytes/1024/1024/1024).toFixed(3) + ' GB';
+}
+
+async function checkStorageSize() {
+  var btn = document.getElementById('sizeCheckBtn');
+  var area = document.getElementById('sizeResultArea');
+  btn.disabled = true;
+  btn.textContent = '⏳ กำลังดึงข้อมูลมาวัดขนาด...';
+  area.style.display = 'block';
+  area.innerHTML = '<div style="font-size:12px;color:var(--text-muted);"><span class="spin"></span> อาจใช้เวลาสักครู่ถ้าข้อมูลเยอะ...</div>';
+
+  var projects = [
+    { label: 'โปรเจกต์หลัก (Job Master + B1 + Delivery + อื่นๆ)', url: DB_B1 },
+    { label: 'โปรเจกต์ B2', url: DB_B2 },
+    { label: 'โปรเจกต์ R1', url: DB_R1 }
+  ];
+
+  var rowsHtml = '';
+  var grandTotal = 0;
+
+  for (var i = 0; i < projects.length; i++) {
+    var p = projects[i];
+    try {
+      var res = await fetch(p.url + '/.json', { cache: 'no-store' });
+      var text = await res.text();
+      var byteLen = new TextEncoder().encode(text).length; // นับ byte จริงแบบ UTF-8 (ภาษาไทยกินหลาย byte ต่อตัวอักษร)
+      grandTotal += byteLen;
+      var pct = (byteLen / SPARK_LIMIT_BYTES * 100);
+      var barColor = pct >= 90 ? '#dc2626' : pct >= 70 ? '#f59e0b' : '#15803d';
+      rowsHtml += '<div style="margin-bottom:14px;">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">' +
+          '<span>' + p.label + '</span>' +
+          '<span><b>' + fmtBytes(byteLen) + '</b> / 1 GB (' + pct.toFixed(2) + '%)</span>' +
+        '</div>' +
+        '<div style="background:#e5e7eb;border-radius:6px;height:10px;overflow:hidden;">' +
+          '<div style="width:' + Math.min(100,pct) + '%;background:' + barColor + ';height:100%;"></div>' +
+        '</div>' +
+      '</div>';
+    } catch (e) {
+      rowsHtml += '<div style="margin-bottom:14px;font-size:12px;color:var(--red);">' + p.label + ': เช็คไม่ได้ (' + e.message + ')</div>';
+    }
+  }
+
+  area.innerHTML = rowsHtml +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">' +
+      'หมายเหตุ: ตัวเลขนี้วัดจากขนาด JSON ที่ดึงมาจริง ใกล้เคียงกับพื้นที่เก็บจริงของ Firebase แต่ไม่ใช่ตัวเลขทางการ 100% — ' +
+      'ถ้าต้องการตัวเลขทางการแม่นยำที่สุด เข้า Firebase Console → เลือกโปรเจกต์ → Realtime Database → แท็บ Usage' +
+    '</div>';
+
+  btn.disabled = false;
+  btn.textContent = '📊 เช็คขนาดข้อมูลตอนนี้ (กดซ้ำเพื่ออัปเดต)';
 }
 
 function downloadBackup() {
