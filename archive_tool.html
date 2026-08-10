@@ -107,7 +107,9 @@
       ขั้นตอนที่ 2 (แปลงเป็น CSV แล้วลบออกจาก /archive ถาวร) จะเปิดให้ใช้ในรอบถัดไป หลังจากมั่นใจแล้วว่าขั้นตอนที่ 1 ทำงานถูกต้อง
     </div>
     <div class="criteria">
-      📋 <b>เกณฑ์ที่ใช้คัดเลือกบิลสำหรับ Archive:</b> สถานะ "จ่ายครบ" เท่านั้น (คงเหลือ = 0 ทั้งรับเข้า−ส่งออกจริงผ่าน INV) — ไม่สนใจว่าบิลนั้นเก่าหรือใหม่แค่ไหน บิลที่ยังมีคงเหลือค้างอยู่จะไม่ถูกแตะต้องเลย
+      📋 <b>เกณฑ์ที่ใช้คัดเลือกบิลสำหรับ Archive (เข้าเงื่อนไขข้อใดข้อหนึ่งพอ):</b><br>
+      1) สถานะ "จ่ายครบ" (คงเหลือ = 0 ทั้งรับเข้า−ส่งออกจริงผ่าน INV) — ไม่สนใจว่าบิลนั้นเก่าหรือใหม่แค่ไหน<br>
+      2) รับเข้ามาเกิน 60 วัน (2 เดือน) — เผื่อ buffer จาก lead time ปกติที่ไม่เกิน 30 วัน กันช่วงปลายเดือน/ต้นเดือน — ข้อนี้จะรวมบิลที่ <b>ยังไม่ปิด</b> (ยังมีคงเหลือค้างอยู่จริง) ด้วย ระบบจะขึ้นป้ายสีส้ม "⏳ เก่าเกิน...วัน (ยังไม่ปิด)" แยกให้เห็นชัด ควรตรวจสอบเป็นพิเศษก่อนย้าย เพราะของอาจจะยังค้างอยู่จริง ไม่ใช่แค่ข้อมูลเก่า
     </div>
 
     <div class="card" id="loadingCard">
@@ -116,7 +118,8 @@
 
     <div id="resultArea" style="display:none;">
       <div class="stat-row">
-        <div class="stat"><div class="num" id="statBills">0</div><div class="lbl">บิลที่ปิดสมบูรณ์แล้ว</div></div>
+        <div class="stat"><div class="num" id="statBills">0</div><div class="lbl">บิลเข้าเกณฑ์ทั้งหมด</div></div>
+        <div class="stat" style="border-color:#fdba74;"><div class="num" id="statOverdueOpen" style="color:#c2410c;">0</div><div class="lbl">— ในนั้น: ยังไม่ปิด แค่เก่าเกิน 60 วัน ⚠️</div></div>
         <div class="stat"><div class="num" id="statPlating">0</div><div class="lbl">รอบชุบที่เกี่ยวข้อง (B1+B2+R1)</div></div>
         <div class="stat"><div class="num" id="statDelivery">0</div><div class="lbl">รายการ Delivery ที่เกี่ยวข้อง</div></div>
         <div class="stat"><div class="num" id="statRecords">0</div><div class="lbl">Records รับเข้า/จ่ายออกใน JM</div></div>
@@ -249,6 +252,18 @@ function calcJob(jobId) {
   return { totalIn:totalIn, totalOut:totalOut, remain:remain, totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
 }
 
+function daysSince(dateStr) {
+  if (!dateStr) return 0;
+  var d = new Date(dateStr+'T00:00:00');
+  var now = new Date();
+  return Math.floor((now - d) / 86400000);
+}
+
+// เกณฑ์ที่ 2 สำหรับ archive: รับเข้ามาเกิน 60 วัน (2 เดือน) — คิดเลขวันเองแยกต่างหาก
+// ไม่ได้ใช้เกณฑ์เดียวกับ badge "เกินกำหนด" ที่โชว์ในหน้าเว็บอื่น (อันนั้นแค่เกิน 7 วัน) เพราะ lead time
+// การชุบปกติไม่เกิน 30 วัน ตั้ง buffer ไว้ 60 วันเผื่อกรณีช่วงปลายเดือน/ต้นเดือน กันดักบิลที่แค่ช้านิดหน่อยเข้ามาด้วย
+var OVERDUE_ARCHIVE_DAYS = 60;
+
 function getStatus(job) {
   var b = calcJob(job.id);
   var isKg = job.unit === 'kg';
@@ -264,7 +279,12 @@ function analyze() {
 
   jobItems.forEach(function(job) {
     var status = getStatus(job);
-    if (status !== 'จ่ายครบ') return; // เกณฑ์: เอาเฉพาะบิลปิดสมบูรณ์แล้วเท่านั้น
+    var days = daysSince(job.date);
+    var isOverdue60 = days > OVERDUE_ARCHIVE_DAYS;
+    // เกณฑ์: (1) จ่ายครบแล้ว หรือ (2) รับเข้ามาเกิน 60 วัน (ไม่ว่าจะปิดหรือไม่ก็ตาม)
+    if (status !== 'จ่ายครบ' && !isOverdue60) return;
+    // แยกเหตุผลไว้ให้เห็นชัดว่าเข้าเกณฑ์เพราะอะไร — สำคัญมากสำหรับเคส (2) ที่ยังมีคงเหลือค้างอยู่จริง
+    var reason = status === 'จ่ายครบ' ? 'closed' : 'overdue';
 
     var b = calcJob(job.id);
 
@@ -291,7 +311,7 @@ function analyze() {
     totalRecordRows   += relatedRecords.length;
 
     closedBillsResult.push({
-      job: job, calc: b,
+      job: job, calc: b, reason: reason, days: days,
       records: relatedRecords,
       platingHits: platingHits,
       deliveryHits: delHits
@@ -301,7 +321,7 @@ function analyze() {
     var inVal  = job.unit === 'kg' ? b.totalInKg  : b.totalIn;
     var outVal = job.unit === 'kg' ? b.totalOutKg : b.totalOut;
 
-    rows += '<tr>' +
+    rows += '<tr' + (reason==='overdue' ? ' style="background:#fff7ed;"' : '') + '>' +
       '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;">' + esc(job.bill||'-') + '</td>' +
       '<td>' + esc(job.partName||'-') + '</td>' +
       '<td>' + esc(job.customer||'-') + '</td>' +
@@ -310,11 +330,15 @@ function analyze() {
       '<td>' + outVal.toLocaleString() + qtyLabel + '</td>' +
       '<td>' + platingHits.length + ' รอบ</td>' +
       '<td>' + delHits.length + ' รายการ</td>' +
-      '<td><span class="badge badge-ok">✅ จ่ายครบ</span></td>' +
+      '<td>' + (reason==='closed'
+          ? '<span class="badge badge-ok">✅ จ่ายครบ</span>'
+          : '<span class="badge badge-warn">⏳ เก่าเกิน ' + days + ' วัน (ยังไม่ปิด)</span>') +
+        '</td>' +
     '</tr>';
   });
 
   document.getElementById('statBills').textContent    = closedBillsResult.length.toLocaleString();
+  document.getElementById('statOverdueOpen').textContent = closedBillsResult.filter(function(it){ return it.reason==='overdue'; }).length.toLocaleString();
   document.getElementById('statPlating').textContent  = totalPlatingRows.toLocaleString();
   document.getElementById('statDelivery').textContent = totalDeliveryRows.toLocaleString();
   document.getElementById('statRecords').textContent  = totalRecordRows.toLocaleString();
