@@ -522,6 +522,14 @@ async function moveToArchive() {
     await fetch(DB_B1 + '/bl-delivery.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newDel)});
     pushLog('Delivery: ย้าย ' + archDel.length + ' รายการ สำเร็จ', true);
 
+    // ── 4) บันทึกเวลาที่ทำสำเร็จล่าสุด ไว้ให้ index.html เอาไปโชว์สถานะ/เตือน ──
+    var metaInfo = {
+      lastRunAt: new Date().toISOString(),
+      lastRunBillCount: closedBillsResult.length,
+      lastRunPlatingCount: closedBillsResult.reduce(function(s,it){ return s + it.platingHits.length; }, 0)
+    };
+    await fetch(DB_B1 + '/archive/_meta.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(metaInfo)});
+
     pushLog('<b>เสร็จสมบูรณ์ทั้งหมด — กดปุ่ม "🔄 โหลดใหม่" ด้านบนเพื่อดูผลลัพธ์</b>', true);
   } catch (e) {
     pushLog('เกิดข้อผิดพลาดระหว่างดำเนินการ: ' + e.message + ' — ตรวจสอบข้อมูลใน Firebase โดยตรงก่อนลองใหม่ (ข้อมูลที่ย้ายไปแล้วก่อนเกิด error จะยังอยู่ครบ ไม่หาย)', false);

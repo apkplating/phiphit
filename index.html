@@ -193,6 +193,13 @@ footer{
   <p>รวมทุกระบบของ APK Plating ไว้ในที่เดียว — แต่ละระบบมีการเข้าสู่ระบบ (PIN) แยกของตัวเองในตอนนี้</p>
 </div>
 
+<!-- แบนเนอร์เตือน Archive ประจำเดือน — โผล่เฉพาะช่วงวันที่ 5-10 ของเดือน และเดือนนี้ยังไม่เคย Archive เท่านั้น -->
+<div id="archiveReminderBanner" style="display:none;max-width:1100px;margin:0 auto 16px;padding:0 20px;">
+  <a href="archive_tool.html" style="display:block;background:#fff7ed;border:1.5px solid #fdba74;border-radius:12px;padding:14px 18px;text-decoration:none;color:#9a3412;font-size:13px;line-height:1.6;">
+    🔔 <b>ถึงกำหนด Archive ข้อมูลประจำเดือนแล้ว</b> (ทุกวันที่ 5) — เดือนนี้ยังไม่ได้ทำ กดเพื่อไปที่ Archive Tool →
+  </a>
+</div>
+
 <main>
 
   <!-- ── สำนักงาน / ทะเบียนกลาง ── -->
@@ -388,7 +395,8 @@ footer{
         <div class="go">เปิดระบบ <span class="arrow">→</span></div>
       </a>
 
-      <a class="card" href="archive_tool.html">
+      <a class="card" href="archive_tool.html" style="position:relative;">
+        <div id="archiveStatusBadge" style="position:absolute;top:14px;right:14px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#f1f5f9;color:#64748b;">กำลังเช็ค...</div>
         <div class="icon">🗄️</div>
         <h4>Archive Tool</h4>
         <div class="code mono">archive_tool.html</div>
@@ -417,6 +425,48 @@ function updateClock(){
 }
 updateClock();
 setInterval(updateClock, 1000);
+
+// ── เช็คสถานะ Archive ล่าสุด (badge ที่การ์ด + แบนเนอร์เตือนช่วงวันที่ 5-10 ของเดือน) ──
+(function checkArchiveStatus(){
+  var DB_B1 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+  var badge = document.getElementById('archiveStatusBadge');
+  var banner = document.getElementById('archiveReminderBanner');
+
+  fetch(DB_B1 + '/archive/_meta.json', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(meta){
+      var now = new Date();
+      var thisMonthKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+      var lastRunDate = meta && meta.lastRunAt ? new Date(meta.lastRunAt) : null;
+      var lastRunMonthKey = lastRunDate ? (lastRunDate.getFullYear() + '-' + String(lastRunDate.getMonth()+1).padStart(2,'0')) : null;
+      var doneThisMonth = lastRunMonthKey === thisMonthKey;
+
+      // อัปเดต badge ที่การ์ด — โชว์ได้ทุกวัน ไม่ขึ้นกับวันที่ 5
+      if (badge) {
+        if (!lastRunDate) {
+          badge.textContent = '⚠️ ยังไม่เคย Archive';
+          badge.style.background = '#fef3c7'; badge.style.color = '#92400e';
+        } else if (doneThisMonth) {
+          var d = lastRunDate;
+          var m = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+          badge.textContent = '✅ ทำแล้ว ' + d.getDate() + ' ' + m[d.getMonth()];
+          badge.style.background = '#dcfce7'; badge.style.color = '#15803d';
+        } else {
+          badge.textContent = '⚠️ เดือนนี้ยังไม่ได้ทำ';
+          badge.style.background = '#fef3c7'; badge.style.color = '#92400e';
+        }
+      }
+
+      // แบนเนอร์เตือนบนสุด — โผล่เฉพาะวันที่ 5-10 ของเดือน และเดือนนี้ยังไม่เคย Archive เท่านั้น
+      var dayOfMonth = now.getDate();
+      if (banner && dayOfMonth >= 5 && dayOfMonth <= 10 && !doneThisMonth) {
+        banner.style.display = 'block';
+      }
+    })
+    .catch(function(){
+      if (badge) { badge.textContent = 'เช็คไม่ได้'; badge.style.background = '#f1f5f9'; badge.style.color = '#94a3b8'; }
+    });
+})();
 </script>
 
 </body>
