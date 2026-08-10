@@ -471,8 +471,27 @@ function initApp(){
   // เดิม poll ทุก 30 วิ ปรับเป็น 60 วิ (1 นาที) เพื่อลดโหลดจากการดึงไฟล์ประวัติทั้งหมดบ่อยเกินไป
   // (bl_stock ต้องโหลดข้อมูลก้อนใหญ่จาก 5 แหล่งทุกครั้ง ต่างจาก monitor.html ที่ดึงแค่ /live.json เล็กๆ)
   // ถ้าต้องการเห็นข้อมูลสดทันทีหลังเพิ่งกรอกอะไรไป กดปุ่ม "🔄 รีเฟรช" ที่หัวหน้าเว็บได้เลย ไม่ต้องรอ
-  setInterval(function(){ loadAll(false); }, 60000);
+  startPollBL();
 }
+
+// ตั้งชื่อ interval ให้ควบคุมได้ (หยุด/เริ่มใหม่ตาม visibility) แทนที่จะเป็น setInterval ลอยๆ สั่งหยุดไม่ได้
+var _blPollTimer = null;
+function startPollBL(){
+  if (_blPollTimer) clearInterval(_blPollTimer);
+  _blPollTimer = setInterval(function(){ loadAll(false); }, 60000);
+}
+
+// ── หยุด poll อัตโนมัติเมื่อสลับไปแท็บอื่น/ย่อหน้าต่าง แล้ว poll ต่อทันทีที่กลับมาดู ──
+// (Page Visibility API) เป็นสาเหตุหลักที่ทำให้ทุกหน้าช้าลงเรื่อยๆ เวลาเปิดหลายแท็บพร้อมกัน (bl_stock, job_master,
+// plating v4/5/6) เพราะเดิม poll ทำงานต่อเนื่องตลอดแม้ไม่ได้เปิดดูแท็บนี้อยู่เลย
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) {
+    if (_blPollTimer) { clearInterval(_blPollTimer); _blPollTimer = null; }
+  } else {
+    loadAll(false); // ดึงทันทีตอนกลับมาดู กันข้อมูลเก่าค้าง
+    startPollBL();
+  }
+});
 
 window.addEventListener('load', function(){
   var savedPin = null;

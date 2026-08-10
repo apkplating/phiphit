@@ -3631,6 +3631,7 @@ async function fbMigrateLocal() {
 
 // Polling ทุก 5 วินาที (real-time sync)
 var _fbPollCount = 0;
+var _fbFastPollTimer = null; // ตั้งชื่อให้ควบคุมได้ (เดิมเป็น anonymous setInterval สั่งหยุดไม่ได้เลย)
 function fbStartPoll() {
   if (_fbPollTimer) clearInterval(_fbPollTimer);
   fbLoad(true);
@@ -3646,11 +3647,25 @@ function fbStartPoll() {
     }
   }, 5000);
   // Fast poll 3 วิ เฉพาะตอนอยู่ใน tab กรอกรายรอบ
-  setInterval(function(){
+  if (_fbFastPollTimer) clearInterval(_fbFastPollTimer);
+  _fbFastPollTimer = setInterval(function(){
     var activeEl = document.querySelector('.view.active');
     if (activeEl && activeEl.id === 'v-entry') fbLivePoll();
   }, 3000);
 }
+
+// ── หยุด poll อัตโนมัติเมื่อสลับไปแท็บอื่น/ย่อหน้าต่าง แล้ว poll ต่อทันทีที่กลับมาดู ──
+// (Page Visibility API) เดิม poll ทำงานต่อเนื่องตลอดแม้ไม่ได้เปิดดูแท็บนี้อยู่เลย พอเปิดหลายแท็บพร้อมกัน
+// (bl_stock, job_master, plating v4/5/6 พร้อมกัน) กลายเป็นยิง request รัวๆ ไปที่ Firebase เดียวกันโดยไม่จำเป็น
+// เป็นสาเหตุหลักที่ทำให้ทุกหน้ารู้สึกช้าลงเรื่อยๆ ตามที่วิเคราะห์กันไว้
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) {
+    if (_fbPollTimer) { clearInterval(_fbPollTimer); _fbPollTimer = null; }
+    if (_fbFastPollTimer) { clearInterval(_fbFastPollTimer); _fbFastPollTimer = null; }
+  } else {
+    fbStartPoll(); // เรียกใหม่ทั้งหมด (ข้างในมี fbLoad(true) ดึงข้อมูลทันทีให้ตามทันก่อนด้วย)
+  }
+});
 
 // Poll เฉพาะ todayBarrels (เบากว่า fbLoad เต็ม)
 async function fbLivePoll() {
