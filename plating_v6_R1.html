@@ -1729,6 +1729,8 @@ async function addBarrel() {
   }
   if (!pcs) { showToast('entry','กรุณากรอกจำนวนชิ้น (Pcs)','err'); return; }
 
+  var _billJobId = document.getElementById('bJobPick').value || '';
+
   // ── เช็คจำนวน/รอบ เทียบกับจิ๊กที่กำหนดไว้ในใบสั่งผลิตวันนี้ (ถ้ามี) ──
   // จำนวนที่กรอกต่อรอบต้องตรงกับ "จำนวน/จิ๊ก" ตัวใดตัวหนึ่ง ±10 ชิ้น จึงจะเพิ่มรอบได้
   // ต้อง await ให้ _poOrdersCache โหลดเสร็จก่อนเสมอ (กันกรณีกดเพิ่มรอบเร็วกว่า cache จะโหลดเสร็จ แล้วเช็คหลุดไปแบบเงียบๆ)
@@ -1744,13 +1746,29 @@ async function addBarrel() {
   if (_jigConfigs.length) {
     var _jigMatch = _jigConfigs.some(function(cfg){ return Math.abs(cfg.perUnit - pcs) <= 10; });
     if (!_jigMatch) {
-      var _expectedStr = _jigConfigs.map(function(cfg){ return cfg.jig + ' (' + cfg.perUnit.toLocaleString() + ' ชิ้น)'; }).join(' หรือ ');
-      showToast('entry','🚫 จำนวนที่กรอก ('+pcs.toLocaleString()+' ชิ้น) ไม่ตรงกับจิ๊กที่กำหนดในใบสั่งผลิต — ต้องใกล้เคียง '+_expectedStr+' (±10 ชิ้น) กรุณาตรวจสอบว่าใช้จิ๊กถูกต้องหรือไม่','err');
-      return;
+      // ── ข้อยกเว้น "ล็อตสุดท้าย": ถ้ายอดคงเหลือจริงของบิลที่เลือกไว้ น้อยกว่าจิ๊กที่เล็กที่สุดอยู่แล้ว
+      // (ไม่มีทางตัดจิ๊กเต็มได้จริงทางกายภาพ — ของเหลือไม่พอ) และจำนวนที่กรอกตรงกับยอดคงเหลือจริงพอดี (±10)
+      // ให้ผ่านได้ ข้ามเงื่อนไขจิ๊กไป — กันเคสของค้างชุบไม่ได้เลยตอนเหลือก้อนสุดท้ายของบิล (deadlock)
+      // ผ่านได้เฉพาะกรอกตรงกับของเหลือจริงเป๊ะๆ เท่านั้น ไม่ใช่ช่องโหว่ให้กรอกเลขอะไรก็ได้ที่ไม่ตรงจิ๊ก
+      var _tailException = false;
+      if (_billJobId && _billJobId !== 'NOBILL') {
+        var _minJigSize = Math.min.apply(null, _jigConfigs.map(function(cfg){ return cfg.perUnit; }));
+        var _tailR = calcJobRemainToPlate(_billJobId);
+        var _tailAlready = _histSessionAdded[_billJobId] || { pcs:0, kg:0 };
+        var _tailRemainPcs = _tailR.remainPcs - _tailAlready.pcs;
+        if (_tailRemainPcs < (_minJigSize - 10) && Math.abs(_tailRemainPcs - pcs) <= 10) {
+          _tailException = true;
+        }
+      }
+      if (!_tailException) {
+        var _expectedStr = _jigConfigs.map(function(cfg){ return cfg.jig + ' (' + cfg.perUnit.toLocaleString() + ' ชิ้น)'; }).join(' หรือ ');
+        showToast('entry','🚫 จำนวนที่กรอก ('+pcs.toLocaleString()+' ชิ้น) ไม่ตรงกับจิ๊กที่กำหนดในใบสั่งผลิต — ต้องใกล้เคียง '+_expectedStr+' (±10 ชิ้น) กรุณาตรวจสอบว่าใช้จิ๊กถูกต้องหรือไม่','err');
+        return;
+      } else {
+        showToast('entry','⚠️ จำนวนไม่ตรงจิ๊กมาตรฐาน แต่ตรงกับยอดคงเหลือจริงของบิล (เหลือไม่พอตัดจิ๊กเต็ม) — บันทึกเป็น "ล็อตสุดท้าย" ให้','ok');
+      }
     }
   }
-
-  var _billJobId = document.getElementById('bJobPick').value || '';
 
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — ปล่อยผ่านได้เลย ไม่ต้องเช็คยอดเกิน ไม่ต้องขออนุมัติ NOBILL ──
   if (selTypeVal === 'R') {
