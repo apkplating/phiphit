@@ -314,7 +314,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     b.id = 'versionUpdateBanner';
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#f59e0b;color:#000;text-align:center;padding:10px 14px;font-size:13px;font-weight:700;font-family:sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);';
     b.textContent = '🔄 มีเวอร์ชันใหม่กว่านี้ — แตะเพื่อโหลดหน้าใหม่';
-    b.onclick = function(){ location.reload(); };
+    b.onclick = function(){ location.href = location.pathname + '?v=' + Date.now(); };
     document.body.appendChild(b);
   }
   if (document.readyState === 'loading') {
