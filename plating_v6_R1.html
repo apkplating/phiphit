@@ -299,7 +299,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.2"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var CURRENT_VERSION = "2026-08-10.3"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
@@ -324,6 +324,23 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   }
   setInterval(checkVersion, 5*60*1000); // เช็คซ้ำทุก 5 นาที
 })();
+</script>
+<script>
+// ══════════════════════════════════════════════════════
+//  ล้าง Service Worker เก่าที่เคยติดตั้งไว้ (จากฟีเจอร์ PWA ที่ยกเลิกไปแล้ว) ออกจากทุกเครื่องอัตโนมัติ
+//  เจอปัญหาจริง: SW ที่ตั้งใจให้ "ไม่แคชอะไรเลย" กลับไปดักจับ fetch ของทุกหน้าในโฟลเดอร์เดียวกัน (ไม่ใช่แค่
+//  index.html ที่ตั้งใจไว้) แล้วทำให้ response บางคำขอ (เช่น apk_hr.html ดึง attendance.json) กลายเป็น 0 ไบต์
+//  แทนที่จะเป็นข้อมูลจริง — ลบออกให้ทุกเครื่องที่เคยติดตั้งไว้ โดยไม่ต้องไปกด Unregister เองทีละเครื่อง
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(reg){ reg.unregister(); });
+  }).catch(function(){});
+}
+if ('caches' in window) {
+  caches.keys().then(function(names){
+    names.forEach(function(name){ caches.delete(name); });
+  }).catch(function(){});
+}
 </script>
 </head>
 <body>
