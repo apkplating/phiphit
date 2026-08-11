@@ -2013,7 +2013,7 @@ function persist(rec) {
   try { localStorage.setItem('r1_lastRecorder', rec.recorder); } catch(e){}
   try { localStorage.setItem('r1_lastLot', rec.lotNo); } catch(e){}
   dayRecords.unshift(rec);
-  try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   todayBarrels = [];
   var _clearedAt = new Date().toISOString();
   try { localStorage.setItem('r1_todayBarrels', '[]'); } catch(e){}
@@ -2365,7 +2365,7 @@ function toggleDetail(id) {
 function delDay(id) {
   if (!confirm('ลบรายการนี้?')) return;
   dayRecords = dayRecords.filter(function(r){ return r.id !== id; });
-  try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   renderHistory();
   if (fbIsConfigured()) fbSave();
 }
@@ -3381,7 +3381,7 @@ function gdriveAutoLoad() {
         var parsed = JSON.parse(text);
         if (parsed.dayRecords && parsed.dayRecords.length > 0) {
           dayRecords = parsed.dayRecords;
-          try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+          try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
           renderHistory(); renderSummary();
           showToast('entry','☁️ โหลดจาก Drive แล้ว ('+dayRecords.length+' วัน)','ok');
         }
@@ -3557,7 +3557,7 @@ async function fbLoad(silent) {
         renderBarrels();
       }
     }
-    try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+    try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
 
     // ── โหลด chemItems (master รายการเคมี) ──
     if (data.chemItems && Array.isArray(data.chemItems) && data.chemItems.length) {
@@ -3649,6 +3649,18 @@ async function fbMigrateLocal() {
   showToast("firebase","กำลังอัปโหลด...","ok");
   await fbSave();
   showToast("firebase","✅ อัปโหลดสำเร็จ! " + dayRecords.length + " วัน","ok");
+}
+
+// ── ตัดข้อมูลที่จะเขียนลง localStorage ให้เหลือแค่ 15 วันล่าสุด (แท็บเล็ตเป็นแค่แคชชั่วคราว) ──
+// ไม่แตะ dayRecords ในหน่วยความจำเลย (ยังครบเหมือนเดิม ใช้คำนวณสรุปรายเดือนได้ถูกต้อง เพราะทุกครั้งที่เปิดหน้า
+// จะดึงข้อมูลสดจาก Firebase มา merge ใหม่อยู่แล้ว ไม่ได้พึ่งแค่ local cache) — ตัดแค่ตอน "เขียนลงเครื่อง" เท่านั้น
+// เพื่อลดขนาดข้อมูลที่ต้อง JSON.stringify + เขียนทับทุกครั้งที่มีการเปลี่ยนแปลง (ตัวการที่ทำให้ยิ่งใช้นานยิ่งช้าลง)
+// Firebase ยังเก็บข้อมูลเต็มเสมอ ไม่กระทบ — ดูย้อนหลังเกิน 15 วันได้ผ่าน job_master.html/bl_stock.html/archive_tool.html
+function pruneForLocalStorage(records) {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 15);
+  var cutoffStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth()+1).padStart(2,'0') + '-' + String(cutoff.getDate()).padStart(2,'0');
+  return (records||[]).filter(function(r){ return (r.date||'') >= cutoffStr; });
 }
 
 // Polling ทุก 5 วินาที (real-time sync)
@@ -8978,7 +8990,7 @@ function saveHistRound(dayId) {
   dr.rows.push(row);
   recalcDayRecordSummary(dr);
 
-  try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   var m = document.getElementById('addHistRoundModal'); if (m) m.remove();
   renderHistory();
   showToast('hist','➕ เพิ่มรอบย้อนหลังแล้ว — กำลัง sync...','ok');
@@ -9016,7 +9028,7 @@ function recalcDayRecordSummary(dr) {
 // จากนั้น "อ่านข้อมูลกลับมาจาก Firebase จริง ๆ" อีกครั้งเพื่อยืนยันว่าค่าที่บันทึกไปขึ้นเซิร์ฟเวอร์แล้วจริง —
 // ไม่ใช่แค่เชื่อสถานะ 200 ของ PUT เฉยๆ
 async function persistBillEdit(dayId, rowIdx, msg) {
-  try { localStorage.setItem('r1_dayRecords', JSON.stringify(dayRecords)); } catch(e){}
+  try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   var m = document.getElementById('addBillModal'); if (m) m.remove();
   renderHistory(); // อัปเดตหน้าจอทันที ไม่ต้องรอ Firebase — กันจอค้าง
 
