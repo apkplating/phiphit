@@ -157,7 +157,7 @@ table.ps-table tr:nth-child(even) td{background:#f8fafc;}
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.3"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var CURRENT_VERSION = "2026-08-10.4"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
@@ -885,6 +885,55 @@ const TH_DAYS=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 let attendance=JSON.parse(localStorage.getItem('apk_att')||'[]');
 let schedule=JSON.parse(localStorage.getItem('apk_sched')||'{}');
 let weeklyOff=JSON.parse(localStorage.getItem('apk_weeklyoff')||'{}');
+
+// ══════════════════════════════════════════════════════
+//  ป้องกัน localStorage เต็ม (QuotaExceededError) ทำระบบพังกลางทาง
+//  เจอจริง: setItem('apk_sched',...) พังเพราะพื้นที่เต็ม (ไม่มี try/catch ดักไว้เลย) ทำให้ loadFromFirebase()
+//  หยุดทำงานกลางฟังก์ชันทันที โค้ดส่วนหลังจากนั้น (ประมวลผลข้อมูลเข้า-ออกงานของวันนี้) เลยไม่เคยถูกรันอีกเลย
+//  ตั้งแต่นั้นมา ทำให้หน้าเว็บค้างแสดงข้อมูลเก่าตลอดไป ทั้งที่ข้อมูลจริงบน Firebase อัปเดตอยู่ตามปกติ
+// ══════════════════════════════════════════════════════
+function safeSetLS(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch(e) {
+    // ไม่ throw ต่อ — ปล่อยให้ฟังก์ชันที่เรียกมาทำงานต่อไปได้ตามปกติ (ข้อมูลจริงยังอยู่ครบบน Firebase เสมอ
+    // แค่แคชในเครื่องนี้เขียนไม่สำเร็จรอบนี้เท่านั้น ไม่กระทบความถูกต้องของข้อมูล)
+    console.warn('⚠️ localStorage เต็ม เขียนไม่สำเร็จ (key: '+key+') — ข้อมูลบน Firebase ไม่กระทบ:', e.message);
+    return false;
+  }
+}
+
+// ตัดข้อมูลก่อนเขียนลง localStorage ให้เหลือแค่ช่วงที่จำเป็น (แท็บเล็ต/เครื่องนี้เป็นแค่แคชชั่วคราว)
+// ไม่แตะตัวแปรในหน่วยความจำ (attendance/schedule) เลย ยังครบเหมือนเดิมระหว่างใช้งาน เพราะ loadFromFirebase()
+// ดึงข้อมูลสดจาก Firebase มา merge ใหม่ทุก 60 วิอยู่แล้ว ไม่ได้พึ่งแค่ local cache — ตัดแค่ตอน "เขียนลงเครื่อง"
+// เพื่อลดขนาดข้อมูลที่ต้อง JSON.stringify + เขียนทับทุกครั้ง (ตัวการที่ทำให้ quota เต็มเร็วขึ้นเรื่อยๆ)
+var ATT_LOCAL_RETENTION_DAYS = 60; // เก็บย้อนหลัง ~2 เดือน พอสำหรับดูสรุปเดือนนี้/เดือนก่อนได้ตามปกติ
+function pruneAttendanceForLS(arr) {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ATT_LOCAL_RETENTION_DAYS);
+  return (arr||[]).filter(function(r){
+    var ci = new Date(r.checkIn);
+    return !isNaN(ci) && ci >= cutoff;
+  });
+}
+function pruneSchedForLS(obj) {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ATT_LOCAL_RETENTION_DAYS);
+  var result = {};
+  Object.keys(obj||{}).forEach(function(k){
+    // key รูปแบบ empId_y_m_d เช่น "1_2026_8_11"
+    var parts = k.split('_');
+    if (parts.length < 4) { result[k] = obj[k]; return; } // รูปแบบไม่ตรง เก็บไว้ก่อนกันพลาด
+    var y = parseInt(parts[parts.length-3], 10);
+    var m = parseInt(parts[parts.length-2], 10) - 1;
+    var d = parseInt(parts[parts.length-1], 10);
+    var dt = new Date(y, m, d);
+    if (isNaN(dt) || dt >= cutoff) result[k] = obj[k]; // เก็บของอนาคต + ย้อนหลังไม่เกิน 60 วัน
+  });
+  return result;
+}
+
 let ssoConfig=JSON.parse(localStorage.getItem('apk_ssoconfig')||'null')||{rate:5,min:1650,max:15000,cap:750}; // เก่า (fallback/migration)
 // ประวัติสูตรประกันสังคม — array ของกฎ {date:'YYYY-MM-DD', rate, min, max, cap} เรียงตามวันที่มีผลบังคับใช้
 let ssoRules=JSON.parse(localStorage.getItem('apk_ssorules')||'null')||[{date:'2000-01-01',rate:ssoConfig.rate,min:ssoConfig.min,max:ssoConfig.max,cap:ssoConfig.cap}];
@@ -1104,21 +1153,21 @@ function normalizeManualRecord(raw){
 async function loadFromFirebase(){
   const [fbAttAll,fbSched,fbWeeklyOff,fbSSO,fbSSORules,fbOT,fbHoliday,fbCorr,fbLeaves,fbShiftDefs]=await Promise.all([fbGet('/hr/attendance'),fbGet('/hr/schedule'),fbGet('/hr/weeklyOff'),fbGet('/hr/ssoConfig'),fbGet('/hr/ssoRules'),fbGet('/hr/otConfig'),fbGet('/hr/companyHolidays'),fbGet('/hr/attCorrections'),fbGet('/hr/leaves'),fbGet('/hr/shiftDefs')]);
   // อัปเดตตารางกะ/ค่าตั้งค่าต่างๆ ให้เสร็จก่อน เพราะการคำนวณสาย/OT ของแต่ละ record (ด้านล่าง) ต้องใช้ค่าล่าสุดเหล่านี้
-  if(fbSched){schedule=fbSched;localStorage.setItem('apk_sched',JSON.stringify(schedule));}
-  if(fbWeeklyOff){weeklyOff=fbWeeklyOff;localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));}
-  if(fbSSO){ssoConfig=fbSSO;localStorage.setItem('apk_ssoconfig',JSON.stringify(ssoConfig));}
+  if(fbSched){schedule=fbSched;safeSetLS('apk_sched',JSON.stringify(pruneSchedForLS(schedule)));}
+  if(fbWeeklyOff){weeklyOff=fbWeeklyOff;safeSetLS('apk_weeklyoff',JSON.stringify(weeklyOff));}
+  if(fbSSO){ssoConfig=fbSSO;safeSetLS('apk_ssoconfig',JSON.stringify(ssoConfig));}
   if(fbSSORules&&fbSSORules.length){
-    ssoRules=fbSSORules;localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+    ssoRules=fbSSORules;safeSetLS('apk_ssorules',JSON.stringify(ssoRules));
   }else if(fbSSO){
     // ยังไม่เคยตั้งประวัติกฎ -> ย้ายค่าเดิมมาเป็นกฎแรก มีผลตั้งแต่ 1 ม.ค. 2000 (ใช้กับทุกเดือนจนกว่าจะตั้งกฎใหม่)
     ssoRules=[{date:'2000-01-01',rate:fbSSO.rate,min:fbSSO.min,max:fbSSO.max,cap:fbSSO.cap}];
-    localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+    safeSetLS('apk_ssorules',JSON.stringify(ssoRules));
   }
-  if(fbOT){otConfig=fbOT;if(otConfig.deductLateEarlyMonthly===undefined)otConfig.deductLateEarlyMonthly=true;localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));}
-  if(fbHoliday){companyHolidays=fbHoliday;localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));}
-  if(fbCorr){attCorrections=fbCorr;localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));}
-  if(fbLeaves){leaveRecords=fbLeaves;localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));}
-  if(fbShiftDefs){shiftDefs=fbShiftDefs;localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));rebuildShiftsDisplay();}
+  if(fbOT){otConfig=fbOT;if(otConfig.deductLateEarlyMonthly===undefined)otConfig.deductLateEarlyMonthly=true;safeSetLS('apk_otconfig',JSON.stringify(otConfig));}
+  if(fbHoliday){companyHolidays=fbHoliday;safeSetLS('apk_companyholidays',JSON.stringify(companyHolidays));}
+  if(fbCorr){attCorrections=fbCorr;safeSetLS('apk_att_corrections',JSON.stringify(attCorrections));}
+  if(fbLeaves){leaveRecords=fbLeaves;safeSetLS('apk_leaves',JSON.stringify(leaveRecords));}
+  if(fbShiftDefs){shiftDefs=fbShiftDefs;safeSetLS('apk_shiftdefs',JSON.stringify(shiftDefs));rebuildShiftsDisplay();}
   const merged=[],zkUnmatched=[];
   if(fbAttAll){
     Object.keys(fbAttAll).forEach(dateKey=>{
@@ -1141,7 +1190,7 @@ async function loadFromFirebase(){
   const local=JSON.parse(localStorage.getItem('apk_att')||'[]');
   const localPending=local.filter(l=>!l.synced&&!merged.find(m=>m.id===l.id));
   attendance=[...merged,...localPending];
-  localStorage.setItem('apk_att',JSON.stringify(attendance));
+  safeSetLS('apk_att',JSON.stringify(pruneAttendanceForLS(attendance)));
   renderTodayTable();renderDashboard();
   const activePage=document.querySelector('.page.active');
   if(activePage&&activePage.id==='page-attendance')renderAttendance();
@@ -1308,7 +1357,7 @@ function showToast(msg,type){
   },3000);
 }
 async function saveAtt(){
-  localStorage.setItem('apk_att',JSON.stringify(attendance));
+  safeSetLS('apk_att',JSON.stringify(pruneAttendanceForLS(attendance)));
   // sync record ที่ยังไม่เคย sync ขึ้น Firebase แบบ PATCH (merge) — กันไม่ให้ทับข้อมูลจาก zk_sync.py (key ขึ้นต้นด้วย emp_)
   const pending=attendance.filter(a=>!a.synced&&a.source!=='ZKTeco');
   if(!pending.length)return;
@@ -1322,7 +1371,7 @@ async function saveAtt(){
     const ok=await fbPatch('/hr/attendance/'+dk,byDate[dk]);
     if(ok)Object.values(byDate[dk]).forEach(a=>{a.synced=true;});
   }
-  localStorage.setItem('apk_att',JSON.stringify(attendance));
+  safeSetLS('apk_att',JSON.stringify(pruneAttendanceForLS(attendance)));
 }
 function getTodayRec(){const s=new Date();s.setHours(0,0,0,0);const e=new Date(s.getTime()+86400000);return attendance.filter(r=>new Date(r.checkIn)>=s&&new Date(r.checkIn)<e);}
 
@@ -1414,7 +1463,7 @@ async function saveAttCorrection(){
     note: document.getElementById('aeNote').value.trim(),
     editedAt: new Date().toISOString()
   };
-  localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));
+  safeSetLS('apk_att_corrections',JSON.stringify(attCorrections));
   await fbPut('/hr/attCorrections',attCorrections);
 
   // สร้าง record ตามเวลาที่กรอก (ใช้ทั้งกับ manual record เดิมที่มีอยู่แล้ว และ record ใหม่ที่ยังไม่เคยมีเลย)
@@ -1459,7 +1508,7 @@ function resetAttCorrection(){
   if(!curAttEditKey)return;
   if(!confirm('คืนค่ากลับเป็นเวลาที่สแกนจริงจากเครื่อง? การแก้ไขที่ตั้งไว้จะถูกลบ'))return;
   delete attCorrections[curAttEditKey];
-  localStorage.setItem('apk_att_corrections',JSON.stringify(attCorrections));
+  safeSetLS('apk_att_corrections',JSON.stringify(attCorrections));
   fbPut('/hr/attCorrections',attCorrections);
   closeAttEditModal();
   showToast('↩️ คืนค่าเวลาเดิมจากเครื่องสแกนแล้ว');
@@ -1483,7 +1532,7 @@ function closeLeaveModal(){document.getElementById('leaveModal').classList.remov
 function saveLeaveType(type){
   if(!curLeaveKey)return;
   leaveRecords[curLeaveKey]={type,note:document.getElementById('leaveNote').value.trim(),markedAt:new Date().toISOString()};
-  localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));
+  safeSetLS('apk_leaves',JSON.stringify(leaveRecords));
   fbPut('/hr/leaves/'+curLeaveKey,leaveRecords[curLeaveKey]);
   closeLeaveModal();
   showToast('✅ บันทึกสถานะแล้ว');
@@ -1494,7 +1543,7 @@ function saveLeaveType(type){
 function clearLeaveType(){
   if(!curLeaveKey)return;
   delete leaveRecords[curLeaveKey];
-  localStorage.setItem('apk_leaves',JSON.stringify(leaveRecords));
+  safeSetLS('apk_leaves',JSON.stringify(leaveRecords));
   fbPut('/hr/leaves/'+curLeaveKey,null); // PUT null = ลบ node นี้ออกจาก Firebase
   closeLeaveModal();
   showToast('🗑️ ล้างสถานะแล้ว');
@@ -1593,8 +1642,8 @@ function toggleCompanyHoliday(day,checked){
     companyHolidays[key]=companyHolidays[key].filter(x=>x!==day);
     // หมายเหตุ: การยกเลิกจะไม่คืนกะเดิมให้ (ต้องไปเลือกกะใหม่เองรายคน/รายวัน)
   }
-  localStorage.setItem('apk_companyholidays',JSON.stringify(companyHolidays));
-  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  safeSetLS('apk_companyholidays',JSON.stringify(companyHolidays));
+  safeSetLS('apk_sched',JSON.stringify(pruneSchedForLS(schedule)));
   fbPut('/hr/companyHolidays',companyHolidays);
   fbPut('/hr/schedule',schedule);
   renderCal();
@@ -1620,7 +1669,7 @@ function toggleWeeklyOff(empId,dow,checked){
   if(!weeklyOff[empId])weeklyOff[empId]=[];
   if(checked){ if(!weeklyOff[empId].includes(dow))weeklyOff[empId].push(dow); }
   else { weeklyOff[empId]=weeklyOff[empId].filter(d=>d!==dow); }
-  localStorage.setItem('apk_weeklyoff',JSON.stringify(weeklyOff));
+  safeSetLS('apk_weeklyoff',JSON.stringify(weeklyOff));
   fbPut('/hr/weeklyOff',weeklyOff);
 }
 
@@ -1677,7 +1726,7 @@ async function assignShift(sv){
 }
 // บันทึกตารางกะลง localStorage + sync ขึ้น Firebase ทันที (กันข้อมูลหายจากการ auto-refresh ทุก 60 วิ ก่อนกดปุ่มบันทึกมือ)
 async function persistSchedule(){
-  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  safeSetLS('apk_sched',JSON.stringify(pruneSchedForLS(schedule)));
   await fbPut('/hr/schedule',schedule);
   loadFromFirebase(); // คำนวณ สาย/OT/เงิน ในหน้าบันทึกเวลา-เงินเดือนใหม่ทันที ไม่ต้องรอ auto-refresh 60 วิ
 }
@@ -1701,7 +1750,7 @@ async function applyShiftWholeMonth(empId,sv){
   alert(`✅ ตั้งกะทั้งเดือนให้แล้ว ${n} วัน และซิงค์ขึ้น Firebase ทันที (เว้นวันหยุดประจำสัปดาห์และวันหยุดบริษัทให้อัตโนมัติ)`);
 }
 function saveSched(){
-  localStorage.setItem('apk_sched',JSON.stringify(schedule));
+  safeSetLS('apk_sched',JSON.stringify(pruneSchedForLS(schedule)));
   const e=event.target,o=e.textContent;
   e.textContent='⏳ กำลังบันทึก...';e.disabled=true;
   fbPut('/hr/schedule',schedule).then(ok=>{
@@ -1926,7 +1975,7 @@ function saveSalaryNote(){
   const m=parseInt(document.getElementById('salaryMonth').value),yr=new Date().getFullYear();
   const noteKey='apk_salary_note_'+yr+'_'+(m+1);
   const val=document.getElementById('salaryNote').value.trim();
-  if(val)localStorage.setItem(noteKey,val);else localStorage.removeItem(noteKey);
+  if(val)safeSetLS(noteKey,val);else localStorage.removeItem(noteKey);
   const btn=event.target,o=btn.textContent;btn.textContent='✅ บันทึกแล้ว!';setTimeout(()=>btn.textContent=o,1500);
 }
 let curDeductKey=null;
@@ -1970,7 +2019,7 @@ function autoCalcSSO(){
 }
 function saveSSORulesToStore(){
   ssoRules.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
-  localStorage.setItem('apk_ssorules',JSON.stringify(ssoRules));
+  safeSetLS('apk_ssorules',JSON.stringify(ssoRules));
   fbPut('/hr/ssoRules',ssoRules);
 }
 function addSSORule(){
@@ -2112,7 +2161,7 @@ function saveOTConfig(){
     qcBreakMin:parseFloat(document.getElementById('qcBreakMin').value)||0,
     deductLateEarlyMonthly:document.getElementById('deductLateEarlyMonthly').checked
   };
-  localStorage.setItem('apk_otconfig',JSON.stringify(otConfig));
+  safeSetLS('apk_otconfig',JSON.stringify(otConfig));
   fbPut('/hr/otConfig',otConfig);
   loadFromFirebase(); // คำนวณ สาย/OT ของข้อมูลที่มีอยู่แล้วใหม่ทันทีตามค่าที่เพิ่งบันทึก
   const el=document.getElementById('otConfigMsg');
@@ -2162,7 +2211,7 @@ function saveDeduct(){
     social:parseFloat(document.getElementById('dSocial').value)||0,
     items:curOtherItems.filter(it=>(it.label&&it.label.trim())||parseFloat(it.amount)>0).map(it=>({label:(it.label||'').trim(),amount:parseFloat(it.amount)||0}))
   };
-  localStorage.setItem('apk_deductions',JSON.stringify(deductions));
+  safeSetLS('apk_deductions',JSON.stringify(deductions));
   fbPut('/hr/deductions/'+curDeductKey, deductions[curDeductKey]);
   closeDeductModal();
   renderSalary();
@@ -2546,7 +2595,7 @@ async function saveShiftDef(){
   }
   newDef.id=id;
   shiftDefs[id]=newDef;
-  localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));
+  safeSetLS('apk_shiftdefs',JSON.stringify(shiftDefs));
   rebuildShiftsDisplay();
   await fbPut('/hr/shiftDefs/'+id,newDef);
   document.getElementById('shiftDefModal').classList.remove('show');
@@ -2563,7 +2612,7 @@ async function deleteShiftDef(id){
   if(Object.keys(shiftDefs).length<=1){alert('ต้องมีอย่างน้อย 1 กะเสมอ ลบกะสุดท้ายไม่ได้');return;}
   if(!confirm(`ยืนยันลบกะ "${sd.name}"?\n\nพนักงานที่เคยถูกตั้งกะนี้ไว้ในตารางกะเดิมจะยังมีข้อมูลอยู่ แต่ระบบจะไม่รู้จักกะนี้อีกต่อไป (แนะนำให้ไปแก้ตารางกะของคนที่ใช้กะนี้ก่อนลบ)`))return;
   delete shiftDefs[id];
-  localStorage.setItem('apk_shiftdefs',JSON.stringify(shiftDefs));
+  safeSetLS('apk_shiftdefs',JSON.stringify(shiftDefs));
   rebuildShiftsDisplay();
   await fbPut('/hr/shiftDefs/'+id,null); // PUT null = ลบ node นี้ออกจาก Firebase
   showToast('🗑️ ลบกะ '+sd.name+' แล้ว');
@@ -2600,7 +2649,7 @@ async function loadEmployeeCloudData(){
   const [overridesFB, customFB, deletedFB] = await Promise.all([fbGet('/hr/employeeOverrides'), fbGet('/hr/customEmployees'), fbGet('/hr/deletedEmployees')]);
   if(overridesFB){
     empOverrides = Object.assign({}, empOverrides, overridesFB);
-    localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+    safeSetLS('apk_emp_overrides', JSON.stringify(empOverrides));
   }
   if(customFB){
     Object.keys(customFB).forEach(id=>{
@@ -2609,7 +2658,7 @@ async function loadEmployeeCloudData(){
   }
   if(deletedFB && Array.isArray(deletedFB)){
     deletedEmpIds = Array.from(new Set([...deletedEmpIds, ...deletedFB]));
-    localStorage.setItem('apk_deleted_emps', JSON.stringify(deletedEmpIds));
+    safeSetLS('apk_deleted_emps', JSON.stringify(deletedEmpIds));
   }
   applyOverrides();
   applyDeleted();
@@ -2638,7 +2687,7 @@ function deleteEmpConfirm(id){
   const idx=EMPLOYEES.findIndex(e=>e.id===id);
   if(idx>=0)EMPLOYEES.splice(idx,1);
   if(!deletedEmpIds.includes(id))deletedEmpIds.push(id);
-  localStorage.setItem('apk_deleted_emps',JSON.stringify(deletedEmpIds));
+  safeSetLS('apk_deleted_emps',JSON.stringify(deletedEmpIds));
   fbPut('/hr/deletedEmployees',deletedEmpIds);
   showToast('🗑️ ลบพนักงาน '+emp.name+' ออกจากระบบแล้ว');
   renderSettings();
@@ -2754,7 +2803,7 @@ function saveEmpEdit(){
     if(idx<0)return;
     Object.assign(EMPLOYEES[idx], updates);
     empOverrides[id]=updates;
-    localStorage.setItem('apk_emp_overrides', JSON.stringify(empOverrides));
+    safeSetLS('apk_emp_overrides', JSON.stringify(empOverrides));
     fbPut('/hr/employeeOverrides/'+id, updates);
     showToast('✅ บันทึกข้อมูลพนักงาน '+EMPLOYEES[idx].name+' แล้ว');
   }
