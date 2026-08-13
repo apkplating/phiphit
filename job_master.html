@@ -104,7 +104,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.3"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var CURRENT_VERSION = "2026-08-10.4"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
