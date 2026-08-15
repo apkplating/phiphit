@@ -1041,6 +1041,19 @@ var jobItems   = [];
 var jobRecords = [];
 var invoices   = [];   // ใบส่งสินค้า/INV ที่ออกแล้ว
 
+// ══════════════════════════════════════════════════════
+//  ป้องกัน localStorage เต็ม (QuotaExceededError) ทำระบบพังกลางทาง — เจอปัญหาเดียวกับ apk_hr.html มาก่อน
+//  (แถบแจ้งเตือนเวอร์ชันใหม่ค้างไม่หายไปสักที เพราะ localStorage.setItem('apk_seen_version',...) เขียนไม่สำเร็จ
+//  แบบเงียบๆ เนื่องจากพื้นที่เต็มจาก jobRecords/invoices ที่สะสมไม่มีวันหมดมาตลอด)
+// ══════════════════════════════════════════════════════
+var JM_LOCAL_RETENTION_DAYS = 60; // เก็บย้อนหลัง ~2 เดือนในเครื่อง พอสำหรับใช้งานปกติ ที่เหลือดึงสดจาก Firebase ทุกครั้งที่โหลดอยู่แล้ว
+function pruneByDateForLS(arr, dateField) {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - JM_LOCAL_RETENTION_DAYS);
+  var cutoffStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth()+1).padStart(2,'0') + '-' + String(cutoff.getDate()).padStart(2,'0');
+  return (arr||[]).filter(function(r){ return (r[dateField]||'') >= cutoffStr; });
+}
+
 // เช็คว่า jobRecords out-record นี้ "ผูกกับเลข INV จริง" หรือไม่ — ใช้แยก "Auto จากรอบชุบ" (เข้ากระบวนการชุบ)
 // ออกจาก "ขายจริง" (ผูก INV จริง) เพราะ jobRecords type:'out' ทั้ง 2 แบบถูกเก็บปนกันไว้ในชุดเดียวกัน
 var _realInvNoSet = null;
@@ -1180,8 +1193,8 @@ function loadLocal() {
 }
 function saveLocal() {
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
-  try { localStorage.setItem('job_records', JSON.stringify(jobRecords)); } catch(e){}
-  try { localStorage.setItem('job_invoices', JSON.stringify(invoices)); } catch(e){}
+  try { localStorage.setItem('job_records', JSON.stringify(pruneByDateForLS(jobRecords, 'date'))); } catch(e){}
+  try { localStorage.setItem('job_invoices', JSON.stringify(pruneByDateForLS(invoices, 'date'))); } catch(e){}
   try { localStorage.setItem('job_customers', JSON.stringify(customers)); } catch(e){}
   try { localStorage.setItem('job_bill_statements', JSON.stringify(billStatements)); } catch(e){}
   try { localStorage.setItem('job_price_list', JSON.stringify(priceList)); } catch(e){}
@@ -3095,8 +3108,8 @@ function getFormOffset() {
 function saveFormOffset() {
   var x = parseFloat(document.getElementById('formOffsetX').value)||0;
   var y = parseFloat(document.getElementById('formOffsetY').value)||0;
-  localStorage.setItem('jm_form_offset_x', x);
-  localStorage.setItem('jm_form_offset_y', y);
+  try { localStorage.setItem('jm_form_offset_x', x); } catch(e){}
+  try { localStorage.setItem('jm_form_offset_y', y); } catch(e){}
   showToast('out','💾 บันทึกค่าตำแหน่งพิมพ์แล้ว (X='+x+'mm, Y='+y+'mm)','ok');
 }
 function loadFormOffsetUI() {
