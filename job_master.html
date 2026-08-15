@@ -104,7 +104,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.4"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var CURRENT_VERSION = "2026-08-10.5"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
@@ -595,6 +595,8 @@ if ('caches' in window) {
         <option value="in">📥 รับเข้า</option>
         <option value="out">📤 จ่ายออก</option>
       </select>
+      <input id="histInvSearch" type="text" placeholder="🔍 ค้นหาเลข INV เช่น IV2608118" oninput="renderHistory()"
+        style="flex:1;min-width:180px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:inherit;">
       <button onclick="exportHistoryCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
     </div>
   </div>
@@ -3832,6 +3834,8 @@ function renderHistory() {
   var lineFilter = (document.getElementById('histLineFilter')||{}).value || '';
   var dateFrom   = (document.getElementById('histDateFrom')||{}).value   || '';
   var dateTo     = (document.getElementById('histDateTo')||{}).value     || '';
+  var invSearch  = (document.getElementById('histInvSearch')||{}).value  || '';
+  invSearch = invSearch.trim().toLowerCase();
 
   // สร้าง synthetic records สำหรับ job ที่เก็บยอดโดยตรง (ไม่มี records type:'in')
   var syntheticRows = [];
@@ -3855,6 +3859,7 @@ function renderHistory() {
     if (typeFilter && r.type  !== typeFilter) return false;
     if (dateFrom   && r.date  <  dateFrom)   return false;
     if (dateTo     && r.date  >  dateTo)     return false;
+    if (invSearch  && String(r.inv||'').toLowerCase().indexOf(invSearch) === -1) return false;
     if (lineFilter) {
       var line = getLineFromRecord(r);
       if (lineFilter === 'manual' && line !== 'จ่ายมือ') return false;
