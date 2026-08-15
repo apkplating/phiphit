@@ -104,7 +104,7 @@ input:focus,select:focus{border-color:var(--blue2);}
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.5"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var CURRENT_VERSION = "2026-08-10.6"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
@@ -599,6 +599,7 @@ if ('caches' in window) {
         style="flex:1;min-width:180px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-family:inherit;">
       <button onclick="exportHistoryCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
     </div>
+    <div id="toast-history" class="toast"></div>
   </div>
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -3899,7 +3900,7 @@ function renderHistory() {
       '<td class="td-l" style="font-size:10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;">'+(job.partName||'—')+'</td>' +
       '<td style="font-weight:800;color:'+(r.type==='in'?'var(--green)':'var(--orange)')+';font-family:monospace;">'+(r.qty||0)+'</td>' +
       '<td>'+lineBadge(line)+'</td>' +
-      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+(r.inv||'—')+'</td>' +
+      '<td class="td-l" style="font-size:10px;">'+(r.inv?('<a href="javascript:void(0)" onclick="openInvFromHistory(\''+r.inv.replace(/'/g,"\\'")+'\')" style="color:var(--blue);text-decoration:underline;cursor:pointer;font-weight:600;">'+r.inv+'</a>'):'—')+'</td>' +
       '<td class="td-l" style="font-size:10px;">'+(r.by||'—')+'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+(r.note||'—')+'</td>' +
       '<td>'+(isAuto?'':('<button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>'))+'</td>' +
@@ -3911,6 +3912,17 @@ function renderHistory() {
     '<td colspan="4" style="color:var(--orange);">-'+sumOut+'</td>' +
     '<td></td>' +
   '</tr>';
+}
+
+// เปิดดู/พิมพ์ใบ INV จริงจากแท็บประวัติ — คลิกเลข INV ในตารางแล้วหาใบที่ตรงกันมาเปิดให้เลย
+// (เดิมคลิกอะไรในตารางนี้ไม่ได้เลยสักคอลัมน์ ผู้ใช้แจ้งว่า "เปิดดูไม่ได้")
+function openInvFromHistory(invNo) {
+  var inv = invoices.find(function(i){ return i.invNo === invNo; });
+  if (!inv) {
+    showToast('history', '🚫 ไม่พบใบ INV "'+invNo+'" ในทะเบียน — อาจถูกลบไปแล้ว หรือเป็นเลขอ้างอิงที่พิมพ์เอง ไม่ใช่ INV จริงจากระบบ', 'err');
+    return;
+  }
+  printInvoice(inv);
 }
 
 function deleteRecord(id) {
