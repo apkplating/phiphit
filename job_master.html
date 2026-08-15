@@ -99,27 +99,47 @@ input:focus,select:focus{border-color:var(--blue2);}
 <script>
 // ══════════════════════════════════════════════════════
 //  เช็คเวอร์ชันใหม่ — เทียบกับ version.json บน GitHub เป็นระยะ
-//  ถ้าไม่ตรงกับเวอร์ชันที่หน้านี้ใช้อยู่ แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
+//  ถ้าไม่ตรงกับเวอร์ชันล่าสุดที่เครื่องนี้เคยเห็น แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
 //  ขึ้นแถบแจ้งเตือนให้กดรีเฟรชเอง แก้ปัญหา "ไม่รู้ตัวว่ากำลังดูเวอร์ชันเก่าอยู่"
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
+//
+//  เปลี่ยนวิธีจากเดิม (เทียบกับเลขที่ฝังไว้ในตัวไฟล์ตรงๆ) เป็นเก็บ "เวอร์ชันล่าสุดที่เครื่องนี้เคยเห็น" ไว้ใน
+//  localStorage แทน — ข้อดีคือ "ทุกครั้งที่แก้ version.json ไม่ต้องไล่แก้เลขในทุกไฟล์ .html ให้ตรงกันอีกต่อไป"
+//  แค่แก้ version.json ไฟล์เดียวพอ ทุกหน้าจะเทียบกับค่าที่เก็บไว้ในเครื่องแทน และเมื่อหน้าไหนหน้าหนึ่งถูกกด
+//  รีเฟรชแล้ว หน้าอื่นๆ ที่เปิดค้างอยู่บนเครื่องเดียวกัน (localStorage ใช้ร่วมกันทั้ง origin) ก็จะรู้ตัวว่า
+//  อัปเดตแล้วไปด้วยในการเช็ครอบถัดไป ไม่ต้องกดรีเฟรชทีละแท็บ
+//
+//  หมายเหตุ (บั๊กที่เพิ่งเจอ): job_master.html เคยตกหล่นจากการอัปเดตชุดนี้จริงๆ ยังใช้เลข CURRENT_VERSION
+//  ฝังตายตัวอยู่ ("2026-08-10.6") ทำให้แถบเตือนค้างตลอดไม่มีวันหายไม่ว่าจะทำอะไรก็ตาม — แก้ให้ตรงกับไฟล์อื่นแล้ว
 // ══════════════════════════════════════════════════════
 (function(){
-  var CURRENT_VERSION = "2026-08-10.6"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
+  var LS_KEY = 'apk_seen_version';
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
       .then(function(data){
-        if (data && data.version && data.version !== CURRENT_VERSION) showVersionBanner();
+        if (!data || !data.version) return;
+        var seen = null;
+        try { seen = localStorage.getItem(LS_KEY); } catch(e){}
+        if (seen === null) {
+          // ครั้งแรกที่เครื่องนี้เห็นระบบ — บันทึกไว้เฉยๆ ไม่ต้องเตือน (ไม่มีเวอร์ชันเก่าให้เทียบ)
+          try { localStorage.setItem(LS_KEY, data.version); } catch(e){}
+          return;
+        }
+        if (seen !== data.version) showVersionBanner(data.version);
       })
       .catch(function(){}); // เงียบไว้ถ้าเช็คไม่ได้ (ออฟไลน์ ฯลฯ) ไม่รบกวนการใช้งาน
   }
-  function showVersionBanner(){
+  function showVersionBanner(newVersion){
     if (document.getElementById('versionUpdateBanner')) return;
     var b = document.createElement('div');
     b.id = 'versionUpdateBanner';
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#f59e0b;color:#000;text-align:center;padding:10px 14px;font-size:13px;font-weight:700;font-family:sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);';
     b.textContent = '🔄 มีเวอร์ชันใหม่กว่านี้ — แตะเพื่อโหลดหน้าใหม่';
-    b.onclick = function(){ location.href = location.pathname + '?v=' + Date.now(); };
+    b.onclick = function(){
+      try { localStorage.setItem(LS_KEY, newVersion); } catch(e){}
+      location.href = location.pathname + '?v=' + Date.now();
+    };
     document.body.appendChild(b);
   }
   if (document.readyState === 'loading') {
