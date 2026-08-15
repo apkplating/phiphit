@@ -4010,7 +4010,15 @@ function renderHistory() {
 
   var tbody = document.getElementById('histBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ</td></tr>';
+    if (invSearch) {
+      // ไม่เจอในข้อมูลปัจจุบัน — อาจเป็นเพราะบิลต้นทางถูก Archive ไปแล้ว (บิลปิดครบ) ลองเช็คใน /archive ต่อให้อัตโนมัติ
+      // (เจอเคสจริง: IV ที่ยังอยู่ในทะเบียน "ยอดขาย" แต่ jobRecords ของบิลที่ประกอบเป็น INV นั้นถูกย้ายเข้า Archive
+      // ไปแล้ว เพราะ archive_tool.html แตะแค่ jobItems/jobRecords ไม่เคยแตะ invoices เลย)
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">🔍 ไม่พบในข้อมูลปัจจุบัน กำลังค้นหาใน Archive เพิ่มเติม...</td></tr>';
+      searchHistoryInArchive(invSearch);
+    } else {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ</td></tr>';
+    }
     return;
   }
 
@@ -4050,7 +4058,55 @@ function renderHistory() {
   '</tr>';
 }
 
-// เปิดแก้ไข/reprint ใบ INV จริงจากแท็บประวัติ — คลิกเลข INV ในตารางแล้วหาใบที่ตรงกันมาเปิดแก้ไขให้เลย
+// ค้นหา jobRecords ใน /archive/job-master.json — ใช้เฉพาะตอนค้นหาด้วยเลข INV แล้วไม่เจอในข้อมูลปัจจุบันเลย
+// (fallback อัตโนมัติ กันเคส INV ยังอยู่ในทะเบียน "ยอดขาย" แต่ jobRecords ของบิลต้นทางถูก Archive ไปแล้ว)
+function searchHistoryInArchive(invSearch) {
+  var url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/archive/job-master.json';
+  fetch(url, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      // กันเคสพิมพ์คำค้นหาใหม่ระหว่างรอโหลด — ถ้าคำค้นหาเปลี่ยนไปแล้ว อย่าทับผลลัพธ์ปัจจุบันทิ้ง
+      var curSearch = ((document.getElementById('histInvSearch')||{}).value || '').trim().toLowerCase();
+      if (curSearch !== invSearch) return;
+
+      var tbody = document.getElementById('histBody');
+      var archRecords = (data && Array.isArray(data.records)) ? data.records : [];
+      var archItems   = (data && Array.isArray(data.items))   ? data.items   : [];
+      var matched = archRecords.filter(function(r){ return String(r.inv||'').toLowerCase().indexOf(invSearch) !== -1; });
+
+      if (!matched.length) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ (เช็คใน Archive แล้วด้วย ไม่พบเช่นกัน)</td></tr>';
+        return;
+      }
+
+      matched = matched.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+      tbody.innerHTML = matched.map(function(r){
+        var job = archItems.find(function(j){ return j.id===r.jobId; }) || {};
+        var typeBadge = r.type==='in'
+          ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับ</span>'
+          : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
+        return '<tr style="background:#fefce8;">' +
+          '<td class="td-l" style="font-size:10px;white-space:nowrap;">'+fmtDate(r.date)+'</td>' +
+          '<td>'+typeBadge+'</td>' +
+          '<td class="td-l" style="font-weight:600;font-size:11px;">'+(job.bill||'—')+'</td>' +
+          '<td class="td-l" style="font-size:10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;">'+(job.partName||'—')+'</td>' +
+          '<td style="font-weight:800;color:'+(r.type==='in'?'var(--green)':'var(--orange)')+';font-family:monospace;">'+(r.qty||0)+'</td>' +
+          '<td>—</td>' +
+          '<td class="td-l" style="font-size:10px;">'+(r.inv?('<a href="javascript:void(0)" onclick="openInvFromHistory(\''+r.inv.replace(/'/g,"\\'")+'\')" style="color:var(--blue);text-decoration:underline;cursor:pointer;font-weight:600;">'+r.inv+'</a>'):'—')+'</td>' +
+          '<td class="td-l" style="font-size:10px;">'+(r.by||'—')+'</td>' +
+          '<td class="td-l" style="font-size:10px;color:#b45309;font-weight:600;">📦 จาก Archive (บิลปิดแล้ว)</td>' +
+          '<td>—</td>' +
+        '</tr>';
+      }).join('') +
+      '<tr><td colspan="10" style="text-align:center;font-size:10px;color:var(--text-muted);padding:8px;">พบ '+matched.length+' รายการจาก Archive — ลบ/แก้ไขจากหน้านี้ไม่ได้ (ต้องใช้ archive_tool.html)</td></tr>';
+    })
+    .catch(function(){
+      var tbody = document.getElementById('histBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีประวัติ (เช็ค Archive ไม่สำเร็จ — ลองค้นหาใหม่อีกครั้ง)</td></tr>';
+    });
+}
+
+
 // ใช้ editInvoice() ที่มีอยู่แล้ว (คืนสต็อกเดิม + โหลดข้อมูลเข้าฟอร์ม "ออก INV ขาย" ให้แก้ แล้วกด
 // "บันทึก + พิมพ์" เพื่อ reprint ได้เลยในตัว) — เดิมคลิกอะไรในตารางนี้ไม่ได้เลยสักคอลัมน์
 function openInvFromHistory(invNo) {
