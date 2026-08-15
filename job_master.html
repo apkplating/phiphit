@@ -99,44 +99,27 @@ input:focus,select:focus{border-color:var(--blue2);}
 <script>
 // ══════════════════════════════════════════════════════
 //  เช็คเวอร์ชันใหม่ — เทียบกับ version.json บน GitHub เป็นระยะ
-//  ถ้าไม่ตรงกับเวอร์ชันล่าสุดที่เครื่องนี้เคยเห็น แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
+//  ถ้าไม่ตรงกับเวอร์ชันที่หน้านี้ใช้อยู่ แสดงว่ามีการอัปเดตไฟล์ใหม่ขึ้นไปแล้ว
 //  ขึ้นแถบแจ้งเตือนให้กดรีเฟรชเอง แก้ปัญหา "ไม่รู้ตัวว่ากำลังดูเวอร์ชันเก่าอยู่"
 //  (โดยเฉพาะเคสไอคอน iOS Add to Home Screen ที่ไม่เช็คอัปเดตเองเลย)
-//
-//  เปลี่ยนวิธีจากเดิม (เทียบกับเลขที่ฝังไว้ในตัวไฟล์ตรงๆ) เป็นเก็บ "เวอร์ชันล่าสุดที่เครื่องนี้เคยเห็น" ไว้ใน
-//  localStorage แทน — ข้อดีคือ "ทุกครั้งที่แก้ version.json ไม่ต้องไล่แก้เลขในทุกไฟล์ .html ให้ตรงกันอีกต่อไป"
-//  แค่แก้ version.json ไฟล์เดียวพอ ทุกหน้าจะเทียบกับค่าที่เก็บไว้ในเครื่องแทน และเมื่อหน้าไหนหน้าหนึ่งถูกกด
-//  รีเฟรชแล้ว หน้าอื่นๆ ที่เปิดค้างอยู่บนเครื่องเดียวกัน (localStorage ใช้ร่วมกันทั้ง origin) ก็จะรู้ตัวว่า
-//  อัปเดตแล้วไปด้วยในการเช็ครอบถัดไป ไม่ต้องกดรีเฟรชทีละแท็บ
 // ══════════════════════════════════════════════════════
 (function(){
-  var LS_KEY = 'apk_seen_version';
+  var CURRENT_VERSION = "2026-08-10.6"; // ต้องอัปเดตให้ตรงกับ version.json ทุกครั้งที่อัปโหลดไฟล์นี้ใหม่
   function checkVersion(){
     fetch('version.json', {cache:'no-store'})
       .then(function(r){ return r.json(); })
       .then(function(data){
-        if (!data || !data.version) return;
-        var seen = null;
-        try { seen = localStorage.getItem(LS_KEY); } catch(e){}
-        if (seen === null) {
-          // ครั้งแรกที่เครื่องนี้เห็นระบบ — บันทึกไว้เฉยๆ ไม่ต้องเตือน (ไม่มีเวอร์ชันเก่าให้เทียบ)
-          try { localStorage.setItem(LS_KEY, data.version); } catch(e){}
-          return;
-        }
-        if (seen !== data.version) showVersionBanner(data.version);
+        if (data && data.version && data.version !== CURRENT_VERSION) showVersionBanner();
       })
       .catch(function(){}); // เงียบไว้ถ้าเช็คไม่ได้ (ออฟไลน์ ฯลฯ) ไม่รบกวนการใช้งาน
   }
-  function showVersionBanner(newVersion){
+  function showVersionBanner(){
     if (document.getElementById('versionUpdateBanner')) return;
     var b = document.createElement('div');
     b.id = 'versionUpdateBanner';
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#f59e0b;color:#000;text-align:center;padding:10px 14px;font-size:13px;font-weight:700;font-family:sans-serif;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);';
     b.textContent = '🔄 มีเวอร์ชันใหม่กว่านี้ — แตะเพื่อโหลดหน้าใหม่';
-    b.onclick = function(){
-      try { localStorage.setItem(LS_KEY, newVersion); } catch(e){}
-      location.href = location.pathname + '?v=' + Date.now();
-    };
+    b.onclick = function(){ location.href = location.pathname + '?v=' + Date.now(); };
     document.body.appendChild(b);
   }
   if (document.readyState === 'loading') {
@@ -2058,7 +2041,9 @@ function onInvLineQtyOrWeightChange() {
     }
   }
 
-  var amount = priceUnit === 'kg' ? (totalKg * price) : (totalPcs * price);
+  // ยอดเงินต้องคำนวณจาก "น้ำหนักที่ปัดเป็น 2 ตำแหน่งแล้ว" (ตรงกับที่แสดงบนจอ/พิมพ์บนบิล) ไม่ใช่น้ำหนักละเอียด
+  // 3 ตำแหน่งที่เก็บไว้ภายใน — ไม่งั้นลูกค้าเอาเลขที่เห็นบนบิลไปคูณเองจะได้ยอดไม่ตรงกับที่ระบบคิด (ดูน่าสงสัย)
+  var amount = priceUnit === 'kg' ? (Number(totalKg.toFixed(2)) * price) : (totalPcs * price);
   var prevEl = document.getElementById('invLineAmountPreview');
   if (prevEl) {
     if (!jobId && qty && jobSelEl) {
@@ -2273,7 +2258,9 @@ function addInvLine() {
   }
 
   // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ (งานเคลม = 0 เสมอ)
-  var amount = isClaim ? 0 : ((priceUnit==='kg') ? (totalKg * price) : (totalPcs * price));
+  // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักปัด 2 ตำแหน่ง (ตรงกับที่แสดง/พิมพ์บนบิล) ไม่ใช่ตัวเลขละเอียด
+  // ภายใน กันยอดเงินไม่ตรงกับที่ลูกค้าคำนวณเองจากตัวเลขที่เห็นบนบิล (งานเคลม = 0 เสมอ)
+  var amount = isClaim ? 0 : ((priceUnit==='kg') ? (Number(totalKg.toFixed(2)) * price) : (totalPcs * price));
 
   invDraft.push({
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
@@ -2316,6 +2303,63 @@ function addInvLine() {
   renderInvLineSelect();
 }
 
+// แก้ไขจำนวน/ราคาของรายการที่มีอยู่แล้วในบิลตรงๆ — ไม่ต้องลบแล้วค้นหา/เพิ่มใหม่ทั้งหมด
+// ใช้สูตรคำนวณเดียวกับตอนเพิ่มรายการ (addInvLine) เป๊ะๆ + เช็คคงเหลืออีกครั้งกันเผลอแก้เกินยอดจริง
+function editInvLine(idx) {
+  var l = invDraft[idx];
+  if (!l) return;
+  var isClaim = (invDocType === 'claim');
+  var qU = l.qtyUnit || l.unit || 'pcs';
+  var curQty = (l.qtyEntered != null) ? l.qtyEntered : l.qty;
+
+  var newQtyStr = prompt('แก้ไขจำนวน ('+l.partName+')\nหน่วย: '+(qU==='kg'?'กก.':'ชิ้น'), curQty);
+  if (newQtyStr === null) return; // กด Cancel
+  var newQty = parseFloat(newQtyStr);
+  if (isNaN(newQty) || newQty <= 0) { showToast('invline','กรุณากรอกจำนวนที่ถูกต้อง (มากกว่า 0)','err'); return; }
+
+  var newPrice = l.price;
+  if (!isClaim) {
+    var newPriceStr = prompt('แก้ไขราคา/หน่วย ('+(l.priceUnit==='kg'?'บาท/กก.':'บาท/ชิ้น')+')', l.price);
+    if (newPriceStr === null) return;
+    newPrice = parseFloat(newPriceStr);
+    if (isNaN(newPrice) || newPrice < 0) { showToast('invline','กรุณากรอกราคาที่ถูกต้อง','err'); return; }
+  }
+
+  // คำนวณน้ำหนัก/จำนวนชิ้น/ยอดเงินใหม่ ด้วยสูตรเดียวกับ addInvLine() เป๊ะๆ
+  var wPerUnit = l.weightPerUnit || 0;
+  var totalKg  = qU === 'kg' ? newQty : (newQty * wPerUnit);
+  var totalPcs = qU === 'pcs' ? newQty : (wPerUnit > 0 ? Math.round(newQty / wPerUnit) : 0);
+  var stockQty = (l.unit === 'kg') ? totalKg : totalPcs;
+
+  // เช็คคงเหลือใหม่ (เทียบกับยอดของรายการอื่นๆ ในบิลนี้ + คงเหลือจริงของบิลต้นทาง — ไม่รวมยอดเดิมของบรรทัดนี้เอง)
+  var job = jobItems.find(function(j){ return j.id === l.jobId; });
+  if (job && !l.stockOverride) {
+    var b = calcJob(l.jobId);
+    var isKg = job.unit === 'kg';
+    var remain = isKg ? b.remainKg : b.remain;
+    var otherInDraft = invDraft
+      .filter(function(x,i){ return i !== idx && x.jobId === l.jobId; })
+      .reduce(function(s,x){ return s + x.qty; }, 0);
+    if (stockQty + otherInDraft > remain + 0.0001) {
+      showToast('invline', '⚠️ เกินคงเหลือ (เหลือให้แก้ได้ไม่เกิน '+(remain-otherInDraft).toFixed(2)+(isKg?' กก.':' ชิ้น')+')', 'err');
+      return;
+    }
+  }
+
+  // ยอดเงินคำนวณจากน้ำหนักปัด 2 ตำแหน่ง (ตรงกับที่แสดงบนจอ) เหมือนกับตอนเพิ่มรายการใหม่ — กันยอดไม่ตรงกับที่เห็น
+  var amount = isClaim ? 0 : ((l.priceUnit==='kg') ? (Number(totalKg.toFixed(2)) * newPrice) : (totalPcs * newPrice));
+
+  l.qty        = stockQty;
+  l.qtyEntered = newQty;
+  l.weight     = parseFloat(totalKg.toFixed(3));
+  l.pcs        = totalPcs;
+  l.price      = newPrice;
+  l.amount     = amount;
+
+  renderInvLines();
+  showToast('invline', '✅ แก้ไขรายการแล้ว', 'ok');
+}
+
 function removeInvLine(idx) {
   invDraft.splice(idx,1);
   renderInvLines();
@@ -2347,7 +2391,7 @@ function renderInvLines() {
         '<td>'+qtyStr+'</td>'+
         '<td>'+wStr+pcsHint+'</td>'+
         priceCells+
-        '<td><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;">✕</button></td>'+
+        '<td><button onclick="editInvLine('+idx+')" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;margin-right:8px;" title="แก้ไขจำนวน/ราคา">✏️</button><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;" title="ลบรายการนี้">✕</button></td>'+
       '</tr>';
     }).join('');
   }
