@@ -365,6 +365,10 @@ if ('caches' in window) {
   <!-- ── หัวบิล INV ── -->
   <div class="card">
     <div class="card-label" id="invCardTitle">📤 ออก INV ขาย (ใบส่งสินค้า)</div>
+    <div id="invEditingBanner" style="display:none;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#1e40af;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span>✏️ กำลังแก้ไขใบเดิมอยู่ — ของเดิมจะยังไม่ถูกลบจนกว่าจะกด "บันทึก" สำเร็จ</span>
+      <button type="button" onclick="cancelEditInvoice()" style="background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;color:#1e40af;font-family:inherit;white-space:nowrap;">❌ ยกเลิกการแก้ไข</button>
+    </div>
     <div class="field">
       <label>ประเภทเอกสาร</label>
       <div style="display:flex;gap:16px;font-size:13px;">
@@ -1086,6 +1090,10 @@ function isRealInvRef(r) {
   return !!_realInvNoSet[r.inv];
 }
 var invDraft   = [];   // รายการสินค้าในบิล INV ที่กำลังสร้าง (ยังไม่บันทึก)
+// เก็บ reference ของ INV เดิมที่กำลัง "แก้ไข" อยู่ (ถ้ามี) — ตั้งใจไม่ลบข้อมูลเดิมออกจาก jobRecords/invoices/Firebase
+// เลยตอนกด "แก้ไข" (เหมือนเดิม) เพราะบางทีกดเข้ามาแค่ดูรายละเอียดเฉยๆ ไม่ได้ตั้งใจจะแก้จริง — ของเดิมจะถูกลบออก
+// ก็ต่อเมื่อกด "บันทึก" สำเร็จเท่านั้น (ดู saveInvoice()) ถ้าไม่กดบันทึกเลย ของเดิมยังอยู่ครบ ไม่กระทบอะไรเลย
+var _editingInvoiceRef = null; // { invId, invNo } หรือ null ถ้าไม่ได้อยู่ในโหมดแก้ไข
 // 'sale' = ขาย (มีราคา/VAT) | 'claim' = งานเคลม (ไม่มีมูลค่า, เลขเอกสารรันแยก prefix CL)
 // จำโหมดล่าสุดที่เลือกไว้ใน localStorage ของเครื่องนี้ — เปิดหน้าใหม่/รีเฟรชแล้วยังอยู่โหมดเดิม ไม่ต้องกดสลับทุกครั้ง
 var invDocType = (function(){ try { return localStorage.getItem('job_last_doc_type')==='claim' ? 'claim' : 'sale'; } catch(e){ return 'sale'; } })();
@@ -1362,6 +1370,9 @@ function calcJob(jobId) {
       // นับเฉพาะรายการที่ผูกกับเลข INV จริงเท่านั้น — ไม่นับ "Auto จากรอบชุบ" (แค่เข้ากระบวนการชุบ ยังไม่ได้ขายจริง)
       // เดิมนับรวมทุกอย่าง ทำให้ "จ่ายออก"/"คงเหลือ"/"สถานะ จ่ายครบ" ผิดพลาดตามไปด้วย
       if (!isRealInvRef(r)) return;
+      // ระหว่างกำลังแก้ไข INV ใบใดใบหนึ่งอยู่ (ยังไม่กดบันทึก) ให้ "แกล้งนับว่าคืนสต็อกของ INV เดิมนั้นแล้ว"
+      // ในการคำนวณนี้ชั่วคราว (ไม่ได้ลบออกจริงจาก jobRecords) กันเช็คคงเหลือผิดพลาดเป็น 2 เท่าเวลาแก้ไขจำนวนเดิม
+      if (_editingInvoiceRef && r.inv === _editingInvoiceRef.invNo) return;
       totalOut   += Number(r.qty||0);
       totalOutKg += Number(r.qtyKg||0);
     }
@@ -2835,6 +2846,15 @@ function saveInvoice(doPrint) {
     invDraft.forEach(function(l){ l.price = 0; l.amount = 0; });
   }
 
+  // ── ถ้ากำลังแก้ไข INV เดิมอยู่ (คลิก "แก้ไข" มา) ค่อยลบของเดิมออกจริงตรงนี้ — จุดเดียวที่ข้อมูลเดิมจะถูกลบ ──
+  // เดิมลบทันทีตอนกด "แก้ไข" ทำให้ถ้าไม่กดบันทึกต่อจนจบ ข้อมูลหายไปเลยแบบกู้คืนไม่ได้ — ย้ายมาลบตรงนี้แทน
+  // เพื่อให้ "ลบของเก่า" กับ "สร้างของใหม่" เกิดขึ้นพร้อมกันในจังหวะบันทึกเดียว ปลอดภัยกว่ามาก
+  if (_editingInvoiceRef) {
+    jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===_editingInvoiceRef.invNo); });
+    invoices = invoices.filter(function(i){ return i.id !== _editingInvoiceRef.invId; });
+    _realInvNoSet = null;
+  }
+
   // สร้าง jobRecords (type:out) — ตัดสต็อกทุกรายการ ผูกเลขที่ INV/ใบเคลมเดียวกัน
   invDraft.forEach(function(l){
     var isKg = l.unit==='kg';
@@ -2863,7 +2883,10 @@ function saveInvoice(doPrint) {
 
   saveLocal(); fbSave();
 
-  showToast('out','✅ บันทึก'+(isClaim?'ใบส่งคืนงานเคลม':'INV')+' '+invNo+' สำเร็จ','ok');
+  var _wasEditing = !!_editingInvoiceRef;
+  _editingInvoiceRef = null; // บันทึกสำเร็จแล้ว เลิกโหมดแก้ไข กลับสู่สถานะปกติ
+
+  showToast('out','✅ บันทึก'+(isClaim?'ใบส่งคืนงานเคลม':'INV')+' '+invNo+(_wasEditing?' (แก้ไขแล้ว)':'')+' สำเร็จ','ok');
 
   if (isClaim) {
     if (doPrint) printClaimNote(invObj);
@@ -2882,8 +2905,27 @@ function saveInvoice(doPrint) {
   document.getElementById('invNote').value = '';
   var overrideResetEl = document.getElementById('invStockOverride');
   if (overrideResetEl) overrideResetEl.checked = false; // เคลียร์ติ๊กหลังบันทึกทุกครั้ง (กันติ๊กค้างไปกระทบ INV ปกติถัดไป) — สิทธิ์เข้าถึงยังอยู่ตลอด session ไม่ต้องขอใหม่
+  var editBannerEl = document.getElementById('invEditingBanner');
+  if (editBannerEl) editBannerEl.style.display = 'none';
   renderInvLines();
   renderInvLineSelect();
+}
+
+// ยกเลิกการแก้ไข INV — เคลียร์ฟอร์มกลับเป็นบิลใหม่เปล่าๆ โดยไม่แตะข้อมูลเดิมเลย (ของเดิมยังอยู่ครบ เพราะยังไม่เคยลบจริง)
+function cancelEditInvoice() {
+  if (!_editingInvoiceRef) return;
+  if (invDraft.length && !confirm('ยกเลิกการแก้ไข? รายการที่แก้ไว้ในฟอร์มจะหายไป (ของเดิมบน Firebase ไม่กระทบ ยังอยู่ครบ)')) return;
+  _editingInvoiceRef = null;
+  invDraft = [];
+  document.getElementById('invNo').value = genInvNo(null, invDocType);
+  document.getElementById('invCustomer').value = '';
+  document.getElementById('invPO').value = '';
+  document.getElementById('invNote').value = '';
+  var editBannerEl = document.getElementById('invEditingBanner');
+  if (editBannerEl) editBannerEl.style.display = 'none';
+  renderInvLines();
+  renderInvLineSelect();
+  showToast('out', 'ยกเลิกการแก้ไขแล้ว — กลับสู่บิลใหม่เปล่าๆ', 'ok');
 }
 
 // สร้าง HTML ใบส่งสินค้า แล้วเปิดหน้าต่างพิมพ์
@@ -3521,14 +3563,12 @@ function editInvoice(invId) {
   if (idx<0) { showToast('out','ไม่พบ INV นี้','err'); return; }
   var inv = invoices[idx];
   if (inv.billNo) { showToast('sales','⚠️ INV นี้วางบิลแล้ว ('+inv.billNo+') — แก้ไขไม่ได้','err'); return; }
-  if (!confirm('แก้ไข INV '+inv.invNo+'?\n\nระบบจะคืนสต็อกของรายการเดิม และนำข้อมูลไปแสดงที่ Tab "ออก INV ขาย" ให้แก้ไข — เมื่อกดบันทึกใหม่ จะตัดสต็อกอีกครั้งตามค่าที่แก้')) return;
 
-  // คืนสต็อก: ลบ jobRecords type:out ที่ผูกกับ INV นี้
-  jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
-  // เอา invoice ออกจากรายการ (ชั่วคราว — จะถูกสร้างใหม่ตอนบันทึก)
-  invoices.splice(idx,1);
-  _realInvNoSet = null;
-  saveLocal(); fbSave();
+  // ── ไม่ลบข้อมูลเดิมออกจาก jobRecords/invoices/Firebase ตรงนี้อีกต่อไป ──
+  // เดิมลบทันทีตอนกด "แก้ไข" ทำให้ถ้าไม่ได้กด "บันทึก" ต่อจนจบ (เช่น กดเข้ามาดูรายละเอียดเฉยๆ แล้วออกไปโดยไม่บันทึก)
+  // ข้อมูลเดิมหายไปเลยแบบกู้คืนไม่ได้ — ตอนนี้แค่ "จำไว้ว่ากำลังแก้ไขบิลไหนอยู่" (_editingInvoiceRef) ของเดิมจะถูก
+  // ลบออกจริงก็ต่อเมื่อกด "บันทึก" สำเร็จเท่านั้น (ดู saveInvoice()) ถ้าไม่กดบันทึกเลย ของเดิมยังอยู่ครบ 100%
+  _editingInvoiceRef = { invId: inv.id, invNo: inv.invNo };
 
   // โหลดข้อมูลกลับเข้าฟอร์ม
   invDraft = inv.items.slice();
@@ -3589,7 +3629,9 @@ function editInvoice(invId) {
   }
   renderInvLineSelect();
   renderInvLines();
-  showToast('out','✏️ กำลังแก้ไข'+(isClaimEdit?'ใบส่งคืนงานเคลม':'INV')+' '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง','ok');
+  var editBannerShowEl = document.getElementById('invEditingBanner');
+  if (editBannerShowEl) editBannerShowEl.style.display = 'flex';
+  showToast('out','✏️ กำลังแก้ไข'+(isClaimEdit?'ใบส่งคืนงานเคลม':'INV')+' '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง (ของเดิมยังไม่ถูกลบจนกว่าจะบันทึกสำเร็จ)','ok');
 }
 
 // ลบ INV: คืนสต็อกของรายการที่ตัดไป แล้วลบ invoice ออก
