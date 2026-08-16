@@ -52,6 +52,9 @@ function vatFromGrand(grandTotal, rate) {
 // เช็คว่ายอดที่บันทึกไว้ (เช่น inv.netTotal เดิม) ตรงกับที่คำนวณใหม่จากรายการจริงหรือไม่ — ใช้ดักจับข้อมูลเก่า
 // ที่เคยบันทึกยอดผิดไว้ก่อนไฟล์นี้ถูกใช้งาน (เทียบกันที่ระดับสตางค์ กันปัญหาเทียบทศนิยมตรงๆ คลาดเคลื่อนเอง)
 function moneyMismatch(storedNetTotal, items, rate) {
-  var r = vatFromGrand(moneyCentsSum((items || []).map(function (it) { return it.amount; })), rate);
-  return toCents(storedNetTotal) !== toCents(r.net);
+  rate = (rate == null) ? 0.07 : rate;
+  var grandCents = moneyCentsSum((items || []).map(function (it) { return it.amount; }));
+  var vatCents = Math.round(grandCents * rate);
+  var netCents = grandCents + vatCents;
+  return toCents(storedNetTotal) !== netCents;
 }
