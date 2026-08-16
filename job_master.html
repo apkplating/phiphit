@@ -1047,6 +1047,14 @@ if ('caches' in window) {
 //  CONFIG
 // ══════════════════════════════════════
 var SYSTEM_KEY = 'job_master';
+
+// ══════════════════════════════════════════════════════
+//  ปัดเศษเงินมาตรฐานเดียวกันทั้งไฟล์ — ใช้ money() ทุกครั้งที่คำนวณ/สะสมค่าเงิน (คูณ, บวก, รวมยอด)
+//  ก่อนเก็บ/แสดงผล กันปัญหาเศษทศนิยมที่มองไม่เห็นสะสมอยู่เบื้องหลัง จนยอดสุทธิที่พิมพ์ไม่ตรงกับที่ลูกค้า
+//  ลองบวกเลขเองจากตัวเลขที่เห็นบนบิล (เจอบั๊กแบบนี้ซ้ำหลายรอบมาก่อน เพราะปัดแค่บางจุดไม่ครบทั้งระบบ)
+// ══════════════════════════════════════════════════════
+function money(n) { return Number((Number(n)||0).toFixed(2)); }
+
 var TAB_IDS = ['board','in','out','history','sales','pricelist','customers'];
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
@@ -2087,7 +2095,7 @@ function onInvLineQtyOrWeightChange() {
 
   // ยอดเงินต้องคำนวณจาก "น้ำหนักที่ปัดเป็น 2 ตำแหน่งแล้ว" (ตรงกับที่แสดงบนจอ/พิมพ์บนบิล) ไม่ใช่น้ำหนักละเอียด
   // 3 ตำแหน่งที่เก็บไว้ภายใน — ไม่งั้นลูกค้าเอาเลขที่เห็นบนบิลไปคูณเองจะได้ยอดไม่ตรงกับที่ระบบคิด (ดูน่าสงสัย)
-  var amount = priceUnit === 'kg' ? (Number(totalKg.toFixed(2)) * price) : (totalPcs * price);
+  var amount = priceUnit === 'kg' ? money(money(totalKg) * price) : money(totalPcs * price);
   var prevEl = document.getElementById('invLineAmountPreview');
   if (prevEl) {
     if (!jobId && qty && jobSelEl) {
@@ -2304,7 +2312,7 @@ function addInvLine() {
   // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักรวม/จำนวนชิ้นรวมที่แปลงแล้วเสมอ (งานเคลม = 0 เสมอ)
   // คำนวณจำนวนเงินตาม "หน่วยราคา" ที่เลือก — ใช้น้ำหนักปัด 2 ตำแหน่ง (ตรงกับที่แสดง/พิมพ์บนบิล) ไม่ใช่ตัวเลขละเอียด
   // ภายใน กันยอดเงินไม่ตรงกับที่ลูกค้าคำนวณเองจากตัวเลขที่เห็นบนบิล (งานเคลม = 0 เสมอ)
-  var amount = isClaim ? 0 : ((priceUnit==='kg') ? (Number(totalKg.toFixed(2)) * price) : (totalPcs * price));
+  var amount = isClaim ? 0 : ((priceUnit==='kg') ? money(money(totalKg) * price) : money(totalPcs * price));
 
   invDraft.push({
     jobId: jobId, bill: job.bill, partName: job.partName, customer: job.customer||'',
@@ -2391,7 +2399,7 @@ function editInvLine(idx) {
   }
 
   // ยอดเงินคำนวณจากน้ำหนักปัด 2 ตำแหน่ง (ตรงกับที่แสดงบนจอ) เหมือนกับตอนเพิ่มรายการใหม่ — กันยอดไม่ตรงกับที่เห็น
-  var amount = isClaim ? 0 : ((l.priceUnit==='kg') ? (Number(totalKg.toFixed(2)) * newPrice) : (totalPcs * newPrice));
+  var amount = isClaim ? 0 : ((l.priceUnit==='kg') ? money(money(totalKg) * newPrice) : money(totalPcs * newPrice));
 
   l.qty        = stockQty;
   l.qtyEntered = newQty;
@@ -2443,9 +2451,10 @@ function renderInvLines() {
 }
 
 function recalcInvTotals() {
-  var grand = invDraft.reduce(function(s,l){ return s + l.amount; }, 0);
-  var vat   = grand * 0.07;
-  var net   = grand + vat;
+  // ปัดทศนิยมทีละขั้นเหมือนตอนบันทึกจริงใน saveInvoice() เป๊ะๆ — กันตัวเลขพรีวิวบนจอไม่ตรงกับที่จะออกมาจริงตอนบันทึก
+  var grand = money(invDraft.reduce(function(s,l){ return s + l.amount; }, 0));
+  var vat   = money(grand * 0.07);
+  var net   = money(grand + vat);
   document.getElementById('invGrandTotal').textContent = grand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('invVat').textContent        = vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('invNetTotal').textContent   = net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2874,10 +2883,12 @@ function saveInvoice(doPrint) {
     id: 'INV'+Date.now(), invNo: invNo, date: date, customer: customer,
     po: po, term: term, note: note, printed: !!doPrint, docType: invDocType,
     items: invDraft.slice(),
-    grandTotal: invDraft.reduce(function(s,l){return s+l.amount;},0),
+    grandTotal: money(invDraft.reduce(function(s,l){return s+l.amount;},0)),
   };
-  invObj.vat = invObj.grandTotal*0.07;
-  invObj.netTotal = invObj.grandTotal + invObj.vat;
+  // ปัดทศนิยม VAT ให้เป็น 2 ตำแหน่งก่อนเสมอ แล้วค่อยบวกรวมเป็นยอดสุทธิ — ไม่งั้นยอดสุทธิที่พิมพ์บนบิลจะไม่ตรงกับ
+  // "grandTotal ที่พิมพ์ + VAT ที่พิมพ์" ที่ลูกค้าลองบวกเลขดูเอง (ต่างกันได้ 0.01 บาทจากเศษทศนิยมที่ซ่อนอยู่)
+  invObj.vat = money(invObj.grandTotal * 0.07);
+  invObj.netTotal = money(invObj.grandTotal + invObj.vat);
   invoices.unshift(invObj);
   _realInvNoSet = null; // มี INV ใหม่เพิ่มมา ต้องสร้าง cache ใหม่รอบหน้า
 
@@ -3367,8 +3378,8 @@ function renderSales() {
   // ── summary ──
   var sumNet=0, sumGrand=0;
   saleList.forEach(function(inv){ sumNet += Number(inv.netTotal||0); sumGrand += Number(inv.grandTotal||0); });
-  document.getElementById('salesSumNet').textContent   = sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
-  document.getElementById('salesSumGrand').textContent = sumGrand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('salesSumNet').textContent   = money(sumNet).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('salesSumGrand').textContent = money(sumGrand).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('salesSumCount').textContent = saleList.length;
 
   // ── สรุปตามลูกค้า ──
@@ -3392,7 +3403,7 @@ function renderSales() {
       return '<tr>'+
         '<td class="td-l">'+esc(r.customer)+'</td>'+
         '<td>'+r.count+'</td>'+
-        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+r.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+money(r.net).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
         '<td>'+
           '<div style="display:flex;align-items:center;gap:6px;">'+
             '<div style="flex:1;background:#e2e8f0;border-radius:6px;height:8px;overflow:hidden;">'+
@@ -3429,7 +3440,7 @@ function renderSales() {
       return '<tr style="'+(hi?'background:#eff6ff;':'')+'">'+
         '<td class="td-l" style="font-weight:'+(hi?'700':'400')+';">'+ymLabel(r.ym)+'</td>'+
         '<td>'+r.count+'</td>'+
-        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+r.net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td style="font-weight:700;color:var(--blue);text-align:right;">'+money(r.net).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
         '<td>'+
           '<div style="background:#e2e8f0;border-radius:6px;height:8px;overflow:hidden;">'+
             '<div style="height:8px;background:var(--green);width:'+pct.toFixed(1)+'%;"></div>'+
@@ -3842,7 +3853,7 @@ function printStatement() {
     return inv;
   }).filter(Boolean).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
-  var total = rows.reduce(function(s,inv){ return s+Number(inv.netTotal||0); }, 0);
+  var total = money(rows.reduce(function(s,inv){ return s+Number(inv.netTotal||0); }, 0));
 
   // mark invoices as billed
   rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
