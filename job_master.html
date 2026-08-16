@@ -1378,6 +1378,9 @@ function calcJob(jobId) {
       // นับเฉพาะรายการที่ผูกกับเลข INV จริงเท่านั้น — ไม่นับ "Auto จากรอบชุบ" (แค่เข้ากระบวนการชุบ ยังไม่ได้ขายจริง)
       // เดิมนับรวมทุกอย่าง ทำให้ "จ่ายออก"/"คงเหลือ"/"สถานะ จ่ายครบ" ผิดพลาดตามไปด้วย
       if (!isRealInvRef(r)) return;
+      // INV ที่ถูก "ยกเลิก" (voided) แล้ว ไม่นับเป็นจ่ายออกอีกต่อไป — เท่ากับคืนสต็อกกลับอัตโนมัติ
+      // (แทนที่การลบ INV ทิ้งถาวรแบบเดิม ที่ทำให้ข้อมูลตรวจสอบย้อนหลังไม่ได้)
+      if (r.voided) return;
       // ระหว่างกำลังแก้ไข INV ใบใดใบหนึ่งอยู่ (ยังไม่กดบันทึก) ให้ "แกล้งนับว่าคืนสต็อกของ INV เดิมนั้นแล้ว"
       // ในการคำนวณนี้ชั่วคราว (ไม่ได้ลบออกจริงจาก jobRecords) กันเช็คคงเหลือผิดพลาดเป็น 2 เท่าเวลาแก้ไขจำนวนเดิม
       if (_editingInvoiceRef && r.inv === _editingInvoiceRef.invNo) return;
@@ -3041,7 +3044,7 @@ function printInvoice(inv) {
 function renderInvClaimHistory() {
   var body = document.getElementById('invClaimHistoryBody');
   if (!body) return;
-  var claims = invoices.filter(function(i){ return i.docType==='claim'; })
+  var claims = invoices.filter(function(i){ return i.docType==='claim' && !i.voided; })
     .sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || (b.invNo||'').localeCompare(a.invNo||''); })
     .slice(0, 15);
   if (!claims.length) {
@@ -3373,7 +3376,7 @@ function renderSales() {
   var list = invoices.filter(function(inv){
     return curMonth==='all' || (inv.date && inv.date.slice(0,7)===curMonth);
   });
-  var saleList = list.filter(function(inv){ return inv.docType!=='claim'; });
+  var saleList = list.filter(function(inv){ return inv.docType!=='claim' && !inv.voided; });
 
   // ── summary ──
   var sumNet=0, sumGrand=0;
@@ -3418,7 +3421,7 @@ function renderSales() {
 
   // ── สรุปตามเดือน (ใช้ invoices ทั้งหมด ไม่ filter ตามเดือนที่เลือก เพื่อดูแนวโน้ม — ไม่รวมงานเคลม) ──
   var byMonth = {};
-  invoices.filter(function(inv){ return inv.docType!=='claim'; }).forEach(function(inv){
+  invoices.filter(function(inv){ return inv.docType!=='claim' && !inv.voided; }).forEach(function(inv){
     if (!inv.date) return;
     var ym = inv.date.slice(0,7);
     if (!byMonth[ym]) byMonth[ym] = { count:0, net:0 };
@@ -3482,23 +3485,27 @@ function renderSales() {
       var d = inv.date ? new Date(inv.date+'T00:00:00') : null;
       var dStr = d ? (d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()) : '-';
       var billed = !!inv.billNo;
+      var voided = !!inv.voided;
       var isClaimRow = (inv.docType==='claim');
-      var editDelBtns = billed
-        ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ลบไม่ได้">🔒 วางบิลแล้ว</span>'
-        : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
-          '<button class="icon-btn" title="ลบ INV" onclick="deleteInvoice(\''+inv.id+'\')">🗑️</button>';
+      var editDelBtns = voided
+        ? '<button class="icon-btn" title="กู้คืน INV" onclick="unvoidInvoice(\''+inv.id+'\')">↩️</button>'
+        : billed
+          ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ยกเลิกไม่ได้">🔒 วางบิลแล้ว</span>'
+          : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
+            '<button class="icon-btn" title="ยกเลิก INV" onclick="voidInvoice(\''+inv.id+'\')">🚫</button>';
       var formBtnHtml = isClaimRow ? '' : '<button class="icon-btn" title="พิมพ์ซ้ำ (ฟอร์มสำเร็จรูป)" onclick="reprintInvoiceOnForm(\''+inv.id+'\')">📄</button>';
       var claimBadge = isClaimRow ? ' <span style="background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;">🔧 เคลม</span>' : '';
+      var voidBadge = voided ? ' <span style="background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;" title="'+esc(inv.voidReason||'')+'">🚫 ยกเลิกแล้ว</span>' : '';
       var netCell = isClaimRow
         ? '<span style="color:var(--text-muted);font-weight:400;">ไม่มีมูลค่า</span>'
         : Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
       var returned = !!inv.returned;
-      var returnSelect = '<select onchange="setInvReturned(\''+inv.id+'\',this.value)" style="font-size:11px;padding:3px 5px;border-radius:6px;border:1.5px solid '+(returned?'#86efac':'#fcd34d')+';background:'+(returned?'#f0fdf4':'#fffbeb')+';color:'+(returned?'#15803d':'#b45309')+';font-weight:600;">'+
+      var returnSelect = voided ? '—' : '<select onchange="setInvReturned(\''+inv.id+'\',this.value)" style="font-size:11px;padding:3px 5px;border-radius:6px;border:1.5px solid '+(returned?'#86efac':'#fcd34d')+';background:'+(returned?'#f0fdf4':'#fffbeb')+';color:'+(returned?'#15803d':'#b45309')+';font-weight:600;">'+
         '<option value="0"'+(!returned?' selected':'')+'>⏳ รอรับคืน</option>'+
         '<option value="1"'+(returned?' selected':'')+'>✅ รับคืนแล้ว</option>'+
       '</select>';
-      return '<tr>'+
-        '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+claimBadge+'</td>'+
+      return '<tr'+(voided?' style="opacity:0.55;"':'')+'>'+
+        '<td class="td-l" style="font-weight:700;'+(voided?'text-decoration:line-through;':'')+'">'+esc(inv.invNo)+claimBadge+voidBadge+'</td>'+
         '<td class="td-l">'+dStr+'</td>'+
         '<td class="td-l">'+esc(cust)+'</td>'+
         '<td>'+(inv.items?inv.items.length:0)+'</td>'+
@@ -3646,18 +3653,46 @@ function editInvoice(invId) {
 }
 
 // ลบ INV: คืนสต็อกของรายการที่ตัดไป แล้วลบ invoice ออก
-function deleteInvoice(invId) {
+// ── ยกเลิก INV (แทนการลบถาวร) ──
+// เดิมกดลบแล้วหาย invoice + jobRecords ทิ้งถาวรทันที ทำให้ข้อมูลตรวจสอบย้อนหลังไม่ได้ และถ้า INV นั้นเคยถูก
+// ลบไปแล้วแต่มีคนอ้างอิงเลข INV ทีหลัง (เช่นค้นหาในแท็บ "ประวัติ") จะหาไม่เจอเลยแบบกู้คืนไม่ได้
+// เปลี่ยนมาเป็น "ยกเลิก" (voided:true) แทน — เก็บ invoice และ jobRecords ไว้ครบทุกจุด แค่ไม่นับเข้าสต็อก/ยอดขายอีก
+// (calcJob ข้าม record ที่ voided ตอนคำนวณคงเหลือ ทำให้สต็อกคืนกลับอัตโนมัติเหมือนของเดิม) และยังกู้คืนได้ทีหลังถ้ากดพลาด
+function voidInvoice(invId) {
   var idx = invoices.findIndex(function(i){ return i.id===invId; });
   if (idx<0) { showToast('sales','ไม่พบ INV นี้','err'); return; }
   var inv = invoices[idx];
-  if (inv.billNo) { showToast('sales','⚠️ INV นี้วางบิลแล้ว ('+inv.billNo+') — ลบไม่ได้','err'); return; }
-  if (!confirm('ลบ INV '+inv.invNo+'?\n\nระบบจะคืนสต็อกของรายการที่ตัดไปทั้งหมด การลบนี้ไม่สามารถย้อนกลับได้')) return;
+  if (inv.billNo) { showToast('sales','⚠️ INV นี้วางบิลแล้ว ('+inv.billNo+') — ยกเลิกไม่ได้','err'); return; }
+  var reason = prompt('เหตุผลที่ยกเลิก INV '+inv.invNo+' (ไม่บังคับ แต่ควรระบุไว้ตรวจสอบย้อนหลังได้ง่ายกว่า):', '');
+  if (reason === null) return; // กดยกเลิกกล่องข้อความ = ไม่ทำอะไร
+  if (!confirm('ยืนยันยกเลิก INV '+inv.invNo+'?\n\nระบบจะคืนสต็อกของรายการที่ตัดไปทั้งหมด แต่ข้อมูล INV และประวัติจะยังเก็บไว้ครบ ดูย้อนหลัง/กู้คืนได้ทีหลัง')) return;
 
-  jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===inv.invNo); });
-  invoices.splice(idx,1);
+  inv.voided = true;
+  inv.voidedAt = new Date().toISOString();
+  inv.voidReason = reason || '';
+  jobRecords.forEach(function(r){
+    if (r.type==='out' && r.inv===inv.invNo) r.voided = true;
+  });
   _realInvNoSet = null;
   saveLocal(); fbSave();
-  showToast('sales','🗑️ ลบ INV '+inv.invNo+' และคืนสต็อกแล้ว','ok');
+  showToast('sales','🚫 ยกเลิก INV '+inv.invNo+' และคืนสต็อกแล้ว (ข้อมูลยังอยู่ ดูย้อนหลังได้)','ok');
+  renderSales();
+}
+
+// กู้คืน INV ที่ยกเลิกไปแล้ว (เผื่อกดยกเลิกพลาด)
+function unvoidInvoice(invId) {
+  var inv = invoices.find(function(i){ return i.id===invId; });
+  if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  if (!confirm('กู้คืน INV '+inv.invNo+' กลับมาใช้งานปกติ?\n\nระบบจะตัดสต็อกกลับเหมือนเดิม')) return;
+  inv.voided = false;
+  inv.voidedAt = null;
+  inv.voidReason = '';
+  jobRecords.forEach(function(r){
+    if (r.type==='out' && r.inv===inv.invNo) r.voided = false;
+  });
+  _realInvNoSet = null;
+  saveLocal(); fbSave();
+  showToast('sales','↩️ กู้คืน INV '+inv.invNo+' แล้ว','ok');
   renderSales();
 }
 
@@ -3726,6 +3761,7 @@ function renderStatementInv() {
   var list = invoices.filter(function(inv){
     var key = (inv.customer||'').split('\n')[0].trim();
     if (key !== custKey) return false;
+    if (inv.voided) return false; // INV ที่ยกเลิกแล้ว ไม่ให้เอามาวางบิลอีก
     if (!showAll && inv.billNo) return false; // ซ่อนที่วางบิลแล้ว
     return true;
   }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
@@ -4016,6 +4052,30 @@ function renderHistory() {
     return true;
   });
 
+  // ── กันเคส: ค้นหาเลข INV แล้ว jobRecords ไม่มีแถวจับคู่เลย (เช่น ถูกลบทิ้งไปก่อนหน้านี้ผ่านปุ่ม ✕ ในตารางนี้ ซึ่งลบแค่
+  // "ประวัติ" ไม่ได้ลบ INV ออกจากทะเบียน "ยอดขาย" ด้วย) ทำให้ก่อนหน้านี้ค้นหาแล้วว่างเปล่าทั้งที่ INV ยังอยู่จริง —
+  // เช็คโดยตรงกับ invoices เพิ่ม ถ้าเจอ INV ที่ตรงคำค้นหาแต่ยังไม่มีแถวไหนจับคู่อยู่ใน rows เลย ให้ดึงรายการจากตัว
+  // invoice.items มาสร้างเป็นแถวแสดงผลแทน (ใช้ id ที่ไม่ใช่ jobRecords จริง กันงงกับของจริง)
+  if (invSearch) {
+    var _matchedInvNos = {};
+    rows.forEach(function(r){ if (r.inv) _matchedInvNos[String(r.inv).toLowerCase()] = true; });
+    invoices.forEach(function(inv){
+      if (!inv.invNo) return;
+      if (String(inv.invNo).toLowerCase().indexOf(invSearch) === -1) return;
+      if (_matchedInvNos[inv.invNo.toLowerCase()]) return; // มีประวัติจับคู่อยู่แล้ว ไม่ต้องเติมซ้ำ
+      (inv.items||[]).forEach(function(it){
+        var isKgIt = it.unit==='kg';
+        rows.push({
+          id: 'INVONLY-'+inv.id+'-'+(it.jobId||Math.random()), jobId: it.jobId, type: 'out',
+          date: inv.date, qty: isKgIt?0:(it.qty||0), qtyKg: isKgIt?(it.qty||0):0, unit: it.unit,
+          inv: inv.invNo, by:'', note: '⚠️ ไม่พบประวัติตัดสต็อกจับคู่ — ดึงจากใบ INV โดยตรง (อาจเคยถูกลบประวัติทิ้งไปก่อนหน้านี้)',
+          docType: inv.docType, _invOnly: true
+        });
+      });
+      _matchedInvNos[inv.invNo.toLowerCase()] = true;
+    });
+  }
+
   // เรียงล่าสุดก่อน
   rows = rows.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 
@@ -4040,15 +4100,23 @@ function renderHistory() {
   tbody.innerHTML = rows.map(function(r) {
     var job = jobItems.find(function(j){ return j.id===r.jobId; }) || {};
     var line = getLineFromRecord(r);
-    var isAuto = (r.id||'').startsWith('AUTO-');
-    var typeBadge = r.type==='in'
+    var isAuto = (r.id||'').startsWith('AUTO-') || r._invOnly;
+    var linkedToRealInv = isRealInvRef(r); // ผูกกับ INV จริงในทะเบียนยอดขาย — ลบตรงนี้ไม่ได้อีกต่อไป ต้องไปยกเลิกที่แท็บยอดขาย
+    var typeBadge = r.voided
+      ? '<span style="background:#fee2e2;color:#b91c1c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">🚫 ยกเลิกแล้ว</span>'
+      : r._invOnly
+      ? '<span style="background:#fee2e2;color:#b91c1c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">⚠️ จาก INV</span>'
+      : r.type==='in'
       ? '<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📥 รับ</span>'
       : isAuto
         ? '<span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">⚙️ ชุบ</span>'
         : r.docType==='claim'
           ? '<span style="background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">🔧 เคลม</span>'
           : '<span style="background:#fff7ed;color:#c2410c;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;">📤 จ่าย</span>';
-    return '<tr>' +
+    var actionCell = (isAuto || linkedToRealInv)
+      ? (linkedToRealInv && !r.voided ? '<span style="font-size:9px;color:var(--text-muted);">จัดการที่แท็บยอดขาย</span>' : '')
+      : '<button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>';
+    return '<tr'+((r._invOnly||r.voided)?' style="background:#fef2f2;opacity:'+(r.voided?'0.6':'1')+';"':'')+'>' +
       '<td class="td-l" style="font-size:10px;white-space:nowrap;">'+fmtDate(r.date)+'</td>' +
       '<td>'+typeBadge+'</td>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+(job.bill||'—')+'</td>' +
@@ -4058,7 +4126,7 @@ function renderHistory() {
       '<td class="td-l" style="font-size:10px;">'+(r.inv?('<a href="javascript:void(0)" onclick="openInvFromHistory(\''+r.inv.replace(/'/g,"\\'")+'\')" style="color:var(--blue);text-decoration:underline;cursor:pointer;font-weight:600;">'+r.inv+'</a>'):'—')+'</td>' +
       '<td class="td-l" style="font-size:10px;">'+(r.by||'—')+'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+(r.note||'—')+'</td>' +
-      '<td>'+(isAuto?'':('<button onclick="deleteRecord(\''+r.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>'))+'</td>' +
+      '<td>'+actionCell+'</td>' +
     '</tr>';
   }).join('') +
   '<tr style="background:#f8fafc;font-weight:700;">' +
@@ -4130,6 +4198,11 @@ function openInvFromHistory(invNo) {
 }
 
 function deleteRecord(id) {
+  var r = jobRecords.find(function(x){ return x.id===id; });
+  if (r && isRealInvRef(r)) {
+    showToast('history', '⚠️ รายการนี้ผูกกับ INV จริง ('+r.inv+') — ลบตรงนี้ไม่ได้ ให้ไปกด "🚫 ยกเลิก INV" ที่แท็บ "ยอดขาย" แทน (จะคืนสต็อกให้ครบและยังดูประวัติย้อนหลังได้)', 'err');
+    return;
+  }
   if (!confirm('ลบรายการนี้?')) return;
   jobRecords = jobRecords.filter(function(r){ return r.id!==id; });
   saveLocal(); fbSave(); renderHistory(); renderHistFilter();
