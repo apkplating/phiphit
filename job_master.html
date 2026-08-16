@@ -1042,18 +1042,16 @@ if ('caches' in window) {
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
+<script src="money-utils.js"></script>
 <script>
 // ══════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════
 var SYSTEM_KEY = 'job_master';
 
-// ══════════════════════════════════════════════════════
-//  ปัดเศษเงินมาตรฐานเดียวกันทั้งไฟล์ — ใช้ money() ทุกครั้งที่คำนวณ/สะสมค่าเงิน (คูณ, บวก, รวมยอด)
-//  ก่อนเก็บ/แสดงผล กันปัญหาเศษทศนิยมที่มองไม่เห็นสะสมอยู่เบื้องหลัง จนยอดสุทธิที่พิมพ์ไม่ตรงกับที่ลูกค้า
-//  ลองบวกเลขเองจากตัวเลขที่เห็นบนบิล (เจอบั๊กแบบนี้ซ้ำหลายรอบมาก่อน เพราะปัดแค่บางจุดไม่ครบทั้งระบบ)
-// ══════════════════════════════════════════════════════
-function money(n) { return Number((Number(n)||0).toFixed(2)); }
+// money()/toCents()/moneyCentsSum()/vatFromGrand() มาจาก money-utils.js (shared module) — ใช้มาตรฐานเดียวกัน
+// ทุกไฟล์ในระบบ กันปัญหา floating-point tie-break ที่ทำให้ยอด VAT/ยอดรวมผิด 1 สตางค์แบบสุ่ม (เจอซ้ำหลายรอบ
+// มาก่อนตอนแต่ละไฟล์เขียน logic ปัดเศษเองแยกกัน) ดูรายละเอียด/วิธีใช้เต็มๆ ได้ในไฟล์ money-utils.js
 
 var TAB_IDS = ['board','in','out','history','sales','pricelist','customers'];
 var FIREBASE_CONFIG = {
@@ -2882,16 +2880,19 @@ function saveInvoice(doPrint) {
   });
 
   // เก็บ invoice
+  // ── คำนวณ grandTotal / VAT / netTotal ผ่าน vatFromGrand() ใน money-utils.js (shared module) — คำนวณด้วย
+  // เลขคณิตแบบสตางค์ล้วนๆ ข้างในให้แล้ว กันปัญหา floating-point tie-break ที่ทำให้ยอดผิด 1 สตางค์แบบสุ่ม
+  // (เจอบั๊กนี้ซ้ำหลายรอบมาก่อนตอนแต่ละไฟล์/แต่ละจุดเขียน logic ปัดเศษเองแยกกัน)
+  var grandTotal = moneyCentsSum(invDraft.map(function(l){ return l.amount; })) / 100;
+  var r = vatFromGrand(grandTotal);
   var invObj = {
     id: 'INV'+Date.now(), invNo: invNo, date: date, customer: customer,
     po: po, term: term, note: note, printed: !!doPrint, docType: invDocType,
     items: invDraft.slice(),
-    grandTotal: money(invDraft.reduce(function(s,l){return s+l.amount;},0)),
+    grandTotal: r.grand,
   };
-  // ปัดทศนิยม VAT ให้เป็น 2 ตำแหน่งก่อนเสมอ แล้วค่อยบวกรวมเป็นยอดสุทธิ — ไม่งั้นยอดสุทธิที่พิมพ์บนบิลจะไม่ตรงกับ
-  // "grandTotal ที่พิมพ์ + VAT ที่พิมพ์" ที่ลูกค้าลองบวกเลขดูเอง (ต่างกันได้ 0.01 บาทจากเศษทศนิยมที่ซ่อนอยู่)
-  invObj.vat = money(invObj.grandTotal * 0.07);
-  invObj.netTotal = money(invObj.grandTotal + invObj.vat);
+  invObj.vat = r.vat;
+  invObj.netTotal = r.net;
   invoices.unshift(invObj);
   _realInvNoSet = null; // มี INV ใหม่เพิ่มมา ต้องสร้าง cache ใหม่รอบหน้า
 
@@ -3487,15 +3488,22 @@ function renderSales() {
       var billed = !!inv.billNo;
       var voided = !!inv.voided;
       var isClaimRow = (inv.docType==='claim');
+      // ── เช็คว่ายอดที่บันทึกไว้ตรงกับที่คำนวณจาก items ปัจจุบันหรือไม่ (ดักจับ INV เก่าที่เคยบันทึกยอดผิดไว้
+      // ก่อนแก้บั๊ก floating-point tie-break ของ VAT — ถ้าไม่ตรง โชว์เตือน + ปุ่มให้กดคำนวณใหม่ได้เอง) ──
+      var totalMismatch = !isClaimRow && moneyMismatch(inv.netTotal, inv.items);
       var editDelBtns = voided
         ? '<button class="icon-btn" title="กู้คืน INV" onclick="unvoidInvoice(\''+inv.id+'\')">↩️</button>'
         : billed
           ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ยกเลิกไม่ได้">🔒 วางบิลแล้ว</span>'
           : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
             '<button class="icon-btn" title="ยกเลิก INV" onclick="voidInvoice(\''+inv.id+'\')">🚫</button>';
+      var recalcBtn = (!voided && totalMismatch)
+        ? '<button class="icon-btn" title="ยอดรวมไม่ตรงกับรายการในบิล (อาจเป็น INV เก่าก่อนแก้บั๊ก) กดเพื่อคำนวณใหม่" onclick="recalcInvoiceTotal(\''+inv.id+'\')" style="background:#fef9c3;">🔧</button>'
+        : '';
       var formBtnHtml = isClaimRow ? '' : '<button class="icon-btn" title="พิมพ์ซ้ำ (ฟอร์มสำเร็จรูป)" onclick="reprintInvoiceOnForm(\''+inv.id+'\')">📄</button>';
       var claimBadge = isClaimRow ? ' <span style="background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;">🔧 เคลม</span>' : '';
       var voidBadge = voided ? ' <span style="background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;" title="'+esc(inv.voidReason||'')+'">🚫 ยกเลิกแล้ว</span>' : '';
+      var mismatchBadge = (!voided && totalMismatch) ? ' <span style="background:#fef9c3;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;">⚠️ ยอดไม่ตรง</span>' : '';
       var netCell = isClaimRow
         ? '<span style="color:var(--text-muted);font-weight:400;">ไม่มีมูลค่า</span>'
         : Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -3505,7 +3513,7 @@ function renderSales() {
         '<option value="1"'+(returned?' selected':'')+'>✅ รับคืนแล้ว</option>'+
       '</select>';
       return '<tr'+(voided?' style="opacity:0.55;"':'')+'>'+
-        '<td class="td-l" style="font-weight:700;'+(voided?'text-decoration:line-through;':'')+'">'+esc(inv.invNo)+claimBadge+voidBadge+'</td>'+
+        '<td class="td-l" style="font-weight:700;'+(voided?'text-decoration:line-through;':'')+'">'+esc(inv.invNo)+claimBadge+voidBadge+mismatchBadge+'</td>'+
         '<td class="td-l">'+dStr+'</td>'+
         '<td class="td-l">'+esc(cust)+'</td>'+
         '<td>'+(inv.items?inv.items.length:0)+'</td>'+
@@ -3514,6 +3522,7 @@ function renderSales() {
         '<td class="td-l" style="white-space:nowrap;">'+
           '<button class="icon-btn" title="พิมพ์ซ้ำ (กระดาษเปล่า)" onclick="reprintInvoice(\''+inv.id+'\')">🖨️</button>'+
           formBtnHtml+
+          recalcBtn+
           editDelBtns+
         '</td>'+
       '</tr>';
@@ -3650,6 +3659,27 @@ function editInvoice(invId) {
   var editBannerShowEl = document.getElementById('invEditingBanner');
   if (editBannerShowEl) editBannerShowEl.style.display = 'flex';
   showToast('out','✏️ กำลังแก้ไข'+(isClaimEdit?'ใบส่งคืนงานเคลม':'INV')+' '+inv.invNo+' — แก้รายการแล้วกดบันทึกอีกครั้ง (ของเดิมยังไม่ถูกลบจนกว่าจะบันทึกสำเร็จ)','ok');
+}
+
+// คำนวณ grandTotal/VAT/netTotal ของ INV ที่มีอยู่แล้วใหม่ — ใช้แก้ INV เก่าที่เคยบันทึกยอดผิดไว้ก่อนที่จะมีการ
+// แก้บั๊ก floating-point tie-break (เช่น INV ที่สร้างก่อนวันที่อัปเดตนี้) โดยคำนวณจาก inv.items ที่เก็บไว้อยู่แล้ว
+// (ไม่แตะจำนวน/ราคาต่อรายการเลย แก้แค่ยอดรวมสุดท้ายให้ตรง) ไม่กระทบสต็อกหรือรายการสินค้าในบิล
+function recalcInvoiceTotal(invId) {
+  var inv = invoices.find(function(i){ return i.id===invId; });
+  if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  if (inv.docType === 'claim') { showToast('sales','ใบส่งคืนงานเคลมไม่มียอดเงินให้คำนวณใหม่','err'); return; }
+  var grandTotal = moneyCentsSum((inv.items||[]).map(function(it){ return it.amount; })) / 100;
+  var r = vatFromGrand(grandTotal);
+  var changed = (r.grand !== Number(inv.grandTotal||0)) || (r.vat !== Number(inv.vat||0)) || (r.net !== Number(inv.netTotal||0));
+  if (!changed) { showToast('sales','ℹ️ ยอด INV '+inv.invNo+' ถูกต้องอยู่แล้ว ไม่ต้องแก้','ok'); return; }
+  if (!confirm('คำนวณยอดใหม่ให้ INV '+inv.invNo+'?\n\nGRAND TOTAL เดิม '+Number(inv.grandTotal||0).toFixed(2)+' → '+r.grand.toFixed(2)+
+    '\nVAT เดิม '+Number(inv.vat||0).toFixed(2)+' → '+r.vat.toFixed(2)+
+    '\nยอดสุทธิเดิม '+Number(inv.netTotal||0).toFixed(2)+' → '+r.net.toFixed(2)+
+    '\n\n(ไม่กระทบจำนวน/ราคาต่อรายการ หรือสต็อกใดๆ ทั้งสิ้น)')) return;
+  inv.grandTotal = r.grand; inv.vat = r.vat; inv.netTotal = r.net;
+  saveLocal(); fbSave();
+  showToast('sales','✅ คำนวณยอด INV '+inv.invNo+' ใหม่แล้ว','ok');
+  renderSales();
 }
 
 // ลบ INV: คืนสต็อกของรายการที่ตัดไป แล้วลบ invoice ออก
@@ -3889,7 +3919,7 @@ function printStatement() {
     return inv;
   }).filter(Boolean).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
-  var total = money(rows.reduce(function(s,inv){ return s+Number(inv.netTotal||0); }, 0));
+  var total = moneyCentsSum(rows.map(function(inv){ return inv.netTotal; })) / 100;
 
   // mark invoices as billed
   rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
