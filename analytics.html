@@ -303,6 +303,21 @@ if ('caches' in window) {
     </div>
     <div id="laborCostCaveat" style="font-size:10.5px;color:#ef4444;margin-top:4px;"></div>
 
+    <!-- ── Section 2e: ประสิทธิภาพแรงงาน (Productivity) ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">📈 ประสิทธิภาพแรงงาน (Productivity) · ม.ค.–เดือนนี้ (ปีปัจจุบัน)</div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);">กก./คน-ชม. เทียบ บาท/คน-ชม. รายเดือน (รวมทั้งโรงงาน)</div>
+        <span id="prodBadge" style="font-size:10.5px;color:var(--text-muted);white-space:nowrap;"></span>
+      </div>
+      <div class="chart-wrap-lg"><canvas id="chartProductivity"></canvas></div>
+      <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
+        กก./คน-ชม. = น้ำหนักงานชุบรวมทุกสาย ÷ ชั่วโมงทำงานรวมของพนักงานทุกคนในโรงงาน (ปกติ+OT) · บาท/คน-ชม. = ต้นทุนแรงงานรวม (เงินปกติ+OT ก่อนหักใดๆ) ÷ ชั่วโมงทำงานรวมเดียวกัน — นับพนักงานทุกคนในโรงงาน ไม่ได้แยกเฉพาะโอเปอเรเตอร์หน้าไลน์หรือแยกตามสาย B1/B2/R1 (ยังทำแยกไม่ได้เพราะข้อมูลแผนกพนักงานส่วนใหญ่ยังไม่ระบุสายชัดเจน)
+      </div>
+      <div id="prodCaveat" style="font-size:10.5px;color:#ef4444;margin-top:4px;"></div>
+    </div>
+
     <!-- ── Section 3: ของเสีย ── -->
     <div class="section-sep"></div>
     <div class="section-title">⚠️ ของเสีย / งานซ่อม (Rework Analysis)</div>
@@ -486,6 +501,7 @@ async function loadAndRender() {
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
   renderLaborCostSection(); // ต้นทุนแรงงาน — เรียกฟังก์ชันจริงจาก apk_hr.html (iframe) ให้ตรงกับหน้าเงินเดือนเป๊ะๆ
+  renderProductivitySection(); // ประสิทธิภาพแรงงาน (กก./คน-ชม., บาท/คน-ชม.) — ใช้ engine เดียวกับต้นทุนแรงงาน
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
@@ -848,6 +864,105 @@ async function renderLaborCostSection(){
   var curYM = months[months.length-1];
   if (badge) badge.innerHTML = 'เดือนนี้ (' + monthLabelTH(curYM) + ') สุทธิ ≈ <b>฿' + fmt(netByMonth[curYM],0) + '</b> · ตรงกับหน้าเงินเดือน apk_hr.html';
   if (caveatEl) caveatEl.textContent = 'ℹ️ แสดงได้เฉพาะ ม.ค.–เดือนปัจจุบันของปีนี้ (ข้อจำกัดจากตัวระบบเงินเดือนเอง ไม่รองรับดูข้ามปี)';
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 2e: ประสิทธิภาพแรงงาน (Productivity) — กก./คน-ชม. เทียบ บาท/คน-ชม.
+//  รวมพนักงานทุกคนในโรงงาน (ยังแยกเฉพาะโอเปอเรเตอร์/แยกตามสาย B1/B2/R1 ไม่ได้ เพราะฟิลด์ dept ของพนักงาน
+//  ส่วนใหญ่ในระบบ apk_hr.html ยังไม่ได้ระบุสายไว้ชัดเจน — ค่อยแยกทีหลังเมื่อข้อมูลพร้อม)
+//  ใช้ hrEngineFrame/hrEval ตัวเดียวกับ renderLaborCostSection() (ประหยัด ไม่ต้องโหลด iframe ซ้ำ) และ cache
+//  ข้อมูล kg เดียวกับ section ปริมาณงาน (fetchLineData) — ไม่ fetch ซ้ำ
+// ══════════════════════════════════════════════
+async function renderProductivitySection(){
+  var badge = document.getElementById('prodBadge');
+  var caveatEl = document.getElementById('prodCaveat');
+  if (badge) badge.innerHTML = 'กำลังคำนวณ...';
+  if (caveatEl) caveatEl.textContent = '';
+
+  var hrWin = await waitForHrEngine(15000);
+  if (!hrWin) {
+    if (badge) badge.innerHTML = '';
+    if (caveatEl) caveatEl.textContent = '❌ โหลด apk_hr.html ไม่สำเร็จ — แสดงกราฟประสิทธิภาพแรงงานไม่ได้';
+    destroyChart('chartProductivity');
+    return;
+  }
+
+  var now = new Date();
+  var curMonth = now.getMonth(); // ข้อจำกัดเดียวกับต้นทุนแรงงาน: getMonthlySalary() ล็อกปีปัจจุบันเท่านั้น
+  var months = [];
+  for (var mi=0; mi<=curMonth; mi++){
+    months.push(now.getFullYear() + '-' + String(mi+1).padStart(2,'0'));
+  }
+
+  // ── รวมชั่วโมงทำงาน (ปกติ+OT) และต้นทุนแรงงาน (เงินปกติ+OT ก่อนหักใดๆ) ของพนักงานทุกคน ต่อเดือน ──
+  var evalScript = '(function(){'
+    + 'var out={};'
+    + 'for(var mi=0; mi<=' + curMonth + '; mi++){'
+    + '  var hrs=0, cost=0;'
+    + '  EMPLOYEES.forEach(function(emp){'
+    + '    var d=getMonthlySalary(emp.id, mi);'
+    + '    hrs += (parseFloat(d.rh)||0) + (parseFloat(d.ot)||0);'
+    + '    cost += (parseFloat(d.rp)||0) + (parseFloat(d.op)||0);'
+    + '  });'
+    + '  out[mi]={hrs:hrs,cost:cost};'
+    + '}'
+    + 'return JSON.stringify(out);'
+    + '})()';
+  var resultRaw = hrEval(hrWin, evalScript);
+  var result = resultRaw ? JSON.parse(resultRaw) : {};
+
+  var hoursByMonth = {}, costByMonth = {};
+  months.forEach(function(ym, idx){
+    var r = result[idx] || {hrs:0, cost:0};
+    hoursByMonth[ym] = r.hrs; costByMonth[ym] = r.cost;
+  });
+
+  // ── รวม kg ทุกสาย ต่อเดือน (ใช้ cache เดียวกับ section ปริมาณงาน ไม่ fetch ซ้ำ) ──
+  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
+  var kgByMonth = {}; months.forEach(function(m){ kgByMonth[m]=0; });
+  var lines = ['B1','B2','R1'];
+  for (var i=0;i<lines.length;i++){
+    var data = await fetchLineData(lines[i]);
+    var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
+    dayRecords.forEach(function(day){
+      if (!day || !day.date) return;
+      var ym = day.date.slice(0,7);
+      if (!monthSet[ym]) return;
+      kgByMonth[ym] += Number(day.totalKg||0);
+    });
+  }
+
+  var kgPerHr = {}, bahtPerHr = {};
+  months.forEach(function(m){
+    var h = hoursByMonth[m] || 0;
+    kgPerHr[m]   = h>0 ? kgByMonth[m]/h   : 0;
+    bahtPerHr[m] = h>0 ? costByMonth[m]/h : 0;
+  });
+
+  destroyChart('chartProductivity');
+  _charts['chartProductivity'] = new Chart(document.getElementById('chartProductivity'), {
+    data: {
+      labels: months.map(monthLabelTH),
+      datasets: [
+        {type:'bar',  label:'กก./คน-ชม.',  data: months.map(function(m){return Math.round(kgPerHr[m]*100)/100;}),   backgroundColor:'#0ea5e9', yAxisID:'y',  order:2},
+        {type:'line', label:'บาท/คน-ชม.', data: months.map(function(m){return Math.round(bahtPerHr[m]*100)/100;}), borderColor:'#f59e0b', backgroundColor:'#f59e0b', yAxisID:'y1', tension:.3, pointRadius:3, order:1, datalabels:{display:false}}
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:11}}},
+        datalabels:{display:function(ctx){return ctx.dataset.type==='bar';},anchor:'end',align:'top',font:{size:9},color:'#374151',formatter:function(v){return fmt(v,2);}}},
+      scales:{
+        x:{ticks:{font:{size:9}}},
+        y:{position:'left',ticks:{font:{size:10}},title:{display:true,text:'กก./คน-ชม.',font:{size:10}}},
+        y1:{position:'right',ticks:{font:{size:10}},title:{display:true,text:'บาท/คน-ชม.',font:{size:10}},grid:{drawOnChartArea:false}}
+      }
+    }
+  });
+
+  var curYM = months[months.length-1];
+  if (badge) badge.innerHTML = 'เดือนนี้ (' + monthLabelTH(curYM) + ') ≈ <b>' + fmt(kgPerHr[curYM],2) + ' กก./คน-ชม.</b> · <b>฿' + fmt(bahtPerHr[curYM],2) + '/คน-ชม.</b>';
+  if (caveatEl) caveatEl.textContent = 'ℹ️ นับพนักงานทุกคนในโรงงาน (รวม QC/ธุรการ/ซ่อมบำรุง) ไม่แยกเฉพาะโอเปอเรเตอร์/สาย · แสดงได้เฉพาะ ม.ค.–เดือนปัจจุบันของปีนี้ (ข้อจำกัดจากระบบเงินเดือน apk_hr.html)';
 }
 
 // ══════════════════════════════════════════════
