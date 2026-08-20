@@ -1107,6 +1107,13 @@ var customers  = [];   // ทะเบียนลูกค้า {id, name, add
 var billStatements = []; // ใบวางบิลที่ออกแล้ว {id, billNo, date, customer, invoiceIds, total}
 var priceList  = [];   // ทะเบียนราคา {id, partName, customer, price, weight, note}
 var hiddenCustomers = []; // คีย์ (บรรทัดแรกของชื่อลูกค้า) ที่ซ่อนจาก dropdown เลือกลูกค้า (เช่น "CASH" รุ่นเก่าไม่มีที่อยู่)
+// ══════════════════════════════════════
+//  custInvGuard — สถานะบล็อกออก INV ต่อลูกค้า (กันบิลที่คงเหลือ>0 ค้างเกิน 7 วัน "ถูกลืม" ไม่มีใครออก INV ให้)
+//  คีย์ = ชื่อลูกค้า (เหมือน job.customer เป๊ะ), ค่า = { nextShipDate, ackCount, setAt, log:[{at,action,note}] }
+//  ackCount: 0 = ยังไม่เคยกด/ยังไม่ตั้งวัน, 1-2 = กด "รับทราบ" ไปแล้วกี่ครั้ง (เบา ยังออก INV ได้ปกติ),
+//  3+ = ต้อง admin อนุมัติทุกครั้งจนกว่าบิลเก่าที่ค้างจริงจะถูกออก INV แล้ว (ถึงจะรีเซ็ตกลับเป็น 0)
+// ══════════════════════════════════════
+var custInvGuard = {};
 var _pollTimer = null, _pollCount = 0;
 var currentRole = '';
 var currentTabs = null;
@@ -1224,6 +1231,7 @@ function loadLocal() {
   try { billStatements = JSON.parse(localStorage.getItem('job_bill_statements') || '[]'); } catch(e){ billStatements=[]; }
   try { priceList = JSON.parse(localStorage.getItem('job_price_list') || '[]'); } catch(e){ priceList=[]; }
   try { hiddenCustomers = JSON.parse(localStorage.getItem('job_hidden_customers') || '[]'); } catch(e){ hiddenCustomers=[]; }
+  try { custInvGuard = JSON.parse(localStorage.getItem('job_cust_inv_guard') || '{}'); } catch(e){ custInvGuard={}; }
 }
 function saveLocal() {
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
@@ -1233,6 +1241,7 @@ function saveLocal() {
   try { localStorage.setItem('job_bill_statements', JSON.stringify(billStatements)); } catch(e){}
   try { localStorage.setItem('job_price_list', JSON.stringify(priceList)); } catch(e){}
   try { localStorage.setItem('job_hidden_customers', JSON.stringify(hiddenCustomers)); } catch(e){}
+  try { localStorage.setItem('job_cust_inv_guard', JSON.stringify(custInvGuard)); } catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -1293,7 +1302,7 @@ async function fbSave() {
     var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, savedAt:savedAt })
+      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, custInvGuard:custInvGuard, savedAt:savedAt })
     });
     if (res.ok) { _fbLastSavedAt = savedAt; setSyncOk(); return true; }
     setSyncErr();
@@ -1325,6 +1334,7 @@ async function fbLoad() {
       if (Array.isArray(data.billStatements)) billStatements = data.billStatements;
       if (Array.isArray(data.priceList)) priceList = data.priceList;
       if (Array.isArray(data.hiddenCustomers)) hiddenCustomers = data.hiddenCustomers;
+      if (data.custInvGuard && typeof data.custInvGuard === 'object') custInvGuard = data.custInvGuard;
       saveLocal();
       setSyncOk();
       // refresh UI
@@ -1401,11 +1411,133 @@ function calcJob(jobId) {
            totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit };
 }
 
+// ══════════════════════════════════════
+//  FIFO บล็อกแข็งสำหรับออก INV — ต่อ P.No (หมายเลขชิ้นงาน)
+//  ป้องกัน "ข้ามคิว" ตอนออกบิล: ถ้าชิ้นงาน P.No เดียวกันมีหลายบิลค้างคงเหลืออยู่พร้อมกัน ต้องออก INV ให้บิลที่
+//  รับเข้าก่อนให้หมดคงเหลือก่อนเสมอ ถึงจะออก INV ให้บิลที่รับเข้าทีหลังของ P.No เดียวกันได้ — ไม่มีทางข้ามเลย
+//  แม้บิลเก่าจะถูกยกเลิก (voided) ก็ตาม (ตัดสินใจแล้วว่ายอมรับความเสี่ยงนี้ได้ เพราะเป็น P.No เดียวกันไม่กระทบ
+//  ลูกค้าอื่น — ถ้าเกิดเคสนี้ขึ้นจริงต้องแก้ไขข้อมูลตรงใน Firebase เอง)
+//  ขอบเขต: ใช้เฉพาะโหมด "ขาย" (เลือกผ่าน P.No) เท่านั้น ไม่ใช้กับโหมด "เคลม" (เลือกผ่านลูกค้า/คืนของ ไม่ใช่การขาย
+//  ข้ามคิว) และไม่ใช้กับ job.closed (บิลที่ปิดไปแล้วไม่มีทางถูกเลือกอยู่แล้วเพราะ remain=0 เสมอ)
+// ══════════════════════════════════════
+function getFifoSiblingsForJob(job) {
+  var normKey = normalizePartKey(job.partName);
+  var siblings = jobItems.filter(function(j) {
+    var b = calcJob(j.id);
+    var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
+    return hasRemain && normalizePartKey(j.partName) === normKey;
+  });
+  siblings.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  return siblings;
+}
+
+// คืนค่า null ถ้าไม่ถูกบล็อก หรือคืนค่า job ที่เป็นตัวบล็อก (บิลเก่าสุดของ P.No เดียวกันที่ต้องออก INV ให้หมดก่อน)
+function getFifoBlocker(job) {
+  var siblings = getFifoSiblingsForJob(job);
+  if (siblings.length <= 1) return null; // ไม่มีคู่แข่ง P.No เดียวกันเลย ไม่ต้องบล็อก
+  if (siblings[0].id === job.id) return null; // ตัวเองคือบิลเก่าสุดอยู่แล้ว ไม่ถูกบล็อก
+  return siblings[0];
+}
+
+
 function daysSince(dateStr) {
   if (!dateStr) return 0;
   var d = new Date(dateStr+'T00:00:00');
   var now = new Date();
   return Math.floor((now - d) / 86400000);
+}
+
+// ══════════════════════════════════════
+//  เรดาร์ "พร้อมออก INV" ต่อลูกค้า — กันบิลที่คงเหลือ>0 ค้างเกิน 7 วันของลูกค้าเดียวกัน ถูกลืมไม่มีใครออก INV ให้
+//  (ยังไม่แยกว่าชุบเสร็จจริงหรือยัง เพราะ job_master.html เองไม่มีข้อมูลสถานะชุบ — ใช้ "คงเหลือ>0 ค้างเกิน 7 วัน"
+//  จากข้อมูลในไฟล์นี้ไปก่อน อาจรวมทั้งบิลที่ยังไม่ชุบกับที่ชุบเสร็จแล้วปนกัน)
+//
+//  Flow บล็อก 4 ขั้น ต่อลูกค้า (เก็บสถานะใน custInvGuard[customerName]):
+//   stage 0→1 (เจอครั้งแรก): บล็อกแข็ง ต้องตั้ง "วันส่งถัดไป" ก่อน ถึงจะออก INV ได้
+//   stage 1→2, 2→3 (เจอซ้ำ): กด "รับทราบ" เฉยๆ (ไม่ต้องตั้งวันใหม่) ก็ออก INV ต่อได้
+//   stage 3→4 ขึ้นไป: ต้องมีสิทธิ์ admin เท่านั้นถึงจะอนุมัติให้ออก INV ต่อได้ (ทุกครั้ง ไม่ลดระดับกลับ)
+//   รีเซ็ต stage กลับเป็น 0 ก็ต่อเมื่อบิลเก่าที่ค้างจริงถูกออก INV ไปแล้วเท่านั้น (ไม่ใช่ตอน admin อนุมัติผ่าน)
+// ══════════════════════════════════════
+function getOverdueUnbilledJobsForCustomer(customerName, excludeJobIds) {
+  excludeJobIds = excludeJobIds || [];
+  return jobItems.filter(function(j) {
+    if ((j.customer||'').trim() !== customerName) return false;
+    if (excludeJobIds.indexOf(j.id) !== -1) return false;
+    if (j.closed) return false;
+    var b = calcJob(j.id);
+    var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
+    if (!hasRemain) return false;
+    return daysSince(j.date) > 7;
+  });
+}
+
+function ensureCustGuardState(customerName) {
+  if (!custInvGuard[customerName]) {
+    custInvGuard[customerName] = { stage:0, nextShipDate:'', log:[] };
+  }
+  if (!Array.isArray(custInvGuard[customerName].log)) custInvGuard[customerName].log = [];
+  return custInvGuard[customerName];
+}
+
+// คืนค่า true = อนุญาตให้บันทึก INV ต่อได้, false = ห้าม (ผู้ใช้ยกเลิก/ไม่มีสิทธิ์ — saveInvoice() ต้อง return ทันที)
+function passCustInvGuard(customerName, excludeJobIds) {
+  var overdue = getOverdueUnbilledJobsForCustomer(customerName, excludeJobIds);
+
+  if (!overdue.length) {
+    // ไม่มีบิลค้างของลูกค้ารายนี้แล้ว — รีเซ็ตสถานะกลับเป็น 0 (ถ้าเคยมีค้างมาก่อน)
+    var existing = custInvGuard[customerName];
+    if (existing && existing.stage > 0) {
+      existing.stage = 0;
+      existing.nextShipDate = '';
+      existing.log.push({ at:new Date().toISOString(), action:'reset', note:'ไม่มีบิลค้างของลูกค้ารายนี้แล้ว รีเซ็ตอัตโนมัติ' });
+    }
+    return true;
+  }
+
+  var state = ensureCustGuardState(customerName);
+  var billListText = overdue.map(function(j){
+    var b = calcJob(j.id);
+    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    return '• ['+(j.bill||'?')+'] '+(j.partName||'')+' เหลือ '+rem+' (ค้าง '+daysSince(j.date)+' วัน)';
+  }).join('\n');
+
+  var newStage = state.stage + 1;
+
+  if (newStage === 1) {
+    alert('🚫 ลูกค้า "'+customerName+'" มีบิลอื่นค้างไม่ออก INV เกิน 7 วันอยู่:\n\n'+billListText+
+      '\n\nกรุณากำหนด "วันส่งถัดไป" ก่อน จึงจะออก INV ใบใหม่ให้ลูกค้ารายนี้ได้');
+    var dateStr = prompt('กำหนดวันส่งถัดไปสำหรับบิลค้างทั้งหมดของ "'+customerName+'" (YYYY-MM-DD):', isoToday());
+    if (!dateStr) return false;
+    state.nextShipDate = dateStr;
+    state.stage = 1;
+    state.log.push({ at:new Date().toISOString(), action:'set_date', note:'ตั้งวันส่งถัดไป: '+dateStr });
+    saveLocal(); fbSave();
+    return true;
+  }
+
+  if (newStage === 2 || newStage === 3) {
+    var ok = confirm('⚠️ ลูกค้า "'+customerName+'" ยังมีบิลค้างไม่ออก INV อยู่ (เคยกำหนดวันส่งไว้: '+(state.nextShipDate||'—')+'):\n\n'+billListText+
+      '\n\nกด OK เพื่อ "รับทราบ" และออก INV ใบนี้ต่อไป (รับทราบครั้งที่ '+newStage+'/3 — ครั้งถัดไปต้องขอ admin อนุมัติ)');
+    if (!ok) return false;
+    state.stage = newStage;
+    state.log.push({ at:new Date().toISOString(), action:'ack', note:'รับทราบครั้งที่ '+newStage });
+    saveLocal(); fbSave();
+    return true;
+  }
+
+  // newStage >= 4: ต้อง admin อนุมัติทุกครั้ง จนกว่าบิลเก่าจะถูกออก INV จริง
+  if (currentRole !== 'admin') {
+    alert('🚫 ลูกค้า "'+customerName+'" มีบิลค้างไม่ออก INV เกินกำหนดซ้ำหลายครั้งแล้ว (ครั้งที่ '+newStage+'):\n\n'+billListText+
+      '\n\nต้องให้ผู้มีสิทธิ์ admin เป็นคนอนุมัติเท่านั้นถึงจะออก INV ต่อได้ กรุณาติดต่อ admin');
+    return false;
+  }
+  var okAdmin = confirm('🔓 [Admin] ลูกค้า "'+customerName+'" มีบิลค้างไม่ออก INV เกินกำหนดซ้ำ (ครั้งที่ '+newStage+'):\n\n'+billListText+
+    '\n\nยืนยันอนุมัติให้ออก INV ใบนี้ต่อ?\n(บิลเก่ายังคงค้างอยู่เหมือนเดิม ต้องออก INV ให้บิลเก่าจริงๆ เท่านั้นถึงจะเคลียร์สถานะนี้ได้)');
+  if (!okAdmin) return false;
+  state.stage = newStage;
+  state.log.push({ at:new Date().toISOString(), action:'admin_approve', note:'Admin อนุมัติ ครั้งที่ '+newStage });
+  saveLocal(); fbSave();
+  return true;
 }
 
 function getStatus(job) {
@@ -1855,13 +1987,20 @@ function selectInvPart(partNo, hasStock, fromPM) {
 
   infoEl.innerHTML = '<span style="color:var(--green);">✅ <b>'+esc(partNo)+'</b> — พบ '+active.length+' บิล เลือกบิลด้านล่าง</span>';
 
+  // เรียงเก่าสุดขึ้นก่อนเสมอ (FIFO) — ให้เห็นชัดว่าบิลไหนควรออก INV ก่อน ไม่ใช่เรียงตามลำดับที่บันทึกในระบบ
+  active.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
   var sel = document.getElementById('invLineJobSel');
   var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
   active.forEach(function(j) {
     var b = calcJob(j.id);
     var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
-    optHtml += '<option value="'+j.id+'">['+esc(j.bill||'?')+'] เหลือ '+rem
-      +(j.customer ? ' · '+esc(j.customer) : '')+'</option>';
+    var blocker = getFifoBlocker(j);
+    var label = (blocker ? '🔴 ' : (active.length>1 ? '🟢 ' : ''))
+      + '['+esc(j.bill||'?')+'] เหลือ '+rem
+      +(j.customer ? ' · '+esc(j.customer) : '')
+      + (blocker ? ' — รอบิล ['+esc(blocker.bill||'?')+'] ('+esc(blocker.date||'')+') ออก INV ให้หมดก่อน' : '');
+    optHtml += '<option value="'+j.id+'"'+(blocker ? ' disabled style="color:#dc2626;"' : '')+'>'+label+'</option>';
   });
   sel.innerHTML = optHtml;
   sel.size = Math.min(active.length + 1, 7);
@@ -2273,6 +2412,16 @@ function addInvLine() {
 
   var job = jobItems.find(function(j){ return j.id===jobId; });
   if (!job) { showToast('invline','ไม่พบรายการบิลนี้','err'); return; }
+
+  // ── FIFO บล็อกแข็งต่อ P.No (โหมดขายเท่านั้น ไม่ใช้กับเคลม) — จุดบังคับใช้จริง กันเผื่อ dropdown ถูกข้ามด้วยวิธีอื่น ──
+  if (!isClaim) {
+    var blocker = getFifoBlocker(job);
+    if (blocker) {
+      showToast('invline','🚫 ออก INV ให้บิลนี้ไม่ได้ — ต้องออก INV ให้บิล ['+(blocker.bill||'?')+'] ('+(blocker.date||'')+') ของชิ้นงานเดียวกันที่รับเข้าก่อนให้หมดคงเหลือก่อนเสมอ (FIFO)','err');
+      return;
+    }
+  }
+
   var isKg = job.unit==='kg';
   var b = calcJob(jobId);
 
@@ -2851,7 +3000,14 @@ function saveInvoice(doPrint) {
     }
   }
 
-  // งานเคลม: บังคับราคา/มูลค่า = 0 เสมอ (กันเผื่อรายการหลงเหลือราคาจากตอนสลับโหมด) — ไม่มีผลกับสต็อกที่ตัด
+  // ── เรดาร์ "พร้อมออก INV" ต่อลูกค้า (กันบิลอื่นของลูกค้าเดียวกันที่ค้างไม่ออก INV เกิน 7 วัน ถูกลืมไปเรื่อยๆ) ──
+  // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
+  // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
+  if (!isClaim && !_editingInvoiceRef) {
+    var thisDraftJobIds = invDraft.map(function(l){ return l.jobId; });
+    if (!passCustInvGuard(customer, thisDraftJobIds)) return;
+  }
+
   if (isClaim) {
     invDraft.forEach(function(l){ l.price = 0; l.amount = 0; });
   }
