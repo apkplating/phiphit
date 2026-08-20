@@ -226,6 +226,11 @@ if ('caches' in window) {
       <div class="sum-chip-val" style="color:var(--amber);" id="sumHasWeight">0</div>
       <div style="font-size:9px;color:var(--text-muted);">P/No</div>
     </div>
+    <div class="sum-chip" style="background:#fef2f2;border-color:#fecaca;">
+      <div class="sum-chip-label">ยังไม่ระบุไลน์</div>
+      <div class="sum-chip-val" style="color:var(--red);" id="sumNoLine">0</div>
+      <div style="font-size:9px;color:var(--text-muted);">P/No</div>
+    </div>
   </div>
 
   <div class="card" style="padding:10px 12px;">
@@ -256,6 +261,7 @@ if ('caches' in window) {
             <th class="td-l" style="min-width:120px;">ชื่อชิ้นงาน</th>
             <th class="td-l">ลูกค้า</th>
             <th>สีที่ชุบ</th>
+            <th>สาย</th>
             <th>น้ำหนัก/ชิ้น<br><span style="font-weight:400;font-size:9px;">(g)</span></th>
             <th>ชิ้น/Rack<br><span style="font-weight:400;font-size:9px;">(optional)</span></th>
             <th>หมายเหตุ</th>
@@ -263,7 +269,7 @@ if ('caches' in window) {
           </tr>
         </thead>
         <tbody id="listBody">
-          <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
         </tbody>
       </table>
     </div>
@@ -318,6 +324,39 @@ if ('caches' in window) {
       <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
         <input type="text" id="addNote" placeholder="หมายเหตุ">
+      </div>
+    </div>
+
+    <!-- ── ไลน์ชุบ + น้ำหนัก/โม่ + จิ๊กแนะนำ (ใช้ pre-fill ตอนสร้างใบสั่งผลิต — ค่าจริงที่ใช้เช็ค FIFO/tolerance
+    ยังคงกำหนดสดในใบสั่งผลิตรายวันเหมือนเดิม field พวกนี้เป็นแค่ค่ามาตรฐาน/ค่าเริ่มต้นเท่านั้น) ── -->
+    <div class="grid3">
+      <div class="field" style="margin:0;">
+        <label>ไลน์หลัก (Main Line) <span style="color:var(--red);">*</span></label>
+        <select id="addLineMain" onchange="onAddLineChange()">
+          <option value="">— เลือกสาย —</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="R1">R1</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ไลน์สำรอง (Backup) <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+        <select id="addLineBackup" onchange="onAddLineChange()">
+          <option value="">— ไม่มี —</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="R1">R1</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/โม่ (kg) <span style="color:var(--text-muted);font-weight:400;">มาตรฐาน (optional)</span></label>
+        <input type="number" id="addDrumWeight" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+      </div>
+    </div>
+    <div class="grid2" id="addJigRow" style="display:none;">
+      <div class="field" style="margin:0;">
+        <label>จิ๊กแนะนำ (สำหรับ R1) <span style="color:var(--text-muted);font-weight:400;">(optional — pre-fill ตอนสร้างใบสั่งผลิต)</span></label>
+        <input type="text" id="addJigSuggest" placeholder="เช่น JIG-A12">
       </div>
     </div>
 
@@ -454,6 +493,36 @@ if ('caches' in window) {
       <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
         <input type="text" id="editNote">
+      </div>
+    </div>
+    <div class="grid3">
+      <div class="field" style="margin:0;">
+        <label>ไลน์หลัก (Main) <span style="color:var(--red);">*</span></label>
+        <select id="editLineMain" onchange="onEditLineChange()">
+          <option value="">— เลือกสาย —</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="R1">R1</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>ไลน์สำรอง (Backup)</label>
+        <select id="editLineBackup" onchange="onEditLineChange()">
+          <option value="">— ไม่มี —</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="R1">R1</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>น้ำหนัก/โม่ (kg) <span style="color:var(--text-muted);font-weight:400;">มาตรฐาน</span></label>
+        <input type="number" id="editDrumWeight" step="0.01" min="0">
+      </div>
+    </div>
+    <div class="grid2" id="editJigRow" style="display:none;">
+      <div class="field" style="margin:0;">
+        <label>จิ๊กแนะนำ (สำหรับ R1)</label>
+        <input type="text" id="editJigSuggest" placeholder="เช่น JIG-A12">
       </div>
     </div>
     <div id="toast-edit" class="toast"></div>
@@ -657,6 +726,7 @@ function updateSummary() {
   var customers = new Set(parts.map(function(p){ return p.customer||''; }).filter(Boolean));
   document.getElementById('sumCustomers').textContent = customers.size;
   document.getElementById('sumHasWeight').textContent = parts.filter(function(p){ return p.weightPerPc>0; }).length;
+  document.getElementById('sumNoLine').textContent = parts.filter(function(p){ return !p.lineMain; }).length;
 }
 
 // ══════════════════════════════════════
@@ -683,7 +753,7 @@ function renderList() {
 
   var tbody = document.getElementById('listBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px;">' +
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">' +
       (parts.length ? 'ไม่พบชิ้นงาน — ลองเปลี่ยนคำค้นหา' : 'ยังไม่มีชิ้นงาน — ไปแท็บ "เพิ่มชิ้นงาน"') + '</td></tr>';
     return;
   }
@@ -695,11 +765,19 @@ function renderList() {
     var rackCell = p.pcsPerRack
       ? '<td>'+p.pcsPerRack+'</td>'
       : '<td style="color:var(--text-muted);">–</td>';
+    var lineCell = p.lineMain
+      ? '<td style="white-space:nowrap;font-size:10px;"><span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:6px;font-weight:700;">'+esc(p.lineMain)+'</span>'
+        + (p.lineBackup ? ' <span style="background:#f1f5f9;color:#64748b;padding:2px 6px;border-radius:6px;" title="ไลน์สำรอง">+'+esc(p.lineBackup)+'</span>' : '')
+        + (p.lineMain==='R1'||p.lineBackup==='R1' ? (p.jigSuggest ? '<br><span style="color:var(--text-muted);">🔧 '+esc(p.jigSuggest)+'</span>' : '') : '')
+        + (p.drumWeight ? '<br><span style="color:var(--text-muted);">⚖️ '+p.drumWeight.toFixed(2)+' กก./โม่</span>' : '')
+        + '</td>'
+      : '<td style="color:var(--text-muted);font-size:10px;">⚠️ ยังไม่ระบุ</td>';
     return '<tr>' +
       '<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:12px;">'+esc(p.partNo)+'</td>' +
       '<td class="td-l" style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'–')+'</td>' +
       '<td class="td-l" style="font-size:11px;color:var(--text-mid);">'+esc(p.customer||'–')+'</td>' +
       '<td style="white-space:nowrap;">'+colorBadges(p.colors)+'</td>' +
+      lineCell +
       wtCell + rackCell +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+esc(p.note||'')+'</td>' +
       '<td style="white-space:nowrap;">' +
@@ -713,6 +791,19 @@ function renderList() {
 function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── ไลน์ชุบ main/backup: กันเลือกสายซ้ำกัน + โชว์/ซ่อนช่อง "จิ๊กแนะนำ" เฉพาะตอนมี R1 อยู่ใน main หรือ backup ──
+function _syncLineFields(mainId, backupId, jigRowId) {
+  var mainSel = document.getElementById(mainId);
+  var backupSel = document.getElementById(backupId);
+  if (backupSel.value && backupSel.value === mainSel.value) {
+    backupSel.value = '';
+  }
+  var isR1 = (mainSel.value === 'R1' || backupSel.value === 'R1');
+  document.getElementById(jigRowId).style.display = isR1 ? '' : 'none';
+}
+function onAddLineChange() { _syncLineFields('addLineMain', 'addLineBackup', 'addJigRow'); }
+function onEditLineChange() { _syncLineFields('editLineMain', 'editLineBackup', 'editJigRow'); }
 
 // ══════════════════════════════════════
 //  ADD PART
@@ -729,6 +820,11 @@ function onAddPartNoInput() {
     document.getElementById('addWeight').value     = exists.weightPerPc || '';
     document.getElementById('addPcsPerRack').value = exists.pcsPerRack || '';
     document.getElementById('addNote').value       = exists.note     || '';
+    document.getElementById('addLineMain').value   = exists.lineMain || '';
+    document.getElementById('addLineBackup').value = exists.lineBackup || '';
+    document.getElementById('addDrumWeight').value = exists.drumWeight || '';
+    document.getElementById('addJigSuggest').value = exists.jigSuggest || '';
+    onAddLineChange();
     setColors(exists.colors||'');
     previewCalc();
   } else {
@@ -754,16 +850,26 @@ async function savePart() {
   var wt     = parseFloat(document.getElementById('addWeight').value) || 0;
   var rack   = parseInt(document.getElementById('addPcsPerRack').value) || 0;
   var note   = document.getElementById('addNote').value.trim();
+  var lineMain   = document.getElementById('addLineMain').value;
+  var lineBackup = document.getElementById('addLineBackup').value;
+  var drumWeight = parseFloat(document.getElementById('addDrumWeight').value) || 0;
+  var jigSuggest = document.getElementById('addJigSuggest').value.trim();
 
   if (!partNo) { showToast('add','กรุณากรอก P/No','err'); return; }
+  // ทยอยกรอกได้ — ไม่บังคับตอนนี้ แต่เตือนไว้ให้รู้ว่ายังไม่ได้ระบุ (ค่อยๆ กรอกครบผ่านการใช้งานจริงทีหลัง)
+  if (!lineMain) { showToast('add','⚠️ ยังไม่ได้ระบุ "ไลน์หลัก" — บันทึกได้ แต่ระบบใบสั่งผลิตจะช่วยแนะนำสายให้ไม่ได้จนกว่าจะกรอก','ok'); }
 
   // upsert
   var idx = parts.findIndex(function(p){ return normKey(p.partNo)===normKey(partNo); });
   var label = idx >= 0 ? ('✅ อัปเดต "'+partNo+'" สำเร็จ') : ('✅ เพิ่ม "'+partNo+'" สำเร็จ');
+  var payload = { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note,
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigSuggest:jigSuggest, updatedAt:new Date().toISOString() };
   if (idx >= 0) {
-    parts[idx] = Object.assign({}, parts[idx], { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
+    parts[idx] = Object.assign({}, parts[idx], payload);
   } else {
-    parts.unshift({ id:'P'+Date.now(), partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, createdAt:new Date().toISOString() });
+    payload.id = 'P'+Date.now();
+    payload.createdAt = new Date().toISOString();
+    parts.unshift(payload);
   }
 
   saveLocal(); renderAll();
@@ -771,9 +877,12 @@ async function savePart() {
   showToast('add', synced ? label : (label+' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)'), synced ? 'ok' : 'err');
 
   // clear form
-  ['addPartNo','addName','addCustomer','addWeight','addPcsPerRack','addNote'].forEach(function(id){
+  ['addPartNo','addName','addCustomer','addWeight','addPcsPerRack','addNote','addDrumWeight','addJigSuggest'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
+  document.getElementById('addLineMain').value = '';
+  document.getElementById('addLineBackup').value = '';
+  document.getElementById('addJigRow').style.display = 'none';
   setColors('');
   document.getElementById('addDupWarn').style.display='none';
   document.getElementById('calcPreview').style.display='none';
@@ -806,6 +915,11 @@ function openEdit(id) {
   document.getElementById('editWeight').value    = p.weightPerPc || '';
   document.getElementById('editPcsPerRack').value= p.pcsPerRack || '';
   document.getElementById('editNote').value      = p.note      || '';
+  document.getElementById('editLineMain').value  = p.lineMain  || '';
+  document.getElementById('editLineBackup').value= p.lineBackup|| '';
+  document.getElementById('editDrumWeight').value= p.drumWeight|| '';
+  document.getElementById('editJigSuggest').value= p.jigSuggest|| '';
+  onEditLineChange();
   setColors(p.colors||'', 'edit');
   document.getElementById('editModal').classList.add('open');
 }
@@ -825,6 +939,10 @@ async function saveEdit() {
   var wt     = parseFloat(document.getElementById('editWeight').value) || 0;
   var rack   = parseInt(document.getElementById('editPcsPerRack').value) || 0;
   var note   = document.getElementById('editNote').value.trim();
+  var lineMain   = document.getElementById('editLineMain').value;
+  var lineBackup = document.getElementById('editLineBackup').value;
+  var drumWeight = parseFloat(document.getElementById('editDrumWeight').value) || 0;
+  var jigSuggest = document.getElementById('editJigSuggest').value.trim();
 
   var newPartNo = document.getElementById('editPartNo').value.trim();
   if (!newPartNo) { showToast('edit','กรุณากรอก P/No','err'); return; }
@@ -834,7 +952,8 @@ async function saveEdit() {
   // ตรวจว่า P/No ซ้ำกับรายการอื่นไหม
   var dupIdx = parts.findIndex(function(p){ return p.partNo===newPartNo && p.id!==id; });
   if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
-  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note, updatedAt:new Date().toISOString() });
+  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note,
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigSuggest:jigSuggest, updatedAt:new Date().toISOString() });
 
   saveLocal();
   var synced = await fbSave();
@@ -928,9 +1047,9 @@ function calcResult() {
 //  EXPORT CSV
 // ══════════════════════════════════════
 function exportCSV() {
-  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','น้ำหนัก/ชิ้น(g)','ชิ้น/Rack','หมายเหตุ']];
+  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊กแนะนำ','น้ำหนัก/ชิ้น(g)','ชิ้น/Rack','หมายเหตุ']];
   parts.forEach(function(p){
-    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.weightPerPc||'',p.pcsPerRack||'',p.note||'']);
+    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.lineMain||'',p.lineBackup||'',p.drumWeight||'',p.jigSuggest||'',p.weightPerPc||'',p.pcsPerRack||'',p.note||'']);
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a = document.createElement('a');
