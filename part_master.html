@@ -203,6 +203,7 @@ if ('caches' in window) {
   <button class="tab-btn active" onclick="tab('list')">📋 รายการชิ้นงาน</button>
   <button class="tab-btn" onclick="tab('add')">➕ เพิ่มชิ้นงาน</button>
   <button class="tab-btn" onclick="tab('calc')">⚖️ คำนวณน้ำหนัก</button>
+  <button class="tab-btn" onclick="tab('jigs')">🔧 ทะเบียนจิ๊ก</button>
 </div>
 
 <div class="main">
@@ -263,13 +264,14 @@ if ('caches' in window) {
             <th>สีที่ชุบ</th>
             <th>สาย</th>
             <th>น้ำหนัก/ชิ้น<br><span style="font-weight:400;font-size:9px;">(g)</span></th>
-            <th>ชิ้น/Rack<br><span style="font-weight:400;font-size:9px;">(optional)</span></th>
+            <th>น้ำหนัก/โม่<br><span style="font-weight:400;font-size:9px;">(kg, B1/B2)</span></th>
+            <th>จิ๊ก + ชิ้น/Rack<br><span style="font-weight:400;font-size:9px;">(R1, optional)</span></th>
             <th>หมายเหตุ</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="listBody">
-          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
         </tbody>
       </table>
     </div>
@@ -311,15 +313,11 @@ if ('caches' in window) {
       </div>
     </div>
 
-    <div class="grid3">
+    <div class="grid2">
       <div class="field" style="margin:0;">
         <label>น้ำหนักต่อชิ้น (g) <span style="color:var(--text-muted);font-weight:400;">สำหรับ kg→ชิ้น</span></label>
         <input type="number" id="addWeight" placeholder="0.00" step="0.01" min="0" inputmode="decimal"
           oninput="previewCalc()">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>ชิ้น/Rack <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-        <input type="number" id="addPcsPerRack" placeholder="เช่น 24" step="1" min="0" inputmode="numeric">
       </div>
       <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
@@ -327,7 +325,7 @@ if ('caches' in window) {
       </div>
     </div>
 
-    <!-- ── ไลน์ชุบ + น้ำหนัก/โม่ + จิ๊กแนะนำ (ใช้ pre-fill ตอนสร้างใบสั่งผลิต — ค่าจริงที่ใช้เช็ค FIFO/tolerance
+    <!-- ── ไลน์ชุบ + น้ำหนัก/โม่ + จิ๊ก (ใช้ pre-fill ตอนสร้างใบสั่งผลิต — ค่าจริงที่ใช้เช็ค FIFO/tolerance
     ยังคงกำหนดสดในใบสั่งผลิตรายวันเหมือนเดิม field พวกนี้เป็นแค่ค่ามาตรฐาน/ค่าเริ่มต้นเท่านั้น) ── -->
     <div class="grid3">
       <div class="field" style="margin:0;">
@@ -349,16 +347,16 @@ if ('caches' in window) {
         </select>
       </div>
       <div class="field" style="margin:0;">
-        <label>น้ำหนัก/โม่ (kg) <span style="color:var(--text-muted);font-weight:400;">มาตรฐาน (optional)</span></label>
+        <label>น้ำหนัก/โม่ (kg) <span style="color:var(--text-muted);font-weight:400;">มาตรฐาน B1/B2 (optional)</span></label>
         <input type="number" id="addDrumWeight" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
       </div>
     </div>
-    <div class="grid2" id="addJigRow" style="display:none;">
-      <div class="field" style="margin:0;">
-        <label>จิ๊กแนะนำ (สำหรับ R1) <span style="color:var(--text-muted);font-weight:400;">(optional — pre-fill ตอนสร้างใบสั่งผลิต)</span></label>
-        <input type="text" id="addJigSuggest" placeholder="เช่น JIG-A12">
-      </div>
+    <div id="addJigRow" style="display:none;margin-top:10px;">
+      <label style="display:block;margin-bottom:6px;">จิ๊ก + ชิ้น/Rack (สำหรับ R1) <span style="color:var(--text-muted);font-weight:400;">— เพิ่มได้หลายแถว ถ้าใช้ได้มากกว่า 1 จิ๊ก</span></label>
+      <div id="addJigConfigsWrap"></div>
+      <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="addJigConfigRow('add')">+ เพิ่มแถวจิ๊ก</button>
     </div>
+
 
     <!-- Preview การคำนวณ -->
     <div class="calc-box" id="calcPreview" style="display:none;">
@@ -448,6 +446,51 @@ if ('caches' in window) {
   </div>
 </div>
 
+<!-- ══ TAB: ทะเบียนจิ๊ก ══ -->
+<!-- เก็บ "จำนวนชุดจิ๊กที่มีจริง" ไว้ที่เดียว (กันข้อมูลซ้ำหลาย P/No เวลาจิ๊กตัวเดียวกันใช้ร่วมกันได้หลายชิ้นงาน)
+     ตอนกรอกแถวจิ๊กในแท็บ "เพิ่มชิ้นงาน"/แก้ไข จะเลือกจาก dropdown ของทะเบียนนี้แทนพิมพ์เอง กันชื่อจิ๊กสะกดไม่ตรงกัน -->
+<div id="v-jigs" class="view">
+  <div class="card">
+    <div class="card-label">🔧 เพิ่ม / แก้ไขจิ๊ก</div>
+    <input type="hidden" id="jigEditId">
+    <div class="grid3">
+      <div class="field" style="margin:0;">
+        <label>รหัสจิ๊ก <span style="color:var(--red);">*</span></label>
+        <input type="text" id="jigCode" placeholder="เช่น JIG-A12">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>จำนวนชุดที่มีจริง <span style="color:var(--red);">*</span></label>
+        <input type="number" id="jigTotalSets" placeholder="เช่น 5" step="1" min="0" inputmode="numeric">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="jigNote" placeholder="เช่น เก็บที่ตู้ R1">
+      </div>
+    </div>
+    <button class="btn btn-green" onclick="saveJig()">💾 บันทึกจิ๊ก</button>
+    <button class="btn btn-outline" id="jigCancelBtn" style="display:none;" onclick="cancelJigEdit()">ยกเลิกแก้ไข</button>
+    <div id="toast-jig" class="toast"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">📋 รายการจิ๊กทั้งหมด</div>
+    <table class="pt">
+      <thead>
+        <tr>
+          <th class="td-l">รหัสจิ๊ก</th>
+          <th>จำนวนชุดที่มีจริง</th>
+          <th class="td-l">ใช้กับ P/No</th>
+          <th class="td-l">หมายเหตุ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="jigListBody">
+        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">กำลังโหลด...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 </div><!-- /main -->
 </div><!-- /appScreen -->
 
@@ -481,14 +524,10 @@ if ('caches' in window) {
         </div>
       </div>
     </div>
-    <div class="grid3">
+    <div class="grid2">
       <div class="field" style="margin:0;">
         <label>น้ำหนัก/ชิ้น (g)</label>
         <input type="number" id="editWeight" step="0.01" min="0">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>ชิ้น/Rack</label>
-        <input type="number" id="editPcsPerRack" step="1" min="0">
       </div>
       <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
@@ -519,11 +558,10 @@ if ('caches' in window) {
         <input type="number" id="editDrumWeight" step="0.01" min="0">
       </div>
     </div>
-    <div class="grid2" id="editJigRow" style="display:none;">
-      <div class="field" style="margin:0;">
-        <label>จิ๊กแนะนำ (สำหรับ R1)</label>
-        <input type="text" id="editJigSuggest" placeholder="เช่น JIG-A12">
-      </div>
+    <div id="editJigRow" style="display:none;margin-top:10px;">
+      <label style="display:block;margin-bottom:6px;">จิ๊ก + ชิ้น/Rack (สำหรับ R1) <span style="color:var(--text-muted);font-weight:400;">— เพิ่มได้หลายแถว</span></label>
+      <div id="editJigConfigsWrap"></div>
+      <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="addJigConfigRow('edit')">+ เพิ่มแถวจิ๊ก</button>
     </div>
     <div id="toast-edit" class="toast"></div>
     <div class="modal-footer">
@@ -540,7 +578,7 @@ if ('caches' in window) {
 //  CONFIG — ใช้ DB เดียวกับ job_master
 // ══════════════════════════════════════
 var SYSTEM_KEY = 'part_master';
-var TAB_IDS = ['list','add','calc'];
+var TAB_IDS = ['list','add','calc','jigs'];
 var DB_URL  = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
 var PM_PATH = DB_URL + '/part-master';   // /part-master.json
 
@@ -549,6 +587,7 @@ var PM_PATH = DB_URL + '/part-master';   // /part-master.json
 // ══════════════════════════════════════
 // parts: { id, partNo, name, customer, colors:string('B'|'C'|'K'|'BC'|...), weightPerPc, pcsPerRack, note }
 var parts = [];
+var jigs  = []; // ทะเบียนจิ๊ก {id, jigCode, totalSets, note} — เก็บจำนวนชุดจริงไว้ที่เดียว กันข้อมูลซ้ำเวลาจิ๊กใช้ร่วมกันได้หลาย P/No
 var currentRole = '';
 var currentTabs = null;
 
@@ -616,7 +655,7 @@ function applyRole() {
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['list','add','calc'].forEach(function(n, i) {
+  ['list','add','calc','jigs'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -624,6 +663,7 @@ function tab(t) {
   });
   if (t==='list') renderList();
   if (t==='calc') renderCalcSel();
+  if (t==='jigs') renderJigRegistry();
 }
 
 // ══════════════════════════════════════
@@ -631,9 +671,11 @@ function tab(t) {
 // ══════════════════════════════════════
 function loadLocal() {
   try { parts = JSON.parse(localStorage.getItem('pm_parts') || '[]'); } catch(e){ parts=[]; }
+  try { jigs = JSON.parse(localStorage.getItem('pm_jigs') || '[]'); } catch(e){ jigs=[]; }
 }
 function saveLocal() {
   try { localStorage.setItem('pm_parts', JSON.stringify(parts)); } catch(e){}
+  try { localStorage.setItem('pm_jigs', JSON.stringify(jigs)); } catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -655,7 +697,7 @@ async function fbSave() {
     var savedAt = new Date().toISOString();
     var res = await fetch(PM_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ parts: parts, savedAt: savedAt })
+      body: JSON.stringify({ parts: parts, jigs: jigs, savedAt: savedAt })
     });
     if (res.ok) { _fbLastSavedAt = savedAt; setSyncOk(); return true; }
     setSyncErr();
@@ -674,6 +716,7 @@ async function fbLoad() {
       if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       parts = data.parts;
+      jigs = Array.isArray(data.jigs) ? data.jigs : [];
       saveLocal();
       setSyncOk();
       renderAll();
@@ -719,6 +762,7 @@ function renderAll() {
   renderList();
   renderCalcSel();
   updateSummary();
+  renderJigRegistry();
 }
 
 function updateSummary() {
@@ -753,7 +797,7 @@ function renderList() {
 
   var tbody = document.getElementById('listBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px;">' +
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">' +
       (parts.length ? 'ไม่พบชิ้นงาน — ลองเปลี่ยนคำค้นหา' : 'ยังไม่มีชิ้นงาน — ไปแท็บ "เพิ่มชิ้นงาน"') + '</td></tr>';
     return;
   }
@@ -762,14 +806,24 @@ function renderList() {
     var wtCell = p.weightPerPc
       ? '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;color:var(--blue);">'+p.weightPerPc.toFixed(2)+'</td>'
       : '<td style="color:var(--text-muted);">–</td>';
-    var rackCell = p.pcsPerRack
-      ? '<td>'+p.pcsPerRack+'</td>'
+    // น้ำหนัก/โม่ — โชว์อิสระเสมอ ไม่ขึ้นกับว่ากรอกไลน์แล้วหรือยัง (เดิมเคยผูกไว้กับ lineMain ทำให้ P/No ที่ยังไม่
+    // ระบุไลน์ไม่โชว์ค่านี้เลยทั้งที่กรอกไว้แล้ว — แก้บั๊กนี้แล้ว)
+    var drumCell = p.drumWeight
+      ? '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;color:#0891b2;">'+p.drumWeight.toFixed(2)+'</td>'
+      : '<td style="color:var(--text-muted);">–</td>';
+    // จิ๊ก + ชิ้น/Rack — โชว์เป็นรายการทุกแถวที่กรอกไว้ (รองรับข้อมูลเก่าก่อนเปลี่ยนเป็น array ด้วย)
+    var jigList = Array.isArray(p.jigConfigs) ? p.jigConfigs : [];
+    if (!jigList.length && (p.jigSuggest || p.pcsPerRack)) {
+      jigList = [{ jig: p.jigSuggest||'', pcsPerRack: p.pcsPerRack||'' }];
+    }
+    var rackCell = jigList.length
+      ? '<td class="td-l" style="font-size:10px;">'+jigList.map(function(r){
+          return (r.jig ? esc(r.jig) : '(ไม่ระบุจิ๊ก)') + (r.pcsPerRack ? ' — '+r.pcsPerRack+' ชิ้น' : '');
+        }).join('<br>')+'</td>'
       : '<td style="color:var(--text-muted);">–</td>';
     var lineCell = p.lineMain
       ? '<td style="white-space:nowrap;font-size:10px;"><span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:6px;font-weight:700;">'+esc(p.lineMain)+'</span>'
         + (p.lineBackup ? ' <span style="background:#f1f5f9;color:#64748b;padding:2px 6px;border-radius:6px;" title="ไลน์สำรอง">+'+esc(p.lineBackup)+'</span>' : '')
-        + (p.lineMain==='R1'||p.lineBackup==='R1' ? (p.jigSuggest ? '<br><span style="color:var(--text-muted);">🔧 '+esc(p.jigSuggest)+'</span>' : '') : '')
-        + (p.drumWeight ? '<br><span style="color:var(--text-muted);">⚖️ '+p.drumWeight.toFixed(2)+' กก./โม่</span>' : '')
         + '</td>'
       : '<td style="color:var(--text-muted);font-size:10px;">⚠️ ยังไม่ระบุ</td>';
     return '<tr>' +
@@ -778,7 +832,7 @@ function renderList() {
       '<td class="td-l" style="font-size:11px;color:var(--text-mid);">'+esc(p.customer||'–')+'</td>' +
       '<td style="white-space:nowrap;">'+colorBadges(p.colors)+'</td>' +
       lineCell +
-      wtCell + rackCell +
+      wtCell + drumCell + rackCell +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+esc(p.note||'')+'</td>' +
       '<td style="white-space:nowrap;">' +
         ((currentRole==='admin'||currentRole==='operator') ? '<button onclick="openEdit(\''+p.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
@@ -792,6 +846,62 @@ function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── จิ๊ก + ชิ้น/Rack (สำหรับ R1) — เก็บเป็น array เพิ่ม/ลบได้หลายแถว เหมือน it.jigs ใน production_order.html ──
+var _addJigConfigs = [];
+var _editJigConfigs = [];
+function _getJigConfigsArr(mode) { return mode==='edit' ? _editJigConfigs : _addJigConfigs; }
+
+function renderJigConfigRows(mode) {
+  var arr = _getJigConfigsArr(mode);
+  var wrap = document.getElementById(mode+'JigConfigsWrap');
+  if (!wrap) return;
+  if (!jigs.length) {
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--red);padding:4px 0;">⚠️ ยังไม่มีจิ๊กในทะเบียนเลย — ไปเพิ่มที่แท็บ "🔧 ทะเบียนจิ๊ก" ก่อน ถึงจะเลือกจิ๊กตรงนี้ได้</div>';
+    return;
+  }
+  if (!arr.length) {
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">ยังไม่มีแถวจิ๊ก — กด "+ เพิ่มแถวจิ๊ก" ด้านล่าง</div>';
+    return;
+  }
+  wrap.innerHTML = arr.map(function(row, idx){
+    return '<div style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">'
+      + '<select onchange="updateJigConfigField(\''+mode+'\','+idx+',\'jig\',this.value)" '
+        + 'style="flex:2;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'
+        + getJigOptionsHtml(row.jig)
+        + '</select>'
+      + '<input type="number" placeholder="ชิ้น/Rack" min="0" step="1" value="'+(row.pcsPerRack!==''&&row.pcsPerRack!=null?row.pcsPerRack:'')+'" '
+        + 'oninput="updateJigConfigField(\''+mode+'\','+idx+',\'pcsPerRack\',this.value)" '
+        + 'style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'
+      + '<button type="button" onclick="removeJigConfigRow(\''+mode+'\','+idx+')" '
+        + 'style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:8px 10px;cursor:pointer;font-size:13px;">✕</button>'
+      + '</div>';
+  }).join('');
+}
+function addJigConfigRow(mode) {
+  _getJigConfigsArr(mode).push({ jig:'', pcsPerRack:'' });
+  renderJigConfigRows(mode);
+}
+function removeJigConfigRow(mode, idx) {
+  _getJigConfigsArr(mode).splice(idx,1);
+  renderJigConfigRows(mode);
+}
+function updateJigConfigField(mode, idx, field, value) {
+  var arr = _getJigConfigsArr(mode);
+  if (!arr[idx]) return;
+  arr[idx][field] = field==='pcsPerRack' ? (value===''?'':(parseInt(value)||0)) : value;
+}
+// ตั้งค่าแถวจิ๊กจากข้อมูลที่มีอยู่แล้ว — รองรับข้อมูลเก่าก่อนเปลี่ยนเป็น array (จิ๊กแนะนำ+ชิ้น/Rack แบบค่าเดียว)
+// โดย migrate เป็นแถวแรกให้อัตโนมัติ ไม่ต้องให้คนกรอกซ้ำ
+function setJigConfigs(mode, part) {
+  var configs = (part && Array.isArray(part.jigConfigs)) ? part.jigConfigs.slice() : [];
+  if (!configs.length && part && (part.jigSuggest || part.pcsPerRack)) {
+    configs = [{ jig: part.jigSuggest||'', pcsPerRack: part.pcsPerRack||'' }];
+  }
+  if (mode==='edit') _editJigConfigs = configs.map(function(c){ return {jig:c.jig||'', pcsPerRack:c.pcsPerRack||''}; });
+  else _addJigConfigs = configs.map(function(c){ return {jig:c.jig||'', pcsPerRack:c.pcsPerRack||''}; });
+  renderJigConfigRows(mode);
+}
+
 // ── ไลน์ชุบ main/backup: กันเลือกสายซ้ำกัน + โชว์/ซ่อนช่อง "จิ๊กแนะนำ" เฉพาะตอนมี R1 อยู่ใน main หรือ backup ──
 function _syncLineFields(mainId, backupId, jigRowId) {
   var mainSel = document.getElementById(mainId);
@@ -801,6 +911,12 @@ function _syncLineFields(mainId, backupId, jigRowId) {
   }
   var isR1 = (mainSel.value === 'R1' || backupSel.value === 'R1');
   document.getElementById(jigRowId).style.display = isR1 ? '' : 'none';
+  var mode = mainId.indexOf('edit') === 0 ? 'edit' : 'add';
+  if (isR1) {
+    var arr = _getJigConfigsArr(mode);
+    if (!arr.length) arr.push({ jig:'', pcsPerRack:'' });
+    renderJigConfigRows(mode);
+  }
 }
 function onAddLineChange() { _syncLineFields('addLineMain', 'addLineBackup', 'addJigRow'); }
 function onEditLineChange() { _syncLineFields('editLineMain', 'editLineBackup', 'editJigRow'); }
@@ -818,12 +934,11 @@ function onAddPartNoInput() {
     document.getElementById('addName').value       = exists.name     || '';
     document.getElementById('addCustomer').value   = exists.customer || '';
     document.getElementById('addWeight').value     = exists.weightPerPc || '';
-    document.getElementById('addPcsPerRack').value = exists.pcsPerRack || '';
     document.getElementById('addNote').value       = exists.note     || '';
     document.getElementById('addLineMain').value   = exists.lineMain || '';
     document.getElementById('addLineBackup').value = exists.lineBackup || '';
     document.getElementById('addDrumWeight').value = exists.drumWeight || '';
-    document.getElementById('addJigSuggest').value = exists.jigSuggest || '';
+    setJigConfigs('add', exists);
     onAddLineChange();
     setColors(exists.colors||'');
     previewCalc();
@@ -848,12 +963,13 @@ async function savePart() {
   var cust   = document.getElementById('addCustomer').value.trim();
   var colors = getColors();
   var wt     = parseFloat(document.getElementById('addWeight').value) || 0;
-  var rack   = parseInt(document.getElementById('addPcsPerRack').value) || 0;
   var note   = document.getElementById('addNote').value.trim();
   var lineMain   = document.getElementById('addLineMain').value;
   var lineBackup = document.getElementById('addLineBackup').value;
   var drumWeight = parseFloat(document.getElementById('addDrumWeight').value) || 0;
-  var jigSuggest = document.getElementById('addJigSuggest').value.trim();
+  // กรองแถวจิ๊กที่กรอกว่างทั้งคู่ทิ้ง (คนกด + เพิ่มแถวแล้วไม่ได้กรอกอะไรเลย)
+  var jigConfigs = _addJigConfigs.filter(function(r){ return (r.jig||'').trim() || r.pcsPerRack; })
+    .map(function(r){ return { jig:(r.jig||'').trim(), pcsPerRack: r.pcsPerRack || 0 }; });
 
   if (!partNo) { showToast('add','กรุณากรอก P/No','err'); return; }
   // ทยอยกรอกได้ — ไม่บังคับตอนนี้ แต่เตือนไว้ให้รู้ว่ายังไม่ได้ระบุ (ค่อยๆ กรอกครบผ่านการใช้งานจริงทีหลัง)
@@ -862,10 +978,12 @@ async function savePart() {
   // upsert
   var idx = parts.findIndex(function(p){ return normKey(p.partNo)===normKey(partNo); });
   var label = idx >= 0 ? ('✅ อัปเดต "'+partNo+'" สำเร็จ') : ('✅ เพิ่ม "'+partNo+'" สำเร็จ');
-  var payload = { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note,
-    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigSuggest:jigSuggest, updatedAt:new Date().toISOString() };
+  var payload = { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() };
   if (idx >= 0) {
     parts[idx] = Object.assign({}, parts[idx], payload);
+    // ล้างฟิลด์เก่าก่อนเปลี่ยนเป็น array (กันข้อมูลค้างซ้ำซ้อนกับ jigConfigs ใหม่)
+    delete parts[idx].pcsPerRack; delete parts[idx].jigSuggest;
   } else {
     payload.id = 'P'+Date.now();
     payload.createdAt = new Date().toISOString();
@@ -877,12 +995,14 @@ async function savePart() {
   showToast('add', synced ? label : (label+' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)'), synced ? 'ok' : 'err');
 
   // clear form
-  ['addPartNo','addName','addCustomer','addWeight','addPcsPerRack','addNote','addDrumWeight','addJigSuggest'].forEach(function(id){
+  ['addPartNo','addName','addCustomer','addWeight','addNote','addDrumWeight'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('addLineMain').value = '';
   document.getElementById('addLineBackup').value = '';
   document.getElementById('addJigRow').style.display = 'none';
+  _addJigConfigs = [];
+  renderJigConfigRows('add');
   setColors('');
   document.getElementById('addDupWarn').style.display='none';
   document.getElementById('calcPreview').style.display='none';
@@ -902,6 +1022,130 @@ async function deletePart(id) {
 }
 
 // ══════════════════════════════════════
+//  ทะเบียนจิ๊ก — เก็บจำนวนชุดจิ๊กที่มีจริงไว้ที่เดียว (กันข้อมูลซ้ำเวลาจิ๊กตัวเดียวกันใช้ร่วมกันได้หลาย P/No)
+//  แถวจิ๊กในแท็บ "เพิ่มชิ้นงาน"/แก้ไข จะเลือกรหัสจิ๊กจาก dropdown ที่ดึงจากทะเบียนนี้ กันพิมพ์ชื่อจิ๊กสะกดไม่ตรงกัน
+// ══════════════════════════════════════
+function getJigOptionsHtml(selectedCode) {
+  var html = '<option value="">— เลือกจิ๊ก —</option>';
+  var found = false;
+  jigs.forEach(function(j){
+    if (j.jigCode===selectedCode) found = true;
+    html += '<option value="'+esc(j.jigCode)+'"'+(j.jigCode===selectedCode?' selected':'')+'>'
+      + esc(j.jigCode)+' (มี '+j.totalSets+' ชุด)</option>';
+  });
+  // ค่าเดิมที่เคยกรอกไว้ (เช่น ข้อมูลเก่าก่อนมีทะเบียนจิ๊ก) ไม่ตรงกับรหัสไหนในทะเบียนเลย — กันหายไปเงียบๆ
+  // ด้วยการโชว์เป็นตัวเลือกพิเศษไว้ก่อน พร้อมเตือนให้ไปแมปกับจิ๊กจริงในทะเบียน
+  if (selectedCode && !found) {
+    html += '<option value="'+esc(selectedCode)+'" selected>⚠️ '+esc(selectedCode)+' (ยังไม่มีในทะเบียน — เลือกจิ๊กจริงแทน)</option>';
+  }
+  return html;
+}
+
+// นับว่าจิ๊กรหัสนี้ถูกใช้อยู่กับ P/No ไหนบ้าง (สแกนจาก parts[].jigConfigs ทั้งหมด) — ไว้โชว์ในตารางทะเบียนจิ๊ก
+function getPartNosUsingJig(jigCode) {
+  return parts.filter(function(p){
+    return Array.isArray(p.jigConfigs) && p.jigConfigs.some(function(c){ return c.jig===jigCode; });
+  }).map(function(p){ return p.partNo; });
+}
+
+function renderJigRegistry() {
+  var tbody = document.getElementById('jigListBody');
+  if (!tbody) return;
+  if (!jigs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">ยังไม่มีจิ๊กในทะเบียน — กรอกฟอร์มด้านบนเพื่อเพิ่ม</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jigs.slice().sort(function(a,b){ return (a.jigCode||'').localeCompare(b.jigCode||''); }).map(function(j){
+    var usedBy = getPartNosUsingJig(j.jigCode);
+    var usedCell = usedBy.length
+      ? '<span style="font-size:10px;color:var(--text-mid);">'+usedBy.map(esc).join(', ')+'</span>'
+      : '<span style="font-size:10px;color:var(--text-muted);">ยังไม่มี P/No ใช้</span>';
+    return '<tr>'
+      + '<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;">'+esc(j.jigCode)+'</td>'
+      + '<td style="font-weight:700;color:var(--navy);">'+j.totalSets+'</td>'
+      + '<td class="td-l">'+usedCell+'</td>'
+      + '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+esc(j.note||'')+'</td>'
+      + '<td style="white-space:nowrap;">'
+        + ((currentRole==='admin'||currentRole==='operator')
+          ? '<button onclick="editJig(\''+j.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>'
+            + '<button onclick="deleteJig(\''+j.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>'
+          : '')
+        + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+async function saveJig() {
+  if (currentRole==='viewer') return;
+  var id = document.getElementById('jigEditId').value;
+  var code = document.getElementById('jigCode').value.trim().toUpperCase();
+  var totalSets = parseInt(document.getElementById('jigTotalSets').value);
+  var note = document.getElementById('jigNote').value.trim();
+
+  if (!code) { showToast('jig','กรุณากรอกรหัสจิ๊ก','err'); return; }
+  if (!totalSets || totalSets <= 0) { showToast('jig','กรุณากรอกจำนวนชุดที่มีจริง (มากกว่า 0)','err'); return; }
+
+  var dupIdx = jigs.findIndex(function(j){ return j.jigCode===code && j.id!==id; });
+  if (dupIdx >= 0) { showToast('jig','รหัสจิ๊ก "'+code+'" มีอยู่แล้วในทะเบียน','err'); return; }
+
+  if (id) {
+    var idx = jigs.findIndex(function(j){ return j.id===id; });
+    if (idx >= 0) {
+      var oldCode = jigs[idx].jigCode;
+      jigs[idx] = Object.assign({}, jigs[idx], { jigCode:code, totalSets:totalSets, note:note, updatedAt:new Date().toISOString() });
+      // ถ้าเปลี่ยนรหัสจิ๊ก ต้องอัปเดตทุก P/No ที่เคยอ้างอิงรหัสเดิมให้ตรงกับรหัสใหม่ด้วย ไม่งั้นจะเชื่อมกันหลุด
+      if (oldCode !== code) {
+        parts.forEach(function(p){
+          if (Array.isArray(p.jigConfigs)) {
+            p.jigConfigs.forEach(function(c){ if (c.jig===oldCode) c.jig = code; });
+          }
+        });
+      }
+    }
+  } else {
+    jigs.push({ id:'J'+Date.now(), jigCode:code, totalSets:totalSets, note:note, createdAt:new Date().toISOString() });
+  }
+
+  saveLocal(); renderAll();
+  var synced = await fbSave();
+  showToast('jig', synced ? '✅ บันทึกจิ๊กสำเร็จ' : '⚠️ บันทึกในเครื่องแล้ว แต่ยังไม่ขึ้น Firebase', synced ? 'ok' : 'err');
+  cancelJigEdit();
+}
+
+function editJig(id) {
+  if (currentRole==='viewer') return;
+  var j = jigs.find(function(x){ return x.id===id; });
+  if (!j) return;
+  document.getElementById('jigEditId').value = j.id;
+  document.getElementById('jigCode').value = j.jigCode;
+  document.getElementById('jigTotalSets').value = j.totalSets;
+  document.getElementById('jigNote').value = j.note || '';
+  document.getElementById('jigCancelBtn').style.display = '';
+  document.getElementById('v-jigs').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function cancelJigEdit() {
+  document.getElementById('jigEditId').value = '';
+  document.getElementById('jigCode').value = '';
+  document.getElementById('jigTotalSets').value = '';
+  document.getElementById('jigNote').value = '';
+  document.getElementById('jigCancelBtn').style.display = 'none';
+}
+
+async function deleteJig(id) {
+  if (currentRole==='viewer') return;
+  var j = jigs.find(function(x){ return x.id===id; });
+  if (!j) return;
+  var usedBy = getPartNosUsingJig(j.jigCode);
+  var warnText = usedBy.length ? ('\n\n⚠️ จิ๊กนี้ถูกใช้อยู่กับ P/No: '+usedBy.join(', ')+' — ลบแล้วแถวจิ๊กใน P/No เหล่านั้นจะเหลือรหัสจิ๊กที่หาไม่เจอในทะเบียนแล้ว') : '';
+  if (!confirm('ลบจิ๊ก "'+j.jigCode+'" ออกจากทะเบียน?'+warnText)) return;
+  jigs = jigs.filter(function(x){ return x.id!==id; });
+  saveLocal(); renderAll();
+  var synced = await fbSave();
+  if (!synced) showToast('jig','⚠️ ลบในเครื่องนี้แล้ว แต่ยังไม่ขึ้น Firebase','err');
+}
+
+// ══════════════════════════════════════
 //  EDIT MODAL
 // ══════════════════════════════════════
 function openEdit(id) {
@@ -913,12 +1157,11 @@ function openEdit(id) {
   document.getElementById('editName').value      = p.name      || '';
   document.getElementById('editCustomer').value  = p.customer  || '';
   document.getElementById('editWeight').value    = p.weightPerPc || '';
-  document.getElementById('editPcsPerRack').value= p.pcsPerRack || '';
   document.getElementById('editNote').value      = p.note      || '';
   document.getElementById('editLineMain').value  = p.lineMain  || '';
   document.getElementById('editLineBackup').value= p.lineBackup|| '';
   document.getElementById('editDrumWeight').value= p.drumWeight|| '';
-  document.getElementById('editJigSuggest').value= p.jigSuggest|| '';
+  setJigConfigs('edit', p); // ดึงแถวจิ๊กมาแสดง (migrate จากฟิลด์เก่าอัตโนมัติถ้ายังไม่เคยแปลง)
   onEditLineChange();
   setColors(p.colors||'', 'edit');
   document.getElementById('editModal').classList.add('open');
@@ -937,12 +1180,12 @@ async function saveEdit() {
   if (document.getElementById('editChkC').checked) colors += 'C';
   if (document.getElementById('editChkK').checked) colors += 'K';
   var wt     = parseFloat(document.getElementById('editWeight').value) || 0;
-  var rack   = parseInt(document.getElementById('editPcsPerRack').value) || 0;
   var note   = document.getElementById('editNote').value.trim();
   var lineMain   = document.getElementById('editLineMain').value;
   var lineBackup = document.getElementById('editLineBackup').value;
   var drumWeight = parseFloat(document.getElementById('editDrumWeight').value) || 0;
-  var jigSuggest = document.getElementById('editJigSuggest').value.trim();
+  var jigConfigs = _editJigConfigs.filter(function(r){ return (r.jig||'').trim() || r.pcsPerRack; })
+    .map(function(r){ return { jig:(r.jig||'').trim(), pcsPerRack: r.pcsPerRack || 0 }; });
 
   var newPartNo = document.getElementById('editPartNo').value.trim();
   if (!newPartNo) { showToast('edit','กรุณากรอก P/No','err'); return; }
@@ -952,8 +1195,10 @@ async function saveEdit() {
   // ตรวจว่า P/No ซ้ำกับรายการอื่นไหม
   var dupIdx = parts.findIndex(function(p){ return p.partNo===newPartNo && p.id!==id; });
   if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
-  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, pcsPerRack:rack, note:note,
-    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigSuggest:jigSuggest, updatedAt:new Date().toISOString() });
+  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() });
+  // ล้างฟิลด์เก่าหลัง migrate เป็น jigConfigs แล้ว กันข้อมูลค้างซ้ำซ้อน
+  delete parts[idx].pcsPerRack; delete parts[idx].jigSuggest;
 
   saveLocal();
   var synced = await fbSave();
@@ -999,7 +1244,10 @@ function onCalcPartSelect() {
   infoEl.style.display='block';
   document.getElementById('calcPartTitle').textContent = p.partNo + (p.name ? ' — '+p.name : '') + (p.customer ? ' ('+p.customer+')' : '');
   document.getElementById('calcWtPerPc').textContent   = p.weightPerPc ? p.weightPerPc.toFixed(2) : '–';
-  document.getElementById('calcPcsPerRack').textContent= p.pcsPerRack  ? p.pcsPerRack : '–';
+  // ชิ้น/Rack ย้ายไปเก็บใน jigConfigs (array) แล้ว — ถ้ามีมากกว่า 1 จิ๊ก ใช้ค่าแรกเป็นตัวคำนวณเริ่มต้น
+  var jigList = Array.isArray(p.jigConfigs) ? p.jigConfigs : [];
+  var rackVal = jigList.length ? jigList[0].pcsPerRack : (p.pcsPerRack || null); // p.pcsPerRack: เผื่อข้อมูลเก่ายังไม่ถูกแก้ไข/migrate
+  document.getElementById('calcPcsPerRack').textContent = rackVal ? (rackVal + (jigList.length>1 ? ' (จิ๊ก '+esc(jigList[0].jig||'?')+', มี '+jigList.length+' แบบ)' : '')) : '–';
   document.getElementById('calcColor').innerHTML       = colorBadges(p.colors);
 
   if (!p.weightPerPc) {
@@ -1024,14 +1272,18 @@ function calcResult() {
   var wtG = unit==='kg' ? wtInput*1000 : wtInput;
   wtGEl.textContent = wtG.toLocaleString('th');
 
+  // ชิ้น/Rack ย้ายไปเก็บใน jigConfigs (array) แล้ว — ใช้ค่าแรกเป็นตัวคำนวณ (เผื่อ p.pcsPerRack ไว้สำหรับข้อมูลเก่าที่ยังไม่ได้แก้ไข)
+  var jigList = Array.isArray(p.jigConfigs) ? p.jigConfigs : [];
+  var pcsPerRack = jigList.length ? jigList[0].pcsPerRack : (p.pcsPerRack || 0);
+
   var pcs   = Math.round(wtG / p.weightPerPc);
-  var racks = p.pcsPerRack ? (wtG / p.weightPerPc / p.pcsPerRack) : 0;
+  var racks = pcsPerRack ? (wtG / p.weightPerPc / pcsPerRack) : 0;
 
   resultEl.style.display='block';
   document.getElementById('calcPcsOut').textContent = pcs.toLocaleString('th');
 
   var rackBox = document.getElementById('calcRackBox');
-  if (p.pcsPerRack && racks > 0) {
+  if (pcsPerRack && racks > 0) {
     rackBox.style.cssText = 'flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;';
     document.getElementById('calcRacksOut').textContent = racks.toFixed(1);
   } else {
@@ -1040,16 +1292,19 @@ function calcResult() {
 
   document.getElementById('calcFormula').textContent =
     wtG.toLocaleString('th') + ' g ÷ ' + p.weightPerPc.toFixed(2) + ' g/ชิ้น = ' + pcs.toLocaleString('th') + ' ชิ้น' +
-    (p.pcsPerRack ? ' (' + racks.toFixed(1) + ' rack × ' + p.pcsPerRack + ' ชิ้น/rack)' : '');
+    (pcsPerRack ? ' (' + racks.toFixed(1) + ' rack × ' + pcsPerRack + ' ชิ้น/rack)' : '');
 }
 
 // ══════════════════════════════════════
 //  EXPORT CSV
 // ══════════════════════════════════════
 function exportCSV() {
-  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊กแนะนำ','น้ำหนัก/ชิ้น(g)','ชิ้น/Rack','หมายเหตุ']];
+  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊ก+ชิ้น/Rack','น้ำหนัก/ชิ้น(g)','หมายเหตุ']];
   parts.forEach(function(p){
-    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.lineMain||'',p.lineBackup||'',p.drumWeight||'',p.jigSuggest||'',p.weightPerPc||'',p.pcsPerRack||'',p.note||'']);
+    var jigList = Array.isArray(p.jigConfigs) ? p.jigConfigs : [];
+    if (!jigList.length && (p.jigSuggest || p.pcsPerRack)) jigList = [{jig:p.jigSuggest||'', pcsPerRack:p.pcsPerRack||''}];
+    var jigText = jigList.map(function(r){ return (r.jig||'?')+':'+(r.pcsPerRack||'?'); }).join('; ');
+    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.lineMain||'',p.lineBackup||'',p.drumWeight||'',jigText,p.weightPerPc||'',p.note||'']);
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a = document.createElement('a');
