@@ -1420,12 +1420,21 @@ function calcJob(jobId) {
 //  ขอบเขต: ใช้เฉพาะโหมด "ขาย" (เลือกผ่าน P.No) เท่านั้น ไม่ใช้กับโหมด "เคลม" (เลือกผ่านลูกค้า/คืนของ ไม่ใช่การขาย
 //  ข้ามคิว) และไม่ใช้กับ job.closed (บิลที่ปิดไปแล้วไม่มีทางถูกเลือกอยู่แล้วเพราะ remain=0 เสมอ)
 // ══════════════════════════════════════
+// คำนวณ "คงเหลือจริงตอนนี้" ของบิลหนึ่ง — หักรายการที่เพิ่งเพิ่มไปแล้วในดราฟต์ INV ที่กำลังสร้างอยู่ (invDraft) ออก
+// ด้วยเสมอ ไม่ใช่แค่ข้อมูลที่บันทึกจริงใน jobRecords เท่านั้น — กันปัญหา "ออก INV รวมหลายบิลในใบเดียวไม่ได้" ทั้งที่
+// เพิ่งเคลียร์บิลก่อนหน้าหมดในดราฟต์เดียวกันแล้ว (แค่ยังไม่กดบันทึก ระบบจริงเลยยังไม่อัปเดตคงเหลือ)
+function getEffectiveRemain(job) {
+  var b = calcJob(job.id);
+  var baseRemain = job.unit==='kg' ? b.remainKg : b.remain;
+  var draftUsed = invDraft.filter(function(l){ return l.jobId===job.id; })
+    .reduce(function(s,l){ return s + (l.qty||0); }, 0);
+  return Math.max(0, baseRemain - draftUsed);
+}
+
 function getFifoSiblingsForJob(job) {
   var normKey = normalizePartKey(job.partName);
   var siblings = jobItems.filter(function(j) {
-    var b = calcJob(j.id);
-    var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
-    return hasRemain && normalizePartKey(j.partName) === normKey;
+    return getEffectiveRemain(j) > 0.0001 && normalizePartKey(j.partName) === normKey;
   });
   siblings.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
   return siblings;
@@ -1972,9 +1981,7 @@ function selectInvPart(partNo, hasStock, fromPM) {
   // ✅ อยู่ใน PM + มีสต็อก → แสดงขั้นที่ 2
   var normSel = normalizePartKey(partNo);
   var active = jobItems.filter(function(j) {
-    var b = calcJob(j.id);
-    var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
-    return hasRemain && normalizePartKey(j.partName) === normSel;
+    return getEffectiveRemain(j) > 0.0001 && normalizePartKey(j.partName) === normSel;
   });
 
   if (!active.length) {
@@ -1993,8 +2000,8 @@ function selectInvPart(partNo, hasStock, fromPM) {
   var sel = document.getElementById('invLineJobSel');
   var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
   active.forEach(function(j) {
-    var b = calcJob(j.id);
-    var rem = j.unit==='kg' ? b.remainKg.toFixed(2)+' กก.' : b.remain.toLocaleString()+' ชิ้น';
+    var effRemain = getEffectiveRemain(j);
+    var rem = j.unit==='kg' ? effRemain.toFixed(2)+' กก.' : effRemain.toLocaleString()+' ชิ้น';
     var blocker = getFifoBlocker(j);
     var label = (blocker ? '🔴 ' : (active.length>1 ? '🟢 ' : ''))
       + '['+esc(j.bill||'?')+'] เหลือ '+rem
