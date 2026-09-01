@@ -4137,28 +4137,34 @@ function printStatement() {
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
     '<title>ใบวางบิล '+esc(billNo)+'</title>'+
     '<style>'+
-    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;'+
-      'min-height:100vh;display:flex;flex-direction:column;}'+
+    // เดิมใช้ body{min-height:100vh;display:flex;flex-direction:column} + .sign{margin-top:auto} เพื่อดันลายเซ็นไปชิด
+    // ขอบล่างเสมอ แต่เจอบั๊กจริง: เบราว์เซอร์คำนวณการแบ่งหน้าพิมพ์ผิดพลาดเพราะ flexbox กับ pagination ไปด้วยกันไม่ได้ดี
+    // ทำให้เอกสารกระโดดเป็น 2 หน้าและข้อความท้ายบิลแตกกระจาย (เจอปัญหาจริงจากการทดสอบพิมพ์) — เปลี่ยนมาใช้ margin-top
+    // แบบคงที่ตามปกติแทน แล้วห่อ .sign + .footer-note ด้วย page-break-inside:avoid กันถูกตัดขาดกลางบล็อกแทน
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
     'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
-    '.hdr{text-align:center;margin-bottom:10px;}'+
+    // โลโก้อยู่ซ้ายมือ ข้อความบริษัทอยู่ข้างๆ ชิดซ้าย (ไม่ใช่กึ่งกลางแบบเดิม)
+    '.hdr{display:flex;align-items:center;gap:16px;margin-bottom:10px;text-align:left;}'+
+    '.hdr-text{text-align:left;}'+
     '.title{text-align:center;font-weight:700;font-size:16px;margin:10px 0;}'+
     '.box{border:1px solid #94a3b8;border-radius:8px;padding:10px;display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}'+
     '.total-row{font-weight:700;}'+
     '.baht-text{margin-top:8px;font-weight:700;}'+
-    // margin-top:auto ดันบล็อกนี้ (และทุกอย่างหลังจากนี้) ลงไปชิดด้านล่างสุดของหน้าเสมอ ไม่ว่าเนื้อหาด้านบนจะสั้นหรือยาวแค่ไหน
-    // (เดิมใช้ margin-top ตายตัว ทำให้ตำแหน่งขยับตามความยาวรายการ INV ด้านบน)
-    '.sign{display:flex;justify-content:space-between;margin-top:auto;padding-top:60px;text-align:center;font-size:11px;}'+
+    '.sign-block{margin-top:50px;page-break-inside:avoid;}'+
+    '.sign{display:flex;justify-content:space-between;text-align:center;font-size:11px;}'+
     '.sign div{width:30%;}'+
     '.sign .line{border-top:1px solid #94a3b8;padding-top:4px;margin-top:30px;}'+
     '.footer-note{margin-top:18px;text-align:center;font-size:11px;font-weight:700;line-height:1.6;}'+
-    '@media print{ body{padding:0;min-height:100vh;} }'+
+    '@media print{ body{padding:0;} }'+
     '</style></head><body>'+
     '<div class="hdr">'+
-      '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:56px;margin-bottom:6px;" alt="APK Plating logo">'+
-      '<div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
-      '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
-      '<div>Tel : 086-0711616  Fax . :  fax  E-mail : apk.plating@gmail.com</div>'+
+      '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:70px;flex-shrink:0;" alt="APK Plating logo">'+
+      '<div class="hdr-text">'+
+        '<div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+        '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
+        '<div>Tel : 086-0711616  Fax . :  fax  E-mail : apk.plating@gmail.com</div>'+
+      '</div>'+
     '</div>'+
     '<div class="title">ใบวางบิล</div>'+
     '<div class="box">'+
@@ -4183,15 +4189,17 @@ function printStatement() {
     '<td style="border:1px solid #94a3b8;padding:6px;"></td></tr>'+
     '</tbody></table>'+
     '<div class="baht-text">( '+thaiBahtText(total)+' )</div>'+
-    '<div class="sign">'+
-      '<div><div class="line">ผู้รับวางบิล<br>วันที่............/............/............</div></div>'+
-      '<div><div class="line">วันที่นัดชำระ<br>วันที่............/............/............</div></div>'+
-      '<div><div class="line">ผู้วางบิล<br>วันที่............/............/............</div></div>'+
-    '</div>'+
-    '<div class="footer-note">'+
-      '***โปรดจ่ายเช็คหรือโอนในนาม บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด***<br>'+
-      'เลขที่บัญชี 016-3-13877-8 ธนาคารกสิกร (ออมทรัพย์) สาขาศูนย์การค้าปู่เจ้า<br>'+
-      '***รบกวนส่ง Pay in ที่ email : apk.plating@gmail.com***'+
+    '<div class="sign-block">'+
+      '<div class="sign">'+
+        '<div><div class="line">ผู้รับวางบิล<br>วันที่............/............/............</div></div>'+
+        '<div><div class="line">วันที่นัดชำระ<br>วันที่............/............/............</div></div>'+
+        '<div><div class="line">ผู้วางบิล<br>วันที่............/............/............</div></div>'+
+      '</div>'+
+      '<div class="footer-note">'+
+        '***โปรดจ่ายเช็คหรือโอนในนาม บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด***<br>'+
+        'เลขที่บัญชี 016-3-13877-8 ธนาคารกสิกร (ออมทรัพย์) สาขาศูนย์การค้าปู่เจ้า<br>'+
+        '***รบกวนส่ง Pay in ที่ email : apk.plating@gmail.com***'+
+      '</div>'+
     '</div>'+
     '</body></html>';
 
