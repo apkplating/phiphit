@@ -822,6 +822,25 @@ if ('caches' in window) {
     <div id="toast-stm" class="toast"></div>
   </div>
 
+  <!-- ── ประวัติใบวางบิล — ดูย้อนหลัง/พิมพ์สำเนาบิลเก่าได้ ── -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="card-label" style="padding:14px 16px 0;">📜 ประวัติใบวางบิล</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:520px;">
+        <thead><tr>
+          <th class="td-l">เลขที่บิล</th>
+          <th class="td-l">วันที่</th>
+          <th class="td-l">ลูกค้า</th>
+          <th>ยอดรวม</th>
+          <th style="width:120px;">จัดการ</th>
+        </tr></thead>
+        <tbody id="stmHistoryBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่เคยออกใบวางบิล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- ══ TAB: ทะเบียนราคา ══ -->
@@ -1228,7 +1247,7 @@ function tab(t) {
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
-  if (t==='statement') { renderStatementCustomers(); }
+  if (t==='statement') { renderStatementCustomers(); renderStatementHistory(); }
   if (t==='pricelist') { renderPriceList(); renderPriceFormHints(); }
   if (t==='customers') { clearCustomerForm(); renderCustomerRegistryPage(); }
 }
@@ -4136,13 +4155,22 @@ function printStatement() {
   });
   saveLocal(); fbSave();
 
-  // ── สร้าง HTML ใบวางบิล — ใช้กลไก <thead>/<tfoot> ของตาราง HTML แทนการเดาจำนวนแถวต่อหน้าเอง ──
-  // ลองมาแล้ว 3 วิธี: flexbox(min-height:100vh) → พังหน้าพิมพ์, position:fixed → ทับซ้อนตารางเมื่อรายการเยอะ,
-  // แบ่งเป็น <div class="page"> เดา 20 แถว/หน้า → 20 แถวไม่พอดีจริง (มีหัวกระดาษเต็มใส่ได้จริงแค่ ~16 แถว/หน้า)
-  // ล้นเป็นแผ่นเพิ่มอัตโนมัติ — รอบนี้เลิกเดาเลย ใช้ <thead>/<tfoot> ซึ่งเบราว์เซอร์ซ้ำให้เองทุกหน้าพิมพ์ตาม
-  // มาตรฐาน HTML/CSS (thead=table-header-group, tfoot=table-footer-group) แล้วปล่อยให้เบราว์เซอร์คำนวณเองว่า
-  // แต่ละหน้าใส่ได้กี่แถวจากความสูงจริง ไม่ต้องเดาตัวเลขอีก — หัวกระดาษเต็ม + ท้ายบิล (ลายเซ็น+ข้อความชำระเงิน)
-  // จะซ้ำทุกหน้าอัตโนมัติตามที่ขอ ส่วนยอดรวม/บาทตัวอักษรอยู่ในตัวตาราง (tbody) ครั้งเดียวที่ท้ายรายการจริง
+  var html = buildStatementHtml(billNo, date, custAddr, rows, total, false);
+  openStatementPrintWindow(html);
+
+  showToast('stm','✅ สร้างใบวางบิล '+billNo+' สำเร็จ ('+rows.length+' INV)','ok');
+  renderStatementInv();
+  renderStatementHistory();
+}
+
+// ── สร้าง HTML ใบวางบิล ใช้ร่วมกันทั้งตอนออกบิลใหม่ (isCopy=false) และพิมพ์สำเนาบิลเก่า (isCopy=true) ──
+// ใช้กลไก <thead>/<tfoot> ของตาราง HTML แทนการเดาจำนวนแถวต่อหน้าเอง — ลองมาแล้ว 3 วิธี: flexbox(min-height:100vh)
+// → พังหน้าพิมพ์, position:fixed → ทับซ้อนตารางเมื่อรายการเยอะ, แบ่งเป็น <div class="page"> เดา 20 แถว/หน้า →
+// 20 แถวไม่พอดีจริง (มีหัวกระดาษเต็มใส่ได้จริงแค่ ~16 แถว/หน้า) ล้นเป็นแผ่นเพิ่มอัตโนมัติ — ใช้ <thead>/<tfoot>
+// ซึ่งเบราว์เซอร์ซ้ำให้เองทุกหน้าพิมพ์ตามมาตรฐาน HTML/CSS (thead=table-header-group, tfoot=table-footer-group)
+// แล้วปล่อยให้เบราว์เซอร์คำนวณเองว่าแต่ละหน้าใส่ได้กี่แถวจากความสูงจริง หัวกระดาษเต็ม + ท้ายบิล (ลายเซ็น+ข้อความ
+// ชำระเงิน) จะซ้ำทุกหน้าอัตโนมัติ ส่วนยอดรวม/บาทตัวอักษรอยู่ในตัวตาราง (tbody) ครั้งเดียวที่ท้ายรายการจริง
+function buildStatementHtml(billNo, date, custAddr, rows, total, isCopy) {
   var rowsHtml = rows.map(function(inv, i){
     var days = parseTermDays(inv.term);
     var due = inv.date ? addDays(inv.date, days) : '';
@@ -4156,7 +4184,12 @@ function printStatement() {
     '</tr>';
   }).join('');
 
+  var copyBadgeHtml = isCopy
+    ? '<div style="text-align:center;color:#dc2626;font-weight:700;font-size:14px;letter-spacing:2px;margin-bottom:6px;">— สำเนา / COPY —</div>'
+    : '';
+
   var letterheadHtml =
+    copyBadgeHtml +
     '<div class="hdr">'+
       '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:70px;flex-shrink:0;" alt="APK Plating logo">'+
       '<div class="hdr-text">'+
@@ -4190,15 +4223,14 @@ function printStatement() {
       '</div>'+
     '</div>';
 
-  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
-    '<title>ใบวางบิล '+esc(billNo)+'</title>'+
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>ใบวางบิล '+esc(billNo)+(isCopy?' (สำเนา)':'')+'</title>'+
     '<style>'+
     'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
     'table{width:100%;border-collapse:collapse;}'+
-    // thead/tfoot ซ้ำทุกหน้าพิมพ์อัตโนมัติตามมาตรฐาน HTML/CSS (ค่าเริ่มต้นของเบราว์เซอร์อยู่แล้ว แต่ระบุชัดเจนไว้กันเผื่อ)
     'thead{display:table-header-group;} tfoot{display:table-footer-group;}'+
     'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
-    'tr{page-break-inside:avoid;}'+ // กันแถวเดียวถูกตัดขาดครึ่งแถวข้ามหน้า
+    'tr{page-break-inside:avoid;}'+
     '.hdr{display:flex;align-items:center;gap:16px;margin-bottom:10px;text-align:left;}'+
     '.hdr-text{text-align:left;}'+
     '.title{text-align:center;font-weight:700;font-size:16px;margin:10px 0;}'+
@@ -4235,15 +4267,59 @@ function printStatement() {
       '</tfoot>'+
     '</table>'+
     '</body></html>';
+}
 
+function openStatementPrintWindow(html) {
   var w = window.open('', '_blank');
-  if (!w) { showToast('stm','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
+  if (!w) { showToast('stm','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return false; }
   w.document.write(html);
   w.document.close();
   w.onload = function(){ w.focus(); w.print(); };
+  return true;
+}
 
-  showToast('stm','✅ สร้างใบวางบิล '+billNo+' สำเร็จ ('+rows.length+' INV)','ok');
-  renderStatementInv();
+// ── พิมพ์สำเนาใบวางบิลที่เคยออกไปแล้ว — ดึงข้อมูลจาก billStatements (ไม่แก้ไข/ไม่บันทึกอะไรใหม่ แค่พิมพ์ซ้ำ
+// จากข้อมูลเดิม) ใส่ป้าย "สำเนา/COPY" กำกับให้เห็นชัดว่าไม่ใช่ต้นฉบับ ──
+function printStatementCopy(billId) {
+  var stm = billStatements.find(function(b){ return b.id===billId; });
+  if (!stm) { showToast('stm','ไม่พบใบวางบิลนี้ในประวัติ','err'); return; }
+
+  var rows = (stm.invoiceIds||[]).map(function(invNo){
+    return invoices.find(function(i){ return i.invNo===invNo; });
+  }).filter(Boolean).sort(function(a,b){ return (a.invNo||'').localeCompare(b.invNo||'', undefined, {numeric:true}); });
+
+  if (!rows.length) { showToast('stm','⚠️ ไม่พบ INV ในใบวางบิลนี้แล้ว (อาจถูกลบ/แก้ไขไปหลังจากออกบิล)','err'); return; }
+
+  var custAddr = stm.customer;
+  var presetCust = customers.find(function(c){ return custKeyNorm(c.addressText)===stm.customer; });
+  if (presetCust) custAddr = presetCust.addressText;
+
+  // ใช้ยอดรวมที่บันทึกไว้ตอนออกบิลจริง (ไม่คำนวณใหม่จาก INV ปัจจุบัน เผื่อ INV มีการแก้ไขราคาไปหลังจากนั้น
+  // สำเนาควรตรงกับต้นฉบับที่เคยพิมพ์ไปจริง ไม่ใช่ยอดที่คำนวณใหม่ล่าสุด)
+  var total = Number(stm.total||0);
+
+  var html = buildStatementHtml(stm.billNo, stm.date, custAddr, rows, total, true);
+  openStatementPrintWindow(html);
+}
+
+// ── แสดงประวัติใบวางบิลที่เคยออกไปแล้วทั้งหมด พร้อมปุ่มพิมพ์สำเนา ──
+function renderStatementHistory() {
+  var tbody = document.getElementById('stmHistoryBody');
+  if (!tbody) return;
+  if (!billStatements.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่เคยออกใบวางบิล</td></tr>';
+    return;
+  }
+  var sorted = billStatements.slice().sort(function(a,b){ return (b.billNo||'').localeCompare(a.billNo||'', undefined, {numeric:true}); });
+  tbody.innerHTML = sorted.map(function(stm){
+    return '<tr>'+
+      '<td class="td-l" style="font-weight:700;">'+esc(stm.billNo)+'</td>'+
+      '<td class="td-l">'+fmtDateTH(stm.date)+'</td>'+
+      '<td class="td-l">'+esc(stm.customer)+'</td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--blue);">'+Number(stm.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td><button onclick="printStatementCopy(\''+stm.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨️ พิมพ์สำเนา</button></td>'+
+    '</tr>';
+  }).join('');
 }
 
 
