@@ -3987,7 +3987,7 @@ function renderStatementInv() {
     if (!showAll && inv.billNo) return false; // ซ่อนที่วางบิลแล้ว
     if (monthKey && String(inv.date||'').slice(0,7) !== monthKey) return false; // กรองตามเดือนที่เลือก
     return true;
-  }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  }).sort(function(a,b){ return (a.invNo||'').localeCompare(b.invNo||'', undefined, {numeric:true}); });
 
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">'+
@@ -4113,7 +4113,7 @@ function printStatement() {
     var invNo = chk.dataset.inv;
     var inv = invoices.find(function(i){ return i.invNo===invNo; });
     return inv;
-  }).filter(Boolean).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  }).filter(Boolean).sort(function(a,b){ return (a.invNo||'').localeCompare(b.invNo||'', undefined, {numeric:true}); });
 
   var total = moneyCentsSum(rows.map(function(inv){ return inv.netTotal; })) / 100;
 
