@@ -4127,90 +4127,120 @@ function printStatement() {
   });
   saveLocal(); fbSave();
 
-  // ── สร้าง HTML ใบวางบิล ──
-  var rowsHtml = rows.map(function(inv,i){
-    var days = parseTermDays(inv.term);
-    var due = inv.date ? addDays(inv.date, days) : '';
-    return '<tr>'+
-      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+(i+1)+'</td>'+
-      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+esc(inv.invNo)+'</td>'+
-      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(inv.date)+'</td>'+
-      '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(due)+'</td>'+
-      '<td style="text-align:right;border:1px solid #94a3b8;padding:5px;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
-      '<td style="border:1px solid #94a3b8;padding:5px;"></td>'+
-    '</tr>';
+  // ── สร้าง HTML ใบวางบิล — แบ่งหน้าจริง 20 แถว/หน้า (เลิกใช้ position:fixed ที่เจอบั๊กทับซ้อนตารางเมื่อรายการเยอะ
+  // — ยิ่งเนื้อหายาวยิ่งชนแน่นอนเพราะ fixed element ไม่รู้จักว่าเนื้อหาปกติอยู่ตรงไหน) หน้าแรกมีหัวกระดาษเต็ม
+  // หน้าถัดไปมีหัวกระดาษย่อ+เลขหน้า กันสับสนว่าใบไหนของใคร ตารางรวม/บาทตัวอักษร/ลายเซ็น/ท้ายบิล อยู่เฉพาะหน้า
+  // สุดท้ายเท่านั้น ใช้ page-break-after:always (เทคนิคมาตรฐานจริงสำหรับแบ่งหน้าพิมพ์ ต่างจาก flexbox/fixed ที่
+  // เจอบั๊กมาก่อนหน้านี้ 2 รอบ) แบ่งเป็น <div class="page"> แยกแต่ละหน้า ไม่ให้เบราว์เซอร์ต้องเดาเอง
+  var ROWS_PER_PAGE = 20;
+  function chunkRows(arr, size) {
+    var out = [];
+    for (var i=0; i<arr.length; i+=size) out.push(arr.slice(i, i+size));
+    return out;
+  }
+  var pages = chunkRows(rows, ROWS_PER_PAGE);
+  var totalPages = pages.length;
+
+  var pagesHtml = pages.map(function(pageRows, pageIdx){
+    var isFirst = pageIdx === 0;
+    var isLast  = pageIdx === totalPages - 1;
+    var startIdx = pageIdx * ROWS_PER_PAGE;
+
+    var rowsHtml = pageRows.map(function(inv, i){
+      var days = parseTermDays(inv.term);
+      var due = inv.date ? addDays(inv.date, days) : '';
+      return '<tr>'+
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+(startIdx+i+1)+'</td>'+
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+esc(inv.invNo)+'</td>'+
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(inv.date)+'</td>'+
+        '<td style="text-align:center;border:1px solid #94a3b8;padding:5px;">'+fmtDateTH(due)+'</td>'+
+        '<td style="text-align:right;border:1px solid #94a3b8;padding:5px;">'+Number(inv.netTotal||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td style="border:1px solid #94a3b8;padding:5px;"></td>'+
+      '</tr>';
+    }).join('');
+
+    var headerHtml = isFirst
+      ? ('<div class="hdr">'+
+            '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:70px;flex-shrink:0;" alt="APK Plating logo">'+
+            '<div class="hdr-text">'+
+              '<div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+              '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
+              '<div>Tel : 086-0711616  Fax . :  fax  E-mail : apk.plating@gmail.com</div>'+
+            '</div>'+
+          '</div>'+
+          '<div class="title">ใบวางบิล'+(totalPages>1?' (หน้า 1/'+totalPages+')':'')+'</div>'+
+          '<div class="box">'+
+            '<div style="white-space:pre-line;flex:2;"><b>นามลูกค้า / ที่อยู่</b><br>'+esc(custAddr)+'</div>'+
+            '<div style="flex:1;font-size:12px;">'+
+              '<b>เลขที่</b> '+esc(billNo)+'<br>'+
+              '<b>วันที่</b> '+fmtDateTH(date)+'<br>'+
+              '<b>เงื่อนไขการชำระ</b> '+esc(rows[0]&&rows[0].term||'30 วัน')+
+            '</div>'+
+          '</div>'+
+          '<div style="font-size:12px;margin-bottom:4px;">รับบิลไว้ตรวจสอบตามรายละเอียดรายการข้างล่างนี้ถูกต้องแล้ว</div>')
+      : ('<div class="title" style="text-align:left;font-size:13px;margin-bottom:10px;">ใบวางบิล เลขที่ '+esc(billNo)+' (ต่อ) — หน้า '+(pageIdx+1)+'/'+totalPages+'</div>');
+
+    var totalRowHtml = isLast
+      ? '<tr class="total-row"><td colspan="4" style="text-align:right;border:1px solid #94a3b8;padding:6px;">รวม</td>'+
+        '<td style="text-align:right;border:1px solid #94a3b8;padding:6px;">'+total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+        '<td style="border:1px solid #94a3b8;padding:6px;"></td></tr>'
+      : '';
+
+    var footerHtml = isLast
+      ? ('<div class="baht-text">( '+thaiBahtText(total)+' )</div>'+
+          '<div class="sign-block">'+
+            '<div class="sign">'+
+              '<div><div class="line">ผู้รับวางบิล<br>วันที่............/............/............</div></div>'+
+              '<div><div class="line">วันที่นัดชำระ<br>วันที่............/............/............</div></div>'+
+              '<div><div class="line">ผู้วางบิล<br>วันที่............/............/............</div></div>'+
+            '</div>'+
+            '<div class="footer-note">'+
+              '***โปรดจ่ายเช็คหรือโอนในนาม บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด***<br>'+
+              'เลขที่บัญชี 016-3-13877-8 ธนาคารกสิกร (ออมทรัพย์) สาขาศูนย์การค้าปู่เจ้า<br>'+
+              '***รบกวนส่ง Pay in ที่ email : apk.plating@gmail.com***'+
+            '</div>'+
+          '</div>')
+      : '';
+
+    return '<div class="page'+(isLast?'':' page-break')+'">'+
+      headerHtml +
+      '<table><thead><tr>'+
+        '<th style="width:40px;">ลำดับที่</th>'+
+        '<th>เลขที่บิล</th>'+
+        '<th>วันที่</th>'+
+        '<th>วันครบกำหนด</th>'+
+        '<th style="width:100px;">จำนวนเงิน</th>'+
+        '<th>หมายเหตุ</th>'+
+      '</tr></thead><tbody>'+rowsHtml+totalRowHtml+'</tbody></table>'+
+      footerHtml +
+    '</div>';
   }).join('');
 
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
     '<title>ใบวางบิล '+esc(billNo)+'</title>'+
     '<style>'+
-    // เดิมใช้ body{min-height:100vh;display:flex;flex-direction:column} + .sign{margin-top:auto} เพื่อดันลายเซ็นไปชิด
-    // ขอบล่างเสมอ แต่เจอบั๊กจริง: เบราว์เซอร์คำนวณการแบ่งหน้าพิมพ์ผิดพลาดเพราะ flexbox กับ pagination ไปด้วยกันไม่ได้ดี
-    // ทำให้เอกสารกระโดดเป็น 2 หน้าและข้อความท้ายบิลแตกกระจาย — ลองใช้ margin-top คงที่ไปแล้วรอบหนึ่ง แต่ผลคือไม่อยู่
-    // ล่างสุดจริงเหมือนที่ต้องการ (แค่ชิดท้ายรายการ INV) — รอบนี้เปลี่ยนมาใช้ position:fixed แทน ซึ่งเป็นเทคนิค
-    // มาตรฐานสำหรับ "footer หน้าพิมพ์" — fixed element ถูกดึงออกจาก normal flow ไม่มีผลต่อการคำนวณความสูงเอกสาร
-    // เลยไม่ไปกวนการแบ่งหน้าเหมือน flexbox แต่ยังคงตำแหน่งไว้ที่ขอบล่างของหน้าเสมอไม่ว่าเนื้อหาด้านบนจะสั้นแค่ไหน
-    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;padding-bottom:150px;}'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;}'+
+    '.page{padding:24px;}'+
+    // page-break-after:always คือเทคนิคมาตรฐานจริงสำหรับ "จบหน้านี้ ขึ้นหน้าใหม่" รองรับดีทั้ง Chrome/Edge/Firefox
+    // ต่างจาก flexbox(min-height:100vh) และ position:fixed ที่เคยลองมาก่อนหน้านี้แล้วเจอบั๊กทั้งคู่
+    '.page-break{page-break-after:always;}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
     'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
-    // โลโก้อยู่ซ้ายมือ ข้อความบริษัทอยู่ข้างๆ ชิดซ้าย (ไม่ใช่กึ่งกลางแบบเดิม)
+    'tr{page-break-inside:avoid;}'+ // กันแถวเดียวถูกตัดขาดครึ่งแถวข้ามหน้า (ควรไม่เกิดอยู่แล้วเพราะแบ่งเป็นก้อน 20 แถว แต่กันไว้)
     '.hdr{display:flex;align-items:center;gap:16px;margin-bottom:10px;text-align:left;}'+
     '.hdr-text{text-align:left;}'+
     '.title{text-align:center;font-weight:700;font-size:16px;margin:10px 0;}'+
     '.box{border:1px solid #94a3b8;border-radius:8px;padding:10px;display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}'+
     '.total-row{font-weight:700;}'+
     '.baht-text{margin-top:8px;font-weight:700;}'+
-    // position:fixed ยึดกับขอบล่างของ "หน้า" เสมอ (ถ้าเนื้อหายาวจนล้นไปหลายหน้าจริงๆ จะโชว์ซ้ำทุกหน้าเหมือน
-    // footer เอกสารทั่วไป ไม่ใช่บั๊ก) — padding-bottom ของ body กันเนื้อหาปกติชนกับบล็อกนี้ถ้ารายการ INV ยาวมาก
-    '.sign-block{position:fixed;left:24px;right:24px;bottom:24px;}'+
+    '.sign-block{margin-top:50px;}'+
     '.sign{display:flex;justify-content:space-between;text-align:center;font-size:11px;}'+
     '.sign div{width:30%;}'+
     '.sign .line{border-top:1px solid #94a3b8;padding-top:4px;margin-top:30px;}'+
     '.footer-note{margin-top:18px;text-align:center;font-size:11px;font-weight:700;line-height:1.6;}'+
+    '@media print{ .page{padding:0 24px;} }'+
     '</style></head><body>'+
-    '<div class="hdr">'+
-      '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:70px;flex-shrink:0;" alt="APK Plating logo">'+
-      '<div class="hdr-text">'+
-        '<div style="font-weight:700;font-size:16px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
-        '<div>774 หมู่ที่ 3 ตำบลบางปลา อำเภอบางพลี จังหวัดสมุทรปราการ 10540</div>'+
-        '<div>Tel : 086-0711616  Fax . :  fax  E-mail : apk.plating@gmail.com</div>'+
-      '</div>'+
-    '</div>'+
-    '<div class="title">ใบวางบิล</div>'+
-    '<div class="box">'+
-      '<div style="white-space:pre-line;flex:2;"><b>นามลูกค้า / ที่อยู่</b><br>'+esc(custAddr)+'</div>'+
-      '<div style="flex:1;font-size:12px;">'+
-        '<b>เลขที่</b> '+esc(billNo)+'<br>'+
-        '<b>วันที่</b> '+fmtDateTH(date)+'<br>'+
-        '<b>เงื่อนไขการชำระ</b> '+esc(rows[0]&&rows[0].term||'30 วัน')+
-      '</div>'+
-    '</div>'+
-    '<div style="font-size:12px;margin-bottom:4px;">รับบิลไว้ตรวจสอบตามรายละเอียดรายการข้างล่างนี้ถูกต้องแล้ว</div>'+
-    '<table><thead><tr>'+
-      '<th style="width:40px;">ลำดับที่</th>'+
-      '<th>เลขที่บิล</th>'+
-      '<th>วันที่</th>'+
-      '<th>วันครบกำหนด</th>'+
-      '<th style="width:100px;">จำนวนเงิน</th>'+
-      '<th>หมายเหตุ</th>'+
-    '</tr></thead><tbody>'+rowsHtml+
-    '<tr class="total-row"><td colspan="4" style="text-align:right;border:1px solid #94a3b8;padding:6px;">รวม</td>'+
-    '<td style="text-align:right;border:1px solid #94a3b8;padding:6px;">'+total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
-    '<td style="border:1px solid #94a3b8;padding:6px;"></td></tr>'+
-    '</tbody></table>'+
-    '<div class="baht-text">( '+thaiBahtText(total)+' )</div>'+
-    '<div class="sign-block">'+
-      '<div class="sign">'+
-        '<div><div class="line">ผู้รับวางบิล<br>วันที่............/............/............</div></div>'+
-        '<div><div class="line">วันที่นัดชำระ<br>วันที่............/............/............</div></div>'+
-        '<div><div class="line">ผู้วางบิล<br>วันที่............/............/............</div></div>'+
-      '</div>'+
-      '<div class="footer-note">'+
-        '***โปรดจ่ายเช็คหรือโอนในนาม บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด***<br>'+
-        'เลขที่บัญชี 016-3-13877-8 ธนาคารกสิกร (ออมทรัพย์) สาขาศูนย์การค้าปู่เจ้า<br>'+
-        '***รบกวนส่ง Pay in ที่ email : apk.plating@gmail.com***'+
-      '</div>'+
-    '</div>'+
+    pagesHtml +
     '</body></html>';
 
   var w = window.open('', '_blank');
