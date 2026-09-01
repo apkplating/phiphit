@@ -3923,6 +3923,17 @@ function fmtDateTH(dateStr) {
 }
 
 // เติม dropdown ลูกค้าสำหรับใบวางบิล (รวมจากทะเบียนลูกค้า + ลูกค้าที่มีใน invoices)
+// ══════════════════════════════════════
+//  custKeyNorm — จับคู่ชื่อลูกค้าแบบเดียวกันทั้งระบบใบวางบิล (Statement)
+//  เดิมแต่ละจุดใช้ (inv.customer||'').split('\n')[0].trim() ตรงๆ เทียบแบบ === เป๊ะ — ถ้าชื่อลูกค้าที่กรอกตอนออก
+//  INV มีช่องว่างเกิน/ไม่ตรงกับที่ลงทะเบียนไว้ในทะเบียนลูกค้าแม้แค่ตัวอักษรเดียว (เช่น เว้นวรรค 2 ครั้งแทน 1 ครั้ง)
+//  จะจับคู่กันไม่ติด ทำให้ INV เดือนนั้นหายไปเงียบๆ ทั้งจาก dropdown เดือนและรายการที่เลือกออกบิลได้ (เจอบั๊กจริง
+//  ตามที่แจ้ง) — เพิ่มการยุบช่องว่างซ้ำให้เหลือช่องเดียวกันปัญหานี้ ใช้ฟังก์ชันเดียวกันทุกจุดที่ต้องจับคู่ลูกค้า
+// ══════════════════════════════════════
+function custKeyNorm(s) {
+  return (s||'').split('\n')[0].trim().replace(/\s+/g, ' ');
+}
+
 function renderStatementCustomers() {
   var sel = document.getElementById('stmCustomerSel');
   if (!sel) return;
@@ -3930,13 +3941,13 @@ function renderStatementCustomers() {
 
   var seen = {}; var opts = [];
   customers.forEach(function(c){
-    var key = c.addressText.split('\n')[0].trim();
+    var key = custKeyNorm(c.addressText);
     if (seen[key]) return;
     seen[key] = true;
     opts.push({ key:key, label:c.name });
   });
   invoices.forEach(function(inv){
-    var key = (inv.customer||'').split('\n')[0].trim();
+    var key = custKeyNorm(inv.customer);
     if (!key || seen[key]) return;
     seen[key] = true;
     opts.push({ key:key, label:key });
@@ -3967,8 +3978,7 @@ function renderStatementInv() {
 
   // เติม dropdown เดือนจาก INV ทั้งหมดของลูกค้ารายนี้ (ไม่ขึ้นกับ showAll — ให้เลือกย้อนดูเดือนเก่าที่วางบิลไปแล้วได้ด้วย)
   var custInvoicesAll = invoices.filter(function(inv){
-    var key = (inv.customer||'').split('\n')[0].trim();
-    return key === custKey && !inv.voided;
+    return custKeyNorm(inv.customer) === custKey && !inv.voided;
   });
   var months = {};
   custInvoicesAll.forEach(function(inv){ if (inv.date) months[String(inv.date).slice(0,7)] = 1; });
@@ -3981,8 +3991,7 @@ function renderStatementInv() {
   var monthKey = monthSel.value;
 
   var list = invoices.filter(function(inv){
-    var key = (inv.customer||'').split('\n')[0].trim();
-    if (key !== custKey) return false;
+    if (custKeyNorm(inv.customer) !== custKey) return false;
     if (inv.voided) return false; // INV ที่ยกเลิกแล้ว ไม่ให้เอามาวางบิลอีก
     if (!showAll && inv.billNo) return false; // ซ่อนที่วางบิลแล้ว
     if (monthKey && String(inv.date||'').slice(0,7) !== monthKey) return false; // กรองตามเดือนที่เลือก
@@ -4102,10 +4111,10 @@ function printStatement() {
 
   // หาที่อยู่เต็มจาก customers หรือจาก invoice แรก
   var custAddr = custKey;
-  var presetCust = customers.find(function(c){ return c.addressText.split('\n')[0].trim()===custKey; });
+  var presetCust = customers.find(function(c){ return custKeyNorm(c.addressText)===custKey; });
   if (presetCust) custAddr = presetCust.addressText;
   else {
-    var firstInv = invoices.find(function(inv){ return (inv.customer||'').split('\n')[0].trim()===custKey; });
+    var firstInv = invoices.find(function(inv){ return custKeyNorm(inv.customer)===custKey; });
     if (firstInv) custAddr = firstInv.customer;
   }
 
