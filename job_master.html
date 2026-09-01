@@ -205,6 +205,7 @@ if ('caches' in window) {
   <button class="tab-btn" onclick="tab('out')">📤 ออก INV ขาย</button>
   <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
   <button class="tab-btn" onclick="tab('sales')">📊 ยอดขาย</button>
+  <button class="tab-btn" onclick="tab('statement')">📑 วางบิล</button>
   <button class="tab-btn" onclick="tab('pricelist')">💲 ทะเบียนราคา</button>
   <button class="tab-btn" onclick="tab('customers')">👤 ทะเบียนลูกค้า</button>
 </div>
@@ -758,6 +759,11 @@ if ('caches' in window) {
     </div>
   </div>
 
+</div>
+
+<!-- ══ TAB: วางบิล (Statement) — แยกออกมาจากแท็บยอดขาย กันต้องเลื่อนหาไกลเวลา INV เยอะขึ้น ══ -->
+<div id="v-statement" class="view">
+
   <!-- ── ใบวางบิล (Statement) ── -->
   <div class="card">
     <div class="card-label">📑 สร้างใบวางบิล (Statement)</div>
@@ -1059,7 +1065,7 @@ var SYSTEM_KEY = 'job_master';
 // ทุกไฟล์ในระบบ กันปัญหา floating-point tie-break ที่ทำให้ยอด VAT/ยอดรวมผิด 1 สตางค์แบบสุ่ม (เจอซ้ำหลายรอบ
 // มาก่อนตอนแต่ละไฟล์เขียน logic ปัดเศษเองแยกกัน) ดูรายละเอียด/วิธีใช้เต็มๆ ได้ในไฟล์ money-utils.js
 
-var TAB_IDS = ['board','in','out','history','sales','pricelist','customers'];
+var TAB_IDS = ['board','in','out','history','sales','statement','pricelist','customers'];
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
@@ -1211,7 +1217,7 @@ function applyStockOverridePermission() {
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['board','in','out','history','sales','pricelist','customers'].forEach(function(n, i) {
+  ['board','in','out','history','sales','statement','pricelist','customers'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -1222,6 +1228,7 @@ function tab(t) {
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
+  if (t==='statement') { renderStatementCustomers(); }
   if (t==='pricelist') { renderPriceList(); renderPriceFormHints(); }
   if (t==='customers') { clearCustomerForm(); renderCustomerRegistryPage(); }
 }
@@ -4139,9 +4146,11 @@ function printStatement() {
     '<style>'+
     // เดิมใช้ body{min-height:100vh;display:flex;flex-direction:column} + .sign{margin-top:auto} เพื่อดันลายเซ็นไปชิด
     // ขอบล่างเสมอ แต่เจอบั๊กจริง: เบราว์เซอร์คำนวณการแบ่งหน้าพิมพ์ผิดพลาดเพราะ flexbox กับ pagination ไปด้วยกันไม่ได้ดี
-    // ทำให้เอกสารกระโดดเป็น 2 หน้าและข้อความท้ายบิลแตกกระจาย (เจอปัญหาจริงจากการทดสอบพิมพ์) — เปลี่ยนมาใช้ margin-top
-    // แบบคงที่ตามปกติแทน แล้วห่อ .sign + .footer-note ด้วย page-break-inside:avoid กันถูกตัดขาดกลางบล็อกแทน
-    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;}'+
+    // ทำให้เอกสารกระโดดเป็น 2 หน้าและข้อความท้ายบิลแตกกระจาย — ลองใช้ margin-top คงที่ไปแล้วรอบหนึ่ง แต่ผลคือไม่อยู่
+    // ล่างสุดจริงเหมือนที่ต้องการ (แค่ชิดท้ายรายการ INV) — รอบนี้เปลี่ยนมาใช้ position:fixed แทน ซึ่งเป็นเทคนิค
+    // มาตรฐานสำหรับ "footer หน้าพิมพ์" — fixed element ถูกดึงออกจาก normal flow ไม่มีผลต่อการคำนวณความสูงเอกสาร
+    // เลยไม่ไปกวนการแบ่งหน้าเหมือน flexbox แต่ยังคงตำแหน่งไว้ที่ขอบล่างของหน้าเสมอไม่ว่าเนื้อหาด้านบนจะสั้นแค่ไหน
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:13px;color:#0f172a;padding:24px;padding-bottom:150px;}'+
     'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
     'th{background:#dbeafe;border:1px solid #94a3b8;padding:6px;font-size:12px;}'+
     // โลโก้อยู่ซ้ายมือ ข้อความบริษัทอยู่ข้างๆ ชิดซ้าย (ไม่ใช่กึ่งกลางแบบเดิม)
@@ -4151,12 +4160,13 @@ function printStatement() {
     '.box{border:1px solid #94a3b8;border-radius:8px;padding:10px;display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}'+
     '.total-row{font-weight:700;}'+
     '.baht-text{margin-top:8px;font-weight:700;}'+
-    '.sign-block{margin-top:50px;page-break-inside:avoid;}'+
+    // position:fixed ยึดกับขอบล่างของ "หน้า" เสมอ (ถ้าเนื้อหายาวจนล้นไปหลายหน้าจริงๆ จะโชว์ซ้ำทุกหน้าเหมือน
+    // footer เอกสารทั่วไป ไม่ใช่บั๊ก) — padding-bottom ของ body กันเนื้อหาปกติชนกับบล็อกนี้ถ้ารายการ INV ยาวมาก
+    '.sign-block{position:fixed;left:24px;right:24px;bottom:24px;}'+
     '.sign{display:flex;justify-content:space-between;text-align:center;font-size:11px;}'+
     '.sign div{width:30%;}'+
     '.sign .line{border-top:1px solid #94a3b8;padding-top:4px;margin-top:30px;}'+
     '.footer-note{margin-top:18px;text-align:center;font-size:11px;font-weight:700;line-height:1.6;}'+
-    '@media print{ body{padding:0;} }'+
     '</style></head><body>'+
     '<div class="hdr">'+
       '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:70px;flex-shrink:0;" alt="APK Plating logo">'+
