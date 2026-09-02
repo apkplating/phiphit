@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>QC 100% — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --navy-light:#1e4976;
+  --blue:#2e75b6; --blue-light:#5ba3d9;
+  --sky:#d6eaf8; --sky-pale:#eaf4fb;
+  --white:#fff;
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --border:rgba(46,117,182,0.18);
+  --red:#dc2626; --red-bg:#fef2f2;
+  --green:#065f46; --green-bg:#ecfdf5; --green-border:rgba(6,95,70,0.2);
+  --amber:#b45309; --amber-bg:#fffbeb;
+  --shadow:0 2px 10px rgba(15,39,68,0.08);
+}
+*{box-sizing:border-box;}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;margin:0;color:var(--text);}
+.app-header{background:var(--navy);padding:20px 20px 16px;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:19px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.line-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;}
+.line-btn{padding:7px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:#cbd8e8;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.line-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.lang-btn{margin-left:auto;font-size:11px;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font-family:inherit;}
+.wrap{max-width:900px;margin:0 auto;padding:14px 16px 60px;}
+.card{background:var(--white);border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow);}
+.card-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.10em;text-transform:uppercase;margin-bottom:10px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;}
+.field input:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,0.12);background:#fff;}
+.field input[readonly]{background:var(--sky-pale);color:var(--text-mid);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media (max-width:520px){.grid2{grid-template-columns:1fr;}}
+.btn{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-outline{background:#fff;border:1.5px solid var(--blue);color:var(--blue);}
+.btn-sm{width:auto;padding:6px 12px;font-size:11px;border-radius:8px;}
+.ac-wrap{position:relative;}
+.ac-list{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--blue);border-top:none;border-radius:0 0 10px 10px;z-index:50;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.15);}
+.ac-item{padding:9px 12px;font-size:12.5px;cursor:pointer;border-bottom:1px solid #f1f5f9;}
+.ac-item:hover{background:var(--sky-pale);}
+.ac-item b{color:var(--navy);}
+.unit-toggle{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.unit-btn{flex:1;padding:9px;text-align:center;font-size:12px;font-weight:700;cursor:pointer;background:var(--sky-pale);color:var(--text-muted);}
+.unit-btn.active{background:var(--blue);color:#fff;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;}
+th{background:var(--navy);color:var(--blue-light);padding:7px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.td-l{text-align:left;}
+.defect-row{display:flex;gap:6px;margin-bottom:6px;align-items:center;}
+.defect-row select{flex:2;}
+.defect-row input[type=number]{flex:1;font-family:'IBM Plex Mono',monospace;font-weight:700;text-align:center;}
+.defect-row .rm{background:var(--red-bg);color:var(--red);border:none;border-radius:8px;padding:9px 11px;cursor:pointer;font-size:13px;}
+.del-btn{background:var(--red-bg);color:var(--red);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;}
+.toast{margin-top:8px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;display:none;}
+.toast.ok{background:var(--green-bg);color:var(--green);display:block;}
+.toast.err{background:var(--red-bg);color:var(--red);display:block;}
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.kpi{background:var(--sky-pale);border-radius:10px;padding:10px;text-align:center;}
+.kpi .v{font-size:18px;font-weight:800;color:var(--navy);font-family:'IBM Plex Mono',monospace;}
+.kpi .l{font-size:9.5px;color:var(--text-muted);margin-top:2px;}
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;}
+.login-box{background:#fff;border-radius:16px;padding:32px 28px;width:100%;max-width:340px;text-align:center;}
+.login-box h1{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:2px;}
+.login-box p{font-size:11.5px;color:var(--text-mid);margin-bottom:20px;}
+.login-box input{width:100%;text-align:center;letter-spacing:6px;font-size:20px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;box-sizing:border-box;}
+.login-box .btn-primary{width:100%;padding:11px;}
+.login-err{color:var(--red);font-size:11.5px;margin-top:10px;min-height:14px;}
+.who-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--text-muted);}
+.who-row a{color:var(--blue-light);text-decoration:none;}
+.btn-logout{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>✅ QC 100%</h1>
+    <p>APK Plating — ใบรายงานการตรวจสอบชิ้นงานประจำวัน — ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+<div class="app-header">
+  <div class="hdr-badge">APK PLATING</div>
+  <div class="hdr-title">✅ QC 100%</div>
+  <div class="hdr-sub" id="hdrSubLabel">ใบรายงานการตรวจสอบชิ้นงานประจำวัน · APK-FR-QA-004</div>
+  <div class="who-row">
+    <a href="index.html">← หน้าแรก</a>
+    <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+    <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+  </div>
+  <div class="line-row">
+    <button class="line-btn active" id="lineBtn-B1" onclick="switchLine('B1')">B1</button>
+    <button class="line-btn" id="lineBtn-B2" onclick="switchLine('B2')">B2</button>
+    <button class="line-btn" id="lineBtn-R1" onclick="switchLine('R1')">R1</button>
+    <button class="lang-btn" id="entryLangBtn" onclick="toggleEntryLang()">🇲🇲 မြန်မာ</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ── ฟอร์มบันทึก ── -->
+  <div class="card">
+    <div class="card-label" id="lblSection1">✏️ บันทึกผลตรวจ</div>
+
+    <!-- P/No (Part Master) — รวมกับ "หมายเลขชิ้นงาน" เป็นช่องเดียว -->
+    <div class="field">
+      <label id="lblPartNo">P/No (จาก Part Master)</label>
+      <div class="ac-wrap">
+        <input type="text" id="qcPartSearch" autocomplete="off" placeholder="พิมพ์หมายเลข P/No..."
+          oninput="qcAcShow()" onfocus="qcAcShow()" onblur="setTimeout(qcAcHide,200)">
+        <div class="ac-list" id="qcAcList"></div>
+      </div>
+      <div id="qcPartStatus" style="font-size:11px;margin-top:4px;min-height:14px;"></div>
+    </div>
+
+    <div class="field">
+      <label id="lblPartName">ชื่อชิ้นงาน (จาก Part Master)</label>
+      <input type="text" id="qcPartName" readonly placeholder="เลือก P/No ก่อน">
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label id="lblDate">วันที่ตรวจสอบ</label>
+        <input type="date" id="qcDate">
+      </div>
+      <div class="field">
+        <label id="lblLot">Pro. Lot No.</label>
+        <input type="text" id="qcLotNo" placeholder="เลข Lot การผลิต">
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label id="lblTimeStart">เวลาเริ่มตรวจ</label>
+        <input type="time" id="qcTimeStart" onchange="qcCalcDuration()">
+      </div>
+      <div class="field">
+        <label id="lblTimeEnd">เวลาเสร็จตรวจ</label>
+        <input type="time" id="qcTimeEnd" onchange="qcCalcDuration()">
+      </div>
+    </div>
+
+    <div class="field">
+      <label id="lblDuration">เวลาที่ใช้ตรวจสอบ (นาที)</label>
+      <input type="number" id="qcDuration" readonly placeholder="คำนวณอัตโนมัติ">
+    </div>
+
+    <!-- จำนวนตรวจสอบ — เลือกหน่วยได้ทั้งชิ้น/กก. แปลงกลับเป็นชิ้นเพื่อวิเคราะห์ -->
+    <div class="field">
+      <label id="lblQtyInspect">จำนวนตรวจสอบ</label>
+      <div class="unit-toggle" style="margin-bottom:6px;">
+        <div class="unit-btn active" id="unitBtn-pcs" onclick="qcSetUnit('pcs')">ชิ้น</div>
+        <div class="unit-btn" id="unitBtn-kg" onclick="qcSetUnit('kg')">กก.</div>
+      </div>
+      <input type="number" id="qcQtyInspect" min="0" placeholder="0" oninput="qcCalcResult()">
+      <div id="qcQtyConvertHint" style="font-size:10.5px;color:var(--text-muted);margin-top:4px;"></div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" id="qcQtyOK" style="color:var(--green);">0</div><div class="l" id="lblOK">OK (ชิ้น)</div></div>
+      <div class="kpi"><div class="v" id="qcQtyNG" style="color:var(--red);">0</div><div class="l" id="lblNG">NG (ชิ้น)</div></div>
+      <div class="kpi"><div class="v" id="qcPercentNG">0%</div><div class="l" id="lblPercentNG">% เสีย</div></div>
+    </div>
+
+    <!-- ตารางประเภทงานเสีย — หลายแถว เพราะ 1 ชิ้นงานมีได้หลายสาเหตุ -->
+    <div class="field">
+      <label id="lblDefectTable">ประเภทงานเสีย (เพิ่มได้หลายสาเหตุ)</label>
+      <div id="qcDefectRows"></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="qcAddDefectRow()" id="btnAddDefectRow">+ เพิ่มแถว</button>
+    </div>
+
+    <div class="field">
+      <label id="lblInspector">ชื่อผู้ตรวจสอบ</label>
+      <input type="text" id="qcInspector" placeholder="ชื่อผู้ตรวจสอบ">
+    </div>
+
+    <button class="btn btn-primary" onclick="qcSaveRecord()" id="qcSaveBtn">💾 บันทึกผลตรวจ</button>
+    <div id="qcToast" class="toast"></div>
+  </div>
+
+  <!-- ── ประวัติ ── -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="card-label" style="margin:0;" id="lblHistory">🗂 ประวัติการตรวจสอบ — <span id="lblHistoryLine">B1</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="qcFilterDate" onchange="qcRenderHistory()"
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
+          <option value="">— ทุกวัน —</option>
+        </select>
+        <button class="btn-sm btn-outline" onclick="qcExportCSV()" style="border-radius:6px;">📥 CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table>
+        <thead>
+          <tr>
+            <th class="td-l">วันที่</th>
+            <th class="td-l">P/No</th>
+            <th class="td-l">ชื่อชิ้นงาน</th>
+            <th class="td-l">Lot No.</th>
+            <th>ตรวจ (ชิ้น)</th>
+            <th>OK</th>
+            <th>NG</th>
+            <th>% เสีย</th>
+            <th class="td-l">ประเภทงานเสีย</th>
+            <th class="td-l">ผู้ตรวจสอบ</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="qcHistBody">
+          <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="auth-central.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  QC 100% (APK-FR-QA-004) — ไฟล์แยกจาก v4/v5/v6 รวมข้อมูล B1/B2/R1 ไว้ที่เดียว
+//  แต่ละไลน์เก็บข้อมูลแยก Firebase project เดิมของตัวเอง (path เดียวกับที่ v4/v5/v6 เคยใช้
+//  plating-{line}-qc100.json) — ย้ายมาไฟล์นี้แล้วไม่เสียข้อมูลเก่า เพราะ path เดิมทุกประการ
+// ═══════════════════════════════════════════════
+
+var SYSTEM_KEY = 'qc100';
+var session = null;
+
+function $(id){ return document.getElementById(id); }
+function loadSession(){ try{ var r=sessionStorage.getItem('qc100_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ sessionStorage.setItem('qc100_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('qc100_session'); }
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok) {
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg;
+      return;
+    }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function canEdit(){ return session && (session.role==='admin' || session.role==='operator'); }
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = session.user.name || session.pin;
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  // viewer ดูได้อย่างเดียว บันทึก/ลบไม่ได้
+  $('qcSaveBtn').style.display = canEdit() ? '' : 'none';
+  qcInitAfterLogin();
+}
+
+var FB_LINES = {
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app'
+};
+var PM_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master.json';
+
+var currentLine = localStorage.getItem('qc100_line') || 'B1';
+var partList = [];
+var qcUnit = 'pcs'; // 'pcs' หรือ 'kg' — หน่วยของ "จำนวนตรวจสอบ" ที่กำลังกรอกอยู่
+var qcSelectedPart = null; // {partNo, partName, weightG}
+var qcDefectRows = []; // [{name, qty}]
+
+// ── ภาษา (ไทย/พม่า) — ใช้กับ label ของฟอร์มเท่านั้น ไม่ใช่ชื่อประเภทงานเสียที่พิมพ์เองอิสระ (แปลอัตโนมัติให้ไม่ได้) ──
+var entryLang = localStorage.getItem('entryLang') || 'th';
+var UI_TEXT = {
+  hdrSub:      { th:'ใบรายงานการตรวจสอบชิ้นงานประจำวัน · APK-FR-QA-004', mm:'နေ့စဉ် အရာဝတ္ထု စစ်ဆေးမှု အစီရင်ခံစာ · APK-FR-QA-004' },
+  section1:    { th:'✏️ บันทึกผลตรวจ', mm:'✏️ စစ်ဆေးချက် မှတ်တမ်းတင်ရန်' },
+  partNo:      { th:'P/No (จาก Part Master)', mm:'P/No (Part Master မှ)' },
+  partName:    { th:'ชื่อชิ้นงาน (จาก Part Master)', mm:'ပစ္စည်းအမည် (Part Master မှ)' },
+  date:        { th:'วันที่ตรวจสอบ', mm:'စစ်ဆေးသည့်ရက်' },
+  lot:         { th:'Pro. Lot No.', mm:'Pro. Lot No.' },
+  timeStart:   { th:'เวลาเริ่มตรวจ', mm:'စတင်စစ်ဆေးချိန်' },
+  timeEnd:     { th:'เวลาเสร็จตรวจ', mm:'စစ်ဆေးပြီးချိန်' },
+  duration:    { th:'เวลาที่ใช้ตรวจสอบ (นาที)', mm:'စစ်ဆေးချိန် (မိနစ်)' },
+  qtyInspect:  { th:'จำนวนตรวจสอบ', mm:'စစ်ဆေးသည့် အရေအတွက်' },
+  ok:          { th:'OK (ชิ้น)', mm:'OK (ခု)' },
+  ng:          { th:'NG (ชิ้น)', mm:'NG (ခု)' },
+  percentNG:   { th:'% เสีย', mm:'ချို့ယွင်း %' },
+  defectTable: { th:'ประเภทงานเสีย (เพิ่มได้หลายสาเหตุ)', mm:'ချို့ယွင်းအမျိုးအစား (အကြောင်းရင်းများစွာ ထည့်နိုင်သည်)' },
+  addRow:      { th:'+ เพิ่มแถว', mm:'+ အတန်း ထည့်ရန်' },
+  inspector:   { th:'ชื่อผู้ตรวจสอบ', mm:'စစ်ဆေးသူအမည်' },
+  saveBtn:     { th:'💾 บันทึกผลตรวจ', mm:'💾 စစ်ဆေးချက် သိမ်းရန်' },
+  history:     { th:'🗂 ประวัติการตรวจสอบ —', mm:'🗂 စစ်ဆေးမှု မှတ်တမ်း —' },
+  addNewDefect:{ th:'+ เพิ่มชื่อใหม่...', mm:'+ အသစ်ထည့်ရန်...' },
+  selectDefect:{ th:'— เลือกประเภทงานเสีย —', mm:'— ချို့ယွင်းအမျိုးအစား ရွေးပါ —' }
+};
+function tEntry(key) {
+  var o = UI_TEXT[key];
+  if (!o) return '';
+  return (entryLang === 'mm' && o.mm) ? o.mm : o.th;
+}
+function toggleEntryLang() {
+  entryLang = (entryLang === 'th') ? 'mm' : 'th';
+  try { localStorage.setItem('entryLang', entryLang); } catch(e){}
+  applyLang();
+}
+function applyLang() {
+  document.getElementById('entryLangBtn').textContent = (entryLang==='th') ? '🇲🇲 မြန်မာ' : '🇹🇭 ไทย';
+  document.getElementById('hdrSubLabel').textContent = tEntry('hdrSub');
+  document.getElementById('lblSection1').textContent = tEntry('section1');
+  document.getElementById('lblPartNo').textContent = tEntry('partNo');
+  document.getElementById('lblPartName').textContent = tEntry('partName');
+  document.getElementById('lblDate').textContent = tEntry('date');
+  document.getElementById('lblLot').textContent = tEntry('lot');
+  document.getElementById('lblTimeStart').textContent = tEntry('timeStart');
+  document.getElementById('lblTimeEnd').textContent = tEntry('timeEnd');
+  document.getElementById('lblDuration').textContent = tEntry('duration');
+  document.getElementById('lblQtyInspect').textContent = tEntry('qtyInspect');
+  document.getElementById('lblOK').textContent = tEntry('ok');
+  document.getElementById('lblNG').textContent = tEntry('ng');
+  document.getElementById('lblPercentNG').textContent = tEntry('percentNG');
+  document.getElementById('lblDefectTable').textContent = tEntry('defectTable');
+  document.getElementById('btnAddDefectRow').textContent = tEntry('addRow');
+  document.getElementById('lblInspector').textContent = tEntry('inspector');
+  document.getElementById('qcSaveBtn').textContent = tEntry('saveBtn');
+  document.getElementById('lblHistory').childNodes[0].textContent = tEntry('history')+' ';
+  qcRenderDefectRows(); // รีเฟรช label ในตารางเหตุผลด้วย
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+// ── สลับไลน์ B1/B2/R1 — โหลดข้อมูล PM + QC records ของไลน์นั้นใหม่ทั้งหมด ──
+function switchLine(line) {
+  currentLine = line;
+  try { localStorage.setItem('qc100_line', line); } catch(e){}
+  ['B1','B2','R1'].forEach(function(l){
+    document.getElementById('lineBtn-'+l).className = 'line-btn' + (l===line?' active':'');
+  });
+  document.getElementById('lblHistoryLine').textContent = line;
+  qcClearForm();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+  qcFbLoadRecords();
+}
+
+// ═══════════════════════════════════════
+//  PART MASTER — โหลดครั้งเดียว ใช้ร่วมกันทุกไลน์ (P/No เป็นรายการเดียวกันไม่ว่าจะชุบไลน์ไหน)
+// ═══════════════════════════════════════
+function pmToPartList(pm) {
+  return (pm.parts || []).map(function(p) {
+    return { partNo: p.partNo || '', partName: p.name || p.partName || '', weightG: p.weightPerPc || p.weightG || 0 };
+  });
+}
+function loadPartList() {
+  try { partList = JSON.parse(localStorage.getItem('qc100_partList') || '[]'); } catch(e){ partList = []; }
+  fetch(PM_URL).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+    if (data && Array.isArray(data.parts)) {
+      partList = pmToPartList(data);
+      try { localStorage.setItem('qc100_partList', JSON.stringify(partList)); } catch(e){}
+    }
+  }).catch(function(e){ console.warn('Part Master load:', e.message); });
+}
+
+// ── ค้นหา P/No แบบพิมพ์แล้วโชว์ตัวเลือก (autocomplete) — ดึงจาก Part Master ตรงๆ ไม่ผ่าน Job Master ──
+function qcAcShow() {
+  var input = document.getElementById('qcPartSearch');
+  var list  = document.getElementById('qcAcList');
+  var statusEl = document.getElementById('qcPartStatus');
+  qcSelectedPart = null;
+  document.getElementById('qcPartName').value = '';
+  var q = input.value.trim();
+  var qNorm = q.toLowerCase().replace(/[\s\-]+/g,'');
+  statusEl.textContent = '';
+  if (!q) { list.style.display = 'none'; return; }
+
+  var matches = partList.filter(function(p){
+    var no = (p.partNo||'').toLowerCase().replace(/[\s\-]+/g,'');
+    var nm = (p.partName||'').toLowerCase();
+    return no.indexOf(qNorm)>=0 || nm.indexOf(q.toLowerCase())>=0;
+  }).slice(0,12);
+
+  if (!matches.length) {
+    list.innerHTML = '<div class="ac-item" style="color:var(--red);">🚫 ไม่พบ "'+esc(q)+'" ใน Part Master</div>';
+    list.style.display = 'block';
+    return;
+  }
+  list.innerHTML = matches.map(function(p,i){
+    return '<div class="ac-item" onmousedown="qcSelectPart('+i+')"><b>'+esc(p.partNo)+'</b> — '+esc(p.partName||'(ไม่มีชื่อ)')+'</div>';
+  }).join('');
+  list.style.display = 'block';
+  qcAcMatches = matches;
+}
+var qcAcMatches = [];
+function qcAcHide() { document.getElementById('qcAcList').style.display = 'none'; }
+function qcSelectPart(i) {
+  var p = qcAcMatches[i];
+  if (!p) return;
+  qcSelectedPart = p;
+  document.getElementById('qcPartSearch').value = p.partNo;
+  document.getElementById('qcPartName').value = p.partName || '';
+  document.getElementById('qcPartStatus').innerHTML = '<span style="color:var(--green);">✅ เลือกจาก Part Master แล้ว</span>';
+  document.getElementById('qcAcList').style.display = 'none';
+  qcUpdateConvertHint();
+}
+
+// ═══════════════════════════════════════
+//  จำนวนตรวจสอบ — เลือกหน่วยได้ทั้งชิ้น/กก. แปลงกลับเป็นชิ้นเพื่อวิเคราะห์เสมอ
+// ═══════════════════════════════════════
+function qcSetUnit(u) {
+  qcUnit = u;
+  document.getElementById('unitBtn-pcs').className = 'unit-btn' + (u==='pcs'?' active':'');
+  document.getElementById('unitBtn-kg').className  = 'unit-btn' + (u==='kg'?' active':'');
+  qcUpdateConvertHint();
+  qcCalcResult();
+}
+function qcUpdateConvertHint() {
+  var hint = document.getElementById('qcQtyConvertHint');
+  if (qcUnit !== 'kg') { hint.textContent = ''; return; }
+  if (!qcSelectedPart || !qcSelectedPart.weightG) {
+    hint.textContent = '⚠️ ไม่มีน้ำหนัก/ชิ้นใน Part Master สำหรับ P/No นี้ — แปลงเป็นชิ้นไม่ได้ กรุณาเลือกหน่วย "ชิ้น" แทน';
+    hint.style.color = 'var(--red)';
+  } else {
+    hint.style.color = 'var(--text-muted)';
+    hint.textContent = 'น้ำหนัก/ชิ้น: '+qcSelectedPart.weightG+' กรัม (ใช้แปลง กก. → ชิ้น)';
+  }
+}
+// คืนจำนวนชิ้นจริงเสมอ ไม่ว่าจะกรอกเป็นหน่วยไหน — ใช้ค่านี้ในการคำนวณ/บันทึกทุกจุด
+function qcGetQtyInPcs() {
+  var raw = parseFloat(document.getElementById('qcQtyInspect').value) || 0;
+  if (qcUnit === 'pcs') return Math.round(raw);
+  if (!qcSelectedPart || !qcSelectedPart.weightG) return 0; // แปลงไม่ได้ ให้ถือว่า 0 (บล็อกตอนบันทึกแทน)
+  return Math.round((raw * 1000) / qcSelectedPart.weightG);
+}
+
+function qcCalcDuration() {
+  var s = document.getElementById('qcTimeStart').value;
+  var e = document.getElementById('qcTimeEnd').value;
+  var out = document.getElementById('qcDuration');
+  if (!s || !e) { out.value = ''; return; }
+  var sm = s.split(':'), em = e.split(':');
+  var startMin = (+sm[0])*60 + (+sm[1]);
+  var endMin   = (+em[0])*60 + (+em[1]);
+  var diff = endMin - startMin;
+  if (diff < 0) diff += 24*60;
+  out.value = diff;
+}
+
+// ── คำนวณ OK / NG / %เสีย — NG มาจากผลรวมตารางเหตุผล (ไม่ใช่กรอกเองแยกต่างหากแบบเดิม) ──
+function qcCalcResult() {
+  var qty = qcGetQtyInPcs();
+  var ng = qcDefectRows.reduce(function(s,r){ return s + (parseInt(r.qty)||0); }, 0);
+  if (ng > qty) ng = qty;
+  var ok = qty - ng;
+  document.getElementById('qcQtyOK').textContent = qty ? ok.toLocaleString() : '0';
+  document.getElementById('qcQtyNG').textContent = ng.toLocaleString();
+  document.getElementById('qcPercentNG').textContent = qty ? ((ng/qty)*100).toFixed(2)+'%' : '0%';
+}
+
+// ═══════════════════════════════════════
+//  ตารางประเภทงานเสีย — เพิ่ม/ลบได้หลายแถว (1 ชิ้นงานมีได้หลายสาเหตุ)
+//  รายชื่อที่เคยเพิ่มไว้แล้ว (Thai only — พิมพ์เองอิสระ แปลอัตโนมัติให้ไม่ได้) เก็บแยกต่อไลน์เหมือนเดิม
+// ═══════════════════════════════════════
+function qcLoadDefectNames() {
+  var key = 'qc100_defects_' + currentLine.toLowerCase();
+  try {
+    var d = JSON.parse(localStorage.getItem(key) || 'null');
+    if (Array.isArray(d) && d.length) return d;
+  } catch(e){}
+  return ['ชุบไม่ติด','คราบน้ำ','ชิ้นงานเสียรูป','ชิ้นงานใหม่'];
+}
+function qcSaveDefectNames(arr) {
+  var key = 'qc100_defects_' + currentLine.toLowerCase();
+  localStorage.setItem(key, JSON.stringify(arr));
+}
+function qcAddDefectRow() {
+  qcDefectRows.push({ name:'', qty:0 });
+  qcRenderDefectRows();
+}
+function qcRemoveDefectRow(i) {
+  qcDefectRows.splice(i,1);
+  qcRenderDefectRows();
+  qcCalcResult();
+}
+function qcRenderDefectRows() {
+  var wrap = document.getElementById('qcDefectRows');
+  var names = qcLoadDefectNames();
+  wrap.innerHTML = qcDefectRows.map(function(row, i){
+    var isCustomInput = row._customMode;
+    var selectHtml = isCustomInput
+      ? '<input type="text" placeholder="พิมพ์ชื่อสาเหตุใหม่..." value="'+esc(row.name)+'" '
+        + 'onblur="qcCommitCustomDefect('+i+',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}">'
+      : '<select onchange="qcDefectRowSelectChange('+i+',this.value)">'
+        + '<option value="">'+esc(tEntry('selectDefect'))+'</option>'
+        + names.map(function(n){ return '<option value="'+esc(n)+'"'+(n===row.name?' selected':'')+'>'+esc(n)+'</option>'; }).join('')
+        + '<option value="__NEW__">'+esc(tEntry('addNewDefect'))+'</option>'
+        + '</select>';
+    return '<div class="defect-row">'
+      + selectHtml
+      + '<input type="number" min="0" placeholder="จำนวน" value="'+(row.qty||'')+'" onchange="qcDefectRowQtyChange('+i+',this.value)">'
+      + '<button type="button" class="rm" onclick="qcRemoveDefectRow('+i+')">✕</button>'
+      + '</div>';
+  }).join('') || '<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">ยังไม่มีสาเหตุ — กด "+ เพิ่มแถว" ด้านล่าง</div>';
+}
+function qcDefectRowSelectChange(i, val) {
+  if (val === '__NEW__') {
+    qcDefectRows[i]._customMode = true;
+    qcDefectRows[i].name = '';
+    qcRenderDefectRows();
+    return;
+  }
+  qcDefectRows[i].name = val;
+}
+function qcCommitCustomDefect(i, val) {
+  val = (val||'').trim();
+  qcDefectRows[i].name = val;
+  qcDefectRows[i]._customMode = false;
+  if (val) {
+    var names = qcLoadDefectNames();
+    if (names.indexOf(val) === -1) { names.push(val); qcSaveDefectNames(names); qcFbSaveRecords(); }
+  }
+  qcRenderDefectRows();
+}
+function qcDefectRowQtyChange(i, val) {
+  qcDefectRows[i].qty = parseInt(val) || 0;
+  qcCalcResult();
+}
+
+// ═══════════════════════════════════════
+//  บันทึก / โหลด / Firebase — path เดิมทุกประการที่ v4/v5/v6 เคยใช้ ไม่เสียข้อมูลเก่า
+// ═══════════════════════════════════════
+function qcRecordsKey() { return 'qc100_records_' + currentLine.toLowerCase(); }
+function qcLoadRecords() {
+  try { return JSON.parse(localStorage.getItem(qcRecordsKey()) || '[]'); } catch(e) { return []; }
+}
+function qcSaveRecordsLocal(arr) { localStorage.setItem(qcRecordsKey(), JSON.stringify(arr)); }
+
+async function qcFbSaveRecords() {
+  try {
+    await fetch(FB_LINES[currentLine].replace(/\/+$/,'') + '/plating-'+currentLine.toLowerCase()+'-qc100.json', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ records: qcLoadRecords(), defects: qcLoadDefectNames(), savedAt: new Date().toISOString() })
+    });
+  } catch(e) { console.warn('qcFbSaveRecords:', e.message); }
+}
+async function qcFbLoadRecords() {
+  try {
+    var res = await fetch(FB_LINES[currentLine].replace(/\/+$/,'') + '/plating-'+currentLine.toLowerCase()+'-qc100.json');
+    if (!res.ok) return;
+    var data = await res.json();
+    if (!data) return;
+    if (Array.isArray(data.records) && data.records.length) {
+      var local = qcLoadRecords();
+      var localIds = {}; local.forEach(function(r){ localIds[r.id]=true; });
+      var merged = local.slice();
+      data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
+      merged.sort(function(a,b){ return b.ts-a.ts; });
+      qcSaveRecordsLocal(merged);
+    }
+    if (Array.isArray(data.defects) && data.defects.length) {
+      var localD = qcLoadDefectNames();
+      var merged2 = localD.slice();
+      data.defects.forEach(function(d){ if (merged2.indexOf(d)===-1) merged2.push(d); });
+      qcSaveDefectNames(merged2);
+    }
+    qcPopulateDateFilter();
+    qcRenderHistory();
+  } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
+}
+
+function qcClearForm() {
+  document.getElementById('qcPartSearch').value = '';
+  document.getElementById('qcPartName').value = '';
+  qcSelectedPart = null;
+  document.getElementById('qcLotNo').value = '';
+  document.getElementById('qcTimeStart').value = '';
+  document.getElementById('qcTimeEnd').value = '';
+  document.getElementById('qcDuration').value = '';
+  document.getElementById('qcQtyInspect').value = '';
+  qcSetUnit('pcs');
+  qcDefectRows = [];
+  qcRenderDefectRows();
+  qcCalcResult();
+  qcUpdateConvertHint();
+}
+
+function qcSaveRecord() {
+  if (!canEdit()) return;
+  var date = document.getElementById('qcDate').value;
+  var partNo = qcSelectedPart ? qcSelectedPart.partNo : document.getElementById('qcPartSearch').value.trim();
+  var partName = document.getElementById('qcPartName').value.trim();
+  var lotNo = document.getElementById('qcLotNo').value.trim();
+  var timeStart = document.getElementById('qcTimeStart').value;
+  var timeEnd = document.getElementById('qcTimeEnd').value;
+  var duration = document.getElementById('qcDuration').value;
+  var qty = qcGetQtyInPcs();
+  var inspector = document.getElementById('qcInspector').value.trim();
+  var toast = document.getElementById('qcToast');
+
+  function showErr(msg) {
+    toast.className = 'toast err'; toast.textContent = msg;
+    setTimeout(function(){ toast.className='toast'; }, 3000);
+  }
+
+  if (!date || !partNo) { showErr('⚠️ กรุณากรอกวันที่ และเลือก P/No จาก Part Master'); return; }
+  if (!qcSelectedPart) { showErr('⚠️ กรุณาเลือก P/No จากรายการที่ค้นเจอใน Part Master (ห้ามพิมพ์เอง)'); return; }
+  if (qcUnit === 'kg' && (!qcSelectedPart.weightG)) { showErr('⚠️ P/No นี้ไม่มีน้ำหนัก/ชิ้นใน Part Master — แปลง กก.→ชิ้น ไม่ได้ กรุณาเลือกหน่วย "ชิ้น" แทน'); return; }
+  if (!qty) { showErr('⚠️ กรุณากรอกจำนวนตรวจสอบ'); return; }
+
+  var defects = qcDefectRows.filter(function(r){ return r.name && r.qty>0; })
+    .map(function(r){ return { name:r.name, qty:r.qty }; });
+  var ng = defects.reduce(function(s,r){ return s+r.qty; }, 0);
+  if (ng > qty) ng = qty;
+  var ok = qty - ng;
+  var pct = qty ? (ng/qty*100) : 0;
+
+  var rec = {
+    id: 'QC'+Date.now(), ts: Date.now(), line: currentLine,
+    date: date, partNo: partNo, partName: partName, lotNo: lotNo,
+    timeStart: timeStart, timeEnd: timeEnd, duration: duration,
+    qtyInspectUnit: qcUnit, qtyInspectRaw: parseFloat(document.getElementById('qcQtyInspect').value)||0,
+    qtyInspect: qty, qtyOK: ok, qtyNG: ng, percentNG: pct,
+    defects: defects, // [{name, qty}] — ตารางเหตุผลหลายแถว
+    inspector: inspector
+  };
+  var recs = qcLoadRecords();
+  recs.unshift(rec);
+  qcSaveRecordsLocal(recs);
+  qcFbSaveRecords();
+
+  toast.className = 'toast ok';
+  toast.textContent = '✅ บันทึกผลตรวจสอบแล้ว ('+currentLine+')';
+  setTimeout(function(){ toast.className='toast'; }, 2200);
+
+  qcClearForm();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+}
+
+function qcDeleteRecord(id) {
+  if (!canEdit()) return;
+  if (!confirm('ลบรายการตรวจสอบนี้?')) return;
+  var recs = qcLoadRecords().filter(function(r){ return r.id !== id; });
+  qcSaveRecordsLocal(recs);
+  qcFbSaveRecords();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+}
+
+function qcPopulateDateFilter() {
+  var recs = qcLoadRecords();
+  var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
+  var sel = document.getElementById('qcFilterDate');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— ทุกวัน —</option>';
+  dates.forEach(function(d){ var o=document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o); });
+  if (cur) sel.value = cur;
+}
+
+function qcRenderHistory() {
+  var filterDate = (document.getElementById('qcFilterDate')||{}).value || '';
+  var recs = qcLoadRecords().filter(function(r){ return !filterDate || r.date===filterDate; })
+    .sort(function(a,b){ return b.ts-a.ts; });
+  var tbody = document.getElementById('qcHistBody');
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = recs.map(function(r){
+    var pctColor = r.percentNG > 5 ? '#ef4444' : r.percentNG > 0 ? '#f59e0b' : '#10b981';
+    var defectStr = (r.defects && r.defects.length)
+      ? r.defects.map(function(d){ return esc(d.name)+' ('+d.qty+')'; }).join(', ')
+      : '–';
+    return '<tr>'
+      +'<td class="td-l">'+esc(r.date)+'</td>'
+      +'<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">'+esc(r.partNo)+'</td>'
+      +'<td class="td-l">'+esc(r.partName||'–')+'</td>'
+      +'<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+esc(r.lotNo||'–')+'</td>'
+      +'<td style="font-weight:700;">'+r.qtyInspect.toLocaleString()+'</td>'
+      +'<td style="color:#059669;">'+r.qtyOK.toLocaleString()+'</td>'
+      +'<td style="color:#ef4444;">'+r.qtyNG.toLocaleString()+'</td>'
+      +'<td style="font-weight:800;color:'+pctColor+';">'+r.percentNG.toFixed(2)+'%</td>'
+      +'<td class="td-l" style="font-size:10px;">'+defectStr+'</td>'
+      +'<td class="td-l">'+esc(r.inspector||'–')+'</td>'
+      +'<td>'+(canEdit() ? '<button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button>' : '')+'</td>'
+      +'</tr>';
+  }).join('');
+}
+
+function qcExportCSV() {
+  var recs = qcLoadRecords().sort(function(a,b){return a.ts-b.ts;});
+  if (!recs.length) { alert('ไม่มีข้อมูล'); return; }
+  var h = ['ไลน์','วันที่','P/No','ชื่อชิ้นงาน','Pro.Lot No.','เวลาเริ่ม','เวลาเสร็จ','เวลาตรวจ(นาที)','จำนวนตรวจ(ชิ้น)','OK','NG','%เสีย','ประเภทงานเสีย(ชื่อ:จำนวน)','ผู้ตรวจสอบ'];
+  var rows = recs.map(function(r){
+    var defectStr = (r.defects||[]).map(function(d){ return d.name+':'+d.qty; }).join('/');
+    return [r.line||currentLine,r.date,r.partNo,r.partName||'',r.lotNo||'',r.timeStart||'',r.timeEnd||'',r.duration||'',
+      r.qtyInspect,r.qtyOK,r.qtyNG,r.percentNG.toFixed(2),defectStr,r.inspector||''].join(',');
+  });
+  var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href=url; a.download='qc100_'+currentLine.toLowerCase()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init (เรียกหลังล็อกอินสำเร็จเท่านั้น) ──
+function qcInitAfterLogin() {
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('qcDate').value = today;
+  ['B1','B2','R1'].forEach(function(l){
+    document.getElementById('lineBtn-'+l).className = 'line-btn' + (l===currentLine?' active':'');
+  });
+  document.getElementById('lblHistoryLine').textContent = currentLine;
+  applyLang();
+  loadPartList();
+  qcRenderDefectRows();
+  qcCalcResult();
+  qcPopulateDateFilter();
+  qcRenderHistory();
+  setTimeout(qcFbLoadRecords, 1000);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+  session = loadSession();
+  if (session) { enterApp(); }
+});
+</script>
+</body>
+</html>

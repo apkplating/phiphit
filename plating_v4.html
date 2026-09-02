@@ -454,7 +454,6 @@ if ('caches' in window) {
   <button class="tab-btn" onclick="tab('thick')">📏 ความหนา</button>
   <button class="tab-btn" onclick="tab('job')">📋 งาน</button>
   <button class="tab-btn" onclick="tab('qa')">📋 บันทึกผล</button>
-  <button class="tab-btn" onclick="tab('qc100')">✅ QC 100%</button>
   <button class="tab-btn" onclick="tab('mcheck')">🔧 ตรวจเครื่องจักร</button>
   <button class="tab-btn active" onclick="tab('settings')">ตั้งค่า</button>
 </div>
@@ -558,6 +557,15 @@ if ('caches' in window) {
         </div>
       </div>
 
+      <!-- ── เหตุผลการ Rework (โชว์เฉพาะตอนเลือก R — บังคับเลือกก่อนเพิ่มรายรอบได้) ── -->
+      <div id="reworkReasonWrap" style="display:none;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:#b91c1c;margin-bottom:6px;" id="reworkReasonLabel">เหตุผลการ Rework <span style="color:var(--red);">*</span></div>
+        <select id="reworkReasonSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;background:#fff;" onchange="onReworkReasonChange()">
+          <option value="">— เลือกสาเหตุ —</option>
+        </select>
+        <textarea id="reworkReasonDetail" style="display:none;width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;min-height:50px;" placeholder="ระบุรายละเอียดเพิ่มเติม"></textarea>
+      </div>
+
       <!-- ── Step 3: เลือกบิล (เฉพาะงานใหม่ N — ซ่อนถ้ายังไม่เลือก P/No หรือเลือกงานซ่อม R) ── -->
       <div id="bBillSelWrap" style="display:none;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px 12px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:6px;">③ เลือกบิล (คงเหลือ)</div>
@@ -613,6 +621,10 @@ if ('caches' in window) {
       </div>
     </div>
 
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+      <button type="button" id="entryLangBtn" onclick="toggleEntryLang()"
+        style="font-size:11px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--navy);cursor:pointer;">🇲🇲 မြန်မာ</button>
+    </div>
     <button class="btn btn-add" onclick="addBarrel()">+ เพิ่มรายรอบนี้</button>
   </div>
 
@@ -1507,6 +1519,7 @@ var selColorVal  = 'B';
 //  INIT
 // ═══════════════════════════════════════
 function init() {
+  renderEntryLangBtn();
   var d = new Date();
   var dateStr = d.toLocaleDateString('th-TH', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('hdrDate').textContent = dateStr;
@@ -1580,7 +1593,7 @@ function isoDate(d) {
 //  TABS
 // ═══════════════════════════════════════
 function tab(t) {
-  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
+  var tabs = ['entry','summary','history','chart','chem','thick','job','qa','mcheck','settings'];
   tabs.forEach(function(n,i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
@@ -1593,7 +1606,6 @@ function tab(t) {
   if (t === 'thick') { populateThickFilter(); renderThickHistory(); renderThickChart(); }
   if (t === 'job')   { jobMasterLoad(); }
   if (t === 'qa') { qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); }
-  if (t === 'qc100') { qcPopulateDateFilter(); qcRenderHistory(); qcPopulateJobPick(); }
   if (t === 'mcheck') { mcInit(); }
 }
 
@@ -1623,19 +1635,29 @@ function selType(t) {
   if (prevType === t) return; // ไม่มีการเปลี่ยนจริง ไม่ต้องยุ่งกับ step เลือกบิล
 
   var bbsw = document.getElementById('bBillSelWrap');
+  var rrw  = document.getElementById('reworkReasonWrap');
   if (t === 'R') {
     // งานซ่อม (R) ไม่ต้องผูกบิล — ซ่อน step เลือกบิล + เคลียร์ค่าที่เลือกไว้ (ถ้าสลับมาจาก N)
     if (bbsw) bbsw.style.display = 'none';
     var sel = document.getElementById('bJobPick'); if (sel) sel.value = '';
     var bbi = document.getElementById('bBillInfo'); if (bbi) bbi.innerHTML = '';
-  } else if (_barrelPartSelected) {
+    // โชว์ dropdown เหตุผล rework — บังคับเลือกก่อนเพิ่มรายรอบได้ (เช็คจริงใน addBarrel())
+    if (rrw) rrw.style.display = 'block';
+    renderReworkReasonOptions();
+  } else {
+    // สลับกลับเป็น N — ซ่อน + เคลียร์เหตุผล rework ที่เคยเลือกไว้ (ไม่ใช่งานซ่อมแล้ว ไม่เกี่ยวกันอีกต่อไป)
+    if (rrw) rrw.style.display = 'none';
+    var rrs = document.getElementById('reworkReasonSelect'); if (rrs) rrs.value = '';
+    var rrd = document.getElementById('reworkReasonDetail'); if (rrd) { rrd.value=''; rrd.style.display='none'; }
+  }
+  if (t !== 'R' && _barrelPartSelected) {
     // สลับจาก R กลับมา N หลังเลือก P/No ไว้แล้ว (ตอนเป็น R) → ให้เลือก P/No ใหม่อีกครั้งเพื่อโชว์รายชื่อบิล
     _barrelPartSelected = false;
     var bps = document.getElementById('bPartSearch');
     var pn = bps ? bps.value.trim() : '';
     if (bps) bps.value = '';
     var stEl = document.getElementById('bPartSearchStatus'); if (stEl) stEl.textContent = '';
-    if (pn) showToast('entry', 'สลับเป็นงานใหม่ (N) — กรุณาเลือก P/No "'+pn+'" อีกครั้งเพื่อเลือกบิล', 'ok');
+    if (pn) showToast('entry', tEntry('สลับเป็นงานใหม่ (N) — กรุณาเลือก P/No "'+pn+'" อีกครั้งเพื่อเลือกบิล','အလုပ်အသစ် (N) သို့ ပြောင်းပါပြီ — ဘီလ်ရွေးရန် P/No "'+pn+'" ကို ထပ်မံနှိပ်ပါ'), 'ok');
   }
 }
 function selColor(c) {
@@ -1649,12 +1671,43 @@ function selColor(c) {
 // (time is always live — no freeze needed)
 
 // ═══════════════════════════════════════
+//  เหตุผลการ Rework (สถานะ R) — บังคับเลือกก่อนเพิ่มรายรอบได้ รองรับ 2 ภาษา (ผูกกับ toggle entryLang เดิม)
+//  ⚠️ คำแปลพม่าเป็นการแปลเบื้องต้น ยังไม่ผ่านผู้ที่พูดพม่าเป็นภาษาแม่ตรวจทาน
+// ═══════════════════════════════════════
+var REWORK_REASONS = [
+  { code: 'SURFACE',       th: 'ผิวไม่เรียบ',              mm: 'မျက်နှာပြင် မညီညာ' },
+  { code: 'COLOR',         th: 'สีไม่ตรง',                  mm: 'အရောင် မမှန်ကန်' },
+  { code: 'PEELING',       th: 'หลุดร่อน',                  mm: 'အလွှာ ကွာထွက်' },
+  { code: 'THICKNESS',     th: 'ความหนาไม่ได้ค่า',          mm: 'အထူ စံမမီ' },
+  { code: 'DAMAGE',        th: 'ตกหล่น/ขนส่งเสียหาย',       mm: 'ကျင်ကျ/သယ်ယူစဉ် ပျက်စီး' },
+  { code: 'CUSTOMER_SPEC', th: 'ลูกค้าเปลี่ยน spec',        mm: 'Customer spec ပြောင်းလဲ' },
+  { code: 'OTHER',         th: 'อื่นๆ',                     mm: 'အခြား' }
+];
+function renderReworkReasonOptions() {
+  var sel = document.getElementById('reworkReasonSelect');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">'+tEntry('— เลือกสาเหตุ —','အကြောင်းရင်း ရွေးပါ')+'</option>'
+    + REWORK_REASONS.map(function(r){ return '<option value="'+r.code+'">'+tEntry(r.th,r.mm)+'</option>'; }).join('');
+  sel.value = cur; // คงค่าที่เคยเลือกไว้ (เผื่อสลับภาษาไปมาระหว่างเลือก)
+  var lbl = document.getElementById('reworkReasonLabel');
+  if (lbl) lbl.innerHTML = tEntry('เหตุผลการ Rework','Rework အကြောင်းရင်း') + ' <span style="color:var(--red);">*</span>';
+  var rrd = document.getElementById('reworkReasonDetail');
+  if (rrd) rrd.placeholder = tEntry('ระบุรายละเอียดเพิ่มเติม','အသေးစိတ် ဖော်ပြပါ');
+}
+function onReworkReasonChange() {
+  var sel = document.getElementById('reworkReasonSelect');
+  var rrd = document.getElementById('reworkReasonDetail');
+  if (rrd) rrd.style.display = (sel && sel.value === 'OTHER') ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════
 //  ADD BARREL
 // ═══════════════════════════════════════
 // Auto-fill bLotNo จาก LOT NO หลักของวัน
 function autoFillBLotNo() {
   var mainLot = (document.getElementById('lotNo')||{}).value || '';
-  if (!mainLot) { showToast('entry','กรุณากรอก LOT NO หลักของวันก่อน (ช่องด้านบน)','err'); return; }
+  if (!mainLot) { showToast('entry',tEntry('กรุณากรอก LOT NO หลักของวันก่อน (ช่องด้านบน)','အရင်ဆုံး ယနေ့၏ LOT နံပါတ်ကို ဖြည့်ပါ (အပေါ်ဘောက်စ်)'),'err'); return; }
   var el = document.getElementById('bLotNo');
   if (el) {
     el.value = mainLot;
@@ -1677,9 +1730,9 @@ function addBarrel() {
     if (mainLot) {
       lotNo = mainLot;
       if (lotEl) { lotEl.value = mainLot; lotEl.style.borderColor='var(--border)'; lotEl.style.background=''; }
-      showToast('entry','⚡ ดึง LOT "'+mainLot+'" จากวันนี้อัตโนมัติ','ok');
+      showToast('entry',tEntry('⚡ ดึง LOT "'+mainLot+'" จากวันนี้อัตโนมัติ','⚡ ယနေ့ LOT "'+mainLot+'" ကို အလိုအလျောက် ယူထားသည်'),'ok');
     } else {
-      showToast('entry','⚠️ กรุณากรอก LOT NO เพื่อให้ตัดสต็อคได้','err');
+      showToast('entry',tEntry('⚠️ กรุณากรอก LOT NO เพื่อให้ตัดสต็อคได้','⚠️ ကုန်ချောင်ခြင်းအတွက် LOT နံပါတ် ဖြည့်ပါ'),'err');
       if (lotEl) { lotEl.focus(); lotEl.style.borderColor='#e74c3c'; }
       // ยังให้เพิ่มได้ แต่แจ้งเตือน
     }
@@ -1687,16 +1740,31 @@ function addBarrel() {
   // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
   var bps = document.getElementById('bPartSearch');
   if (!_barrelPartSelected && (!bps || !bps.value.trim())) {
-    showToast('entry', '🚫 ① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master', 'err');
+    showToast('entry', tEntry('🚫 ① กรุณาเลือกหมายเลขชิ้นงาน (P/No) จาก Part Master','🚫 ① Part Master မှ P/No ကို ရွေးပါ'), 'err');
     if (bps) bps.focus();
     return;
   }
-  if (!kg && !pcs) { showToast('entry','กรุณากรอก Kgs หรือ Pcs','err'); return; }
+  if (!kg && !pcs) { showToast('entry',tEntry('กรุณากรอก Kgs หรือ Pcs','Kgs သို့မဟုတ် Pcs ကို ဖြည့်ပါ'),'err'); return; }
 
   var _billJobId = document.getElementById('bJobPick').value || '';
 
-  // ── งานซ่อม (R) ไม่ต้องผูกบิล — ปล่อยผ่านได้เลย ไม่ต้องเช็คยอดเกิน ไม่ต้องขออนุมัติ NOBILL ──
+  // ── งานซ่อม (R) ไม่ต้องผูกบิล — แต่ต้องเลือกเหตุผล rework ก่อนเสมอ ──
   if (selTypeVal === 'R') {
+    var rrSel = document.getElementById('reworkReasonSelect');
+    var rrCode = rrSel ? rrSel.value : '';
+    if (!rrCode) {
+      showToast('entry', tEntry('🚫 กรุณาเลือกเหตุผลการ Rework ก่อนบันทึก','🚫 Rework မမှတ်တမ်းတင်ခင် အကြောင်းရင်း အရင်ရွေးပါ'), 'err');
+      if (rrSel) rrSel.focus();
+      return;
+    }
+    if (rrCode === 'OTHER') {
+      var rrDetailEl = document.getElementById('reworkReasonDetail');
+      if (!rrDetailEl || !rrDetailEl.value.trim()) {
+        showToast('entry', tEntry('🚫 กรุณาระบุรายละเอียดเหตุผล "อื่นๆ"','🚫 "အခြား" အကြောင်းရင်း အသေးစိတ် ဖော်ပြပါ'), 'err');
+        if (rrDetailEl) rrDetailEl.focus();
+        return;
+      }
+    }
     _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, null);
     return;
   }
@@ -1710,7 +1778,10 @@ function addBarrel() {
       var _blocker = findFifoBlocker(_billJob);
       if (_blocker) {
         var _qtyStr = (_blocker.remain.remainPcs||0) > 0 ? (_blocker.remain.remainPcs.toLocaleString()+' ชิ้น') : (_blocker.remain.remainKg.toFixed(2)+' กก.');
-        showToast('entry','🚫 ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน — เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+_billJob.bill+'" ที่เลือกไว้ ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)','err');
+        showToast('entry',tEntry(
+          '🚫 ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน — เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+_billJob.bill+'" ที่เลือกไว้ ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)',
+          '🚫 ဘီလ် "'+_blocker.job.bill+'" ('+_blocker.job.date+' ရရှိ) ကို အရင်ပြီးအောင်လုပ်ပါ — အလားတူပစ္စည်းဖြစ်ပြီး ရွေးထားသော ဘီလ် "'+_billJob.bill+'" ထက် ရှေးရှိသည် လက်ကျန် '+_qtyStr+' ရှိနေသည် (FIFO စည်းမျဉ်း)'
+        ),'err');
         return;
       }
 
@@ -1731,7 +1802,10 @@ function addBarrel() {
       // (เดิมถ้าแปลงไม่ได้ _pcsChk จะค้างเป็น 0 แล้วผ่านเช็คยอดเกินไปเงียบๆ ทั้งที่จริงอาจเกินก็ได้ —
       // ไม่ปลอดภัย จึงบล็อกไว้ก่อน ให้ไปเพิ่มน้ำหนักใน Part Master หรือกรอกจำนวนชิ้น (Pcs) ตรงๆ แทน)
       if (_convertFailed) {
-        showToast('entry', '⚠️ ตรวจสอบยอดคงเหลือไม่ได้ — ไม่มีน้ำหนัก/ชิ้นของ "'+(_billJob.partName||_billJob.partNo||'?')+'" ใน Part Master กรุณาไปเพิ่มน้ำหนักก่อน หรือกรอกจำนวนชิ้น (Pcs) แทนน้ำหนัก (Kgs)', 'err');
+        showToast('entry', tEntry(
+          '⚠️ ตรวจสอบยอดคงเหลือไม่ได้ — ไม่มีน้ำหนัก/ชิ้นของ "'+(_billJob.partName||_billJob.partNo||'?')+'" ใน Part Master กรุณาไปเพิ่มน้ำหนักก่อน หรือกรอกจำนวนชิ้น (Pcs) แทนน้ำหนัก (Kgs)',
+          '⚠️ လက်ကျန်ကို စစ်ဆေး၍မရပါ — Part Master တွင် "'+(_billJob.partName||_billJob.partNo||'?')+'" ၏ အလေးချိန် မရှိပါ အရင်ဆုံး အလေးချိန်ထည့်ပါ သို့မဟုတ် Kgs အစား Pcs အရေအတွက်ကို ဖြည့်ပါ'
+        ), 'err');
         return;
       }
       var _overAmt = 0, _remainStr = '';
@@ -1750,7 +1824,10 @@ function addBarrel() {
       if (_overAmt > 0) {
         var _overKgHint = (_wGmsg > 0 && !_isKgUnit) ? ' (≈'+ucFmtKg((_overAmt*_wGmsg)/1000)+' กก.)' : '';
         var _overStr = _isKgUnit ? ucFmtKg(_overAmt)+' กก.' : _overAmt.toLocaleString()+' ชิ้น'+_overKgHint;
-        showToast('entry', '🚫 บันทึกไม่ได้ — บิล '+(_billJob.bill||'?')+' คงเหลือ '+_remainStr+' แต่กำลังลงจำนวนเกินไป '+_overStr+' กรุณาตรวจสอบยอดค้างจากบิล', 'err');
+        showToast('entry', tEntry(
+          '🚫 บันทึกไม่ได้ — บิล '+(_billJob.bill||'?')+' คงเหลือ '+_remainStr+' แต่กำลังลงจำนวนเกินไป '+_overStr+' กรุณาตรวจสอบยอดค้างจากบิล',
+          '🚫 မှတ်တမ်းတင်၍မရပါ — ဘီလ် '+(_billJob.bill||'?')+' တွင် '+_remainStr+' ကျန်ရှိပြီး '+_overStr+' ပိုနေပါသည် ဘီလ်မှ လက်ကျန်ကို စစ်ဆေးပါ'
+        ), 'err');
         return;
       }
     }
@@ -1761,7 +1838,10 @@ function addBarrel() {
   // ── ยกเลิกการบันทึกแบบ "ไม่ระบุบิล" (NOBILL) แล้ว — บังคับต้องเลือกบิลจริงเสมอสำหรับงานใหม่ (N) ──
   // เดิมมี flow ขออนุมัติ PIN ให้บันทึกแบบไม่ผูกบิลได้ (requestNobillApproval) แต่พบว่าเป็นสาเหตุหลักที่ทำให้
   // "ยอดชุบ" เกิน "ยอดรับ" เพราะของที่ชุบแบบไม่ผูกบิลจะสอบกลับไปยังบิลรับเข้าไม่ได้เลย จึงปิดช่องทางนี้ทั้งหมด
-  showToast('entry', '🚫 บันทึกไม่ได้ — กรุณาเลือกบิลก่อนบันทึก (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว) ถ้ายังไม่มีบิลให้เลือก กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน', 'err');
+  showToast('entry', tEntry(
+    '🚫 บันทึกไม่ได้ — กรุณาเลือกบิลก่อนบันทึก (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว) ถ้ายังไม่มีบิลให้เลือก กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน',
+    '🚫 မှတ်တမ်းတင်၍မရပါ — မှတ်တမ်းမတင်မီ ဘီလ်ကို အရင်ရွေးပါ ("ဘီလ်မဲ့" မှတ်တမ်းတင်ခြင်းကို ပိတ်လိုက်ပါပြီ) ဘီလ်မရှိသေးပါက Job Master တွင် အရင်ဖန်တီးပါ'
+  ), 'err');
 }
 
 // ── บันทึกรายรอบจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async ของกรณี "ไม่ระบุบิล") ──
@@ -1771,6 +1851,19 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
               customer: document.getElementById('bCustomer').value.trim(),
               jobId: jobId,
               lotNo: lotNo };
+  if (selTypeVal === 'R') {
+    var rrSel = document.getElementById('reworkReasonSelect');
+    var rrCode = rrSel ? rrSel.value : '';
+    if (rrCode) {
+      row.reworkReasonCode = rrCode;
+      var reasonObj = REWORK_REASONS.find(function(r){ return r.code === rrCode; });
+      row.reworkReasonTh = reasonObj ? reasonObj.th : rrCode; // เก็บ label ไทยไว้ด้วย กันวันหลังแก้รายการ REWORK_REASONS แล้วของเก่าอ่านไม่ออก
+      if (rrCode === 'OTHER') {
+        var rrDetailEl = document.getElementById('reworkReasonDetail');
+        row.reworkReasonDetail = rrDetailEl ? rrDetailEl.value.trim() : '';
+      }
+    }
+  }
   if (approverInfo) {
     row.nobillApprovedBy = approverInfo.name || (approverInfo.role + (approverInfo.by==='self' ? ' (self)' : ''));
     row.nobillApprovedAt = approverInfo.at;
@@ -1805,12 +1898,15 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   var bbsw = document.getElementById('bBillSelWrap'); if(bbsw) bbsw.style.display='none';
   var bbi  = document.getElementById('bBillInfo'); if(bbi) bbi.textContent='';
   _barrelPartSelected = false;
+  // เคลียร์เหตุผล rework ที่เพิ่งบันทึกไป — บังคับเลือกใหม่ทุกรอบ กันพลาดเอาเหตุผลรอบก่อนมาปนกับรอบใหม่
+  var rrSelReset = document.getElementById('reworkReasonSelect'); if (rrSelReset) rrSelReset.value = '';
+  var rrDetailReset = document.getElementById('reworkReasonDetail'); if (rrDetailReset) { rrDetailReset.value=''; rrDetailReset.style.display='none'; }
   // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
 
   renderBarrels();
-  showToast('entry','เพิ่มรอบชุบแล้ว ✓ (LOT: '+lotNo+')'+(approverInfo?' · ✅ อนุมัติไม่ระบุบิลแล้ว':''),'ok');
+  showToast('entry',tEntry('เพิ่มรอบชุบแล้ว ✓ (LOT: '+lotNo+')','ဆလိုက်တစ်ခေါက် ထည့်ပြီးပါပြီ ✓ (LOT: '+lotNo+')')+(approverInfo?' · ✅ อนุมัติไม่ระบุบิลแล้ว':''),'ok');
 }
 
 function delBarrel(id) {
@@ -2471,6 +2567,26 @@ function setBadge(ok) {
   b.style.background = ok ? 'var(--success-bg)' : '';
   b.style.color = ok ? 'var(--success)' : '';
 }
+
+// ═══════════════════════════════════════
+//  ภาษาแจ้งเตือนหน้างาน (ไทย/พม่า) — เฉพาะข้อความช่วง "เพิ่มรายรอบ" ที่โอเปอเรเตอร์เจอบ่อย
+//  ⚠️ คำแปลพม่าเป็นการแปลเบื้องต้น ยังไม่ผ่านผู้ที่พูดพม่าเป็นภาษาแม่ตรวจทาน ควรให้คนตรวจสอบก่อนใช้งานจริงจัง
+// ═══════════════════════════════════════
+var entryLang = localStorage.getItem('entryLang') || 'th'; // 'th' หรือ 'mm'
+
+function toggleEntryLang() {
+  entryLang = (entryLang === 'th') ? 'mm' : 'th';
+  try { localStorage.setItem('entryLang', entryLang); } catch(e){}
+  renderEntryLangBtn();
+  var rrw = document.getElementById('reworkReasonWrap');
+  if (rrw && rrw.style.display !== 'none') renderReworkReasonOptions();
+}
+function renderEntryLangBtn() {
+  var btn = document.getElementById('entryLangBtn');
+  if (btn) btn.textContent = (entryLang === 'th') ? '🇲🇲 မြန်မာ' : '🇹🇭 ไทย';
+}
+// เลือกข้อความตามภาษาปัจจุบัน — เรียกตอนสร้างข้อความ showToast('entry', ...) เท่านั้น (ไม่ใช้กับ scope อื่น)
+function tEntry(th, mm) { return (entryLang === 'mm' && mm) ? mm : th; }
 
 // ═══════════════════════════════════════
 //  TOAST
@@ -6026,7 +6142,7 @@ function exportIntakeCSV() {
 // ═══════════════════════════════════════
 
 var SYSTEM_KEY = 'plating_v4';
-var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','qc100','mcheck','settings'];
+var TAB_IDS = ['entry','summary','history','chart','chem','thick','job','qa','mcheck','settings'];
 
 var currentRole = null;
 var currentTabs = null; // null = ทุกแท็บ, หรือ array ของ tab id ที่อนุญาต
@@ -6075,7 +6191,7 @@ function applyRoleUI(role) {
   // Tab bar
   // ถ้า auth_admin ตั้งค่า currentTabs ไว้แล้ว (array) → ใช้ตามนั้นเป๊ะๆ (ไม่จำกัดซ้ำตาม role)
   // ถ้ายังไม่ได้ตั้ง (currentTabs === null = "ทุกแท็บ") → ใช้ค่า default ตาม role:
-  //   Admin: เห็นทุก tab | Operator: กรอกรายรอบ, ความหนา, งาน, บันทึกผล, QC 100%
+  //   Admin: เห็นทุก tab | Operator: กรอกรายรอบ, ความหนา, งาน, บันทึกผล
   //   Viewer: เห็นทุก tab ยกเว้น กรอกรายรอบ และ ตั้งค่า
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(btn, i) {
@@ -6085,9 +6201,9 @@ function applyRoleUI(role) {
       // auth_admin ตั้งสิทธิ์แท็บไว้แล้ว — ใช้รายการนี้เป็นหลัก
       visible = TAB_IDS[i] ? (currentTabs.indexOf(TAB_IDS[i]) !== -1) : true;
     } else if (isOperator) {
-      // Operator (ค่า default): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล, QC 100%
+      // Operator (ค่า default): เห็น กรอกรายรอบ, ความหนา, งาน, บันทึกผล
       visible = txt.includes('กรอกรายรอบ') || txt.includes('ความหนา') ||
-                 txt.includes('งาน') || txt.includes('บันทึกผล') || txt.includes('QC 100%');
+                 txt.includes('งาน') || txt.includes('บันทึกผล');
     } else if (isViewer) {
       // Viewer (ค่า default): ซ่อน กรอกรายรอบ และ ตั้งค่า เท่านั้น
       var hide = txt.includes('กรอกรายรอบ') || txt === 'ตั้งค่า';
@@ -6949,7 +7065,10 @@ function pickBillRow(jobId, billNo) {
   var _blocker = findFifoBlocker(job);
   if (_blocker) {
     var _qtyStr = (_blocker.remain.remainPcs||0) > 0 ? (_blocker.remain.remainPcs.toLocaleString()+' ชิ้น') : (_blocker.remain.remainKg.toFixed(2)+' กก.');
-    showToast('entry','🚫 เลือกไม่ได้ — ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+job.bill+'" ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)','err');
+    showToast('entry',tEntry(
+      '🚫 เลือกไม่ได้ — ต้องชุบบิล "'+_blocker.job.bill+'" (รับเข้า '+_blocker.job.date+') ให้หมดก่อน เป็นพาร์ทเดียวกันและรับเข้ามาก่อนบิล "'+job.bill+'" ยังเหลืออยู่ '+_qtyStr+' (บังคับ FIFO)',
+      '🚫 ရွေး၍မရပါ — ဘီလ် "'+_blocker.job.bill+'" ('+_blocker.job.date+' ရရှိ) ကို အရင်ပြီးအောင်လုပ်ပါ အလားတူပစ္စည်းဖြစ်ပြီး ရွေးထားသော ဘီလ် "'+job.bill+'" ထက် ရှေးရှိသည် လက်ကျန် '+_qtyStr+' ရှိနေသည် (FIFO စည်းမျဉ်း)'
+    ),'err');
     return;
   }
 
@@ -7418,10 +7537,16 @@ async function confirmJobOut() {
           style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;">
           <option value="">— เลือก Process —</option>
         </select>
-        <select id="qaChartDate" onchange="qaRenderChart()"
+        <select id="qaChartMode" onchange="qaOnChartModeChange()"
           style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
-          <option value="">— ทุกวัน —</option>
+          <option value="all">— ทุกวัน —</option>
+          <option value="range">ช่วงวันที่</option>
+          <option value="month">เลือกเดือน</option>
         </select>
+        <input type="date" id="qaChartFrom" onchange="qaRenderChart()" style="display:none;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);">
+        <span id="qaChartToLbl" style="display:none;font-size:11px;color:var(--text-muted);">ถึง</span>
+        <input type="date" id="qaChartTo" onchange="qaRenderChart()" style="display:none;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);">
+        <input type="month" id="qaChartMonth" onchange="qaRenderChart()" style="display:none;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);">
       </div>
     </div>
     <canvas id="qaChart" style="max-height:300px;"></canvas>
@@ -7698,153 +7823,6 @@ async function confirmJobOut() {
         </thead>
         <tbody id="qaHistBody">
           <tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-</div>
-
-<!-- ══════════════════════════════════ -->
-<!--  QC 100%  (APK-FR-QA-004)            -->
-<!-- ══════════════════════════════════ -->
-<div id="v-qc100" class="view">
-
-  <div style="background:var(--navy);border-radius:14px;padding:12px 14px;margin-bottom:10px;">
-    <div style="font-size:14px;font-weight:700;color:#fff;">✅ QC 100%</div>
-    <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">ใบรายงานการตรวจสอบชิ้นงานประจำวัน · APK-FR-QA-004</div>
-  </div>
-
-  <!-- ฟอร์มบันทึก -->
-  <div class="card">
-    <div class="card-label">✏️ บันทึกผลตรวจ</div>
-
-    <!-- P/No จาก Job Master -->
-    <div class="field" style="margin-bottom:8px;">
-      <label style="display:flex;align-items:center;justify-content:space-between;">
-        P/No (จาก Job Master)
-        <button onclick="jobMasterLoad().then(qcPopulateJobPick)" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">🔄 รีเฟรช</button>
-      </label>
-      <select id="qcJobPick" onchange="onQcJobPick()" style="font-size:13px;">
-        <option value="">— เลือก P/No จากงานที่มีอยู่ —</option>
-      </select>
-    </div>
-
-    <div class="grid2" style="margin-bottom:8px;">
-      <div class="field" style="margin:0;">
-        <label>วันที่ตรวจสอบ</label>
-        <input type="date" id="qcDate">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>หมายเลขชิ้นงาน</label>
-        <input type="text" id="qcPartNo" placeholder="เช่น 17219-K1N-V000">
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-bottom:8px;">
-      <div class="field" style="margin:0;">
-        <label>ชื่อชิ้นงาน</label>
-        <input type="text" id="qcPartName" placeholder="ชื่อชิ้นงาน">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>Pro. Lot No.</label>
-        <input type="text" id="qcLotNo" placeholder="เลข Lot การผลิต">
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-bottom:8px;">
-      <div class="field" style="margin:0;">
-        <label>เวลาเริ่มตรวจ</label>
-        <input type="time" id="qcTimeStart" onchange="qcCalcDuration()">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>เวลาเสร็จตรวจ</label>
-        <input type="time" id="qcTimeEnd" onchange="qcCalcDuration()">
-      </div>
-    </div>
-
-    <div class="field">
-      <label>เวลาที่ใช้ตรวจสอบ (นาที)</label>
-      <input type="number" id="qcDuration" placeholder="คำนวณอัตโนมัติจากเวลาเริ่ม/เสร็จ" readonly style="background:var(--sky-pale);">
-    </div>
-
-    <div class="grid2" style="margin-bottom:8px;">
-      <div class="field" style="margin:0;">
-        <label>จำนวนตรวจสอบ (ชิ้น)</label>
-        <input type="number" id="qcQtyInspect" min="0" placeholder="0" oninput="qcCalcResult()">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>ชิ้นงาน "NG" (ชิ้น)</label>
-        <input type="number" id="qcQtyNG" min="0" placeholder="0" oninput="qcCalcResult()">
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-bottom:8px;">
-      <div class="field" style="margin:0;">
-        <label>ชิ้นงาน "OK" (ชิ้น)</label>
-        <input type="number" id="qcQtyOK" readonly style="background:var(--sky-pale);">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>เปอร์เซ็นต์เสีย (%)</label>
-        <input type="text" id="qcPercentNG" readonly style="background:var(--sky-pale);">
-      </div>
-    </div>
-
-    <!-- ประเภทงานเสีย -->
-    <div class="field">
-      <label>ประเภทงานเสีย</label>
-      <div id="qcDefectChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
-      <div style="display:flex;gap:6px;">
-        <input type="text" id="qcNewDefect" placeholder="เพิ่มประเภทงานเสียใหม่..." style="flex:1;">
-        <button onclick="qcAddDefectType()"
-          style="padding:10px 14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'IBM Plex Sans Thai',sans-serif;">+ เพิ่ม</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>ชื่อผู้ตรวจสอบ</label>
-      <input type="text" id="qcInspector" placeholder="ชื่อผู้ตรวจสอบ">
-    </div>
-
-    <button class="btn btn-primary" onclick="qcSaveRecord()" id="qcSaveBtn">💾 บันทึกผลตรวจ</button>
-    <div id="qcToast" style="margin-top:8px;font-size:12px;font-weight:600;display:none;"></div>
-  </div>
-
-  <!-- ประวัติ -->
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-      <div class="card-label" style="margin:0;">🗂 ประวัติการตรวจสอบ</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <select id="qcFilterDate" onchange="qcRenderHistory()"
-          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
-          <option value="">— ทุกวัน —</option>
-        </select>
-        <button onclick="qcExportCSV()"
-          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:#fff;color:var(--blue);cursor:pointer;">
-          📥 CSV
-        </button>
-      </div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="barrel-table">
-        <thead>
-          <tr>
-            <th style="text-align:left;">วันที่</th>
-            <th style="text-align:left;">หมายเลขชิ้นงาน</th>
-            <th style="text-align:left;">ชื่อชิ้นงาน</th>
-            <th style="text-align:left;">Lot No.</th>
-            <th>เวลาตรวจ (นาที)</th>
-            <th>ตรวจ</th>
-            <th>OK</th>
-            <th>NG</th>
-            <th>% เสีย</th>
-            <th style="text-align:left;">ประเภทงานเสีย</th>
-            <th style="text-align:left;">ผู้ตรวจสอบ</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="qcHistBody">
-          <tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
         </tbody>
       </table>
     </div>
@@ -8292,20 +8270,31 @@ function qaDeleteRecord(id) {
   qaRenderChart();
 }
 
-// ── Date filter populate ──
+// ── Date filter populate ── (qaChartDate ถูกแทนที่ด้วย qaChartMode + ช่วงวันที่/เดือนแล้ว เหลือแค่ qaFilterDate)
 function qaPopulateDateFilter() {
   var recs = qaLoadRecords();
   var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
-  ['qaChartDate','qaFilterDate'].forEach(function(selId) {
-    var sel = document.getElementById(selId);
-    if (!sel) return;
+  var sel = document.getElementById('qaFilterDate');
+  if (sel) {
     var cur = sel.value;
     sel.innerHTML = '<option value="">— ทุกวัน —</option>';
     dates.forEach(function(d){
       var o = document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o);
     });
     if (cur) sel.value = cur;
-  });
+  }
+}
+
+// เปลี่ยนโหมดเลือกช่วงเวลาของ Control Chart (ทุกวัน / ช่วงวันที่ / เลือกเดือน) — โชว์/ซ่อนช่องกรอกให้ตรงโหมด
+function qaOnChartModeChange() {
+  var mode = (document.getElementById('qaChartMode')||{}).value || 'all';
+  var showRange = mode === 'range';
+  var showMonth = mode === 'month';
+  document.getElementById('qaChartFrom').style.display  = showRange ? '' : 'none';
+  document.getElementById('qaChartToLbl').style.display  = showRange ? '' : 'none';
+  document.getElementById('qaChartTo').style.display    = showRange ? '' : 'none';
+  document.getElementById('qaChartMonth').style.display = showMonth ? '' : 'none';
+  qaRenderChart();
 }
 
 function qaPopulateAll() {
@@ -8359,7 +8348,10 @@ function qaRenderHistory() {
 // ── Render chart ──
 function qaRenderChart() {
   var pid   = (document.getElementById('qaChartProcess')||{}).value || '';
-  var dateF = (document.getElementById('qaChartDate')||{}).value || '';
+  var mode  = (document.getElementById('qaChartMode')||{}).value || 'all';
+  var fromD = (document.getElementById('qaChartFrom')||{}).value || '';
+  var toD   = (document.getElementById('qaChartTo')||{}).value || '';
+  var monthV= (document.getElementById('qaChartMonth')||{}).value || '';
   var canvasEl = document.getElementById('qaChart');
   var emptyEl  = document.getElementById('qaChartEmpty');
   var legendEl = document.getElementById('qaChartLegend');
@@ -8367,7 +8359,12 @@ function qaRenderChart() {
 
   var recs = qaLoadRecords().filter(function(r){
     if (pid && r.pid !== pid) return false;
-    if (dateF && r.date !== dateF) return false;
+    if (mode === 'range') {
+      if (fromD && r.date < fromD) return false;
+      if (toD && r.date > toD) return false;
+    } else if (mode === 'month') {
+      if (monthV && r.date.slice(0,7) !== monthV) return false;
+    }
     return true;
   }).sort(function(a,b){return a.ts-b.ts;});
 
@@ -8444,313 +8441,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var today = new Date().toISOString().split('T')[0];
   var qd = document.getElementById('qaDate');
   if (qd && !qd.value) qd.value = today;
-});
-
-// ═══════════════════════════════════════════════
-//  QC 100%  (APK-FR-QA-004)
-// ═══════════════════════════════════════════════
-var QC_RECORDS_KEY  = 'qc100_records_b1';
-var QC_DEFECTS_KEY  = 'qc100_defects_b1';
-var QC_DEFAULT_DEFECTS = ['ชุบไม่ติด','คราบน้ำ','ชิ้นงานเสียรูป','ชิ้นงานใหม่'];
-var qcSelectedDefects = [];
-
-function qcEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-
-function qcLoadRecords() {
-  try { return JSON.parse(localStorage.getItem(QC_RECORDS_KEY) || '[]'); } catch(e) { return []; }
-}
-function qcSaveRecords(arr) { localStorage.setItem(QC_RECORDS_KEY, JSON.stringify(arr)); }
-
-function qcLoadDefects() {
-  try {
-    var d = JSON.parse(localStorage.getItem(QC_DEFECTS_KEY) || 'null');
-    if (Array.isArray(d) && d.length) return d;
-  } catch(e){}
-  return QC_DEFAULT_DEFECTS.slice();
-}
-function qcSaveDefects(arr) { localStorage.setItem(QC_DEFECTS_KEY, JSON.stringify(arr)); }
-
-// ── Firebase sync ──
-async function qcFbSaveRecords() {
-  if (!fbIsConfigured()) return;
-  try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qc100.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ records: qcLoadRecords(), defects: qcLoadDefects(), savedAt: new Date().toISOString() })
-    });
-  } catch(e) { console.warn('qcFbSaveRecords:', e.message); }
-}
-async function qcFbLoadRecords() {
-  if (!fbIsConfigured()) return;
-  try {
-    var res = await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b1-qc100.json');
-    if (!res.ok) return;
-    var data = await res.json();
-    if (data) {
-      if (Array.isArray(data.records) && data.records.length > 0) {
-        var local = qcLoadRecords();
-        var localIds = {};
-        local.forEach(function(r){ localIds[r.id] = true; });
-        var merged = local.slice();
-        data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
-        merged.sort(function(a,b){ return b.ts - a.ts; });
-        qcSaveRecords(merged);
-      }
-      if (Array.isArray(data.defects) && data.defects.length > 0) {
-        var localD = qcLoadDefects();
-        var merged2 = localD.slice();
-        data.defects.forEach(function(d){ if (merged2.indexOf(d)===-1) merged2.push(d); });
-        qcSaveDefects(merged2);
-      }
-      qcPopulateDateFilter();
-      qcRenderDefectChips();
-      qcRenderHistory();
-    }
-  } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
-}
-
-// ── เติม dropdown P/No จาก Job Master ในแท็บ QC 100% (ใช้ jobMasterItems ร่วมกับแท็บกรอกรายรอบ) ──
-function qcPopulateJobPick() {
-  var sel = document.getElementById('qcJobPick');
-  if (!sel) return;
-  var cur = sel.value;
-  var items = (jobMasterItems || []).filter(function(j){ var r=calcJobRemainToPlate(j.id); return r.remainPcs > 0 || r.remainKg > 0; });
-  items = items.slice().sort(function(a,b){
-    var pn = (a.partName||'').localeCompare(b.partName||'');
-    if (pn !== 0) return pn;
-    return (a.bill||'').localeCompare(b.bill||'');
-  });
-  sel.innerHTML = '<option value="">— เลือก P/No จากงานที่มีอยู่ —</option>' +
-    items.map(function(j){
-      var r = calcJobRemainToPlate(j.id);
-      var unitLabel = (j.unit==='kg') ? ' กก.' : ' ชิ้น';
-      var remVal = (j.unit==='kg') ? r.remainKg.toFixed(2) : r.remainPcs.toLocaleString();
-      var label = (j.partName||'(ไม่มีชื่อ)') + ' [บิล '+(j.bill||'-')+']'
-        + (j.customer?(' — '+j.customer):'') + '  · คงเหลือ '+remVal+unitLabel;
-      return '<option value="'+j.id+'">'+label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</option>';
-    }).join('');
-  if (cur && items.find(function(j){return j.id===cur;})) sel.value = cur;
-}
-
-// ── เลือก P/No จาก dropdown → เติมหมายเลข/ชื่อชิ้นงาน ──
-function onQcJobPick() {
-  var sel = document.getElementById('qcJobPick');
-  var jobId = sel.value;
-  if (!jobId) return;
-  var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
-  if (!job) return;
-
-  // หา Part No จริงจาก Part Master ถ้ามี (job.partName มักเป็น "P/No คำอธิบาย")
-  var key = partNoFromName(job.partName || '');
-  var mp = partList.find(function(p){ return normalizePartKey(p.partNo) === key; });
-  if (mp) {
-    document.getElementById('qcPartNo').value = mp.partNo;
-    document.getElementById('qcPartName').value = mp.partName || job.partName || '';
-  } else {
-    document.getElementById('qcPartNo').value = '';
-    document.getElementById('qcPartName').value = job.partName || '';
-  }
-}
-
-// ── เวลาตรวจสอบ (นาที) — คำนวณจากเวลาเริ่ม/เสร็จ ──
-function qcCalcDuration() {
-  var s = document.getElementById('qcTimeStart').value;
-  var e = document.getElementById('qcTimeEnd').value;
-  var out = document.getElementById('qcDuration');
-  if (!s || !e) { out.value = ''; return; }
-  var sm = s.split(':'), em = e.split(':');
-  var startMin = (+sm[0])*60 + (+sm[1]);
-  var endMin   = (+em[0])*60 + (+em[1]);
-  var diff = endMin - startMin;
-  if (diff < 0) diff += 24*60; // ข้ามวัน (กะดึก)
-  out.value = diff;
-}
-
-// ── คำนวณ OK / %เสีย จากจำนวนตรวจ + NG ──
-function qcCalcResult() {
-  var qty = parseFloat(document.getElementById('qcQtyInspect').value) || 0;
-  var ng  = parseFloat(document.getElementById('qcQtyNG').value) || 0;
-  if (ng > qty) ng = qty;
-  var ok = qty - ng;
-  document.getElementById('qcQtyOK').value = qty ? ok : '';
-  document.getElementById('qcPercentNG').value = qty ? ((ng/qty)*100).toFixed(2)+'%' : '';
-}
-
-// ── ประเภทงานเสีย (chips เลือกได้หลายรายการ) ──
-function qcRenderDefectChips() {
-  var wrap = document.getElementById('qcDefectChips');
-  var defects = qcLoadDefects();
-  wrap.innerHTML = defects.map(function(d){
-    var active = qcSelectedDefects.indexOf(d) !== -1;
-    return '<button type="button" onclick="qcToggleDefect(\''+qcEsc(d).replace(/'/g,"\\'")+'\')" '+
-      'style="padding:5px 12px;border-radius:20px;font-size:11px;border:1.5px solid '+(active?'var(--navy)':'var(--border)')+
-      ';background:'+(active?'var(--navy)':'#fff')+';color:'+(active?'#fff':'var(--text)')+';cursor:pointer;font-family:\'IBM Plex Sans Thai\',sans-serif;">'+
-      qcEsc(d)+'</button>';
-  }).join('');
-}
-function qcToggleDefect(name) {
-  var i = qcSelectedDefects.indexOf(name);
-  if (i === -1) qcSelectedDefects.push(name);
-  else qcSelectedDefects.splice(i,1);
-  qcRenderDefectChips();
-}
-function qcAddDefectType() {
-  var input = document.getElementById('qcNewDefect');
-  var name = input.value.trim();
-  if (!name) return;
-  var defects = qcLoadDefects();
-  if (defects.indexOf(name) === -1) {
-    defects.push(name);
-    qcSaveDefects(defects);
-    qcFbSaveRecords();
-  }
-  qcSelectedDefects.push(name);
-  input.value = '';
-  qcRenderDefectChips();
-}
-
-// ── บันทึกผลตรวจ ──
-function qcSaveRecord() {
-  if (currentRole === 'viewer') return;
-  var date = document.getElementById('qcDate').value;
-  var partNo = document.getElementById('qcPartNo').value.trim();
-  var partName = document.getElementById('qcPartName').value.trim();
-  var lotNo = document.getElementById('qcLotNo').value.trim();
-  var timeStart = document.getElementById('qcTimeStart').value;
-  var timeEnd = document.getElementById('qcTimeEnd').value;
-  var duration = document.getElementById('qcDuration').value;
-  var qty = parseFloat(document.getElementById('qcQtyInspect').value) || 0;
-  var ng  = parseFloat(document.getElementById('qcQtyNG').value) || 0;
-  var ok  = qty - ng;
-  var pct = qty ? ((ng/qty)*100) : 0;
-  var inspector = document.getElementById('qcInspector').value.trim();
-  var toast = document.getElementById('qcToast');
-
-  if (!date || !partNo || !qty) {
-    toast.style.display = 'block';
-    toast.style.color = 'var(--red)';
-    toast.textContent = '⚠️ กรุณากรอกวันที่, หมายเลขชิ้นงาน และจำนวนตรวจสอบ';
-    setTimeout(function(){ toast.style.display='none'; }, 2500);
-    return;
-  }
-
-  var rec = {
-    id: 'QC'+Date.now(),
-    ts: Date.now(),
-    date: date, partNo: partNo, partName: partName, lotNo: lotNo,
-    jobId: document.getElementById('qcJobPick').value || '',
-    timeStart: timeStart, timeEnd: timeEnd, duration: duration,
-    qtyInspect: qty, qtyOK: ok, qtyNG: ng, percentNG: pct,
-    defects: qcSelectedDefects.slice(),
-    inspector: inspector
-  };
-  var recs = qcLoadRecords();
-  recs.unshift(rec);
-  qcSaveRecords(recs);
-  qcFbSaveRecords();
-
-  toast.style.display = 'block';
-  toast.style.color = 'var(--green)';
-  toast.textContent = '✅ บันทึกผลตรวจสอบแล้ว';
-  setTimeout(function(){ toast.style.display='none'; }, 2000);
-
-  // ล้างฟอร์มบางส่วน (เก็บวันที่/ชื่อผู้ตรวจไว้ใช้ต่อ)
-  document.getElementById('qcPartNo').value = '';
-  document.getElementById('qcPartName').value = '';
-  document.getElementById('qcLotNo').value = '';
-  document.getElementById('qcJobPick').value = '';
-  document.getElementById('qcTimeStart').value = '';
-  document.getElementById('qcTimeEnd').value = '';
-  document.getElementById('qcDuration').value = '';
-  document.getElementById('qcQtyInspect').value = '';
-  document.getElementById('qcQtyNG').value = '';
-  document.getElementById('qcQtyOK').value = '';
-  document.getElementById('qcPercentNG').value = '';
-  qcSelectedDefects = [];
-  qcRenderDefectChips();
-
-  qcPopulateDateFilter();
-  qcRenderHistory();
-}
-
-function qcDeleteRecord(id) {
-  if (!confirm('ลบรายการตรวจสอบนี้?')) return;
-  var recs = qcLoadRecords().filter(function(r){ return r.id !== id; });
-  qcSaveRecords(recs);
-  qcFbSaveRecords();
-  qcPopulateDateFilter();
-  qcRenderHistory();
-}
-
-function qcPopulateDateFilter() {
-  var recs = qcLoadRecords();
-  var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
-  var sel = document.getElementById('qcFilterDate');
-  if (!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">— ทุกวัน —</option>';
-  dates.forEach(function(d){
-    var o = document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o);
-  });
-  if (cur) sel.value = cur;
-}
-
-function qcRenderHistory() {
-  var filterDate = (document.getElementById('qcFilterDate')||{}).value || '';
-  var recs = qcLoadRecords().filter(function(r){
-    if (filterDate && r.date !== filterDate) return false;
-    return true;
-  }).sort(function(a,b){return b.ts-a.ts;});
-
-  var tbody = document.getElementById('qcHistBody');
-  if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
-    return;
-  }
-  tbody.innerHTML = recs.map(function(r){
-    var pctColor = r.percentNG > 5 ? '#ef4444' : r.percentNG > 0 ? '#f59e0b' : '#10b981';
-    return '<tr>'
-      +'<td class="td-l">'+qcEsc(r.date)+'</td>'
-      +'<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;">'+qcEsc(r.partNo)+'</td>'
-      +'<td class="td-l">'+qcEsc(r.partName||'–')+'</td>'
-      +'<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+qcEsc(r.lotNo||'–')+'</td>'
-      +'<td>'+(r.duration||'–')+'</td>'
-      +'<td style="font-weight:700;">'+r.qtyInspect+'</td>'
-      +'<td style="color:#059669;">'+r.qtyOK+'</td>'
-      +'<td style="color:#ef4444;">'+r.qtyNG+'</td>'
-      +'<td style="font-weight:800;color:'+pctColor+';">'+r.percentNG.toFixed(2)+'%</td>'
-      +'<td class="td-l" style="font-size:10px;">'+((r.defects&&r.defects.length)?r.defects.map(qcEsc).join(', '):'–')+'</td>'
-      +'<td class="td-l">'+qcEsc(r.inspector||'–')+'</td>'
-      +'<td><button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button></td>'
-      +'</tr>';
-  }).join('');
-}
-
-function qcExportCSV() {
-  var recs = qcLoadRecords().sort(function(a,b){return a.ts-b.ts;});
-  if (!recs.length) { alert('ไม่มีข้อมูล'); return; }
-  var h = ['วันที่','หมายเลขชิ้นงาน','ชื่อชิ้นงาน','Pro.Lot No.','เวลาเริ่ม','เวลาเสร็จ','เวลาตรวจ(นาที)','จำนวนตรวจ','OK','NG','%เสีย','ประเภทงานเสีย','ผู้ตรวจสอบ'];
-  var rows = recs.map(function(r){
-    return [r.date,r.partNo,r.partName||'',r.lotNo||'',r.timeStart||'',r.timeEnd||'',r.duration||'',
-      r.qtyInspect,r.qtyOK,r.qtyNG,r.percentNG.toFixed(2),(r.defects||[]).join('/'),r.inspector||''].join(',');
-  });
-  var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
-  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a'); a.href=url; a.download='qc100_b1.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ── Init on load ──
-document.addEventListener('DOMContentLoaded', function() {
-  var today = new Date().toISOString().split('T')[0];
-  var qcd = document.getElementById('qcDate');
-  if (qcd && !qcd.value) qcd.value = today;
-  qcRenderDefectChips();
-  qcPopulateDateFilter();
-  qcRenderHistory();
-  setTimeout(qcFbLoadRecords, 1000);
 });
 
 // ══════════════════════════════════════
