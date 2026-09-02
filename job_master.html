@@ -808,6 +808,10 @@ if ('caches' in window) {
   </div>
 
   <div class="card">
+    <div id="stmEditBanner" style="display:none;background:#fefce8;border:1.5px solid #fde047;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#a16207;">
+      ✏️ กำลังแก้ไขใบวางบิล <b id="stmEditBillNo"></b> — เพิ่ม/ถอด INV ได้ (ล็อกเลขที่บิล+วันที่ไว้ ไม่ให้แก้ตอนนี้)
+      <button onclick="cancelEditStatement()" style="float:right;background:none;border:1px solid #a16207;color:#a16207;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">ยกเลิก</button>
+    </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label>เลขที่ใบวางบิล</label>
@@ -818,7 +822,7 @@ if ('caches' in window) {
         <input type="date" id="stmDate">
       </div>
     </div>
-    <button class="btn btn-primary" onclick="printStatement()">🖨️ พิมพ์ใบวางบิล</button>
+    <button class="btn btn-primary" onclick="printStatement()" id="stmSaveBtn">🖨️ พิมพ์ใบวางบิล</button>
     <div id="toast-stm" class="toast"></div>
   </div>
 
@@ -4033,8 +4037,12 @@ function renderStatementInv() {
     var statusHtml = billed
       ? '<span class="st-done">วางบิลแล้ว '+esc(inv.billNo)+'</span>'
       : (overdue ? '<span class="st-over">เกินกำหนด</span>' : '<span class="st-ok">ยังไม่วางบิล</span>');
+    var belongsToEditingStm = _stmEditingId && inv.billNo === _stmEditingOriginalBillNo;
+    var billedElsewhere = billed && !belongsToEditingStm; // วางบิลไปแล้วในใบอื่น (ไม่ใช่ใบที่กำลังแก้ไข)
+    var checkedByDefault = !billed || belongsToEditingStm;
     return '<tr>'+
-      '<td><input type="checkbox" class="stm-chk" data-inv="'+esc(inv.invNo)+'" data-net="'+(inv.netTotal||0)+'" onchange="recalcStmTotal()" '+(billed?'':'checked')+' style="width:auto;"></td>'+
+      '<td><input type="checkbox" class="stm-chk" data-inv="'+esc(inv.invNo)+'" data-net="'+(inv.netTotal||0)+'" onchange="recalcStmTotal()" '
+        +(checkedByDefault?'checked':'')+(billedElsewhere?' disabled title="วางบิลไปแล้วในใบอื่น เอามาใส่ซ้ำไม่ได้"':'')+' style="width:auto;"></td>'+
       '<td class="td-l" style="font-weight:700;">'+esc(inv.invNo)+'</td>'+
       '<td class="td-l">'+fmtDateTH(inv.date)+'</td>'+
       '<td class="td-l">'+fmtDateTH(due)+'</td>'+
@@ -4145,6 +4153,32 @@ function printStatement() {
 
   var total = moneyCentsSum(rows.map(function(inv){ return inv.netTotal; })) / 100;
 
+  if (_stmEditingId) {
+    // ── โหมดแก้ไข: อัปเดตใบวางบิลเดิม ไม่สร้างใบใหม่ ──
+    // 1) INV ที่เคยอยู่ในบิลนี้ (billNo เดิม) แต่ตอนนี้ถูกถอด (ไม่ติ๊กแล้ว) → ปลดล็อกกลับเป็น "ยังไม่วางบิล"
+    var newInvNoSet = {};
+    rows.forEach(function(inv){ newInvNoSet[inv.invNo] = true; });
+    invoices.forEach(function(inv){
+      if (inv.billNo === _stmEditingOriginalBillNo && !newInvNoSet[inv.invNo]) {
+        inv.billNo = ''; inv.billedDate = '';
+      }
+    });
+    // 2) INV ที่ติ๊กอยู่ตอนนี้ (ทั้งของเดิมที่ยังอยู่ และที่เพิ่งเพิ่มใหม่) → ผูกกับบิลนี้
+    rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
+    // 3) อัปเดต record เดิมใน billStatements (ไม่สร้างรายการใหม่)
+    var stmIdx = billStatements.findIndex(function(b){ return b.id===_stmEditingId; });
+    if (stmIdx >= 0) {
+      billStatements[stmIdx].invoiceIds = rows.map(function(r){return r.invNo;});
+      billStatements[stmIdx].total = total;
+    }
+    saveLocal(); fbSave();
+    showToast('stm','✅ บันทึกการแก้ไขใบวางบิล '+billNo+' แล้ว ('+rows.length+' INV)','ok');
+    cancelEditStatement();
+    renderStatementHistory();
+    return;
+  }
+
+  // ── โหมดสร้างใหม่ (ปกติ) ──
   // mark invoices as billed
   rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
   // save statement record
@@ -4303,6 +4337,50 @@ function printStatementCopy(billId) {
 }
 
 // ── แสดงประวัติใบวางบิลที่เคยออกไปแล้วทั้งหมด พร้อมปุ่มพิมพ์สำเนา ──
+// ── แก้ไข INV ในใบวางบิลที่ออกไปแล้ว — เพิ่ม/ถอด INV ได้ ล็อกเลขที่บิล+วันที่ไว้ (ไม่ให้แก้ตอนนี้ ตามที่ขอ) ──
+var _stmEditingId = null;           // id ของ billStatements ที่กำลังแก้ไขอยู่ (null = โหมดสร้างใหม่ตามปกติ)
+var _stmEditingOriginalBillNo = null; // เลขที่บิลเดิม ณ ตอนเริ่มแก้ไข — ใช้เทียบว่า INV ไหนเคยอยู่ในบิลนี้บ้าง
+                                       // (เก็บแยกจาก stmNo เผื่ออนาคตอยากปลดล็อกให้แก้เลขบิลได้ ค่านี้จะยังอ้างอิงของเดิมถูก)
+
+function editStatement(billId) {
+  var stm = billStatements.find(function(b){ return b.id===billId; });
+  if (!stm) { showToast('stm','ไม่พบใบวางบิลนี้ในประวัติ','err'); return; }
+
+  _stmEditingId = billId;
+  _stmEditingOriginalBillNo = stm.billNo;
+
+  document.getElementById('stmCustomerSel').value = stm.customer;
+  document.getElementById('stmCustomerSel').disabled = true;
+  document.getElementById('stmShowAll').checked = true; // ต้องเห็น INV ที่วางบิลแล้วด้วย ถึงจะเห็น INV เดิมของบิลนี้
+  document.getElementById('stmNo').value = stm.billNo;
+  document.getElementById('stmNo').disabled = true;
+  document.getElementById('stmDate').value = stm.date;
+  document.getElementById('stmDate').disabled = true;
+
+  document.getElementById('stmEditBanner').style.display = 'block';
+  document.getElementById('stmEditBillNo').textContent = stm.billNo;
+  document.getElementById('stmSaveBtn').textContent = '🔄 บันทึกการแก้ไข';
+
+  renderStatementInv();
+
+  // เลื่อนไปที่ฟอร์มให้เห็นทันที (เผื่อกดจากประวัติที่อยู่ด้านล่างของหน้า)
+  document.getElementById('stmCustomerSel').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function cancelEditStatement() {
+  _stmEditingId = null;
+  _stmEditingOriginalBillNo = null;
+  document.getElementById('stmNo').disabled = false;
+  document.getElementById('stmDate').disabled = false;
+  document.getElementById('stmCustomerSel').disabled = false;
+  document.getElementById('stmNo').value = '';
+  document.getElementById('stmDate').value = '';
+  document.getElementById('stmEditBanner').style.display = 'none';
+  document.getElementById('stmSaveBtn').textContent = '🖨️ พิมพ์ใบวางบิล';
+  document.getElementById('stmShowAll').checked = false;
+  renderStatementInv();
+}
+
 function renderStatementHistory() {
   var tbody = document.getElementById('stmHistoryBody');
   if (!tbody) return;
@@ -4317,7 +4395,8 @@ function renderStatementHistory() {
       '<td class="td-l">'+fmtDateTH(stm.date)+'</td>'+
       '<td class="td-l">'+esc(stm.customer)+'</td>'+
       '<td style="text-align:right;font-weight:700;color:var(--blue);">'+Number(stm.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
-      '<td><button onclick="printStatementCopy(\''+stm.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">🖨️ พิมพ์สำเนา</button></td>'+
+      '<td><button onclick="printStatementCopy(\''+stm.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;">🖨️ พิมพ์สำเนา</button>'+
+        '<button onclick="editStatement(\''+stm.id+'\')" style="background:#fefce8;color:#a16207;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">✏️ แก้ไข INV</button></td>'+
     '</tr>';
   }).join('');
 }
