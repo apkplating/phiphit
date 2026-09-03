@@ -3059,7 +3059,7 @@ function applyPreset(idx) {
   if (!pmMatch.length) {
     searchEl.value = '';
     var statusEl = document.getElementById('bPartSearchStatus');
-    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">🚫 Preset "'+partNo+'" ไม่พบใน Part Master — กรุณาลบ Preset นี้</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">'+tEntry('🚫 Preset "'+partNo+'" ไม่พบใน Part Master — กรุณาลบ Preset นี้','🚫 Preset "'+partNo+'" ကို Part Master တွင် ရှာမတွေ့ပါ — ဤ Preset ကို ဖျက်ပါ')+'</span>';
     showToast('entry', '🚫 "'+partNo+'" ไม่พบใน Part Master', 'err');
     return;
   }
@@ -3070,7 +3070,7 @@ function applyPreset(idx) {
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — ข้าม jobId ที่บันทึกไว้ใน preset ไปเลย ──
   if (selTypeVal === 'R') {
     barrelPmAcPick(0);
-    showToast('entry', '⭐ Preset "'+partNo+'" (งานซ่อม R — ไม่ต้องเลือกบิล)', 'ok');
+    showToast('entry', tEntry('⭐ Preset "'+partNo+'" (งานซ่อม R — ไม่ต้องเลือกบิล)','⭐ Preset "'+partNo+'" (R — ပြင်ဆင်မှုအလုပ် — ဘီလ်မလိုပါ)'), 'ok');
     return;
   }
 
@@ -6798,10 +6798,11 @@ function barrelPmAcShow() {
   if (!matches.length) {
     list.innerHTML =
       '<div style="padding:10px 14px;color:#dc2626;font-size:12px;">'+
-      '🚫 ไม่พบ <b>"'+q+'"</b> ใน Part Master<br>'+
-      '<span style="font-size:10px;color:#64748b;">กรุณาเพิ่มชิ้นงานนี้ใน PM ก่อนบันทึก</span></div>';
+      tEntry('🚫 ไม่พบ <b>"'+q+'"</b> ใน Part Master<br><span style="font-size:10px;color:#64748b;">กรุณาเพิ่มชิ้นงานนี้ใน PM ก่อนบันทึก</span>',
+             '🚫 <b>"'+q+'"</b> ကို Part Master တွင် ရှာမတွေ့ပါ<br><span style="font-size:10px;color:#64748b;">မှတ်တမ်းမတင်မီ PM တွင် ဤပစ္စည်းကို အရင်ထည့်ပါ</span>')+
+      '</div>';
     list.style.display = 'block';
-    statusEl.innerHTML = '<span style="color:#dc2626;">🚫 ไม่พบใน Part Master</span>';
+    statusEl.innerHTML = '<span style="color:#dc2626;">'+tEntry('🚫 ไม่พบใน Part Master','🚫 Part Master တွင် ရှာမတွေ့ပါ')+'</span>';
     return;
   }
 
@@ -6848,7 +6849,7 @@ function barrelPmAcPick(idx) {
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — ข้ามการค้นหา/แสดงรายชื่อบิลไปเลย ──
   if (selTypeVal === 'R') {
     _barrelPartSelected = true;
-    statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span> <span style="color:#94a3b8;">(งานซ่อม R — ไม่ต้องเลือกบิล)</span>';
+    statusEl.innerHTML = '<span style="color:#16a34a;font-weight:600;">✅ '+partNo+(cust?' · '+cust:'')+'</span> <span style="color:#94a3b8;">('+tEntry('งานซ่อม R — ไม่ต้องเลือกบิล','R — ပြင်ဆင်မှုအလုပ် — ဘီလ်မလိုပါ')+')</span>';
     var bbswR = document.getElementById('bBillSelWrap'); if (bbswR) bbswR.style.display = 'none';
     var selR = document.getElementById('bJobPick'); if (selR) selR.value = '';
     var bbiR = document.getElementById('bBillInfo'); if (bbiR) bbiR.innerHTML = '';
@@ -6857,7 +6858,7 @@ function barrelPmAcPick(idx) {
 
   // ── ป้องกัน: ถ้า Job Master ยังโหลดไม่เสร็จ (ว่างเปล่า) อย่าฟันธงว่า "ไม่มีสต็อก" ──
   if (!jobMasterItems || !jobMasterItems.length) {
-    statusEl.innerHTML = '<span style="color:#d97706;">⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่</span>';
+    statusEl.innerHTML = '<span style="color:#d97706;">'+tEntry('⏳ กำลังโหลด Job Master... กดปุ่ม "รีเฟรช" แล้วลองใหม่','⏳ Job Master ကို ဖွင့်နေသည်... "Refresh" ကိုနှိပ်ပြီး ထပ်ကြိုးစားပါ')+'</span>';
     jobMasterLoad().then(function(){ barrelPmAcPick(idx); }); // โหลดแล้วลองเลือกซ้ำอัตโนมัติ
     return;
   }
@@ -6894,7 +6895,10 @@ function barrelPmAcPick(idx) {
       + '🔍 Debug — jobMasterItems โหลดแล้ว '+(jobMasterItems||[]).length+' รายการ | WipCalc โหลดแล้ว='+(typeof WipCalc!=='undefined'&&WipCalc.isLoaded()?'✅':'⏳ยัง') +' | คีย์ที่ค้นหา (ตัดอักขระคั่นแล้ว) = "'+_dbgTyped+'"'
       + (_dbgLines.length ? '\n' + _dbgLines.join('\n') : '\nไม่พบชื่อใกล้เคียงเลยแม้แต่ 4 ตัวอักษรแรก ('+(jobMasterItems||[]).length+' รายการที่โหลดมาไม่มีตัวไหนขึ้นต้นคล้ายกันเลย — เช็คว่า partName ใน Job Master พิมพ์ต่างจากนี้มากไหม)')
       + '</div>';
-    statusEl.innerHTML = '<span style="color:#dc2626;">🚫 <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน แล้วค่อยกลับมาชุบ (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว)</span>' + _dbgHtml;
+    statusEl.innerHTML = '<span style="color:#dc2626;">'+tEntry(
+      '🚫 <b>'+partNo+'</b> ยังไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน แล้วค่อยกลับมาชุบ (ปิดการบันทึกแบบ "ไม่ระบุบิล" แล้ว)',
+      '🚫 <b>'+partNo+'</b> အတွက် လက်ကျန်ရှိသော ဘီလ် မရှိသေးပါ — Job Master တွင် အရင်ဖန်တီးပါ ပြီးမှ ပြန်လာ၍ ဆလိုက်ချပါ'
+    )+'</span>' + _dbgHtml;
     renderBillList([], '');
     document.getElementById('bBillSelWrap').style.display = 'block';
     return;
@@ -7004,7 +7008,7 @@ function renderBillList(active, selectedJobId) {
 
   // ยกเลิกการใช้ "ไม่ระบุบิล" (NOBILL) แล้ว — ต้องเลือกบิลจริงเสมอสำหรับงานใหม่ (N) จึงไม่เพิ่มตัวเลือกนี้ท้ายรายการอีกต่อไป
   if (!active.length) {
-    listEl.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#dc2626;">🚫 ไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน</div>';
+    listEl.innerHTML = '<div style="padding:12px;text-align:center;font-size:12px;color:#dc2626;">'+tEntry('🚫 ไม่มีบิลที่มีคงเหลือให้เลือก — กรุณาไปรับเข้า/สร้างบิลใน Job Master ก่อน','🚫 လက်ကျန်ရှိသော ဘီလ် မရှိပါ — Job Master တွင် အရင်ဖန်တီးပါ')+'</div>';
   }
 
   // event delegation — ผูกครั้งเดียวที่ container
@@ -7107,7 +7111,7 @@ function barrelPmCheckBlur() {
   if (!_barrelPartSelected) {
     document.getElementById('bPartSearch').value = '';
     document.getElementById('bPartSearchStatus').innerHTML =
-      '<span style="color:#dc2626;">🚫 กรุณาเลือกหมายเลขชิ้นงานจาก Part Master เท่านั้น</span>';
+      '<span style="color:#dc2626;">'+tEntry('🚫 กรุณาเลือกหมายเลขชิ้นงานจาก Part Master เท่านั้น','🚫 Part Master မှ P/No ကိုသာ ရွေးပါ')+'</span>';
     document.getElementById('bBillSelWrap').style.display = 'none';
   }
 }
