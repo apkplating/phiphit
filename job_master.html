@@ -4181,6 +4181,14 @@ function printStatement() {
   // ── โหมดสร้างใหม่ (ปกติ) ──
   // mark invoices as billed
   rows.forEach(function(inv){ inv.billNo = billNo; inv.billedDate = date; });
+  // ── กันเลขที่บิลชนกับใบของลูกค้าอื่น (ต้นตอบั๊กที่เจอจริง — ช่องเลขที่บิลค้างจากใบก่อนหน้า แล้วไปทับใบเก่า
+  // ของลูกค้าอื่นแบบเงียบๆ) ถ้าเลขนี้เคยใช้แล้วกับ "ลูกค้าคนละราย" ห้ามบันทึกทับเด็ดขาด ต้องเตือนก่อนเสมอ ──
+  var dupStm = billStatements.find(function(b){ return b.billNo===billNo; });
+  if (dupStm && dupStm.customer !== custKey) {
+    showToast('stm','🚫 เลขที่ '+billNo+' ถูกใช้ไปแล้วกับลูกค้า "'+dupStm.customer+'" — กรุณาเปลี่ยนเลขที่บิล (ช่องเลขที่อาจค้างจากใบก่อนหน้า)','err');
+    return;
+  }
+
   // save statement record
   billStatements = billStatements.filter(function(b){ return b.billNo!==billNo; });
   billStatements.unshift({
@@ -4193,6 +4201,9 @@ function printStatement() {
   openStatementPrintWindow(html);
 
   showToast('stm','✅ สร้างใบวางบิล '+billNo+' สำเร็จ ('+rows.length+' INV)','ok');
+  // เคลียร์ช่องเลขที่บิล/วันที่ หลังสร้างสำเร็จ — กันค้างแล้วไปใช้ซ้ำกับลูกค้ารายถัดไปโดยไม่รู้ตัว (ต้นตอบั๊กที่เจอจริง)
+  document.getElementById('stmNo').value = '';
+  document.getElementById('stmDate').value = '';
   renderStatementInv();
   renderStatementHistory();
 }
@@ -4381,6 +4392,31 @@ function cancelEditStatement() {
   renderStatementInv();
 }
 
+// ── ลบใบวางบิลทั้งใบ — ปลดล็อก INV ทั้งหมดในใบนี้กลับเป็น "ยังไม่วางบิล" แล้วลบ record ทิ้ง
+// จำกัดสิทธิ์แอดมินเท่านั้น เพราะเป็นการทำลายเอกสารบัญชีที่ย้อนกลับไม่ได้ ──
+function deleteStatement(billId) {
+  if (currentRole !== 'admin') { showToast('stm','🚫 ต้องเป็น admin เท่านั้นถึงจะลบใบวางบิลได้','err'); return; }
+  var stm = billStatements.find(function(b){ return b.id===billId; });
+  if (!stm) { showToast('stm','ไม่พบใบวางบิลนี้','err'); return; }
+
+  var ok = confirm('ลบใบวางบิล "'+stm.billNo+'" ('+stm.customer+') ทั้งใบ?\n\n'+
+    'INV ทั้งหมดในใบนี้ ('+(stm.invoiceIds||[]).length+' รายการ) จะถูกปลดล็อกกลับเป็น "ยังไม่วางบิล" ทันที ให้นำไปวางบิลใหม่ได้\n\n'+
+    '⚠️ การลบนี้ย้อนกลับไม่ได้');
+  if (!ok) return;
+
+  // ปลดล็อก INV ทั้งหมดในใบนี้ — เช็ค billNo ตรงกันก่อนเคลียร์ทุกครั้ง (กันเผลอไปยุ่งกับ INV ที่ถูกย้ายไปบิลอื่นแล้ว)
+  (stm.invoiceIds||[]).forEach(function(invNo){
+    var inv = invoices.find(function(i){ return i.invNo===invNo; });
+    if (inv && inv.billNo === stm.billNo) { inv.billNo = ''; inv.billedDate = ''; }
+  });
+  billStatements = billStatements.filter(function(b){ return b.id!==billId; });
+  saveLocal(); fbSave();
+
+  showToast('stm','✅ ลบใบวางบิล '+stm.billNo+' แล้ว — INV ทั้งหมดกลับเป็น "ยังไม่วางบิล"','ok');
+  renderStatementHistory();
+  renderStatementInv();
+}
+
 function renderStatementHistory() {
   var tbody = document.getElementById('stmHistoryBody');
   if (!tbody) return;
@@ -4396,7 +4432,9 @@ function renderStatementHistory() {
       '<td class="td-l">'+esc(stm.customer)+'</td>'+
       '<td style="text-align:right;font-weight:700;color:var(--blue);">'+Number(stm.total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
       '<td><button onclick="printStatementCopy(\''+stm.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;">🖨️ พิมพ์สำเนา</button>'+
-        '<button onclick="editStatement(\''+stm.id+'\')" style="background:#fefce8;color:#a16207;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">✏️ แก้ไข INV</button></td>'+
+        '<button onclick="editStatement(\''+stm.id+'\')" style="background:#fefce8;color:#a16207;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px;">✏️ แก้ไข INV</button>'+
+        (currentRole==='admin' ? '<button onclick="deleteStatement(\''+stm.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">🗑️ ลบใบนี้</button>' : '')+
+        '</td>'+
     '</tr>';
   }).join('');
 }
