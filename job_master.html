@@ -778,6 +778,7 @@ if ('caches' in window) {
       </div>
     </div>
     <button class="btn btn-outline btn-sm" onclick="bdExportCSV()" style="margin-top:8px;">📥 Export CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="printBillDetail()" style="margin-top:8px;margin-left:8px;">🖨️ พิมพ์รายงาน</button>
   </div>
 
   <div class="card" style="padding:0;overflow:hidden;">
@@ -3873,6 +3874,75 @@ function bdExportCSV() {
   a.download = 'bill_detail_'+(document.getElementById('bdFrom').value||'all')+'_'+(document.getElementById('bdTo').value||'all')+'.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── พิมพ์รายงาน "สรุปรายละเอียดการขาย รายบิล" — ใช้กลไก <thead> ซ้ำหัวกระดาษทุกหน้าพิมพ์ (เทคนิคเดียวกับใบวางบิล
+// ที่พิสูจน์แล้วว่าใช้งานได้จริงกับรายการยาวๆ ไม่พังหน้าแบบที่เคยลอง flexbox/position:fixed มาก่อน) ──
+function printBillDetail() {
+  var list = bdFilterList();
+  if (!list.length) { alert('ไม่มีข้อมูลในช่วงที่เลือก'); return; }
+
+  var fromD = document.getElementById('bdFrom').value;
+  var toD = document.getElementById('bdTo').value;
+
+  var sumNet=0, sumVat=0, sumGrand=0;
+  var rowsHtml = list.map(function(inv){
+    var net = Number(inv.netTotal||0), vat = Number(inv.vat||0), grand = Number(inv.grandTotal||0);
+    sumNet+=net; sumVat+=vat; sumGrand+=grand;
+    var custName = (inv.customer||'-').split('\n')[0].trim();
+    return '<tr>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;">'+fmtDateTH(inv.date)+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;">'+esc(inv.invNo)+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;">'+esc(custName)+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;">'+net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;color:#64748b;">0.00</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;color:#64748b;">0.00</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;">'+net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;">'+vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="border:1px solid #94a3b8;padding:4px 6px;text-align:right;font-weight:700;">'+grand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var letterheadHtml =
+    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;text-align:left;">'+
+      '<img src="data:image/png;base64,'+STATEMENT_LOGO_B64+'" style="height:56px;flex-shrink:0;" alt="APK Plating logo">'+
+      '<div style="font-weight:700;font-size:14px;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
+    '</div>'+
+    '<div style="text-align:center;font-weight:700;font-size:14px;margin:6px 0 2px;">สรุปรายละเอียดการขาย รายบิล</div>'+
+    '<div style="text-align:center;font-size:11px;margin-bottom:8px;color:#334155;">วันที่ '+fmtDateTH(fromD)+' - '+fmtDateTH(toD)+'</div>';
+
+  // แถวยอดรวม — อยู่ใน tbody (ไม่ใช่ tfoot) เพราะต้องโชว์ครั้งเดียวที่ท้ายรายการจริง ไม่ซ้ำทุกหน้าแบบหัวกระดาษ
+  var totalRowHtml = '<tr style="font-weight:800;background:#f1f5f9;">'+
+    '<td colspan="3" style="border:1px solid #94a3b8;padding:5px 6px;">รวมทั้งหมด ('+list.length+' บิล)</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">'+sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">0.00</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">0.00</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">'+sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">'+sumVat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="border:1px solid #94a3b8;padding:5px 6px;text-align:right;">'+sumGrand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+  '</tr>';
+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+    '<title>สรุปรายละเอียดการขาย รายบิล</title>'+
+    '<style>'+
+    'body{font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:11.5px;color:#0f172a;padding:20px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    'thead{display:table-header-group;} tfoot{display:table-footer-group;}'+
+    'th{background:#dbeafe;border:1px solid #94a3b8;padding:5px 6px;font-size:10.5px;}'+
+    'tr{page-break-inside:avoid;}'+
+    '</style></head><body>'+
+    '<table>'+
+      '<thead>'+
+        '<tr><td colspan="9" style="border:none;padding:0 0 6px;">'+letterheadHtml+'</td></tr>'+
+        '<tr>'+
+          '<th>วันที่</th><th>เลขที่เอกสาร</th><th>ชื่อ</th><th>จำนวนเงิน</th><th>Service</th><th>ส่วนลด</th><th>สุทธิ (ไม่รวม VAT)</th><th>VAT</th><th>รวมเงิน (รวม VAT)</th>'+
+        '</tr>'+
+      '</thead>'+
+      '<tbody>'+ rowsHtml + totalRowHtml + '</tbody>'+
+    '</table>'+
+    '</body></html>';
+
+  openStatementPrintWindow(html);
 }
 
 
