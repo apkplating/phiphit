@@ -205,6 +205,7 @@ if ('caches' in window) {
   <button class="tab-btn" onclick="tab('out')">📤 ออก INV ขาย</button>
   <button class="tab-btn" onclick="tab('history')">📋 ประวัติ</button>
   <button class="tab-btn" onclick="tab('sales')">📊 ยอดขาย</button>
+  <button class="tab-btn" onclick="tab('billdetail')">📄 รายบิล</button>
   <button class="tab-btn" onclick="tab('statement')">📑 วางบิล</button>
   <button class="tab-btn" onclick="tab('pricelist')">💲 ทะเบียนราคา</button>
   <button class="tab-btn" onclick="tab('customers')">👤 ทะเบียนลูกค้า</button>
@@ -761,6 +762,47 @@ if ('caches' in window) {
 
 </div>
 
+<!-- ══ TAB: รายบิล — สรุปรายละเอียดการขายรายบิล ทีละ INV ตามช่วงวันที่ (ตามรูปแบบรายงานเดิม) ══ -->
+<div id="v-billdetail" class="view">
+
+  <div class="card">
+    <div class="card-label">📄 สรุปรายละเอียดการขาย รายบิล</div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>วันที่ (จาก)</label>
+        <input type="date" id="bdFrom" onchange="renderBillDetail()">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>วันที่ (ถึง)</label>
+        <input type="date" id="bdTo" onchange="renderBillDetail()">
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="bdExportCSV()" style="margin-top:8px;">📥 Export CSV</button>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+      <table class="jt" style="min-width:760px;">
+        <thead><tr>
+          <th class="td-l">วันที่</th>
+          <th class="td-l">เลขที่เอกสาร</th>
+          <th class="td-l">ชื่อ</th>
+          <th>จำนวนเงิน</th>
+          <th>Service</th>
+          <th>ส่วนลด</th>
+          <th>สุทธิ (ไม่รวม VAT)</th>
+          <th>VAT</th>
+          <th>รวมเงิน (รวม VAT)</th>
+        </tr></thead>
+        <tbody id="bdBody">
+          <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px;">ยังไม่มีข้อมูล</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
 <!-- ══ TAB: วางบิล (Statement) — แยกออกมาจากแท็บยอดขาย กันต้องเลื่อนหาไกลเวลา INV เยอะขึ้น ══ -->
 <div id="v-statement" class="view">
 
@@ -1088,7 +1130,7 @@ var SYSTEM_KEY = 'job_master';
 // ทุกไฟล์ในระบบ กันปัญหา floating-point tie-break ที่ทำให้ยอด VAT/ยอดรวมผิด 1 สตางค์แบบสุ่ม (เจอซ้ำหลายรอบ
 // มาก่อนตอนแต่ละไฟล์เขียน logic ปัดเศษเองแยกกัน) ดูรายละเอียด/วิธีใช้เต็มๆ ได้ในไฟล์ money-utils.js
 
-var TAB_IDS = ['board','in','out','history','sales','statement','pricelist','customers'];
+var TAB_IDS = ['board','in','out','history','sales','billdetail','statement','pricelist','customers'];
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyB-vvWMRInOgRXv5uJW7RouW317Avd6VOE",
   authDomain:        "platingapp-92e21-c1346.firebaseapp.com",
@@ -1240,7 +1282,7 @@ function applyStockOverridePermission() {
 //  TAB
 // ══════════════════════════════════════
 function tab(t) {
-  ['board','in','out','history','sales','statement','pricelist','customers'].forEach(function(n, i) {
+  ['board','in','out','history','sales','billdetail','statement','pricelist','customers'].forEach(function(n, i) {
     var el = document.getElementById('v-'+n);
     if (el) el.classList.toggle('active', n===t);
     var btns = document.querySelectorAll('.tab-btn');
@@ -1251,6 +1293,7 @@ function tab(t) {
   if (t==='out')     { initInvTab(); }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
+  if (t==='billdetail') { renderBillDetail(); }
   if (t==='statement') { renderStatementCustomers(); renderStatementHistory(); }
   if (t==='pricelist') { renderPriceList(); renderPriceFormHints(); }
   if (t==='customers') { clearCustomerForm(); renderCustomerRegistryPage(); }
@@ -3746,6 +3789,92 @@ function renderSales() {
 
   renderStatementCustomers();
 }
+
+// ══════════════════════════════════════
+//  รายบิล — สรุปรายละเอียดการขายทีละ INV ตามช่วงวันที่ (ตามรูปแบบรายงานเดิมที่ใช้อยู่)
+//  Service/ส่วนลด เป็นคอลัมน์ตายตัว 0.00 เสมอ (ตามที่ตกลง — ยังไม่มีฟีเจอร์กรอกค่าจริง)
+// ══════════════════════════════════════
+function bdFilterList() {
+  var fromD = document.getElementById('bdFrom').value;
+  var toD = document.getElementById('bdTo').value;
+  return invoices.filter(function(inv){
+    if (inv.docType==='claim' || inv.voided) return false; // ไม่รวมใบเคลม/ที่ยกเลิกแล้ว เหมือนรายงานยอดขายอื่น
+    if (fromD && inv.date < fromD) return false;
+    if (toD && inv.date > toD) return false;
+    return true;
+  }).sort(function(a,b){ return (a.invNo||'').localeCompare(b.invNo||'', undefined, {numeric:true}); });
+}
+
+function renderBillDetail() {
+  var fromEl = document.getElementById('bdFrom'), toEl = document.getElementById('bdTo');
+  // ค่าเริ่มต้นตอนเข้าแท็บครั้งแรก — เดือนปัจจุบัน (กันโชว์ทุก INV ทั้งหมดตั้งแต่เริ่มระบบ ซึ่งอาจช้า/ท่วมตา)
+  if (!fromEl.value && !toEl.value) {
+    var now = new Date();
+    var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    fromEl.value = firstDay.toISOString().slice(0,10);
+    toEl.value = isoToday();
+  }
+
+  var list = bdFilterList();
+  var tbody = document.getElementById('bdBody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:16px;">ไม่พบข้อมูลในช่วงที่เลือก</td></tr>';
+    return;
+  }
+
+  var sumNet=0, sumVat=0, sumGrand=0;
+  var rowsHtml = list.map(function(inv){
+    var net = Number(inv.netTotal||0);
+    var vat = Number(inv.vat||0);
+    var grand = Number(inv.grandTotal||0);
+    sumNet+=net; sumVat+=vat; sumGrand+=grand;
+    var custName = (inv.customer||'-').split('\n')[0].trim();
+    return '<tr>'+
+      '<td class="td-l">'+fmtDateTH(inv.date)+'</td>'+
+      '<td class="td-l" style="font-family:\'IBM Plex Mono\',monospace;">'+esc(inv.invNo)+'</td>'+
+      '<td class="td-l">'+esc(custName)+'</td>'+
+      '<td style="text-align:right;">'+net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="text-align:right;color:var(--text-muted);">0.00</td>'+
+      '<td style="text-align:right;color:var(--text-muted);">0.00</td>'+
+      '<td style="text-align:right;">'+net.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="text-align:right;">'+vat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+      '<td style="text-align:right;font-weight:700;">'+grand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '</tr>';
+  }).join('');
+
+  rowsHtml += '<tr style="font-weight:800;background:var(--sky-pale);">'+
+    '<td class="td-l" colspan="3">รวมทั้งหมด ('+list.length+' บิล)</td>'+
+    '<td style="text-align:right;">'+sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="text-align:right;">0.00</td>'+
+    '<td style="text-align:right;">0.00</td>'+
+    '<td style="text-align:right;">'+sumNet.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="text-align:right;">'+sumVat.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+    '<td style="text-align:right;">'+sumGrand.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
+  '</tr>';
+
+  tbody.innerHTML = rowsHtml;
+}
+
+function bdExportCSV() {
+  var list = bdFilterList();
+  if (!list.length) { alert('ไม่มีข้อมูลในช่วงที่เลือก'); return; }
+
+  var h = ['วันที่','เลขที่เอกสาร','ชื่อ','จำนวนเงิน','Service','ส่วนลด','สุทธิ(ไม่รวมVAT)','VAT','รวมเงิน(รวมVAT)'];
+  var rows = list.map(function(inv){
+    var net = Number(inv.netTotal||0), vat = Number(inv.vat||0), grand = Number(inv.grandTotal||0);
+    var custName = (inv.customer||'-').split('\n')[0].trim();
+    return [inv.date, inv.invNo, custName, net.toFixed(2), '0.00', '0.00', net.toFixed(2), vat.toFixed(2), grand.toFixed(2)].join(',');
+  });
+  var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'bill_detail_'+(document.getElementById('bdFrom').value||'all')+'_'+(document.getElementById('bdTo').value||'all')+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 
 // ตั้งสถานะ "รับคืนบิลแล้ว" ต่อ INV/ใบเคลม — ใช้ยืนยันว่าได้รับสำเนาที่เซ็นกลับมาจากลูกค้า/คนขับแล้ว
 function setInvReturned(invId, val) {
