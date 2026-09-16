@@ -23,6 +23,13 @@
 //    var grandCents = moneyCentsSum(items.map(function(it){ return it.amount; }));  // ได้ "สตางค์" (จำนวนเต็ม)
 //    var r = vatFromGrand(grandCents / 100);   // r = { grand, vat, net } ปัดถูกต้องทุกกรณี
 //    invObj.grandTotal = r.grand; invObj.vat = r.vat; invObj.netTotal = r.net;
+//
+//  ⚠️ แก้ไข 2026-09-02: vatFromGrand() คืนค่า grand/net สลับความหมายกันมาตลอด — grand ที่คืนออกมาคือยอด
+//  ก่อน VAT (ตัวเล็กกว่า) ส่วน net คือยอดรวม VAT (ตัวใหญ่กว่า) ซึ่งตรงข้ามกับชื่อฟิลด์ที่ใช้จริงทั่วระบบ
+//  (grandTotal ควรรวม VAT แล้วใหญ่กว่า, netTotal ควรไม่รวม VAT แล้วเล็กกว่า) ทำให้ INV ทุกใบที่เคยออกผ่าน
+//  ฟังก์ชันนี้มา มีค่า grandTotal/netTotal สลับกันอยู่จริง — แก้ให้ตรงกับความหมายที่ถูกต้องแล้ว INV เก่าที่
+//  เคยออกไปแล้วต้องใช้ recalcInvoiceTotal() (มีอยู่แล้วใน job_master.html) แก้ย้อนหลังทีละใบ หรือรันสคริปต์
+//  bulk fix แยกต่างหาก (ไม่ได้แก้ข้อมูลเก่าอัตโนมัติจากการแก้ไฟล์นี้ไฟล์เดียว)
 // ══════════════════════════════════════════════════════════════════════════
 
 // ปัดค่าเงินเดี่ยวๆ เป็นทศนิยม 2 ตำแหน่ง — ใช้ได้ปลอดภัยสำหรับ "ค่าเดี่ยว" (เช่น ราคา × จำนวน 1 รายการ)
@@ -38,23 +45,23 @@ function moneyCentsSum(arr) {
   return (arr || []).reduce(function (s, n) { return s + toCents(n); }, 0);
 }
 
-// คำนวณ VAT + ยอดสุทธิจากยอดก่อนภาษี ด้วยเลขคณิตแบบสตางค์ล้วนๆ — ถูกต้อง 100% ทุกกรณี ไม่มีปัญหาปัดผิดทิศ
-// grandTotal: ยอดก่อน VAT (บาท), rate: อัตราภาษี ค่าเริ่มต้น 0.07 (VAT 7%)
-// คืนค่า { grand, vat, net } เป็นบาททศนิยม 2 ตำแหน่งทั้งหมด พร้อมใช้เก็บ/แสดงผลได้เลย
+// คำนวณ VAT + ยอดรวมจากยอดก่อนภาษี ด้วยเลขคณิตแบบสตางค์ล้วนๆ — ถูกต้อง 100% ทุกกรณี ไม่มีปัญหาปัดผิดทิศ
+// grandTotal (พารามิเตอร์): ยอดก่อน VAT (บาท), rate: อัตราภาษี ค่าเริ่มต้น 0.07 (VAT 7%)
+// คืนค่า { grand, vat, net } — grand = ยอดรวม VAT (ตัวใหญ่กว่า), net = ยอดก่อน VAT (ตัวเล็กกว่า, เท่ากับ
+// ค่าที่ส่งเข้ามา), vat = ภาษีที่คำนวณได้ — grand ต้อง >= net เสมอ (แก้ไข 2026-09-02: เดิมสลับกัน)
 function vatFromGrand(grandTotal, rate) {
   rate = (rate == null) ? 0.07 : rate;
-  var grandCents = toCents(grandTotal);
-  var vatCents = Math.round(grandCents * rate);
-  var netCents = grandCents + vatCents;
+  var netCents = toCents(grandTotal);           // ค่าที่ส่งเข้ามาคือยอดก่อน VAT
+  var vatCents = Math.round(netCents * rate);
+  var grandCents = netCents + vatCents;         // ยอดรวม VAT ต้องมากกว่ายอดก่อน VAT เสมอ
   return { grand: grandCents / 100, vat: vatCents / 100, net: netCents / 100 };
 }
 
 // เช็คว่ายอดที่บันทึกไว้ (เช่น inv.netTotal เดิม) ตรงกับที่คำนวณใหม่จากรายการจริงหรือไม่ — ใช้ดักจับข้อมูลเก่า
 // ที่เคยบันทึกยอดผิดไว้ก่อนไฟล์นี้ถูกใช้งาน (เทียบกันที่ระดับสตางค์ กันปัญหาเทียบทศนิยมตรงๆ คลาดเคลื่อนเอง)
+// netTotal ไม่เกี่ยวกับ VAT เลย (เป็นผลรวมราคารายการก่อนภาษีตรงๆ) — เก็บพารามิเตอร์ rate ไว้เพื่อความเข้ากันได้
+// ของ signature เดิม แต่ไม่ได้ใช้คำนวณอะไรแล้ว (แก้ไข 2026-09-02 ให้ตรงกับความหมาย net ที่แก้ไขใน vatFromGrand)
 function moneyMismatch(storedNetTotal, items, rate) {
-  rate = (rate == null) ? 0.07 : rate;
-  var grandCents = moneyCentsSum((items || []).map(function (it) { return it.amount; }));
-  var vatCents = Math.round(grandCents * rate);
-  var netCents = grandCents + vatCents;
+  var netCents = moneyCentsSum((items || []).map(function (it) { return it.amount; }));
   return toCents(storedNetTotal) !== netCents;
 }
