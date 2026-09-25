@@ -219,6 +219,27 @@ if ('caches' in window) {
       <div class="kpi-card"><div class="kpi-label">AH รวม</div><div class="kpi-value" id="kpiAH">—</div><div class="kpi-sub" id="kpiAHSub"></div></div>
     </div>
 
+    <!-- ── Section 1b: ยอดขาย (Sales) — ดึงจาก job-master.json (job_master.html เป็นเจ้าของข้อมูลจริง) ── -->
+    <div class="section-sep"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div class="section-title" style="margin-bottom:0;">💰 ยอดขาย (Sales)</div>
+      <select id="salesCustFilter" onchange="renderSalesSection()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;max-width:280px;">
+        <option value="ALL">— ทุกลูกค้า —</option>
+      </select>
+    </div>
+    <div class="grid3">
+      <div class="kpi-card"><div class="kpi-label">ยอดขายเดือนนี้ (MTD)</div><div class="kpi-value" id="salesKpiThisMonth">—</div><div class="kpi-sub" id="salesKpiThisMonthSub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">เดือนก่อน (ช่วงเดียวกัน)</div><div class="kpi-value" id="salesKpiLastMonth">—</div><div class="kpi-sub" id="salesKpiLastMonthSub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">ผลต่าง</div><div class="kpi-value" id="salesKpiDiff">—</div><div class="kpi-sub" id="salesKpiDiffSub">เทียบแบบ MTD (ตัดวันเดียวกัน)</div></div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ยอดขายรายเดือน (12 เดือนล่าสุด) · ไม่รวมใบเคลม/ที่ยกเลิกแล้ว</div>
+      <div class="tbl-wrap"><table id="tblSalesByMonth">
+        <thead><tr><th style="text-align:left;">เดือน</th><th>จำนวน INV</th><th>ยอดขาย (NET)</th><th>เทียบเดือนก่อน</th></tr></thead>
+        <tbody><tr><td colspan="4" class="loading">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+    </div>
+
     <!-- ── Section 2: ปริมาณงาน ── -->
     <div class="section-sep"></div>
     <div class="section-title">📦 ปริมาณงาน (Production Volume)</div>
@@ -498,6 +519,7 @@ async function loadAndRender() {
   document.getElementById('loadStatus').textContent = 'โหลด '+records.length+' กะ · อัปเดต '+new Date().toLocaleTimeString('th-TH');
 
   renderKPI(records);
+  renderSalesSection(); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
   renderLaborCostSection(); // ต้นทุนแรงงาน — เรียกฟังก์ชันจริงจาก apk_hr.html (iframe) ให้ตรงกับหน้าเงินเดือนเป๊ะๆ
@@ -505,6 +527,120 @@ async function loadAndRender() {
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 1b: ยอดขาย (Sales) — ดึงจาก job-master.json (job_master.html เป็นเจ้าของข้อมูลจริง)
+//  ⚠️ ยอดขายที่แท้จริงถูกกรอก/จัดการอยู่ใน job_master.html ไฟล์นี้แค่ "ดึงมาวิเคราะห์" อย่างเดียว ไม่มีการ
+//  แก้ไขข้อมูล invoices ใดๆ ทั้งสิ้น (read-only) ตามที่ตกลงไว้
+// ══════════════════════════════════════════════
+var _jmCache = null;
+async function fetchJobMasterData() {
+  if (_jmCache) return _jmCache;
+  try {
+    var r = await fetch(FB.B1 + '/job-master.json');
+    if (!r.ok) return { invoices: [] };
+    var d = await r.json();
+    _jmCache = d || { invoices: [] };
+    return _jmCache;
+  } catch (e) { return { invoices: [] }; }
+}
+
+function prevYm(ym) {
+  var y = parseInt(ym.slice(0,4),10), m = parseInt(ym.slice(5,7),10);
+  m--; if (m<1) { m=12; y--; }
+  return y+'-'+String(m).padStart(2,'0');
+}
+
+// เดือนปัจจุบัน (ยังไม่จบเดือน) เทียบแบบ MTD ตัดวันเดียวกับวันนี้ กันไม่แฟร์ (เดือนก่อนมียอดครบทั้งเดือน แต่
+// เดือนนี้เพิ่งผ่านมาบางวัน เทียบเต็มเดือนตรงๆ จะดูเหมือนลดลงเสมอทั้งที่จริงอาจกำลังไปได้ดีกว่าเดิม)
+function trendBadge(curVal, prevVal) {
+  if (prevVal <= 0) return '<span style="color:#94a3b8;font-size:11px;">—</span>';
+  var pct = ((curVal - prevVal) / prevVal) * 100;
+  if (Math.abs(pct) < 1) return '<span style="color:#64748b;font-weight:700;">■ ใกล้เคียงเดิม</span>';
+  if (pct > 0) return '<span style="color:#16a34a;font-weight:700;">▲ +'+pct.toFixed(1)+'%</span>';
+  return '<span style="color:#dc2626;font-weight:700;">▼ '+pct.toFixed(1)+'%</span>';
+}
+
+async function renderSalesSection() {
+  var data = await fetchJobMasterData();
+  var invoices = Array.isArray(data.invoices) ? data.invoices : [];
+  // ไม่รวมใบเคลม/ที่ยกเลิกแล้ว — เกณฑ์เดียวกับที่ job_master.html ใช้เองในแท็บยอดขาย
+  var validInvAll = invoices.filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
+
+  // ── เติม dropdown รายชื่อลูกค้า (ครั้งแรกเท่านั้น เพื่อไม่ให้ค่าที่เลือกไว้หายทุกครั้งที่ re-render) ──
+  var custSel = document.getElementById('salesCustFilter');
+  if (custSel.dataset.filled !== '1') {
+    var custNames = Array.from(new Set(validInvAll.map(function(inv){
+      return (inv.customer||'').split('\n')[0].trim();
+    }).filter(Boolean))).sort(function(a,b){ return a.localeCompare(b,'th'); });
+    custSel.innerHTML = '<option value="ALL">— ทุกลูกค้า —</option>' +
+      custNames.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+    custSel.dataset.filled = '1';
+  }
+  var custFilter = custSel.value || 'ALL';
+  var validInv = (custFilter === 'ALL') ? validInvAll : validInvAll.filter(function(inv){
+    return (inv.customer||'').split('\n')[0].trim() === custFilter;
+  });
+
+  var byMonth = {};
+  validInv.forEach(function(inv){
+    if (!inv.date) return;
+    var ym = inv.date.slice(0,7);
+    if (!byMonth[ym]) byMonth[ym] = { count:0, net:0 };
+    byMonth[ym].count++;
+    byMonth[ym].net += Number(inv.netTotal||0);
+  });
+
+  var todayStr = isoDate(new Date());
+  var todayYm  = todayStr.slice(0,7);
+  var todayDay = parseInt(todayStr.slice(8,10), 10);
+
+  function sumNetUpToDay(ym, maxDay) {
+    var sum = 0;
+    validInv.forEach(function(inv){
+      if (!inv.date || inv.date.slice(0,7) !== ym) return;
+      var d = parseInt(inv.date.slice(8,10), 10);
+      if (d <= maxDay) sum += Number(inv.netTotal||0);
+    });
+    return sum;
+  }
+
+  // ── KPI Cards: เดือนนี้ (MTD) vs เดือนก่อน (ตัดวันเดียวกัน) ──
+  var thisMonthMtd = byMonth[todayYm] ? byMonth[todayYm].net : 0; // inv ในเดือนนี้ทั้งหมด = MTD อยู่แล้ว (ไม่มี inv วันในอนาคต)
+  var lastMonthMtd = sumNetUpToDay(prevYm(todayYm), todayDay);
+  document.getElementById('salesKpiThisMonth').textContent = '฿'+fmt(thisMonthMtd,0);
+  document.getElementById('salesKpiThisMonthSub').textContent = monthLabelTH(todayYm)+' ถึงวันที่ '+todayDay;
+  document.getElementById('salesKpiLastMonth').textContent = '฿'+fmt(lastMonthMtd,0);
+  document.getElementById('salesKpiLastMonthSub').textContent = monthLabelTH(prevYm(todayYm))+' ถึงวันที่ '+todayDay+' (ช่วงเดียวกัน)';
+  document.getElementById('salesKpiDiff').innerHTML = trendBadge(thisMonthMtd, lastMonthMtd);
+
+  // ── ตารางรายเดือน (12 เดือนล่าสุด) พร้อมเทียบเดือนก่อนทุกแถว ──
+  var monthRows = Object.keys(byMonth).map(function(ym){
+    return { ym:ym, count:byMonth[ym].count, net:byMonth[ym].net };
+  }).sort(function(a,b){ return b.ym.localeCompare(a.ym); }).slice(0,12);
+
+  var tbody = document.querySelector('#tblSalesByMonth tbody');
+  if (!monthRows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="loading">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = monthRows.map(function(r){
+    var trendHtml;
+    if (r.ym === todayYm) {
+      var prevMtd = sumNetUpToDay(prevYm(r.ym), todayDay);
+      trendHtml = trendBadge(r.net, prevMtd) + '<div style="font-size:9px;color:#94a3b8;margin-top:2px;">MTD ถึงวันที่ '+todayDay+'</div>';
+    } else {
+      var prevFull = byMonth[prevYm(r.ym)] ? byMonth[prevYm(r.ym)].net : 0;
+      trendHtml = trendBadge(r.net, prevFull);
+    }
+    return '<tr>'+
+      '<td style="text-align:left;">'+monthLabelTH(r.ym)+'</td>'+
+      '<td>'+r.count+'</td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--navy);">'+fmt(r.net,2)+'</td>'+
+      '<td>'+trendHtml+'</td>'+
+    '</tr>';
+  }).join('');
 }
 
 // ══════════════════════════════════════════════
