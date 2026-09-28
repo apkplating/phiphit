@@ -519,7 +519,7 @@ async function loadAndRender() {
   document.getElementById('loadStatus').textContent = 'โหลด '+records.length+' กะ · อัปเดต '+new Date().toLocaleTimeString('th-TH');
 
   renderKPI(records);
-  renderSalesSection(); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
+  renderSalesSection().catch(function(e){ console.error('[analytics] renderSalesSection', e); var tb=document.querySelector('#tblSalesByMonth tbody'); if(tb) tb.innerHTML='<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ แสดงผลยอดขายไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
   renderLaborCostSection(); // ต้นทุนแรงงาน — เรียกฟังก์ชันจริงจาก apk_hr.html (iframe) ให้ตรงกับหน้าเงินเดือนเป๊ะๆ
@@ -539,11 +539,13 @@ async function fetchJobMasterData() {
   if (_jmCache) return _jmCache;
   try {
     var r = await fetch(FB.B1 + '/job-master.json');
-    if (!r.ok) return { invoices: [] };
+    // ไม่ cache ตอนล้มเหลว เพื่อให้ครั้งถัดไปลองดึงใหม่ และคืน _error ให้หน้าจอบอกสาเหตุ (เดิมเงียบ แสดงเป็น "ไม่มีข้อมูล"
+    // ทำให้แยกไม่ออกว่า "ไม่มียอดขายจริง" หรือ "โหลดไม่สำเร็จ")
+    if (!r.ok) { console.error('[analytics] โหลด job-master.json ไม่สำเร็จ HTTP', r.status); return { invoices: [], _error: 'HTTP ' + r.status }; }
     var d = await r.json();
     _jmCache = d || { invoices: [] };
     return _jmCache;
-  } catch (e) { return { invoices: [] }; }
+  } catch (e) { console.error('[analytics] โหลด job-master.json ผิดพลาด', e); return { invoices: [], _error: (e && e.message) ? e.message : 'เครือข่าย' }; }
 }
 
 function prevYm(ym) {
@@ -564,6 +566,13 @@ function trendBadge(curVal, prevVal) {
 
 async function renderSalesSection() {
   var data = await fetchJobMasterData();
+  if (data._error) {
+    ['salesKpiThisMonth','salesKpiLastMonth'].forEach(function(id){ document.getElementById(id).textContent = '—'; });
+    document.getElementById('salesKpiDiff').textContent = '—';
+    document.querySelector('#tblSalesByMonth tbody').innerHTML =
+      '<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ โหลดข้อมูลยอดขายไม่สำเร็จ ('+esc(data._error)+') — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้านี้ (ข้อมูลยอดขายจริงไม่ได้หาย อยู่ใน job_master ตามเดิม)</td></tr>';
+    return;
+  }
   var invoices = Array.isArray(data.invoices) ? data.invoices : [];
   // ไม่รวมใบเคลม/ที่ยกเลิกแล้ว — เกณฑ์เดียวกับที่ job_master.html ใช้เองในแท็บยอดขาย
   var validInvAll = invoices.filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
