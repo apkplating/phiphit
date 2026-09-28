@@ -1542,13 +1542,34 @@ function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; 
 // ══════════════════════════════════════
 //  CALC
 // ══════════════════════════════════════
+// ── ดัชนีชั่วคราวเพื่อเร่งความเร็ว calcJob() ──
+// ปัญหาเดิม: calcJob() วนอ่าน jobRecords "ทั้งหมด" ทุกครั้งที่ถูกเรียก และหน้าภาพรวมเรียกหลายรอบต่อ 1 บิล
+// (บิลทั้งหมด × record ทั้งหมด) ยิ่งข้อมูลสะสมมาก ยิ่งช้าแบบทวีคูณ (อาการ "เปิดหน้าช้า ค่อยๆ ช้าลงเรื่อยๆ")
+// วิธีแก้: สร้างดัชนี jobId → รายการ ครั้งเดียวก่อนเริ่มวาดหน้า แล้วใช้ตลอดการวาดครั้งนั้น จากนั้นทิ้งทันที
+// ⚠️ ปลอดภัยเพราะใช้เฉพาะในฟังก์ชัน "อ่านอย่างเดียว" ที่ทำงานต่อเนื่องรวดเดียว (ไม่มีการเพิ่ม/ลบ/แก้ record
+// ระหว่างนั้น) และเก็บ reference ของ record จริง ไม่ใช่สำเนา — นอกช่วงนี้ calcJob() วนอ่านเต็มเหมือนเดิมทุกประการ
+var _jrIdx = null, _jiIdx = null;
+function withCalcIndex(fn, ctx, args) {
+  var built = false;
+  if (_jrIdx === null) {
+    _jrIdx = {}; _jiIdx = {};
+    jobRecords.forEach(function(r){ (_jrIdx[r.jobId] = _jrIdx[r.jobId] || []).push(r); });
+    jobItems.forEach(function(j){ if (!(j.id in _jiIdx)) _jiIdx[j.id] = j; }); // เก็บตัวแรกที่เจอ เหมือน find() เดิม
+    built = true;
+  }
+  try { return fn.apply(ctx || null, args || []); }
+  finally { if (built) { _jrIdx = null; _jiIdx = null; } }
+}
+
 function calcJob(jobId) {
-  var job = jobItems.find(function(j){ return j.id===jobId; }) || {};
+  var job = (_jiIdx ? _jiIdx[jobId] : jobItems.find(function(j){ return j.id===jobId; })) || {};
   var unit = job.unit || 'pcs';
   var totalIn = 0, totalOut = 0;
   var totalInKg = 0, totalOutKg = 0;
-  var hasInRecords = jobRecords.some(function(r){ return r.jobId===jobId && r.type==='in'; });
-  jobRecords.forEach(function(r) {
+  // ระหว่างที่มีดัชนี (_jrIdx) จะวนเฉพาะรายการของบิลนี้ ไม่ต้องวนทุก record ทั้งระบบ — ผลลัพธ์เหมือนเดิมทุกประการ
+  var recs = _jrIdx ? (_jrIdx[jobId] || []) : jobRecords;
+  var hasInRecords = recs.some(function(r){ return r.jobId===jobId && r.type==='in'; });
+  recs.forEach(function(r) {
     if (r.jobId !== jobId) return;
     if (r.type==='in') {
       totalIn   += Number(r.qty||0);
@@ -1639,7 +1660,8 @@ function daysSince(dateStr) {
 //   stage 3→4 ขึ้นไป: ต้องมีสิทธิ์ admin เท่านั้นถึงจะอนุมัติให้ออก INV ต่อได้ (ทุกครั้ง ไม่ลดระดับกลับ)
 //   รีเซ็ต stage กลับเป็น 0 ก็ต่อเมื่อบิลเก่าที่ค้างจริงถูกออก INV ไปแล้วเท่านั้น (ไม่ใช่ตอน admin อนุมัติผ่าน)
 // ══════════════════════════════════════
-function getOverdueUnbilledJobsForCustomer(customerName, excludeJobIds) {
+function getOverdueUnbilledJobsForCustomer(customerName, excludeJobIds) { return withCalcIndex(_getOverdueUnbilledJobsForCustomerImpl, null, [customerName, excludeJobIds]); }
+function _getOverdueUnbilledJobsForCustomerImpl(customerName, excludeJobIds) {
   excludeJobIds = excludeJobIds || [];
   return jobItems.filter(function(j) {
     if ((j.customer||'').trim() !== customerName) return false;
@@ -1778,7 +1800,8 @@ function jmMonthLabel(period){
   return (m[mi]||parts[1]) + ' ' + yBE;
 }
 
-function renderBoard() {
+function renderBoard() { return withCalcIndex(_renderBoardImpl); }
+function _renderBoardImpl() {
   var search = (document.getElementById('boardSearch')||{}).value || '';
   var statusFilter = (document.getElementById('boardStatus')||{}).value || '';
   var monthFilter  = (document.getElementById('boardMonth')||{}).value || '';
@@ -1942,7 +1965,8 @@ function deleteJob(id) {
   saveLocal(); fbSave(); renderBoard();
 }
 
-function exportBoardCSV() {
+function exportBoardCSV() { return withCalcIndex(_exportBoardCSVImpl); }
+function _exportBoardCSVImpl() {
   var rows = [['เลขบิล','วันรับ','ชิ้นงาน','ลูกค้า','หน่วย','รับเข้า','จ่ายออก','คงเหลือ(ชิ้น)','คงเหลือ(กก.)','วันค้าง','สถานะ']];
   jobItems.forEach(function(j){
     var b = calcJob(j.id);
@@ -2030,7 +2054,8 @@ function checkInvPartBlur() {
   }
 }
 
-function onInvPartSearchInput() {
+function onInvPartSearchInput() { return withCalcIndex(_onInvPartSearchInputImpl); }
+function _onInvPartSearchInputImpl() {
   var q = (document.getElementById('invPartSearch').value || '').trim();
   var infoEl = document.getElementById('invPartSearchInfo');
   var list = document.getElementById('ac-invPartSearch');

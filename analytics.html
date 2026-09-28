@@ -240,6 +240,37 @@ if ('caches' in window) {
       </table></div>
     </div>
 
+    <!-- ── Section 1c: QC 100% — สรุปปัญหา (รายเดือน + พาเรโตสาเหตุงาน NG) — ดึงจาก plating-{line}-qc100.json ── -->
+    <div class="section-sep"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div class="section-title" style="margin-bottom:0;">✅ QC 100% — สรุปปัญหา</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="qcSumLine" onchange="renderQcSummary()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;">
+          <option value="ALL">ทุกสาย</option><option value="B1">B1</option><option value="B2">B2</option><option value="R1">R1</option>
+        </select>
+        <select id="qcSumMonth" onchange="renderQcSummary()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;" title="ช่วงเวลาของกราฟพาเรโต">
+          <option value="ALL">พาเรโต: 12 เดือนล่าสุด</option>
+        </select>
+      </div>
+    </div>
+    <div id="qcSumNote" style="font-size:11px;color:#dc2626;margin-bottom:8px;"></div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">สรุปรายเดือน (12 เดือนล่าสุด) · %NG = NG รวม ÷ ตรวจรวม</div>
+      <div class="tbl-wrap"><table id="tblQcMonthly">
+        <thead><tr><th style="text-align:left;">เดือน</th><th>จำนวนตรวจสอบ (ชิ้น)</th><th>OK</th><th>NG</th><th>% NG</th></tr></thead>
+        <tbody><tr><td colspan="5" class="loading">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">พาเรโตสาเหตุงาน NG (ชิ้น) <span id="qcParetoPeriod" style="font-weight:400;color:var(--text-muted);"></span></div>
+      <div class="chart-wrap-lg"><canvas id="chartQcPareto"></canvas></div>
+      <div class="tbl-wrap" style="margin-top:10px;"><table id="tblQcPareto">
+        <thead><tr><th>#</th><th style="text-align:left;">สาเหตุ</th><th>NG (ชิ้น)</th><th>%</th><th>สะสม %</th></tr></thead>
+        <tbody><tr><td colspan="5" class="loading">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+      <div id="qcParetoFoot" style="font-size:10px;color:var(--text-muted);margin-top:6px;"></div>
+    </div>
+
     <!-- ── Section 2: ปริมาณงาน ── -->
     <div class="section-sep"></div>
     <div class="section-title">📦 ปริมาณงาน (Production Volume)</div>
@@ -520,6 +551,7 @@ async function loadAndRender() {
 
   renderKPI(records);
   renderSalesSection().catch(function(e){ console.error('[analytics] renderSalesSection', e); var tb=document.querySelector('#tblSalesByMonth tbody'); if(tb) tb.innerHTML='<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ แสดงผลยอดขายไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
+  renderQcSummary().catch(function(e){ console.error('[analytics] renderQcSummary', e); var tb=document.querySelector('#tblQcMonthly tbody'); if(tb) tb.innerHTML='<tr><td colspan="5" style="color:#dc2626;padding:14px;">⚠️ แสดงผล QC100% ไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // QC100% — ไม่ผูกกับ dateFrom/dateTo (12 เดือนล่าสุดเสมอ)
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
   renderLaborCostSection(); // ต้นทุนแรงงาน — เรียกฟังก์ชันจริงจาก apk_hr.html (iframe) ให้ตรงกับหน้าเงินเดือนเป๊ะๆ
@@ -650,6 +682,150 @@ async function renderSalesSection() {
       '<td>'+trendHtml+'</td>'+
     '</tr>';
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 1c: QC 100% — สรุปปัญหารายเดือน + พาเรโตสาเหตุงาน NG
+//  ข้อมูลจาก qc100.html เก็บที่ {FB[line]}/plating-{line}-qc100.json (อ่านอย่างเดียว ไม่แก้ไขข้อมูลใดๆ)
+// ══════════════════════════════════════════════
+var _qcCache = {};
+async function fetchQcRecords(line) {
+  if (_qcCache[line]) return _qcCache[line];
+  try {
+    var r = await fetch(FB[line] + '/plating-' + line.toLowerCase() + '-qc100.json');
+    if (!r.ok) { console.error('[analytics] QC100 '+line+' HTTP', r.status); return { records: [], _error: 'HTTP ' + r.status }; }
+    var d = await r.json();
+    var arr = d && d.records ? (Array.isArray(d.records) ? d.records : Object.values(d.records)) : [];
+    _qcCache[line] = { records: arr.filter(Boolean) };   // ไม่ cache ตอนล้มเหลว เพื่อให้ลองใหม่ได้
+    return _qcCache[line];
+  } catch (e) { console.error('[analytics] QC100 '+line, e); return { records: [], _error: (e && e.message) ? e.message : 'เครือข่าย' }; }
+}
+
+// สรุปรายเดือน — %NG ถ่วงน้ำหนักด้วยจำนวนตรวจ (NG รวม ÷ ตรวจรวม) ไม่ใช่ค่าเฉลี่ยของ %NG รายรายการ
+function qcBuildMonthly(records) {
+  var by = {};
+  records.forEach(function(r){
+    if (!r || !r.date) return;
+    var ym = String(r.date).slice(0,7);
+    var insp = Number(r.qtyInspect||0), ng = Number(r.qtyNG||0);
+    var ok = (r.qtyOK != null) ? Number(r.qtyOK) : (insp - ng);
+    if (!by[ym]) by[ym] = { insp:0, ok:0, ng:0 };
+    by[ym].insp += insp; by[ym].ok += ok; by[ym].ng += ng;
+  });
+  return by;
+}
+
+// พาเรโตสาเหตุ NG — สาเหตุที่ระบุจำนวนแยกไว้ (defects:[{name,qty}]) รวมตามชื่อ เรียงมาก→น้อย แสดง 10 อันดับแรก
+// ที่เหลือรวมเป็น "อื่นๆ" ส่วน NG ที่ไม่มีจำนวนแยกสาเหตุ (ข้อมูลเก่าก่อนมีตารางสาเหตุ หรือไม่ได้ระบุ) รวมเป็น
+// "ไม่ระบุสาเหตุ" วางท้ายสุดเสมอ — ทำให้ยอดรวมพาเรโตเท่ากับ NG รวมในตารางรายเดือนเสมอ (ไม่ตกหล่นเงียบๆ)
+function qcBuildPareto(records) {
+  var byCause = {}, totalNg = 0, unspecified = 0;
+  records.forEach(function(r){
+    var ng = Number(r.qtyNG||0);
+    if (ng <= 0) return;
+    totalNg += ng;
+    var sum = 0;
+    if (Array.isArray(r.defects)) {
+      r.defects.forEach(function(x){
+        if (!x || typeof x !== 'object') return;          // แบบเก่า (ชื่ออย่างเดียว ไม่มีจำนวน) ไม่นับที่นี่
+        var q = Number(x.qty||0), n = String(x.name||'').trim();
+        if (n && q > 0) { byCause[n] = (byCause[n]||0) + q; sum += q; }
+      });
+    }
+    if (sum < ng) unspecified += (ng - sum);
+  });
+  var list = Object.keys(byCause).map(function(n){ return { name:n, qty:byCause[n] }; })
+    .sort(function(a,b){ return b.qty - a.qty; });
+  var top = list.slice(0,10), rest = list.slice(10);
+  if (rest.length) top.push({ name:'อื่นๆ ('+rest.length+' สาเหตุ)', qty: rest.reduce(function(s,x){return s+x.qty;},0) });
+  if (unspecified > 0) top.push({ name:'ไม่ระบุสาเหตุ', qty: unspecified });
+  var cum = 0;
+  top.forEach(function(x){
+    cum += x.qty;
+    x.pct = totalNg ? x.qty/totalNg*100 : 0;
+    x.cum = totalNg ? cum/totalNg*100 : 0;
+  });
+  return { rows: top, totalNg: totalNg, unspecified: unspecified };
+}
+
+async function renderQcSummary() {
+  var lineSel = document.getElementById('qcSumLine').value || 'ALL';
+  var lines = (lineSel === 'ALL') ? ['B1','B2','R1'] : [lineSel];
+  var results = await Promise.all(lines.map(fetchQcRecords));
+  var errs = [], recs = [];
+  results.forEach(function(res, i){ if (res._error) errs.push(lines[i]+' ('+res._error+')'); recs = recs.concat(res.records); });
+  document.getElementById('qcSumNote').textContent = errs.length
+    ? '⚠️ โหลดข้อมูล QC100% ไม่สำเร็จ: '+errs.join(', ')+' — ตัวเลขด้านล่างยังไม่ครบ เช็คอินเทอร์เน็ตแล้วรีเฟรช (ข้อมูลจริงไม่ได้หาย)' : '';
+
+  var valid = recs.filter(function(r){ return r && r.date; });
+  var byMonth = qcBuildMonthly(valid);
+  var months = Object.keys(byMonth).sort().reverse().slice(0,12);   // ใหม่→เก่า 12 เดือน
+
+  // dropdown ช่วงเวลาพาเรโต (คงค่าที่เลือกไว้ถ้ายังมีอยู่)
+  var mSel = document.getElementById('qcSumMonth');
+  var curM = mSel.value || 'ALL';
+  mSel.innerHTML = '<option value="ALL">พาเรโต: 12 เดือนล่าสุด</option>' +
+    months.map(function(m){ return '<option value="'+m+'">พาเรโต: '+monthLabelTH(m)+'</option>'; }).join('');
+  mSel.value = (curM !== 'ALL' && months.indexOf(curM) >= 0) ? curM : 'ALL';
+  var pMonth = mSel.value;
+
+  // ── ตารางรายเดือน ──
+  var tbody = document.querySelector('#tblQcMonthly tbody');
+  if (!months.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">ยังไม่มีข้อมูล QC100%</td></tr>';
+  } else {
+    var tI=0,tO=0,tN=0;
+    var rows = months.map(function(m){
+      var b = byMonth[m]; tI+=b.insp; tO+=b.ok; tN+=b.ng;
+      var pct = b.insp ? b.ng/b.insp*100 : 0;
+      var col = pct > 5 ? '#dc2626' : pct > 0 ? '#d97706' : '#16a34a';
+      return '<tr><td style="text-align:left;">'+monthLabelTH(m)+'</td><td>'+fmt(b.insp,0)+'</td><td style="color:#16a34a;">'+fmt(b.ok,0)+
+             '</td><td style="color:#dc2626;">'+fmt(b.ng,0)+'</td><td style="font-weight:800;color:'+col+';">'+pct.toFixed(2)+'%</td></tr>';
+    });
+    var tp = tI ? tN/tI*100 : 0;
+    rows.push('<tr style="font-weight:800;background:#f1f5f9;"><td style="text-align:left;">รวม</td><td>'+fmt(tI,0)+'</td><td>'+fmt(tO,0)+'</td><td>'+fmt(tN,0)+'</td><td>'+tp.toFixed(2)+'%</td></tr>');
+    tbody.innerHTML = rows.join('');
+  }
+
+  // ── พาเรโต ──
+  var inPeriod = valid.filter(function(r){
+    var ym = String(r.date).slice(0,7);
+    return pMonth === 'ALL' ? months.indexOf(ym) >= 0 : ym === pMonth;
+  });
+  var par = qcBuildPareto(inPeriod);
+  document.getElementById('qcParetoPeriod').textContent = '· ' + (pMonth==='ALL' ? '12 เดือนล่าสุด' : monthLabelTH(pMonth)) + ' · ' + (lineSel==='ALL' ? 'ทุกสาย' : lineSel);
+
+  var pb = document.querySelector('#tblQcPareto tbody');
+  destroyChart('chartQcPareto');
+  if (!par.rows.length) {
+    pb.innerHTML = '<tr><td colspan="5" class="loading">ไม่มีงาน NG ในช่วงที่เลือก</td></tr>';
+    document.getElementById('qcParetoFoot').textContent = '';
+    return;
+  }
+  pb.innerHTML = par.rows.map(function(x,i){
+    return '<tr><td>'+(i+1)+'</td><td style="text-align:left;">'+esc(x.name)+'</td><td>'+fmt(x.qty,0)+'</td><td>'+x.pct.toFixed(1)+'%</td><td>'+x.cum.toFixed(1)+'%</td></tr>';
+  }).join('');
+  document.getElementById('qcParetoFoot').textContent =
+    'NG รวม '+fmt(par.totalNg,0)+' ชิ้น'+(par.unspecified>0 ? ' · "ไม่ระบุสาเหตุ" '+fmt(par.unspecified,0)+' ชิ้น (ข้อมูลเก่าก่อนมีตารางสาเหตุ หรือไม่ได้ระบุ)' : '');
+
+  _charts['chartQcPareto'] = new Chart(document.getElementById('chartQcPareto'), {
+    data:{
+      labels: par.rows.map(function(x){ return x.name; }),
+      datasets:[
+        {type:'bar', label:'NG (ชิ้น)', data:par.rows.map(function(x){return x.qty;}), backgroundColor:'rgba(220,38,38,.75)', yAxisID:'y', order:2},
+        {type:'line', label:'สะสม %', data:par.rows.map(function(x){return Number(x.cum.toFixed(1));}), borderColor:'#1e40af', backgroundColor:'#1e40af', yAxisID:'y1', tension:.2, pointRadius:3, order:1},
+        {type:'line', label:'80%', data:par.rows.map(function(){return 80;}), borderColor:'#94a3b8', borderDash:[5,4], pointRadius:0, yAxisID:'y1', order:0}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:11}}}, datalabels:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:9}}},
+        y:{beginAtZero:true,ticks:{font:{size:10}},title:{display:true,text:'ชิ้น',font:{size:10}}},
+        y1:{position:'right',min:0,max:100,ticks:{font:{size:10},callback:function(v){return v+'%';}},grid:{drawOnChartArea:false}}
+      }
+    }
+  });
 }
 
 // ══════════════════════════════════════════════
