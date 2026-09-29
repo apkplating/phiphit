@@ -109,7 +109,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <div class="field" style="margin-top:12px;">
-      <label>Cust. Name (ชื่อลูกค้า)</label>
+      <label>Cust. Name (ดึงจาก Part Master อัตโนมัติ — แก้เองได้)</label>
       <input type="text" id="tgCust" placeholder="ชื่อลูกค้า">
     </div>
 
@@ -219,7 +219,7 @@ function isoToday(){ return new Date().toISOString().split('T')[0]; }
 function loadPartList() {
   fetch(PM_URL).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
     if (data && Array.isArray(data.parts)) {
-      partList = data.parts.map(function(p){ return { partNo:p.partNo||'', partName:p.name||p.partName||'' }; });
+      partList = data.parts.map(function(p){ return { partNo:p.partNo||'', partName:p.name||p.partName||'', customer:p.customer||'' }; });
       $('tgPartNoList').innerHTML = partList.map(function(p){ return '<option value="'+esc(p.partNo)+'">'; }).join('');
     }
   }).catch(function(e){ console.warn('Part Master load:', e.message); });
@@ -237,6 +237,7 @@ function onPartNoBlur() {
   if (match) {
     $('tgPartNo').value = match.partNo;
     $('tgPartName').value = match.partName || '';
+    if (match.customer) $('tgCust').value = match.customer; // auto-fill จาก PM (1 P/No : 1 ลูกค้าเสมอ) แก้เองได้ถ้าต้องการ
     $('tgPartHint').textContent = '✅ เจอใน Part Master';
     $('tgPartHint').className = 'hint ok';
     renderPhotoBox(match.partNo);
