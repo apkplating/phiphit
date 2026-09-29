@@ -84,11 +84,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <div class="card">
     <div class="card-label">✏️ กรอกข้อมูล Tag</div>
 
-    <div class="field">
-      <label>Cust. Name (ชื่อลูกค้า)</label>
-      <input type="text" id="tgCust" placeholder="ชื่อลูกค้า">
-    </div>
-
     <div class="grid2">
       <div class="field" style="margin-bottom:0;">
         <label>P/No. (จาก Part Master)</label>
@@ -113,10 +108,18 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
     </div>
 
+    <div class="field" style="margin-top:12px;">
+      <label>Cust. Name (ชื่อลูกค้า)</label>
+      <input type="text" id="tgCust" placeholder="ชื่อลูกค้า">
+    </div>
+
     <div class="grid2" style="margin-top:12px;">
       <div class="field" style="margin-bottom:0;">
-        <label>Pro Lot No.</label>
-        <input type="text" id="tgLot" placeholder="เลข Lot การผลิต" oninput="scheduleInspLookup()">
+        <label>Pro Lot No. (ดึงจาก QC 100% — เลือก P/No ก่อน)</label>
+        <select id="tgLot" onchange="onLotSelected()" disabled>
+          <option value="">พิมพ์ P/No ก่อน</option>
+        </select>
+        <div class="hint" id="tgLotHint"></div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>Del. Date</label>
@@ -125,8 +128,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <div class="field" style="margin-top:12px;">
-      <label>Insp. By (ดึงจาก QC 100% อัตโนมัติ — แก้เองได้ถ้าไม่เจอ)</label>
-      <input type="text" id="tgInspBy" placeholder="ชื่อผู้ตรวจสอบ">
+      <label>Insp. By (ดึงจาก QC 100% อัตโนมัติเมื่อเลือก Lot)</label>
+      <input type="text" id="tgInspBy" readonly placeholder="เลือก Pro Lot No. ก่อน">
       <div class="hint" id="tgInspHint"></div>
     </div>
 
@@ -179,7 +182,6 @@ var PHOTO_URL = FB_LINES.B1 + '/part-photos.json'; // ไฟล์แยกต�
 var partList = [];        // [{partNo, partName}]
 var partPhotos = {};      // { [partNo]: 'data:image/jpeg;base64,...' }
 var _selectedPhotoB64 = null; // รูปที่เพิ่งเลือกแต่ยังไม่บันทึก (บันทึกจริงตอนกดพิมพ์)
-var _inspLookupTimer = null;
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -226,6 +228,7 @@ function onPartNoInput() {
   $('tgPartName').value = '';
   $('tgPartHint').textContent = ''; $('tgPartHint').className = 'hint';
   renderPhotoBox(null);
+  resetLotDropdown('พิมพ์ P/No ก่อน');
 }
 function onPartNoBlur() {
   var val = $('tgPartNo').value.trim();
@@ -243,7 +246,7 @@ function onPartNoBlur() {
     $('tgPartName').removeAttribute('readonly');
     renderPhotoBox(null);
   }
-  scheduleInspLookup();
+  loadLotOptionsForPartNo(val);
 }
 
 // ══════════════════════════════════════
@@ -295,19 +298,24 @@ function savePhotoIfNeeded(partNo) {
 }
 
 // ══════════════════════════════════════
-//  QC 100% — ค้นหาผู้ตรวจสอบ จับคู่ P/No + Lot No (อ่านจากทั้ง B1/B2/R1)
+//  QC 100% — Pro Lot No. เป็น dropdown เสมอ ดึงเฉพาะ Lot ที่เคยผ่านการตรวจ QC100% ของ P/No นี้จริง
+//  (อ่านจากทั้ง B1/B2/R1) — เจตนา: Tag พิมพ์ได้ก็ต่อเมื่อผ่าน QC100% แล้วเท่านั้น ตามหลักสอบกลับที่ตกลงกัน
+//  ป้องกันเลือก Lot ที่สะกดผิด/ยังไม่เคยตรวจได้ตั้งแต่ต้น ไม่ต้องพึ่งจับคู่ string ที่พิมพ์เองอีกต่อไป
 // ══════════════════════════════════════
-function scheduleInspLookup() {
-  clearTimeout(_inspLookupTimer);
-  _inspLookupTimer = setTimeout(lookupInspector, 500); // รอพิมพ์นิ่งก่อนค่อยค้นหา กันยิง fetch รัวๆ
-}
-function lookupInspector() {
-  var partNo = $('tgPartNo').value.trim();
-  var lot = $('tgLot').value.trim();
-  if (!partNo || !lot) { $('tgInspHint').textContent = ''; return; }
-  $('tgInspHint').textContent = '⏳ กำลังค้นหาใน QC 100%...';
-  $('tgInspHint').className = 'hint';
+var _qcRecordsForPartNo = []; // record ทั้งหมดของ P/No ปัจจุบัน ที่โหลดมาครั้งเดียว ใช้เลือก Insp.By ต่อได้ทันทีไม่ fetch ซ้ำ
 
+function resetLotDropdown(placeholderText) {
+  var sel = $('tgLot');
+  sel.innerHTML = '<option value="">'+esc(placeholderText)+'</option>';
+  sel.disabled = true;
+  $('tgLotHint').textContent = '';
+  $('tgInspBy').value = '';
+  $('tgInspHint').textContent = '';
+  _qcRecordsForPartNo = [];
+}
+
+function loadLotOptionsForPartNo(partNo) {
+  resetLotDropdown('⏳ กำลังค้นหาใน QC 100%...');
   var lines = ['B1','B2','R1'];
   Promise.all(lines.map(function(line){
     return fetch(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json')
@@ -316,19 +324,42 @@ function lookupInspector() {
       .catch(function(){ return []; });
   })).then(function(results){
     var all = [].concat.apply([], results);
-    var matches = all.filter(function(r){
-      return r && String(r.partNo||'').trim().toLowerCase() === partNo.toLowerCase()
-              && String(r.lotNo||'').trim().toLowerCase() === lot.toLowerCase();
+    _qcRecordsForPartNo = all.filter(function(r){
+      return r && String(r.partNo||'').trim().toLowerCase() === partNo.toLowerCase() && String(r.lotNo||'').trim();
     }).sort(function(a,b){ return (b.ts||0) - (a.ts||0); }); // ใหม่สุดก่อน
-    if (matches.length) {
-      $('tgInspBy').value = matches[0].inspector || '';
-      $('tgInspHint').textContent = '✅ เจอในระบบ QC 100% ('+matches[0].line+', '+matches[0].date+')';
-      $('tgInspHint').className = 'hint ok';
-    } else {
-      $('tgInspHint').textContent = '⚠️ ไม่เจอ P/No+Lot นี้ใน QC 100% — กรอกชื่อผู้ตรวจสอบเอง';
-      $('tgInspHint').className = 'hint warn';
+
+    var sel = $('tgLot');
+    if (!_qcRecordsForPartNo.length) {
+      sel.innerHTML = '<option value="">— ไม่มี —</option>';
+      sel.disabled = true;
+      $('tgLotHint').textContent = '🚫 ยังไม่มีข้อมูลตรวจ QC 100% สำหรับ P/No นี้เลย — ต้องตรวจผ่านก่อนถึงจะพิมพ์ Tag ได้';
+      $('tgLotHint').className = 'hint err';
+      return;
     }
+    var seenLots = {};
+    var options = ['<option value="">— เลือก Lot —</option>'];
+    _qcRecordsForPartNo.forEach(function(r){
+      var lot = String(r.lotNo).trim();
+      if (seenLots[lot]) return; // เก็บตัวแรกที่เจอ (ใหม่สุด เพราะ sort ไว้แล้ว) ต่อ 1 lot
+      seenLots[lot] = true;
+      options.push('<option value="'+esc(lot)+'">'+esc(lot)+' ('+esc(r.line||'')+' '+esc(r.date||'')+')</option>');
+    });
+    sel.innerHTML = options.join('');
+    sel.disabled = false;
+    $('tgLotHint').textContent = '✅ เจอ '+Object.keys(seenLots).length+' Lot ที่ผ่าน QC 100% แล้ว';
+    $('tgLotHint').className = 'hint ok';
   });
+}
+
+function onLotSelected() {
+  var lot = $('tgLot').value;
+  if (!lot) { $('tgInspBy').value = ''; $('tgInspHint').textContent = ''; return; }
+  var rec = _qcRecordsForPartNo.find(function(r){ return String(r.lotNo).trim() === lot; });
+  if (rec) {
+    $('tgInspBy').value = rec.inspector || '';
+    $('tgInspHint').textContent = '✅ ดึงจาก QC 100% ('+rec.line+', '+rec.date+')';
+    $('tgInspHint').className = 'hint ok';
+  }
 }
 
 // ══════════════════════════════════════
@@ -382,6 +413,7 @@ function printTags() {
     photo: (partPhotos[$('tgPartNo').value.trim()] || _selectedPhotoB64 || '')
   };
   if (!d.partNo) { showToast('⚠️ กรุณากรอก P/No', 'err'); return; }
+  if (!d.lot) { showToast('⚠️ กรุณาเลือก Pro Lot No. — ต้องผ่านการตรวจ QC 100% แล้วเท่านั้นถึงจะพิมพ์ Tag ได้', 'err'); return; }
   if (!d.cust) { showToast('⚠️ กรุณากรอกชื่อลูกค้า', 'err'); return; }
   var count = parseInt($('tgCount').value, 10) || 1;
   if (count < 1) count = 1;
