@@ -376,8 +376,9 @@ function buildStampSvg(dateStr) {
 }
 function buildTagHtml(d) {
   var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '';
-  var TD = 'border:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';
-  var LBL = TD+'font-weight:700;';
+  var TD = 'border:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูลจริง — มีกรอบ
+  var NOB = 'padding:1px 2px;overflow:hidden;white-space:nowrap;';                        // label/โคลอน — ไม่มีกรอบ กันเส้นรก
+  var LBL = NOB+'font-weight:700;';
   // สัดส่วนคอลัมน์อิงจากไฟล์ Excel ต้นฉบับจริง (ใบกำกับผลิตภัณฑ์.xls) — 8 คอลัมน์ต่อ 1 ใบ:
   // label1(18%) โคลอน1(2%) ค่า1(18%+16%+14%=กว้างรวมกันตามแถว) โคลอน2(2%) label2/ค่า2 ช่วงขวา
   return '<div style="border:1.5px solid #000;padding:4px;display:flex;flex-direction:column;width:100%;height:100%;font-size:9px;overflow:hidden;box-sizing:border-box;">'+
@@ -389,33 +390,32 @@ function buildTagHtml(d) {
     '<table style="border-collapse:collapse;width:100%;flex:1;table-layout:fixed;">'+
       '<colgroup><col style="width:16%"><col style="width:2%"><col style="width:16%"><col style="width:14%"><col style="width:12%"><col style="width:2%"><col style="width:19%"><col style="width:19%"></colgroup>'+
       '<tr>'+
-        '<td style="'+LBL+'">Cust. Name</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">Cust. Name</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TD+'">'+esc(d.cust)+'</td>'+
         '<td rowspan="3" colspan="2" style="border:1px solid #999;padding:1px;text-align:center;vertical-align:middle;">'+photoHtml+'</td>'+
       '</tr>'+
       '<tr>'+
-        '<td style="'+LBL+'">P/No.</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">P/No.</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TD+'">'+esc(d.partNo)+'</td>'+
       '</tr>'+
       '<tr>'+
-        '<td style="'+LBL+'">P/Name</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">P/Name</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TD+'">'+esc(d.partName)+'</td>'+
       '</tr>'+
       '<tr>'+
-        '<td style="'+LBL+'">Pro Lot No.</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">Pro Lot No.</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.lot)+'</td>'+
-        '<td style="'+LBL+'">Q\'TY</td><td style="'+TD+'">:</td>'+
-        '<td style="'+TD+'">'+esc(d.qty)+'</td><td style="'+TD+'">'+esc(d.unit)+'</td>'+
+        '<td style="'+LBL+'">Q\'TY</td><td style="'+NOB+'">:</td>'+
+        '<td style="'+TD+'">'+esc(d.qty)+'</td><td style="'+NOB+'">'+esc(d.unit)+'</td>'+
       '</tr>'+
       '<tr>'+
-        '<td style="'+LBL+'">Del. Date</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">Del. Date</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.delDate)+'</td>'+
-        '<td style="'+LBL+'">Insp. By</td><td style="'+TD+'">:</td>'+
+        '<td style="'+LBL+'">Insp. By</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.inspBy)+'</td>'+
       '</tr>'+
     '</table>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;flex-shrink:0;">'+
-      '<div style="font-weight:700;font-size:8px;">คัด100%</div>'+
+    '<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:2px;flex-shrink:0;">'+
       buildStampSvg(fmtDateTH(isoToday()))+
     '</div>'+
   '</div>';
