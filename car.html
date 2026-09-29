@@ -234,6 +234,7 @@ if ('caches' in window) {
     <button class="tabbtn" data-tab="list">รายการ CAR/PAR</button>
     <button class="tabbtn" data-tab="detect">ตรวจพบจาก KPI</button>
     <button class="tabbtn" data-tab="new">+ สร้างใหม่ (มือ)</button>
+    <button class="tabbtn" data-tab="settings">ตั้งค่าแจ้งเตือน</button>
     <button class="tabbtn" data-tab="detail" id="detailTabBtn" style="display:none;">รายละเอียด</button>
   </div>
 
@@ -268,6 +269,14 @@ if ('caches' in window) {
       </div>
     </div>
 
+    <div class="panel" id="panel-settings">
+      <div class="card">
+        <h2>ตั้งค่าอีเมลแจ้งเตือน</h2>
+        <div class="sub">กรอกอีเมลผู้รับแยกตามแผนก — แก้ตรงนี้แล้วกด "บันทึก" ได้เลย ไม่ต้องแก้โค้ดหรืออัปโหลดไฟล์ใหม่ (ใส่ได้หลายคนต่อแผนก คั่นด้วยจุลภาค)</div>
+        <div id="settingsFormWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-detail">
       <div id="detailWrap"></div>
     </div>
@@ -276,6 +285,7 @@ if ('caches' in window) {
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
 <script>
@@ -287,7 +297,8 @@ var PATHS = {
   records: DB_URL + '/car/records',
   counters: DB_URL + '/car/counters',
   metrics: DB_URL + '/kpi/metrics',
-  entries: DB_URL + '/kpi/entries'
+  entries: DB_URL + '/kpi/entries',
+  settings: DB_URL + '/car/settings'
 };
 var FB = {
   B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
@@ -299,6 +310,62 @@ var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.
 // ── Discord Webhook: แจ้งเตือนเมื่อพบ KPI เกินเป้าที่ยังไม่ได้ออก CAR/PAR ──
 // ใช้ Webhook เดียวกับที่ po_master.html ใช้อยู่แล้ว (ช่องแจ้งเตือนผู้บริหาร/ผู้อนุมัติ)
 var DISCORD_WEBHOOK_CAR_ALERT = 'https://discordapp.com/api/webhooks/1517882647089647769/4aVSUKg8CYEDH9d1ZqZFaw90Rgc45pvfhvBnCMA9i1I-kpqLdkf9Ywi8GgMUcnaFgCaO';
+
+// ── Email (EmailJS): แจ้งเตือนทางอีเมลคู่กับ Discord — สมัครฟรีได้ที่ https://www.emailjs.com
+// 1) สมัคร EmailJS → เชื่อมอีเมลบริษัท (Gmail/Outlook) เป็น "Service" → คัดลอก Service ID
+// 2) สร้าง "Email Template" ที่มีตัวแปร {{subject}} และ {{message}} ในเนื้อหา → คัดลอก Template ID
+// 3) ไปที่ Account > General → คัดลอก Public Key
+// 4) วางค่าทั้ง 3 ด้านล่าง แล้วใส่อีเมลผู้รับ (คั่นหลายคนด้วยจุลภาคได้) — เว้นว่างไว้ = ปิดการแจ้งเตือนทางอีเมล
+var EMAILJS_PUBLIC_KEY  = 'AQoo6q6PEFCzUbGuq';
+var EMAILJS_SERVICE_ID  = 'service_ur3dj7q';
+var EMAILJS_TEMPLATE_ID = 'template_mq5khl6';
+if (EMAILJS_PUBLIC_KEY && window.emailjs) emailjs.init(EMAILJS_PUBLIC_KEY);
+
+/* อีเมลผู้รับแยกตามแผนก — แก้ได้จากแท็บ "ตั้งค่าแจ้งเตือน" ในหน้าเว็บโดยตรง ไม่ต้องแก้โค้ด/อัปโหลดไฟล์ใหม่
+   ค่าด้านล่างนี้เป็นแค่ "ค่าเริ่มต้น" ใช้ตอนที่ยังไม่เคยตั้งค่าอะไรใน Firebase เลยเท่านั้น */
+var DEFAULT_NOTIFY_EMAILS = {
+  byDept: { PR: 'phiphit.apk@gmail.com', HR: '', QA: '', MN: '', PU: '', MK: '' },
+  default: 'phiphit.apk@gmail.com'
+};
+var notifyEmailSettings = null; // โหลดจาก Firebase ตอนล็อกอิน — ดู loadNotifySettings()
+function emailForDept(dept){
+  var s = notifyEmailSettings || DEFAULT_NOTIFY_EMAILS;
+  return (dept && s.byDept && s.byDept[dept]) || s.default || '';
+}
+function loadNotifySettings(){
+  return fbGet(PATHS.settings + '/notifyEmails').then(function(s){
+    notifyEmailSettings = s || JSON.parse(JSON.stringify(DEFAULT_NOTIFY_EMAILS));
+    if (!notifyEmailSettings.byDept) notifyEmailSettings.byDept = {};
+    return notifyEmailSettings;
+  });
+}
+function renderSettingsForm(){
+  var wrap = $('settingsFormWrap');
+  loadNotifySettings().then(function(s){
+    if (!canEdit()){
+      wrap.innerHTML = '<div class="empty">คุณไม่มีสิทธิ์แก้ไขการตั้งค่านี้</div>';
+      return;
+    }
+    var rows = DEPT_LIST.map(function(d){
+      return '<div class="field"><label>'+d.code+' — '+d.label+'</label><input type="text" data-notify-dept="'+d.code+'" value="'+escapeHtml(s.byDept[d.code]||'')+'" placeholder="เช่น production@apkplating.com"></div>';
+    }).join('');
+    wrap.innerHTML =
+      '<div class="row">'+rows+'</div>' +
+      '<div class="field"><label>อีเมลสำรอง (ใช้เมื่อเอกสารไม่ระบุแผนก หรือแผนกนั้นยังไม่ได้กรอกไว้ด้านบน)</label><input type="text" id="notifyDefaultEmail" value="'+escapeHtml(s.default||'')+'" placeholder="เช่น phiphit.apk@gmail.com"></div>' +
+      '<button class="btn btn-primary" id="saveNotifySettingsBtn">💾 บันทึกการตั้งค่า</button>';
+    $('saveNotifySettingsBtn').addEventListener('click', function(){
+      var byDept = {};
+      wrap.querySelectorAll('[data-notify-dept]').forEach(function(inp){ byDept[inp.getAttribute('data-notify-dept')] = inp.value.trim(); });
+      var newSettings = { byDept: byDept, default: $('notifyDefaultEmail').value.trim() };
+      var btn = $('saveNotifySettingsBtn'); btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+      fbPut(PATHS.settings + '/notifyEmails', newSettings).then(function(){
+        notifyEmailSettings = newSettings;
+        toast('บันทึกการตั้งค่าอีเมลแล้ว');
+        btn.disabled = false; btn.textContent = '💾 บันทึกการตั้งค่า';
+      });
+    });
+  });
+}
 
 var session = null;
 var allRecords = {};
@@ -358,9 +425,12 @@ function enterApp(){
   $('app').style.display = 'block';
   $('whoName').textContent = session.user.name || session.pin;
   $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
-  document.querySelectorAll('.tabbtn[data-tab="new"]').forEach(function(b){ b.style.display = canEdit() ? '' : 'none'; });
+  document.querySelectorAll('.tabbtn[data-tab="new"], .tabbtn[data-tab="settings"]').forEach(function(b){ b.style.display = canEdit() ? '' : 'none'; });
   switchTab('list');
-  renderGlobalAlert();
+  loadNotifySettings().then(function(){
+    renderGlobalAlert();
+    if (canEdit()) checkFollowUps();
+  });
 }
 function switchTab(tab){
   document.querySelectorAll('.tabbtn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab')===tab); });
@@ -368,6 +438,7 @@ function switchTab(tab){
   if (tab==='list') refreshList();
   if (tab==='detect') refreshDetect();
   if (tab==='new') renderNewForm();
+  if (tab==='settings') renderSettingsForm();
 }
 
 /* ══════════════ เลขที่เอกสาร (รันใหม่ทุกปี) ══════════════ */
@@ -415,12 +486,13 @@ function renderList(){
     return '<tr data-open="'+id+'" style="cursor:pointer;">' +
       '<td class="mono">'+escapeHtml(r.docNo||'—')+'</td>' +
       '<td>'+typeBadge+'</td>' +
+      '<td>'+escapeHtml(r.dept ? (r.dept+' — '+deptLabel(r.dept)) : '—')+'</td>' +
       '<td>'+escapeHtml((srcList[0]||'—') + (srcList.length>1 ? ' +'+(srcList.length-1) : ''))+'</td>' +
       '<td>'+escapeHtml(r.reportedDate||'—')+'</td>' +
       '<td>'+statusBadge+'</td>' +
     '</tr>';
   }).join('');
-  $('listWrap').innerHTML = '<table><thead><tr><th>เลขที่</th><th>ประเภท</th><th>แหล่งที่มา</th><th>วันที่แจ้ง</th><th>สถานะ</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  $('listWrap').innerHTML = '<table><thead><tr><th>เลขที่</th><th>ประเภท</th><th>แผนก</th><th>แหล่งที่มา</th><th>วันที่แจ้ง</th><th>สถานะ</th></tr></thead><tbody>'+rows+'</tbody></table>';
   $('listWrap').querySelectorAll('[data-open]').forEach(function(tr){
     tr.addEventListener('click', function(){ openDetail(tr.getAttribute('data-open')); });
   });
@@ -575,62 +647,126 @@ function runDetection(){
 }
 function monthLabel(mk){ var p=mk.split('-'); return MONTH_NAMES[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543); }
 
-/* ── แจ้งเตือน Discord เมื่อพบ KPI เกินเป้าที่ยังไม่ได้ออกเอกสาร (กันสแปม: ส่งแค่วันละครั้งต่อเดือน/ประเภทที่ตรวจพบ) ── */
-function notifyDiscordCarAlert(det){
-  if (!DISCORD_WEBHOOK_CAR_ALERT) return;
-  var todayIso = new Date().toISOString().slice(0,10);
-  var debounceKey = 'car_alert_notified_' + det.mk + '_' + det.suggestType;
-  try {
-    if (localStorage.getItem(debounceKey) === todayIso) return; // แจ้งไปแล้ววันนี้
-  } catch(e){}
-  var overdue = det.daysOverdue > 0;
-  var payload = {
-    embeds: [{
-      title: (overdue ? '🚨 เลยกำหนดออก ' : '🔔 ต้องออก ') + det.suggestType + ' — ' + det.metric.name,
-      description: 'เดือน ' + monthLabel(det.mk) + ' · ค่าจริง ' + round2(det.v) + '% (เป้าหมาย ' + (det.metric.direction==='lower'?'≤':'≥') + ' ' + det.metric.target + '%) · เกินเป้าติดต่อกัน ' + det.streak + ' เดือน',
-      color: overdue ? 0xdc2626 : 0xd97706,
-      fields: [
-        { name:'กำหนดออกเอกสารภายใน', value: fmtDateThai(det.dueDate), inline:true },
-        { name: overdue ? 'เลยกำหนดมาแล้ว' : 'เหลือเวลา', value: (overdue ? det.daysOverdue : -det.daysOverdue) + ' วัน', inline:true },
-        { name:'ลิงก์ระบบ', value:'https://apkplating.github.io/phiphit/car.html', inline:false }
-      ],
-      timestamp: new Date().toISOString()
-    }]
-  };
-  fetch(DISCORD_WEBHOOK_CAR_ALERT, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
-  }).then(function(){
-    try { localStorage.setItem(debounceKey, todayIso); } catch(e){}
-  }).catch(function(e){ console.warn('notifyDiscordCarAlert failed:', e.message); });
+/* ส่งอีเมลผ่าน EmailJS — เทมเพลตต้องมีตัวแปร {{subject}} {{message}} {{to_email}} ในเนื้อหา */
+function sendCarEmail(subject, message, dept){
+  var to = emailForDept(dept);
+  if (!EMAILJS_PUBLIC_KEY || !EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !to || !window.emailjs) return;
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+    subject: subject, message: message, to_email: to
+  }).catch(function(e){ console.warn('sendCarEmail failed:', e && e.text ? e.text : e); });
+}
+function sendCarDiscord(embed){
+  if (!DISCORD_WEBHOOK_CAR_ALERT) return Promise.resolve();
+  return fetch(DISCORD_WEBHOOK_CAR_ALERT, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ embeds:[embed] })
+  }).catch(function(e){ console.warn('sendCarDiscord failed:', e.message); });
 }
 
-/* แบนเนอร์เตือนบนสุด — ขึ้นทันทีที่ล็อกอิน ไม่ต้องกดเข้าแท็บ "ตรวจพบจาก KPI" ก่อน */
+/* ── แจ้งเตือน KPI เกินเป้า (Discord + Email): ถ้า issuedRec มีค่า = แจ้งว่าออกเอกสารให้แล้วพร้อมเลขที่ / ถ้าไม่มี = แจ้งว่ายังรอออก (กันสแปมแบบวันละครั้งเฉพาะกรณีรอออก) ── */
+function notifyCarAlert(det, issuedRec){
+  var overdue = det.daysOverdue > 0;
+  var link = 'https://apkplating.github.io/phiphit/car.html';
+  if (issuedRec){
+    var title1 = '✅ ออก ' + issuedRec.type + ' อัตโนมัติแล้ว เลขที่ ' + issuedRec.docNo + ' — ' + det.metric.name;
+    var desc1 = 'เดือน ' + monthLabel(det.mk) + ' · ค่าจริง ' + round2(det.v) + '% (เป้าหมาย ' + (det.metric.direction==='lower'?'≤':'≥') + ' ' + det.metric.target + '%) · เกินเป้าติดต่อกัน ' + det.streak + ' เดือน · ต้องกรอกสาเหตุ/แนวทางแก้ไขต่อในระบบ';
+    sendCarDiscord({ title:title1, description:desc1, color:0x16a34a, fields:[{name:'ลิงก์ระบบ', value:link, inline:false}], timestamp:new Date().toISOString() });
+    sendCarEmail(title1, desc1 + '\n\nลิงก์ระบบ: ' + link, det.metric.dept);
+    return;
+  }
+  var todayIso = new Date().toISOString().slice(0,10);
+  var debounceKey = 'car_alert_notified_' + det.mk + '_' + det.suggestType;
+  try { if (localStorage.getItem(debounceKey) === todayIso) return; } catch(e){} // แจ้งไปแล้ววันนี้
+  var title2 = (overdue ? '🚨 เลยกำหนดออก ' : '🔔 ต้องออก ') + det.suggestType + ' — ' + det.metric.name;
+  var desc2 = 'เดือน ' + monthLabel(det.mk) + ' · ค่าจริง ' + round2(det.v) + '% (เป้าหมาย ' + (det.metric.direction==='lower'?'≤':'≥') + ' ' + det.metric.target + '%) · เกินเป้าติดต่อกัน ' + det.streak + ' เดือน';
+  var dueLine = 'กำหนดออกเอกสารภายใน: ' + fmtDateThai(det.dueDate) + ' · ' + (overdue ? 'เลยกำหนดมาแล้ว ' + det.daysOverdue + ' วัน' : 'เหลือเวลา ' + (-det.daysOverdue) + ' วัน');
+  sendCarDiscord({
+    title:title2, description:desc2, color: overdue ? 0xdc2626 : 0xd97706,
+    fields: [
+      { name:'กำหนดออกเอกสารภายใน', value: fmtDateThai(det.dueDate), inline:true },
+      { name: overdue ? 'เลยกำหนดมาแล้ว' : 'เหลือเวลา', value: (overdue ? det.daysOverdue : -det.daysOverdue) + ' วัน', inline:true },
+      { name:'ลิงก์ระบบ', value:link, inline:false }
+    ],
+    timestamp: new Date().toISOString()
+  }).then(function(){ try { localStorage.setItem(debounceKey, todayIso); } catch(e){} });
+  sendCarEmail(title2, desc2 + '\n' + dueLine + '\n\nลิงก์ระบบ: ' + link, det.metric.dept);
+}
+
+/* แบนเนอร์เตือนบนสุด — ขึ้นทันทีที่ล็อกอิน ไม่ต้องกดเข้าแท็บ "ตรวจพบจาก KPI" ก่อน
+   ถ้าสิทธิ์แก้ไขได้ (admin/operator) จะ "ออกเอกสารพร้อมรันเลขที่ให้อัตโนมัติทันที" ไม่ต้องกดปุ่มเอง */
 function renderGlobalAlert(){
   runDetection().then(function(det){
     var el = $('globalAlert');
     if (!det || !det.hasData || !det.exceeded || det.already){ el.innerHTML = ''; return; }
-    if (det.daysOverdue > 0){
-      el.innerHTML = '<div class="alertbar overdue">⚠️ ยังไม่ได้ออกเอกสาร '+det.suggestType+' สำหรับ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' — เลยกำหนด ('+fmtDateThai(det.dueDate)+') มาแล้ว '+det.daysOverdue+' วัน <a data-goto-detect href="#">ไปออกเอกสารตอนนี้ →</a></div>';
-    } else {
-      el.innerHTML = '<div class="alertbar due-soon">🔔 พบ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' เกินเป้า — ต้องออก '+det.suggestType+' ภายใน '+fmtDateThai(det.dueDate)+' (เหลือ '+(-det.daysOverdue)+' วัน) <a data-goto-detect href="#">ไปออกเอกสาร →</a></div>';
+
+    if (!canEdit()){
+      if (det.daysOverdue > 0){
+        el.innerHTML = '<div class="alertbar overdue">⚠️ ยังไม่ได้ออกเอกสาร '+det.suggestType+' สำหรับ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' — เลยกำหนด ('+fmtDateThai(det.dueDate)+') มาแล้ว '+det.daysOverdue+' วัน (แจ้ง admin ให้เข้าระบบเพื่อออกเอกสาร)</div>';
+      } else {
+        el.innerHTML = '<div class="alertbar due-soon">🔔 พบ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' เกินเป้า — ต้องออก '+det.suggestType+' ภายใน '+fmtDateThai(det.dueDate)+' (เหลือ '+(-det.daysOverdue)+' วัน)</div>';
+      }
+      notifyCarAlert(det, null);
+      return;
     }
-    var link = el.querySelector('[data-goto-detect]');
-    if (link) link.addEventListener('click', function(e){ e.preventDefault(); switchTab('detect'); });
-    notifyDiscordCarAlert(det);
+
+    /* ออกเอกสารอัตโนมัติเฉพาะวันที่ 5 ของเดือนถัดไปเป็นต้นไป (วันครบกำหนดจริง) — ก่อนหน้านั้นแค่แจ้งว่าจะออกวันไหน ยังไม่สร้างเอกสาร */
+    if (det.daysOverdue < 0){
+      el.innerHTML = '<div class="alertbar due-soon">🗓️ พบ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' เกินเป้า — ระบบจะออกเอกสาร '+det.suggestType+' ให้อัตโนมัติในวันที่ <b>'+fmtDateThai(det.dueDate)+'</b> (อีก '+(-det.daysOverdue)+' วัน)</div>';
+      return;
+    }
+
+    el.innerHTML = '<div class="alertbar due-soon">⏳ ถึงกำหนดวันที่ '+fmtDateThai(det.dueDate)+' แล้ว — กำลังออกเอกสาร '+det.suggestType+' สำหรับ "'+escapeHtml(det.metric.name)+'" เดือน '+monthLabel(det.mk)+' และรันเลขที่ให้อัตโนมัติ…</div>';
+    autoCreateFromDetection(det).then(function(result){
+      if (!result){ refreshList(); el.innerHTML = ''; return; } // มีคนออกไปก่อนแล้ว (เปิดหลายแท็บพร้อมกัน)
+      el.innerHTML = '<div class="alertbar due-soon" style="background:#dcfce7; color:#166534; border-color:#bbf7d0;">' +
+        '✅ ออกเอกสาร <b>'+result.rec.type+' เลขที่ '+escapeHtml(result.rec.docNo)+'</b> ให้อัตโนมัติแล้ว (เดือน '+monthLabel(det.mk)+' เกินเป้า) — ต้องกรอกทีมงาน/สาเหตุ/แนวทางแก้ไขให้ครบ ' +
+        '<a data-open-new href="#">เปิดเอกสาร →</a></div>';
+      var link = el.querySelector('[data-open-new]');
+      if (link) link.addEventListener('click', function(e){ e.preventDefault(); openDetail(result.id); switchTab('detail'); });
+      refreshList();
+      notifyCarAlert(det, result.rec);
+    });
+  });
+}
+
+/* สร้างเนื้อหาฉบับร่างจากผลตรวจจับ (ใช้ร่วมกันทั้งตอนออกอัตโนมัติและตอนกดออกเอง) */
+function buildDraftFromDetection(det){
+  var bt = todayBE();
+  var rec = blankRecord(det.suggestType);
+  rec.dept = det.metric.dept;
+  rec.source.other = true;
+  rec.source.otherText = 'KPI เกินเป้าหมาย';
+  rec.kpiTriggered = true;
+  rec.kpiMetricId = det.metricId;
+  rec.kpiMonth = det.mk;
+  rec.abnormalCondition = 'ผลติดตามตัวชี้วัด KPI "'+det.metric.name+'" (แผนก '+det.metric.dept+') เดือน'+monthLabel(det.mk)+' พบค่าจริง '+round2(det.v)+'% สูงกว่าเป้าหมาย ('+(det.metric.direction==='lower'?'≤':'≥')+' '+det.metric.target+'%) '+(det.streak>=3 ? 'ติดต่อกัน '+det.streak+' เดือน จึงออกเป็น PAR ตามเงื่อนไขบริษัท' : '');
+  rec.reportedBy = 'ระบบติดตาม KPI อัตโนมัติ / แผนก '+det.metric.dept;
+  rec.reportedDate = bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2);
+  return rec;
+}
+/* ออกเอกสาร + รันเลขที่ให้เองทันที ไม่ต้องรอมนุษย์กดบันทึก — เช็คซ้ำกับ Firebase สดๆ อีกครั้งก่อนเขียนจริง กันชนกันเวลาเปิดหลายแท็บพร้อมกัน */
+function autoCreateFromDetection(det){
+  return fbGet(PATHS.records).then(function(records){
+    records = records || {};
+    var already = Object.keys(records).some(function(id){
+      var r = records[id];
+      return r.kpiMetricId===det.metricId && r.kpiMonth===det.mk;
+    });
+    if (already) return null;
+    var rec = buildDraftFromDetection(det);
+    rec.abnormalCondition += ' — ระบบออกเอกสารนี้ให้อัตโนมัติทันทีที่ตรวจพบ กรุณากรอกทีมงาน/สาเหตุ/แนวทางแก้ไขให้ครบ';
+    var bt = todayBE();
+    return nextDocNumber(rec.type, bt.m, bt.y).then(function(docNo){
+      rec.docNo = docNo;
+      return fbPost(PATHS.records, rec);
+    }).then(function(res){
+      allRecords[res.name] = rec;
+      return { id: res.name, rec: rec };
+    });
   });
 }
 
 function createFromKpi(type, metric, metricId, latest, streak){
-  var bt = todayBE();
-  var draft = blankRecord(type);
-  draft.source.other = true;
-  draft.source.otherText = 'KPI เกินเป้าหมาย';
-  draft.kpiTriggered = true;
-  draft.kpiMetricId = metricId;
-  draft.kpiMonth = latest.mk;
-  draft.abnormalCondition = 'ผลติดตามตัวชี้วัด KPI "'+metric.name+'" (แผนก '+metric.dept+') เดือน'+monthLabel(latest.mk)+' พบค่าจริง '+round2(latest.v)+'% สูงกว่าเป้าหมาย ('+(metric.direction==='lower'?'≤':'≥')+' '+metric.target+'%) '+(streak>=3 ? 'ติดต่อกัน '+streak+' เดือน จึงออกเป็น PAR ตามเงื่อนไขบริษัท' : '');
-  draft.reportedBy = 'ระบบติดตาม KPI อัตโนมัติ / แผนก '+metric.dept;
-  draft.reportedDate = bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2);
+  var draft = buildDraftFromDetection({ suggestType:type, metric:metric, metricId:metricId, mk:latest.mk, v:latest.v, streak:streak });
   openDetail(null, draft);
   switchTab('detail');
 }
@@ -641,6 +777,7 @@ function blankRecord(type){
   return {
     type: type || 'CAR',
     docNo: '',
+    dept: null, // ใช้เลือกว่าจะส่งอีเมลแจ้งเตือนไปแผนกไหน (PR/HR/QA/MN/PU/MK)
     source: {rawMaterial:false, wasteProduction:false, customerReturn:false, qualityExceedTarget:false, other:false, otherText:''},
     kpiTriggered: false, kpiMetricId:null, kpiMonth:null,
     abnormalCondition: '',
@@ -654,6 +791,18 @@ function blankRecord(type){
     reportedBy: '', reportedDate: bt.d+'/'+pad2(bt.m)+'/'+String(bt.y).slice(-2),
     createdAt: new Date().toISOString(), createdBy: session ? session.user.name : ''
   };
+}
+var DEPT_LIST = [
+  {code:'PR', label:'แผนกผลิต'},
+  {code:'HR', label:'แผนกบุคคล'},
+  {code:'QA', label:'แผนกประกันคุณภาพ'},
+  {code:'MN', label:'แผนกซ่อมบำรุง'},
+  {code:'PU', label:'แผนกจัดซื้อ'},
+  {code:'MK', label:'แผนกการตลาด'}
+];
+function deptLabel(code){
+  for (var i=0;i<DEPT_LIST.length;i++) if (DEPT_LIST[i].code===code) return DEPT_LIST[i].label;
+  return code || '—';
 }
 
 /* ══════════════ สร้างใหม่ (มือ) ══════════════ */
@@ -720,6 +869,9 @@ function renderDetail(rec, id){
   html += '<div class="card noprint">' +
     '<div class="row">' +
       '<div class="field" style="max-width:160px;"><label>ประเภท</label><select id="fType" '+(editable?'':'disabled')+'><option value="CAR"'+(rec.type==='CAR'?' selected':'')+'>CAR</option><option value="PAR"'+(rec.type==='PAR'?' selected':'')+'>PAR</option></select></div>' +
+      '<div class="field" style="max-width:180px;"><label>แผนก (ใช้ส่งอีเมลแจ้งเตือน)</label><select id="fDept" '+(editable?'':'disabled')+'><option value="">— ไม่ระบุ —</option>'+
+        DEPT_LIST.map(function(d){ return '<option value="'+d.code+'"'+(rec.dept===d.code?' selected':'')+'>'+d.code+' — '+d.label+'</option>'; }).join('') +
+      '</select></div>' +
       '<div class="field" style="max-width:160px;"><label>เลขที่เอกสาร</label><input type="text" id="fDocNo" value="'+escapeHtml(rec.docNo||'(ออกเมื่อบันทึกครั้งแรก)')+'" disabled></div>' +
       '<div class="field" style="max-width:220px;"><label>สถานะการติดตาม</label><select id="fStatus" '+(editable?'':'disabled')+'>'+
         STATUS_ORDER.map(function(k){ return '<option value="'+k+'"'+(normalizeStatus(rec.status)===k?' selected':'')+'>'+STATUS_LABELS[k]+'</option>'; }).join('') +
@@ -951,6 +1103,7 @@ function wireDetailEvents(rec, id){
   if ($('rcClose')) $('rcClose').addEventListener('change', function(){ rec.result.closed = true; });
   if ($('rcNotClose')) $('rcNotClose').addEventListener('change', function(){ rec.result.closed = false; });
   if ($('fType')) $('fType').addEventListener('change', function(){ rec.type = this.value; });
+  if ($('fDept')) $('fDept').addEventListener('change', function(){ rec.dept = this.value || null; });
   if ($('fStatus')) $('fStatus').addEventListener('change', function(){ rec.status = this.value; });
 
   if ($('saveRecBtn')) $('saveRecBtn').addEventListener('click', function(){ saveRecord(rec, id); });
@@ -977,6 +1130,37 @@ function saveRecord(rec, id){
   } else {
     fbPut(PATHS.records + '/' + id, rec).then(function(){ finish(id); });
   }
+}
+
+/* ══════════════ ติดตามเอกสารที่ยังไม่ตอบกลับ — เตือนครั้งแรกเมื่อครบ 7 วัน แล้วเตือนซ้ำทุก 3 วันหลังจากนั้น จนกว่าจะเข้าสถานะ "รออนุมัติปิด"/"อนุมัติปิด" ══════════════ */
+function checkFollowUps(){
+  fbGet(PATHS.records).then(function(recs){
+    recs = recs || {}; allRecords = recs;
+    var now = new Date();
+    Object.keys(recs).forEach(function(id){
+      var r = recs[id];
+      var st = normalizeStatus(r.status);
+      if (st === 'awaiting_approval' || st === 'approved_closed') return; // ตอบแล้ว/ปิดแล้ว ไม่ต้องตาม
+      if (!r.createdAt) return;
+      var created = new Date(r.createdAt);
+      var daysSinceCreated = Math.floor((now - created) / 86400000);
+      if (daysSinceCreated < 7) return; // ยังไม่ครบรอบแรก
+      var lastRem = r.lastReminderAt ? new Date(r.lastReminderAt) : null;
+      var daysSinceLastRem = lastRem ? Math.floor((now - lastRem) / 86400000) : null;
+      var due = !lastRem ? true : daysSinceLastRem >= 3; // ครั้งแรกที่ 7 วัน จากนั้นทุก 3 วัน
+      if (!due) return;
+      sendFollowUpReminder(id, r, daysSinceCreated);
+      fbPatch(PATHS.records + '/' + id, { lastReminderAt: now.toISOString() });
+    });
+  });
+}
+function sendFollowUpReminder(id, r, daysSinceCreated){
+  var link = 'https://apkplating.github.io/phiphit/car.html';
+  var title = '⏰ ติดตาม ' + r.type + ' เลขที่ ' + (r.docNo||'—') + ' — ยังไม่ได้รับการตอบกลับ';
+  var desc = 'ส่งไปแล้ว ' + daysSinceCreated + ' วัน ยังไม่มีการอัปเดตสถานะ (สถานะปัจจุบัน: ' + STATUS_LABELS[normalizeStatus(r.status)] + ')\n' +
+    'ผู้แจ้ง: ' + (r.reportedBy||'—') + ' · สภาพความผิดปกติ: ' + (r.abnormalCondition||'—').slice(0,150);
+  sendCarDiscord({ title:title, description:desc, color:0xd97706, fields:[{name:'ลิงก์ระบบ', value:link, inline:false}], timestamp:new Date().toISOString() });
+  sendCarEmail(title, desc + '\n\nลิงก์ระบบ: ' + link, r.dept);
 }
 
 /* ══════════════ wiring หลัก ══════════════ */
