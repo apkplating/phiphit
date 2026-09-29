@@ -235,9 +235,52 @@ if ('caches' in window) {
     <div class="card">
       <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">ยอดขายรายเดือน (12 เดือนล่าสุด) · ไม่รวมใบเคลม/ที่ยกเลิกแล้ว</div>
       <div class="tbl-wrap"><table id="tblSalesByMonth">
-        <thead><tr><th style="text-align:left;">เดือน</th><th>จำนวน INV</th><th>ยอดขาย (NET)</th><th>เทียบเดือนก่อน</th></tr></thead>
+        <thead><tr><th style="text-align:left;">เดือน</th><th style="text-align:right;">จำนวน INV</th><th style="text-align:right;">ยอดขาย (NET)</th><th style="text-align:left;">เทียบเดือนก่อน</th></tr></thead>
         <tbody><tr><td colspan="4" class="loading">กำลังโหลด...</td></tr></tbody>
       </table></div>
+    </div>
+
+    <!-- ── Section 1b2: ต้นทุนซื้อ (PO) เทียบยอดขาย — ดึงยอดซื้อจาก po-master.json ── -->
+    <div class="section-sep"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div class="section-title" style="margin-bottom:0;">🧾 ต้นทุนซื้อ (PO) เทียบยอดขาย</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="costVendor" onchange="renderCostRatio()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;max-width:240px;">
+          <option value="ALL">— ทุกผู้ขาย —</option>
+        </select>
+        <select id="costBasis" onchange="renderCostRatio()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;">
+          <option value="EX">ฐาน: ก่อน VAT</option>
+          <option value="INC">ฐาน: รวม VAT</option>
+        </select>
+      </div>
+    </div>
+    <div id="costNote" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
+    <div class="card">
+      <div class="chart-wrap-lg"><canvas id="chartCostRatio"></canvas></div>
+      <div class="tbl-wrap" style="margin-top:10px;"><table id="tblCostRatio">
+        <thead><tr><th style="text-align:left;">เดือน</th></tr></thead>
+        <tbody><tr><td class="loading">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">เฉลี่ย 3 เดือน = ต้นทุน 3 เดือนรวม ÷ ยอดขาย 3 เดือนรวม (แสดงเมื่อทั้ง 3 เดือนมียอดขาย) ช่วยลดการแกว่งจากการซื้อเป็นก้อนตามรอบ</div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);">แยกตามรายการซื้อ <span id="costItemTitle" style="font-weight:400;color:var(--text-muted);"></span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <select id="costItemPeriod" onchange="renderCostRatio()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;">
+            <option value="ALL">12 เดือนล่าสุด</option>
+          </select>
+          <select id="costItemSel" onchange="renderCostRatio()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;max-width:260px;">
+            <option value="ALL">ทุกรายการ (จัดอันดับ)</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table id="tblCostItems">
+        <thead><tr><th style="text-align:left;">รายการ</th></tr></thead>
+        <tbody><tr><td class="loading">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+      <div id="costItemFoot" style="font-size:10px;color:var(--text-muted);margin-top:6px;"></div>
     </div>
 
     <!-- ── Section 1c: QC 100% — สรุปปัญหา (รายเดือน + พาเรโตสาเหตุงาน NG) — ดึงจาก plating-{line}-qc100.json ── -->
@@ -551,6 +594,7 @@ async function loadAndRender() {
 
   renderKPI(records);
   renderSalesSection().catch(function(e){ console.error('[analytics] renderSalesSection', e); var tb=document.querySelector('#tblSalesByMonth tbody'); if(tb) tb.innerHTML='<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ แสดงผลยอดขายไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
+  renderCostRatio().catch(function(e){ console.error('[analytics] renderCostRatio', e); var n=document.getElementById('costNote'); if(n){ n.style.color='#dc2626'; n.textContent='⚠️ แสดงผลต้นทุน/ยอดขายไม่สำเร็จ: '+(e&&e.message||e); } }); // ต้นทุนซื้อเทียบยอดขาย — ไม่ผูกกับ dateFrom/dateTo
   renderQcSummary().catch(function(e){ console.error('[analytics] renderQcSummary', e); var tb=document.querySelector('#tblQcMonthly tbody'); if(tb) tb.innerHTML='<tr><td colspan="5" style="color:#dc2626;padding:14px;">⚠️ แสดงผล QC100% ไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // QC100% — ไม่ผูกกับ dateFrom/dateTo (12 เดือนล่าสุดเสมอ)
   renderVolumeSection(); // ใช้ dropdown เลือกสายของตัวเอง + 12 เดือนล่าสุด — ไม่ผูกกับ dateFrom/dateTo
   renderCostSection();   // ต้นทุนการผลิต — เริ่มจากค่าซิงค์ (Zn), ใช้ dropdown/12 เดือนของตัวเองเช่นกัน
@@ -650,9 +694,9 @@ async function renderSalesSection() {
   // ── KPI Cards: เดือนนี้ (MTD) vs เดือนก่อน (ตัดวันเดียวกัน) ──
   var thisMonthMtd = byMonth[todayYm] ? byMonth[todayYm].net : 0; // inv ในเดือนนี้ทั้งหมด = MTD อยู่แล้ว (ไม่มี inv วันในอนาคต)
   var lastMonthMtd = sumNetUpToDay(prevYm(todayYm), todayDay);
-  document.getElementById('salesKpiThisMonth').textContent = '฿'+fmt(thisMonthMtd,0);
+  document.getElementById('salesKpiThisMonth').textContent = '฿'+fmt(thisMonthMtd,2);
   document.getElementById('salesKpiThisMonthSub').textContent = monthLabelTH(todayYm)+' ถึงวันที่ '+todayDay;
-  document.getElementById('salesKpiLastMonth').textContent = '฿'+fmt(lastMonthMtd,0);
+  document.getElementById('salesKpiLastMonth').textContent = '฿'+fmt(lastMonthMtd,2);
   document.getElementById('salesKpiLastMonthSub').textContent = monthLabelTH(prevYm(todayYm))+' ถึงวันที่ '+todayDay+' (ช่วงเดียวกัน)';
   document.getElementById('salesKpiDiff').innerHTML = trendBadge(thisMonthMtd, lastMonthMtd);
 
@@ -677,11 +721,279 @@ async function renderSalesSection() {
     }
     return '<tr>'+
       '<td style="text-align:left;">'+monthLabelTH(r.ym)+'</td>'+
-      '<td>'+r.count+'</td>'+
+      '<td style="text-align:right;">'+r.count+'</td>'+
       '<td style="text-align:right;font-weight:700;color:var(--navy);">'+fmt(r.net,2)+'</td>'+
-      '<td>'+trendHtml+'</td>'+
+      '<td style="text-align:left;">'+trendHtml+'</td>'+
     '</tr>';
   }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 1b2: ต้นทุนซื้อ (PO) เทียบยอดขาย
+//  ยอดซื้อดึงจาก po-master.json (po_master.html เป็นเจ้าของข้อมูล — อ่านอย่างเดียว) ยอดขายจาก job-master.json
+//  ออกแบบเป็น "แหล่งต้นทุน" หลายตัวต่อคอลัมน์ได้ (ตอนนี้มีแค่ยอดซื้อ PO) เพิ่มแหล่งอื่นภายหลัง (แรงงาน/ซิงค์ ฯลฯ)
+//  ได้โดยเพิ่มเข้า array sources ใน renderCostRatio() ไม่ต้องรื้อตาราง/กราฟ
+// ══════════════════════════════════════════════
+var _poCache = null;
+async function fetchPoMaster() {
+  if (_poCache) return _poCache;
+  try {
+    var r = await fetch(FB.B1 + '/po-master.json');
+    if (!r.ok) { console.error('[analytics] โหลด po-master.json ไม่สำเร็จ HTTP', r.status); return { poList: [], _error: 'HTTP ' + r.status }; }
+    var d = await r.json();
+    var list = d && d.poList ? (Array.isArray(d.poList) ? d.poList : Object.values(d.poList)) : [];
+    _poCache = { poList: list.filter(Boolean) };
+    return _poCache;
+  } catch (e) { console.error('[analytics] โหลด po-master.json ผิดพลาด', e); return { poList: [], _error: (e && e.message) ? e.message : 'เครือข่าย' }; }
+}
+
+// ยอดขายรายเดือนตามฐาน — ก่อน VAT = ค่าน้อยกว่าระหว่าง grandTotal/netTotal ของ INV, รวม VAT = ค่ามากกว่า
+// (ยอดก่อน VAT ไม่มีทางมากกว่ายอดรวม VAT จึงใช้ min/max กันกรณี INV ที่ออกช่วงที่สูตรเคยผิดแล้วสองฟิลด์สลับกัน)
+function costSalesByMonth(validInv, basis) {
+  var by = {};
+  validInv.forEach(function(inv){
+    if (!inv.date) return;
+    var g = Number(inv.grandTotal||0), n = Number(inv.netTotal||0);
+    var amt = (basis === 'INC') ? Math.max(g, n) : Math.min(g, n);
+    var ym = String(inv.date).slice(0,7);
+    by[ym] = (by[ym]||0) + amt;
+  });
+  return by;
+}
+
+// ยอดซื้อ PO รายเดือนตามฐาน — เกณฑ์เดียวกับหน้า "สรุปยอดซื้อ" ของ po_master (ไม่รวม PO ที่ยกเลิก) ก่อน VAT ใช้ subtotal
+// ที่ PO เก็บไว้ (ถ้าไม่มีใช้ grandTotal - vatAmt) รวม VAT ใช้ grandTotal
+function costPoByMonth(poList, basis, vendor) {
+  var by = {};
+  poList.forEach(function(po){
+    if (!po || !po.date || po.status === 'cancelled') return;
+    if (vendor && vendor !== 'ALL' && (po.vendorName || '(ไม่ระบุผู้ขาย)') !== vendor) return;
+    var grand = Number(po.grandTotal||0);
+    var ex = (po.subtotal != null && po.subtotal !== '') ? Number(po.subtotal) : (grand - Number(po.vatAmt||0));
+    var amt = (basis === 'INC') ? grand : ex;
+    var ym = String(po.date).slice(0,7);
+    by[ym] = (by[ym]||0) + amt;
+  });
+  return by;
+}
+
+// สร้างแถวสรุป: สัดส่วน = ต้นทุนรวม ÷ ยอดขาย (ไม่มียอดขาย → null) / เฉลี่ย 3 เดือน (ต้องมียอดขายครบทั้ง 3 เดือน
+// ไม่งั้น null — กันเดือนที่ยอดขายหายมาทำให้สัดส่วนเพี้ยน)
+function costBuildRows(months, salesMap, sources) {
+  function cost(ym){ return sources.reduce(function(s,src){ return s + (src.byMonth[ym]||0); }, 0); }
+  return months.map(function(ym){
+    var m1 = prevYm(ym), m2 = prevYm(m1);
+    var S = salesMap[ym]||0, C = cost(ym);
+    var sales3 = [ym,m1,m2].map(function(m){ return salesMap[m]||0; });
+    var roll = sales3.every(function(v){ return v > 0; })
+      ? [ym,m1,m2].reduce(function(s,m){ return s + cost(m); },0) / sales3.reduce(function(a,b){return a+b;},0) * 100 : null;
+    return { ym:ym, sales:S, costs:sources.map(function(src){ return src.byMonth[ym]||0; }), total:C,
+             ratio: S > 0 ? C/S*100 : null, roll: roll };
+  });
+}
+
+// ── แยกตามรายการซื้อ (จากบรรทัดสินค้าใน PO) ──
+// จัดกลุ่มด้วยชื่อรายการที่ตัดช่องว่าง/ไม่สนตัวพิมพ์ใหญ่เล็ก (วิธีเดียวกับ itemKey() ของ po_master) — ชื่อที่พิมพ์
+// ต่างกันจริงๆ จะนับเป็นคนละรายการ (ข้อจำกัดเดียวกับหน้าประวัติรายการของ po_master) รวม VAT = ยอดบรรทัด × (1+อัตรา VAT ของ PO)
+function costItemKey(desc) { return String(desc||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function costPoVatRate(po) {
+  if (po.vatPercent != null && po.vatPercent !== '') return Number(po.vatPercent)/100;
+  var sub = Number(po.subtotal||0);
+  return sub > 0 ? Math.max(0, (Number(po.grandTotal||0) - sub) / sub) : 0;
+}
+function costPoUsable(po, vendor, months) {
+  if (!po || !po.date || po.status === 'cancelled') return false;
+  if (vendor && vendor !== 'ALL' && (po.vendorName || '(ไม่ระบุผู้ขาย)') !== vendor) return false;
+  if (months && months.indexOf(String(po.date).slice(0,7)) < 0) return false;
+  return true;
+}
+// รวมยอดต่อรายการ — คืน [{key,desc,units[],qty,spend,lines,lastPrice}] เรียงยอดซื้อมาก→น้อย
+function costItemAgg(poList, basis, vendor, months) {
+  var map = {};
+  poList.filter(function(po){ return costPoUsable(po, vendor, months); })
+    .sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); })
+    .forEach(function(po){
+      var mult = 1 + (basis === 'INC' ? costPoVatRate(po) : 0);
+      (po.items||[]).forEach(function(it){
+        var key = costItemKey(it.desc); if (!key) return;
+        var qty = Number(it.qty)||0, price = Number(it.price)||0;
+        var e = map[key] || (map[key] = { key:key, desc:it.desc, units:{}, qty:0, spend:0, lines:0, lastPrice:0 });
+        e.desc = it.desc;
+        e.units[String(it.unit||'').trim()] = true;
+        e.qty += qty; e.spend += qty*price*mult; e.lines++; e.lastPrice = price*mult;   // เรียงเก่า→ใหม่ จึงได้ราคาล่าสุด
+      });
+    });
+  return Object.keys(map).map(function(k){ var e = map[k]; e.units = Object.keys(e.units).filter(Boolean); return e; })
+    .sort(function(a,b){ return b.spend - a.spend; });
+}
+// รายเดือนของรายการเดียว — {ym:{qty,spend,min,max,lines}}
+function costItemMonthly(poList, basis, vendor, itemKeyStr, months) {
+  var by = {};
+  poList.filter(function(po){ return costPoUsable(po, vendor, months); }).forEach(function(po){
+    var mult = 1 + (basis === 'INC' ? costPoVatRate(po) : 0);
+    var ym = String(po.date).slice(0,7);
+    (po.items||[]).forEach(function(it){
+      if (costItemKey(it.desc) !== itemKeyStr) return;
+      var qty = Number(it.qty)||0, price = (Number(it.price)||0) * mult;
+      var b = by[ym] || (by[ym] = { qty:0, spend:0, min:Infinity, max:0, lines:0 });
+      b.qty += qty; b.spend += qty*price; b.lines++; b.min = Math.min(b.min, price); b.max = Math.max(b.max, price);
+    });
+  });
+  return by;
+}
+
+function renderCostItems(poList, basis, vendor) {
+  var tbl = document.getElementById('tblCostItems');
+  var pSel = document.getElementById('costItemPeriod'), iSel = document.getElementById('costItemSel');
+
+  // ช่วงเวลา: 12 เดือนล่าสุดที่มี PO (ตามผู้ขายที่เลือก)
+  var poMonthSet = {};
+  poList.forEach(function(po){ if (costPoUsable(po, vendor, null)) poMonthSet[String(po.date).slice(0,7)] = true; });
+  var poMonths = Object.keys(poMonthSet).sort().reverse().slice(0,12);
+  var curP = pSel.value || 'ALL';
+  pSel.innerHTML = '<option value="ALL">12 เดือนล่าสุด</option>' + poMonths.map(function(m){ return '<option value="'+m+'">'+monthLabelTH(m)+'</option>'; }).join('');
+  pSel.value = (curP !== 'ALL' && poMonths.indexOf(curP) >= 0) ? curP : 'ALL';
+  var months = pSel.value === 'ALL' ? poMonths : [pSel.value];
+
+  var agg = costItemAgg(poList, basis, vendor, months);
+
+  // dropdown รายการ (คงค่าที่เลือกไว้ถ้ายังมีในช่วงนี้)
+  var curI = iSel.value || 'ALL';
+  iSel.innerHTML = '<option value="ALL">ทุกรายการ (จัดอันดับ)</option>' + agg.map(function(e){ return '<option value="'+esc(e.key)+'">'+esc(e.desc)+'</option>'; }).join('');
+  iSel.value = agg.some(function(e){ return e.key === curI; }) ? curI : 'ALL';
+
+  var title = document.getElementById('costItemTitle');
+  var foot = document.getElementById('costItemFoot');
+  var unitTxt = function(e){ return e.units.length === 1 ? ' '+esc(e.units[0]) : ''; };
+  if (!agg.length) {
+    tbl.querySelector('thead').innerHTML = '<tr><th style="text-align:left;">รายการ</th></tr>';
+    tbl.querySelector('tbody').innerHTML = '<tr><td class="loading">ไม่มีรายการซื้อในช่วงที่เลือก</td></tr>';
+    title.textContent = ''; foot.textContent = ''; return;
+  }
+
+  if (iSel.value === 'ALL') {
+    // ── จัดอันดับรายการตามยอดซื้อ (15 อันดับแรก ที่เหลือรวมเป็น "อื่นๆ") ──
+    var total = agg.reduce(function(s,e){ return s + e.spend; }, 0);
+    var top = agg.slice(0,15), rest = agg.slice(15);
+    title.textContent = '· '+(pSel.value==='ALL'?'12 เดือนล่าสุด':monthLabelTH(pSel.value))+' · '+(basis==='EX'?'ก่อน VAT':'รวม VAT');
+    tbl.querySelector('thead').innerHTML = '<tr><th>#</th><th style="text-align:left;">รายการ</th><th style="text-align:right;">จำนวนซื้อ</th><th style="text-align:right;">ยอดซื้อ</th><th style="text-align:right;">% ของยอดซื้อ</th><th style="text-align:right;">ราคาเฉลี่ย/หน่วย</th><th style="text-align:right;">ราคาล่าสุด</th></tr>';
+    var cum = 0;
+    var rowsHtml = top.map(function(e,i){
+      var single = e.units.length === 1;
+      cum += e.spend;
+      return '<tr><td>'+(i+1)+'</td><td style="text-align:left;">'+esc(e.desc)+'</td>'+
+        '<td style="text-align:right;">'+(single ? fmt(e.qty,2)+unitTxt(e) : '<span style="color:#94a3b8;">หลายหน่วย</span>')+'</td>'+
+        '<td style="text-align:right;font-weight:700;">'+fmt(e.spend,2)+'</td>'+
+        '<td style="text-align:right;">'+(total?(e.spend/total*100).toFixed(1):'0.0')+'%</td>'+
+        '<td style="text-align:right;">'+(single && e.qty>0 ? fmt(e.spend/e.qty,2) : '—')+'</td>'+
+        '<td style="text-align:right;">'+(single ? fmt(e.lastPrice,2) : '—')+'</td></tr>';
+    });
+    if (rest.length) {
+      var rs = rest.reduce(function(s,e){ return s + e.spend; }, 0);
+      rowsHtml.push('<tr><td></td><td style="text-align:left;">อื่นๆ ('+rest.length+' รายการ)</td><td></td><td style="text-align:right;font-weight:700;">'+fmt(rs,2)+'</td><td style="text-align:right;">'+(total?(rs/total*100).toFixed(1):'0.0')+'%</td><td></td><td></td></tr>');
+    }
+    rowsHtml.push('<tr style="font-weight:800;background:#f1f5f9;"><td></td><td style="text-align:left;">รวมทุกรายการ ('+agg.length+' รายการ)</td><td></td><td style="text-align:right;">'+fmt(total,2)+'</td><td style="text-align:right;">100%</td><td></td><td></td></tr>');
+    tbl.querySelector('tbody').innerHTML = rowsHtml.join('');
+    foot.textContent = 'ยอดซื้อรวมจากบรรทัดสินค้าใน PO (ไม่รวม PO ที่ยกเลิก) · ชื่อรายการที่พิมพ์ต่างกันจะนับเป็นคนละรายการ · รายการที่ซื้อหลายหน่วยไม่แสดงจำนวน/ราคาเฉลี่ย เพราะรวมข้ามหน่วยไม่ได้';
+  } else {
+    // ── รายเดือนของรายการเดียว ──
+    var one = agg.filter(function(e){ return e.key === iSel.value; })[0];
+    var by = costItemMonthly(poList, basis, vendor, one.key, months);
+    var mkeys = Object.keys(by).sort().reverse();
+    var single1 = one.units.length === 1;
+    title.textContent = '· '+one.desc+' · '+(basis==='EX'?'ก่อน VAT':'รวม VAT');
+    tbl.querySelector('thead').innerHTML = '<tr><th style="text-align:left;">เดือน</th><th style="text-align:right;">จำนวนซื้อ</th><th style="text-align:right;">ยอดซื้อ</th><th style="text-align:right;">ราคาเฉลี่ย/หน่วย</th><th style="text-align:right;">ต่ำสุด – สูงสุด</th></tr>';
+    var tq = 0, ts = 0;
+    var rowsHtml2 = mkeys.map(function(m){
+      var b = by[m]; tq += b.qty; ts += b.spend;
+      return '<tr><td style="text-align:left;">'+monthLabelTH(m)+'</td>'+
+        '<td style="text-align:right;">'+(single1 ? fmt(b.qty,2)+unitTxt(one) : '<span style="color:#94a3b8;">หลายหน่วย</span>')+'</td>'+
+        '<td style="text-align:right;font-weight:700;">'+fmt(b.spend,2)+'</td>'+
+        '<td style="text-align:right;">'+(single1 && b.qty>0 ? fmt(b.spend/b.qty,2) : '—')+'</td>'+
+        '<td style="text-align:right;">'+(single1 ? (b.min===b.max ? fmt(b.min,2) : fmt(b.min,2)+' – '+fmt(b.max,2)) : '—')+'</td></tr>';
+    });
+    rowsHtml2.push('<tr style="font-weight:800;background:#f1f5f9;"><td style="text-align:left;">รวม</td><td style="text-align:right;">'+(single1?fmt(tq,2)+unitTxt(one):'')+'</td><td style="text-align:right;">'+fmt(ts,2)+'</td><td style="text-align:right;">'+(single1&&tq>0?fmt(ts/tq,2):'—')+'</td><td></td></tr>');
+    tbl.querySelector('tbody').innerHTML = rowsHtml2.join('');
+    foot.textContent = single1 ? 'ราคาต่ำสุด–สูงสุดต่อเดือน ช่วยดูว่าราคาซื้อเปลี่ยนไปแค่ไหน' : 'รายการนี้ซื้อหลายหน่วย ('+one.units.join(', ')+') จึงไม่แสดงจำนวน/ราคาเฉลี่ย';
+  }
+}
+
+async function renderCostRatio() {
+  var basis  = document.getElementById('costBasis').value || 'EX';
+  var vendor = document.getElementById('costVendor').value || 'ALL';
+  var note = document.getElementById('costNote');
+  var tbl = document.getElementById('tblCostRatio');
+  var results = await Promise.all([fetchJobMasterData(), fetchPoMaster()]);
+  var jm = results[0], po = results[1];
+
+  var errs = [];
+  if (jm._error) errs.push('ยอดขาย ('+jm._error+')');
+  if (po._error) errs.push('ยอดซื้อ PO ('+po._error+')');
+  if (errs.length) {
+    note.style.color = '#dc2626';
+    note.textContent = '⚠️ โหลดไม่สำเร็จ: '+errs.join(', ')+' — เช็คอินเทอร์เน็ตแล้วรีเฟรช (ข้อมูลจริงไม่ได้หาย)';
+    tbl.querySelector('tbody').innerHTML = '<tr><td class="loading">ไม่สามารถคำนวณสัดส่วนได้</td></tr>';
+    destroyChart('chartCostRatio');
+    return;
+  }
+  note.style.color = 'var(--text-muted)';
+
+  // dropdown ผู้ขาย (เติมครั้งแรกครั้งเดียว กันค่าที่เลือกหาย)
+  var vSel = document.getElementById('costVendor');
+  if (vSel.dataset.filled !== '1') {
+    var names = Array.from(new Set(po.poList.filter(function(x){ return x.status !== 'cancelled'; })
+      .map(function(x){ return x.vendorName || '(ไม่ระบุผู้ขาย)'; }))).sort(function(a,b){ return a.localeCompare(b,'th'); });
+    vSel.innerHTML = '<option value="ALL">— ทุกผู้ขาย —</option>' + names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+    vSel.dataset.filled = '1';
+    vSel.value = vendor;
+  }
+
+  var validInv = (Array.isArray(jm.invoices) ? jm.invoices : []).filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
+  var salesMap = costSalesByMonth(validInv, basis);
+  var sources = [ { label:'ยอดซื้อ (PO)', byMonth: costPoByMonth(po.poList, basis, vendor) } ];   // ← เพิ่มแหล่งต้นทุนอื่นที่นี่ภายหลัง
+
+  var monthSet = {};
+  Object.keys(salesMap).forEach(function(m){ monthSet[m] = true; });
+  sources.forEach(function(src){ Object.keys(src.byMonth).forEach(function(m){ monthSet[m] = true; }); });
+  var months = Object.keys(monthSet).sort().reverse().slice(0,12);   // ใหม่→เก่า
+  var rows = costBuildRows(months, salesMap, sources);
+
+  var todayYm = isoDate(new Date()).slice(0,7);
+  note.textContent = 'ฐาน'+(basis==='EX'?'ก่อน VAT':'รวม VAT')+' · ยอดขาย = INV ที่ไม่ใช่ใบเคลม/ไม่ยกเลิก · ยอดซื้อ = PO ที่ไม่ยกเลิก'+(vendor!=='ALL'?' เฉพาะ '+vendor:'')+' · เดือนปัจจุบันยังไม่ครบเดือน';
+
+  renderCostItems(po.poList, basis, vendor);   // แยกตามรายการซื้อ — ไม่ต้องรอยอดขาย
+  if (!rows.length) { tbl.querySelector('tbody').innerHTML = '<tr><td class="loading">ไม่มีข้อมูล</td></tr>'; destroyChart('chartCostRatio'); return; }
+
+  var multi = sources.length > 1;
+  tbl.querySelector('thead').innerHTML = '<tr><th style="text-align:left;">เดือน</th><th style="text-align:right;">ยอดขาย</th>' +
+    sources.map(function(src){ return '<th style="text-align:right;">'+esc(src.label)+'</th>'; }).join('') +
+    (multi ? '<th style="text-align:right;">ต้นทุนรวม</th>' : '') +
+    '<th style="text-align:right;">สัดส่วน %</th><th style="text-align:right;">เฉลี่ย 3 เดือน %</th></tr>';
+  tbl.querySelector('tbody').innerHTML = rows.map(function(r){
+    var isCur = r.ym === todayYm;
+    return '<tr><td style="text-align:left;">'+monthLabelTH(r.ym)+(isCur?' <span style="font-size:9px;color:#94a3b8;">(ถึงวันนี้)</span>':'')+'</td>'+
+      '<td style="text-align:right;">'+(r.sales>0?fmt(r.sales,2):'—')+'</td>'+
+      r.costs.map(function(c){ return '<td style="text-align:right;">'+(c>0?fmt(c,2):'—')+'</td>'; }).join('')+
+      (multi ? '<td style="text-align:right;font-weight:700;">'+(r.total>0?fmt(r.total,2):'—')+'</td>' : '')+
+      '<td style="text-align:right;font-weight:800;color:var(--navy);">'+(r.ratio==null?'—':r.ratio.toFixed(1)+'%')+'</td>'+
+      '<td style="text-align:right;">'+(r.roll==null?'—':r.roll.toFixed(1)+'%')+'</td></tr>';
+  }).join('');
+
+  var chron = rows.slice().reverse();   // เก่า→ใหม่ สำหรับกราฟ
+  destroyChart('chartCostRatio');
+  _charts['chartCostRatio'] = new Chart(document.getElementById('chartCostRatio'), {
+    data:{
+      labels: chron.map(function(r){ return monthLabelTH(r.ym); }),
+      datasets:[
+        {type:'bar',  label:'สัดส่วนต้นทุน/ยอดขาย (%)', data:chron.map(function(r){ return r.ratio==null?null:Number(r.ratio.toFixed(1)); }), backgroundColor:'rgba(59,130,246,.65)', order:2},
+        {type:'line', label:'เฉลี่ย 3 เดือน (%)', data:chron.map(function(r){ return r.roll==null?null:Number(r.roll.toFixed(1)); }), borderColor:'#f43f5e', backgroundColor:'#f43f5e', tension:.25, pointRadius:3, spanGaps:false, order:1}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:11}}}, datalabels:{display:false}},
+      scales:{ x:{ticks:{font:{size:9}}}, y:{beginAtZero:true,ticks:{font:{size:10},callback:function(v){return v+'%';}}} }
+    }
+  });
 }
 
 // ══════════════════════════════════════════════
