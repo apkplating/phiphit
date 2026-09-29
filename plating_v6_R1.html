@@ -467,7 +467,7 @@ if ('caches' in window) {
       </div>
       <div class="field" style="margin:0;">
         <label>Pro Lot No.</label>
-        <input type="text" id="lotNo" placeholder="014202..." oninput="document.getElementById('hdrLot').textContent=this.value||'–';var bl=document.getElementById('bLotNo');if(bl){bl.value=this.value;if(this.value){bl.style.borderColor='var(--border)';bl.style.background='';}}try{localStorage.setItem('r1_lastLot',this.value);}catch(e){}">
+        <input type="text" id="lotNo" readonly style="background:#f1f5f9;cursor:default;" title="Auto-generate จากวันที่ปัจจุบัน (DDMMYYYY) — แก้ไขเองไม่ได้">
       </div>
     </div>
     <div class="grid2">
@@ -1556,6 +1556,14 @@ var discordWH    = '';
 var selTypeVal   = 'N';
 var selColorVal  = 'B';
 
+// Pro Lot No. รูปแบบ DDMMYYYY ของวันนี้เรียงติดกัน (เช่น 29092026) — ใช้ Date ของเครื่อง ไม่ใช่ UTC
+function todayDDMMYYYY() {
+  var d = new Date();
+  var dd = String(d.getDate()).padStart(2,'0');
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  return dd + mm + d.getFullYear();
+}
+
 // ═══════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════
@@ -1588,8 +1596,14 @@ function init() {
     discordWH = localStorage.getItem('r1_discordWH') || '';
     if (discordWH) { document.getElementById('webhookUrl').value = discordWH; setBadge(true); }
     var lr = localStorage.getItem('r1_lastRecorder'); if(lr) document.getElementById('recorder').value = lr;
-    var ll = localStorage.getItem('r1_lastLot'); if(ll) { document.getElementById('lotNo').value = ll; document.getElementById('hdrLot').textContent = ll; }
   } catch(e){}
+
+  // ── Pro Lot No. — auto-generate จากวันที่ปัจจุบันเสมอ รูปแบบ DDMMYYYY (ล็อกแก้เองไม่ได้)
+  var todayLot = todayDDMMYYYY();
+  document.getElementById('lotNo').value = todayLot;
+  document.getElementById('hdrLot').textContent = todayLot;
+  var _blInit = document.getElementById('bLotNo');
+  if (_blInit && !_blInit.value) { _blInit.value = todayLot; _blInit.style.borderColor='var(--border)'; _blInit.style.background=''; }
 
   renderBarrels();
   renderSummary();
@@ -1985,6 +1999,7 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
     row.nobillApprovedAt = approverInfo.at;
   }
   todayBarrels.push(row);
+  _localDirty = true; // มีข้อมูลใหม่ในเครื่อง — รอยืนยันซิงค์ขึ้น Firebase
   try { localStorage.setItem('r1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   renderBarrels(); // แสดงทันที ไม่รอ Firebase
   livePush(); // ← Live Sync (background)
@@ -2147,7 +2162,6 @@ function validateDay() {
 
 function persist(rec) {
   try { localStorage.setItem('r1_lastRecorder', rec.recorder); } catch(e){}
-  try { localStorage.setItem('r1_lastLot', rec.lotNo); } catch(e){}
   dayRecords.unshift(rec);
   try { localStorage.setItem('r1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   todayBarrels = [];
@@ -3565,6 +3579,9 @@ var FB_MASTER_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast
 var FB_DB_URL     = FB_DB_URL_DEFAULT;
 var _fbPollTimer  = null;
 var _fbLastSavedAt = '';
+// ── ธงบอกว่า "มีข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ" — กันข้อมูลที่เพิ่งกรอกตอนเน็ตหลุด
+// ถูก fbLoad() ทับหายเงียบๆ เมื่อเน็ตกลับมา (แก้ปัญหาเดียวกับที่เจอใน job_master.html) ──
+var _localDirty = false;
 
 function fbIsConfigured() {
   return !!FB_DB_URL;
@@ -3624,7 +3641,6 @@ async function fbSave() {
   try { body.partNames     = JSON.parse(localStorage.getItem('r1_partNames')||'[]');   } catch(e){}
   try { body.customerNames = JSON.parse(localStorage.getItem('r1_customerNames')||'[]'); } catch(e){}
   try { body.discordWH     = discordWH || ''; } catch(e){}
-  try { body.lastLot = (document.getElementById('lotNo')||{}).value || ''; } catch(e){}
   try {
     var res = await fetch(fbDataUrl(), {
       method: 'PUT',
@@ -3633,6 +3649,7 @@ async function fbSave() {
     });
     if (res.ok) {
       _fbLastSavedAt = savedAt;
+      _localDirty = false; // ยืนยันซิงค์สำเร็จแล้ว
       showToast('entry','☁️ Sync ขึ้น Firebase แล้ว','ok');
       return true;
     } else {
@@ -3659,6 +3676,16 @@ async function fbLoad(silent) {
     if (!res.ok) return;
     var data = await res.json();
     if (!data) return;
+
+    // ── กันข้อมูลที่เพิ่งกรอกในเครื่องแต่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ ถูกทับหายเงียบๆ (ปัญหาจริงที่เจอ:
+    // เน็ตไม่เสถียร บันทึกไม่ผ่าน แล้ว poll พื้นหลัง/กลับมาเปิดแท็บ ดึงข้อมูลเก่าจากเซิร์ฟเวอร์มาทับข้อมูลในเครื่อง
+    // ที่เพิ่งกรอกไปทันทีที่เน็ตกลับมา — การเช็ค cloudSavedAt<=_fbLastSavedAt ด้านล่างป้องกันไม่ได้เลยถ้า
+    // _fbLastSavedAt ยังว่างอยู่ (ไม่เคยบันทึกสำเร็จเลยในเซสชันนี้) จึงต้องเช็คธง _localDirty แยกต่างหากก่อนเสมอ ──
+    if (_localDirty) {
+      console.warn('[plating_v6_R1] fbLoad() พบข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ — ข้ามการดึงข้อมูลรอบนี้ และลองบันทึกซ้ำแทน');
+      fbSave(); // เน็ตกลับมาแล้ว (fbLoad() เพิ่งสำเร็จ) ลองส่งข้อมูลในเครื่องขึ้นไปแทนที่จะดึงของเก่าลงมาทับ
+      return;
+    }
 
     var cloudSavedAt = data.savedAt || '';
     if (cloudSavedAt && cloudSavedAt <= _fbLastSavedAt) return;
@@ -3768,17 +3795,7 @@ async function fbLoad(silent) {
     if (data.partPresets)    { try { localStorage.setItem('r1_partPresets',    JSON.stringify(data.partPresets));    } catch(e){} }
     if (data.partNames)      { try { localStorage.setItem('r1_partNames',      JSON.stringify(data.partNames));      } catch(e){} }
     if (data.customerNames)  { try { localStorage.setItem('r1_customerNames',  JSON.stringify(data.customerNames));  } catch(e){} }
-    if (data.lastLot) {
-      var lotEl = document.getElementById('lotNo');
-      var hdrEl = document.getElementById('hdrLot');
-      var blEl  = document.getElementById('bLotNo');
-      if (lotEl) {
-        lotEl.value = data.lastLot;
-        if (hdrEl) hdrEl.textContent = data.lastLot;
-        if (blEl && !blEl.value) { blEl.value = data.lastLot; blEl.style.borderColor='var(--border)'; blEl.style.background=''; }
-        try { localStorage.setItem('r1_lastLot', data.lastLot); } catch(e){}
-      }
-    }
+    // data.lastLot (ของเดิม) ไม่ใช้แล้ว — Pro Lot No. auto-generate จากวันที่ปัจจุบันเสมอ (ดู todayDDMMYYYY() ใน init())
     if (data.discordWH) {
       discordWH = data.discordWH;
       try { localStorage.setItem('r1_discordWH', discordWH); document.getElementById('webhookUrl').value = discordWH; setBadge(true); } catch(e){}
@@ -4451,6 +4468,7 @@ function loadChemItems() {
 }
 
 function saveChemData() {
+  _localDirty = true; // มีข้อมูลเคมีใหม่ในเครื่อง — รอยืนยันซิงค์ขึ้น Firebase
   try { localStorage.setItem('r1_chemItems',   JSON.stringify(chemItems));   } catch(e){}
   try { localStorage.setItem('r1_chemRecords', JSON.stringify(chemRecords)); } catch(e){}
   // sync ขึ้น Firebase (รวมกับข้อมูลทั้งหมดให้ tablet ดึงได้)
