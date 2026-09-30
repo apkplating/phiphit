@@ -376,12 +376,16 @@ function buildStampSvg(dateStr) {
 }
 function buildTagHtml(d) {
   var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '<span style="font-size:8px;color:#666;">Picture</span>';
-  // เส้นแนวนอนลากเต็มความกว้างทั้งแถวเสมอ (label/โคลอน/ค่า ใช้ border-bottom เดียวกันหมด) — ไม่มีเส้นแนวตั้งกั้น
-  // ระหว่าง label กับค่า กันดูรกแบบที่เคยเจอ แต่เส้นแนวนอนต้องต่อเนื่องเต็มแถว ไม่ขาดครึ่งทางแบบที่พลาดไปรอบก่อน
-  // (เทียบกับ PDF ต้นฉบับจริงแล้วเส้นแนวนอนลากยาวจากซ้ายสุดถึงขวาสุดของแต่ละแถวเสมอ)
-  var TD  = 'border-bottom:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูล
-  var NOB = 'border-bottom:1px solid #000;padding:1px 2px;overflow:hidden;white-space:nowrap;';   // label/โคลอน
-  var LBL = NOB+'font-weight:700;';
+  // เส้นแนวนอนลากเต็มความกว้างทั้งแถวเสมอ (label/โคลอน/ค่า ใช้ border-bottom เดียวกันหมด) — เส้นแนวตั้งอยู่
+  // หลังโคลอน (ก่อนค่า) ทุกช่อง ตามที่วาดชี้ไว้ — ไม่มีเส้นระหว่าง label กับโคลอน
+  var TD   = 'border-bottom:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูล
+  // ช่องค่าที่ติดกับ Photo (3 แถวบน) — ต้องประกาศเส้นขวาเองด้วย ไม่ปล่อยให้ border ของ Photo (rowspan คร่อม
+  // 3 แถว) เป็นฝ่ายลากเส้นซ้ายให้ฝ่ายเดียว เพราะ browser รวมเส้นตรงรอยต่อ rowspan กับเซลล์ปกติได้ไม่แม่นเป๊ะ
+  // ทุกครั้ง ทำให้เห็นเป็นเส้นขาด/เหลื่อมกันได้ — ประกาศให้ตรงกันทั้ง 2 ฝั่งกันปัญหานี้เด็ดขาด
+  var TDR  = TD+'border-right:1px solid #000;';   // ค่าที่ติด Photo (เส้นขวา)
+  var TDQ  = TD+'border-right:1px solid #000;';   // ค่า Q'TY (เส้นขวา คั่นกับหน่วย pcs/Box)
+  var LBL  = 'border-bottom:1px solid #000;border-left:1px solid #000;padding:1px 2px;overflow:hidden;white-space:nowrap;font-weight:700;';  // label — เส้นซ้ายสุดของตาราง
+  var NOB  = LBL.replace('font-weight:700;','').replace('border-left:1px solid #000;','')+'border-right:1px solid #000;';   // โคลอน — มีเส้นขวา (หลังโคลอน ก่อนค่า) ไม่มีเส้นซ้าย
   // สัดส่วนคอลัมน์อิงจากไฟล์ Excel ต้นฉบับจริง (ใบกำกับผลิตภัณฑ์.xls) — 8 คอลัมน์ต่อ 1 ใบ:
   // label1(18%) โคลอน1(2%) ค่า1(18%+16%+14%=กว้างรวมกันตามแถว) โคลอน2(2%) label2/ค่า2 ช่วงขวา
   return '<div style="border:1.5px solid #000;padding:4px;display:flex;flex-direction:column;width:100%;height:100%;font-size:9px;overflow:hidden;box-sizing:border-box;">'+
@@ -389,33 +393,33 @@ function buildTagHtml(d) {
       '<img src="data:image/png;base64,'+LOGO_B64+'" style="height:16px;flex-shrink:0;">'+
       '<div style="font-size:7px;font-weight:700;line-height:1.1;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
     '</div>'+
-    '<div style="text-align:center;font-weight:800;font-size:10px;margin-bottom:2px;flex-shrink:0;">ใบกำกับผลิตภัณฑ์</div>'+
+    '<div style="text-align:center;font-weight:800;font-size:10px;margin-bottom:2px;flex-shrink:0;border-bottom:1px solid #000;padding:2px 0;">ใบกำกับผลิตภัณฑ์</div>'+
     '<table style="border-collapse:collapse;width:100%;flex:1;table-layout:fixed;">'+
       '<colgroup><col style="width:16%"><col style="width:2%"><col style="width:16%"><col style="width:14%"><col style="width:12%"><col style="width:2%"><col style="width:19%"><col style="width:19%"></colgroup>'+
       '<tr>'+
         '<td style="'+LBL+'">Cust. Name</td><td style="'+NOB+'">:</td>'+
-        '<td colspan="4" style="'+TD+'">'+esc(d.cust)+'</td>'+
-        '<td rowspan="3" colspan="2" style="border:1px solid #999;padding:1px;text-align:center;vertical-align:middle;">'+photoHtml+'</td>'+
+        '<td colspan="4" style="'+TDR+'">'+esc(d.cust)+'</td>'+
+        '<td rowspan="3" colspan="2" style="border:1px solid #000;padding:1px;text-align:center;vertical-align:middle;">'+photoHtml+'</td>'+
       '</tr>'+
       '<tr>'+
         '<td style="'+LBL+'">P/No.</td><td style="'+NOB+'">:</td>'+
-        '<td colspan="4" style="'+TD+'">'+esc(d.partNo)+'</td>'+
+        '<td colspan="4" style="'+TDR+'">'+esc(d.partNo)+'</td>'+
       '</tr>'+
       '<tr>'+
         '<td style="'+LBL+'">P/Name</td><td style="'+NOB+'">:</td>'+
-        '<td colspan="4" style="'+TD+'">'+esc(d.partName)+'</td>'+
+        '<td colspan="4" style="'+TDR+'">'+esc(d.partName)+'</td>'+
       '</tr>'+
       '<tr>'+
         '<td style="'+LBL+'">Pro Lot No.</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.lot)+'</td>'+
         '<td style="'+LBL+'">Q\'TY</td><td style="'+NOB+'">:</td>'+
-        '<td style="'+TD+'">'+esc(d.qty)+'</td><td style="'+NOB+'">'+esc(d.unit)+'</td>'+
+        '<td style="'+TDQ+'">'+esc(d.qty)+'</td><td style="border-bottom:1px solid #000;padding:1px 2px;overflow:hidden;white-space:nowrap;border-right:1px solid #000;">'+esc(d.unit)+'</td>'+
       '</tr>'+
       '<tr>'+
         '<td style="'+LBL+'">Del. Date</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.delDate)+'</td>'+
         '<td style="'+LBL+'">Insp. By</td><td style="'+NOB+'">:</td>'+
-        '<td colspan="2" style="'+TD+'">'+esc(d.inspBy)+'</td>'+
+        '<td colspan="2" style="'+TDR+'">'+esc(d.inspBy)+'</td>'+
       '</tr>'+
     '</table>'+
     '<div style="display:flex;justify-content:flex-end;align-items:center;margin-top:2px;flex-shrink:0;">'+
