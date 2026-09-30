@@ -376,8 +376,11 @@ function buildStampSvg(dateStr) {
 }
 function buildTagHtml(d) {
   var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '<span style="font-size:8px;color:#666;">Picture</span>';
-  var TD = 'border:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูลจริง — มีกรอบ
-  var NOB = 'padding:1px 2px;overflow:hidden;white-space:nowrap;';                        // label/โคลอน — ไม่มีกรอบ กันเส้นรก
+  // เส้นแนวนอนลากเต็มความกว้างทั้งแถวเสมอ (label/โคลอน/ค่า ใช้ border-bottom เดียวกันหมด) — ไม่มีเส้นแนวตั้งกั้น
+  // ระหว่าง label กับค่า กันดูรกแบบที่เคยเจอ แต่เส้นแนวนอนต้องต่อเนื่องเต็มแถว ไม่ขาดครึ่งทางแบบที่พลาดไปรอบก่อน
+  // (เทียบกับ PDF ต้นฉบับจริงแล้วเส้นแนวนอนลากยาวจากซ้ายสุดถึงขวาสุดของแต่ละแถวเสมอ)
+  var TD  = 'border-bottom:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูล
+  var NOB = 'border-bottom:1px solid #000;padding:1px 2px;overflow:hidden;white-space:nowrap;';   // label/โคลอน
   var LBL = NOB+'font-weight:700;';
   // สัดส่วนคอลัมน์อิงจากไฟล์ Excel ต้นฉบับจริง (ใบกำกับผลิตภัณฑ์.xls) — 8 คอลัมน์ต่อ 1 ใบ:
   // label1(18%) โคลอน1(2%) ค่า1(18%+16%+14%=กว้างรวมกันตามแถว) โคลอน2(2%) label2/ค่า2 ช่วงขวา
