@@ -375,7 +375,7 @@ function buildStampSvg(dateStr) {
     '</div>';
 }
 function buildTagHtml(d) {
-  var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '';
+  var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '<span style="font-size:8px;color:#666;">Picture</span>';
   var TD = 'border:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูลจริง — มีกรอบ
   var NOB = 'padding:1px 2px;overflow:hidden;white-space:nowrap;';                        // label/โคลอน — ไม่มีกรอบ กันเส้นรก
   var LBL = NOB+'font-weight:700;';
