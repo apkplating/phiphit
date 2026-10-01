@@ -266,6 +266,8 @@ if ('caches' in window) {
             <th>น้ำหนัก/ชิ้น<br><span style="font-weight:400;font-size:9px;">(g)</span></th>
             <th>น้ำหนัก/โม่<br><span style="font-weight:400;font-size:9px;">(kg, B1/B2)</span></th>
             <th>จิ๊ก + ชิ้น/Rack<br><span style="font-weight:400;font-size:9px;">(R1, optional)</span></th>
+            <th class="td-l">Plating Type<br><span style="font-weight:400;font-size:9px;">(สเปค)</span></th>
+            <th>พื้นที่<br><span style="font-weight:400;font-size:9px;">(dm²/ชิ้น)</span></th>
             <th>หมายเหตุ</th>
             <th></th>
           </tr>
@@ -322,6 +324,19 @@ if ('caches' in window) {
       <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
         <input type="text" id="addNote" placeholder="หมายเหตุ">
+      </div>
+    </div>
+
+    <!-- ── Plating Type (สเปค) + พื้นที่ (dm²) — ใช้ดึงเข้า ICS (Inspection Check Sheet) และคำนวณต้นทุนสังกะสี
+    แม่นยำขึ้นต่อชิ้น (แทนค่าประมาณทั่วไปที่ analytics.html ใช้อยู่) ── -->
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>Plating Type (สเปค) <span style="color:var(--text-muted);font-weight:400;">เช่น MFZn8-B (Cr3+) — optional</span></label>
+        <input type="text" id="addPlatingType" placeholder="MFZn8-B (Cr3+)">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>พื้นที่ผิว (dm²) <span style="color:var(--text-muted);font-weight:400;">ต่อ 1 ชิ้น — optional</span></label>
+        <input type="number" id="addAreaDm2" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
       </div>
     </div>
 
@@ -534,6 +549,16 @@ if ('caches' in window) {
         <input type="text" id="editNote">
       </div>
     </div>
+    <div class="grid2">
+      <div class="field" style="margin:0;">
+        <label>Plating Type (สเปค) <span style="color:var(--text-muted);font-weight:400;">เช่น MFZn8-B (Cr3+)</span></label>
+        <input type="text" id="editPlatingType">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>พื้นที่ผิว (dm²) <span style="color:var(--text-muted);font-weight:400;">ต่อ 1 ชิ้น</span></label>
+        <input type="number" id="editAreaDm2" step="0.01" min="0">
+      </div>
+    </div>
     <div class="grid3">
       <div class="field" style="margin:0;">
         <label>ไลน์หลัก (Main) <span style="color:var(--red);">*</span></label>
@@ -585,7 +610,8 @@ var PM_PATH = DB_URL + '/part-master';   // /part-master.json
 // ══════════════════════════════════════
 //  DATA
 // ══════════════════════════════════════
-// parts: { id, partNo, name, customer, colors:string('B'|'C'|'K'|'BC'|...), weightPerPc, pcsPerRack, note }
+// parts: { id, partNo, name, customer, colors:string('B'|'C'|'K'|'BC'|...), weightPerPc, pcsPerRack, note,
+//          platingType (สเปคการชุบ เช่น MFZn8-B(Cr3+) — ไว้ดึงเข้า ICS), areaDm2 (พื้นที่ผิวต่อชิ้น — ไว้คำนวณต้นทุนสังกะสีแม่นยำขึ้น) }
 var parts = [];
 var jigs  = []; // ทะเบียนจิ๊ก {id, jigCode, totalSets, note} — เก็บจำนวนชุดจริงไว้ที่เดียว กันข้อมูลซ้ำเวลาจิ๊กใช้ร่วมกันได้หลาย P/No
 var currentRole = '';
@@ -821,6 +847,12 @@ function renderList() {
           return (r.jig ? esc(r.jig) : '(ไม่ระบุจิ๊ก)') + (r.pcsPerRack ? ' — '+r.pcsPerRack+' ชิ้น' : '');
         }).join('<br>')+'</td>'
       : '<td style="color:var(--text-muted);">–</td>';
+    var platingCell = p.platingType
+      ? '<td class="td-l" style="font-size:10px;">'+esc(p.platingType)+'</td>'
+      : '<td style="color:var(--text-muted);">–</td>';
+    var areaCell = p.areaDm2
+      ? '<td style="font-family:\'IBM Plex Mono\',monospace;font-weight:600;color:#7c3aed;">'+p.areaDm2.toFixed(2)+'</td>'
+      : '<td style="color:var(--text-muted);">–</td>';
     var lineCell = p.lineMain
       ? '<td style="white-space:nowrap;font-size:10px;"><span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:6px;font-weight:700;">'+esc(p.lineMain)+'</span>'
         + (p.lineBackup ? ' <span style="background:#f1f5f9;color:#64748b;padding:2px 6px;border-radius:6px;" title="ไลน์สำรอง">+'+esc(p.lineBackup)+'</span>' : '')
@@ -832,7 +864,7 @@ function renderList() {
       '<td class="td-l" style="font-size:11px;color:var(--text-mid);">'+esc(p.customer||'–')+'</td>' +
       '<td style="white-space:nowrap;">'+colorBadges(p.colors)+'</td>' +
       lineCell +
-      wtCell + drumCell + rackCell +
+      wtCell + drumCell + rackCell + platingCell + areaCell +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;">'+esc(p.note||'')+'</td>' +
       '<td style="white-space:nowrap;">' +
         ((currentRole==='admin'||currentRole==='operator') ? '<button onclick="openEdit(\''+p.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
@@ -967,6 +999,8 @@ async function savePart() {
   var lineMain   = document.getElementById('addLineMain').value;
   var lineBackup = document.getElementById('addLineBackup').value;
   var drumWeight = parseFloat(document.getElementById('addDrumWeight').value) || 0;
+  var platingType = document.getElementById('addPlatingType').value.trim();
+  var areaDm2 = parseFloat(document.getElementById('addAreaDm2').value) || 0;
   // กรองแถวจิ๊กที่กรอกว่างทั้งคู่ทิ้ง (คนกด + เพิ่มแถวแล้วไม่ได้กรอกอะไรเลย)
   var jigConfigs = _addJigConfigs.filter(function(r){ return (r.jig||'').trim() || r.pcsPerRack; })
     .map(function(r){ return { jig:(r.jig||'').trim(), pcsPerRack: r.pcsPerRack || 0 }; });
@@ -979,7 +1013,7 @@ async function savePart() {
   var idx = parts.findIndex(function(p){ return normKey(p.partNo)===normKey(partNo); });
   var label = idx >= 0 ? ('✅ อัปเดต "'+partNo+'" สำเร็จ') : ('✅ เพิ่ม "'+partNo+'" สำเร็จ');
   var payload = { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
-    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() };
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, platingType:platingType, areaDm2:areaDm2, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() };
   if (idx >= 0) {
     parts[idx] = Object.assign({}, parts[idx], payload);
     // ล้างฟิลด์เก่าก่อนเปลี่ยนเป็น array (กันข้อมูลค้างซ้ำซ้อนกับ jigConfigs ใหม่)
@@ -995,7 +1029,7 @@ async function savePart() {
   showToast('add', synced ? label : (label+' (⚠️ ยังไม่ขึ้น Firebase — บันทึกไว้ในเครื่องนี้เท่านั้น)'), synced ? 'ok' : 'err');
 
   // clear form
-  ['addPartNo','addName','addCustomer','addWeight','addNote','addDrumWeight'].forEach(function(id){
+  ['addPartNo','addName','addCustomer','addWeight','addNote','addDrumWeight','addPlatingType','addAreaDm2'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('addLineMain').value = '';
@@ -1161,6 +1195,8 @@ function openEdit(id) {
   document.getElementById('editLineMain').value  = p.lineMain  || '';
   document.getElementById('editLineBackup').value= p.lineBackup|| '';
   document.getElementById('editDrumWeight').value= p.drumWeight|| '';
+  document.getElementById('editPlatingType').value= p.platingType|| '';
+  document.getElementById('editAreaDm2').value   = p.areaDm2    || '';
   setJigConfigs('edit', p); // ดึงแถวจิ๊กมาแสดง (migrate จากฟิลด์เก่าอัตโนมัติถ้ายังไม่เคยแปลง)
   onEditLineChange();
   setColors(p.colors||'', 'edit');
@@ -1184,6 +1220,8 @@ async function saveEdit() {
   var lineMain   = document.getElementById('editLineMain').value;
   var lineBackup = document.getElementById('editLineBackup').value;
   var drumWeight = parseFloat(document.getElementById('editDrumWeight').value) || 0;
+  var platingType = document.getElementById('editPlatingType').value.trim();
+  var areaDm2 = parseFloat(document.getElementById('editAreaDm2').value) || 0;
   var jigConfigs = _editJigConfigs.filter(function(r){ return (r.jig||'').trim() || r.pcsPerRack; })
     .map(function(r){ return { jig:(r.jig||'').trim(), pcsPerRack: r.pcsPerRack || 0 }; });
 
@@ -1196,7 +1234,7 @@ async function saveEdit() {
   var dupIdx = parts.findIndex(function(p){ return p.partNo===newPartNo && p.id!==id; });
   if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
   parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
-    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() });
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, platingType:platingType, areaDm2:areaDm2, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() });
   // ล้างฟิลด์เก่าหลัง migrate เป็น jigConfigs แล้ว กันข้อมูลค้างซ้ำซ้อน
   delete parts[idx].pcsPerRack; delete parts[idx].jigSuggest;
 
@@ -1299,12 +1337,12 @@ function calcResult() {
 //  EXPORT CSV
 // ══════════════════════════════════════
 function exportCSV() {
-  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊ก+ชิ้น/Rack','น้ำหนัก/ชิ้น(g)','หมายเหตุ']];
+  var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊ก+ชิ้น/Rack','น้ำหนัก/ชิ้น(g)','Plating Type','พื้นที่(dm²)','หมายเหตุ']];
   parts.forEach(function(p){
     var jigList = Array.isArray(p.jigConfigs) ? p.jigConfigs : [];
     if (!jigList.length && (p.jigSuggest || p.pcsPerRack)) jigList = [{jig:p.jigSuggest||'', pcsPerRack:p.pcsPerRack||''}];
     var jigText = jigList.map(function(r){ return (r.jig||'?')+':'+(r.pcsPerRack||'?'); }).join('; ');
-    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.lineMain||'',p.lineBackup||'',p.drumWeight||'',jigText,p.weightPerPc||'',p.note||'']);
+    rows.push([p.partNo,p.name||'',p.customer||'',p.colors||'',p.lineMain||'',p.lineBackup||'',p.drumWeight||'',jigText,p.weightPerPc||'',p.platingType||'',p.areaDm2||'',p.note||'']);
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a = document.createElement('a');
