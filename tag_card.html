@@ -163,19 +163,20 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div id="icsEntryWrap" style="margin-top:14px;padding-top:14px;border-top:1.5px dashed var(--border);">
       <div class="card-label" style="margin-bottom:6px;">📐 ผลตรวจ ICS (ไม่บังคับ)</div>
       <div class="hint" id="icsStdStatus" style="margin-bottom:10px;">พิมพ์ P/No ก่อน เพื่อเช็คว่ามีทะเบียน Standard ไหม</div>
+      <button type="button" id="goRegisterIcsBtn" onclick="goRegisterIcs()" style="display:none;font-size:11px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;margin-bottom:10px;">+ ลงทะเบียน Standard สำหรับ P/No นี้เลย</button>
       <div class="field" style="margin-bottom:0;">
         <label>ความหนาที่วัดได้ (μm) — 5 จุด</label>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
-          <input type="number" id="icsT1" step="0.01" placeholder="1">
-          <input type="number" id="icsT2" step="0.01" placeholder="2">
-          <input type="number" id="icsT3" step="0.01" placeholder="3">
-          <input type="number" id="icsT4" step="0.01" placeholder="4">
-          <input type="number" id="icsT5" step="0.01" placeholder="5">
+          <input type="text" inputmode="decimal" id="icsT1" placeholder="1">
+          <input type="text" inputmode="decimal" id="icsT2" placeholder="2">
+          <input type="text" inputmode="decimal" id="icsT3" placeholder="3">
+          <input type="text" inputmode="decimal" id="icsT4" placeholder="4">
+          <input type="text" inputmode="decimal" id="icsT5" placeholder="5">
         </div>
       </div>
       <div class="field" style="margin-top:12px;margin-bottom:0;">
         <label>Lot Size (pcs)</label>
-        <input type="number" id="icsLotSize" min="0" placeholder="0">
+        <input type="text" inputmode="decimal" id="icsLotSize" placeholder="0">
       </div>
     </div>
 
@@ -187,7 +188,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <div class="wrap" id="icsView" style="display:none;">
   <div class="card">
-    <div class="card-label">📐 ทะเบียน Standard — ตั้งครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ (เฉพาะแอดมิน)</div>
+    <div class="card-label" style="margin-bottom:4px;">📐 ทะเบียน Standard — ตั้งครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ (เฉพาะแอดมิน)</div>
+    <div class="hint" style="margin-bottom:10px;">หน้าตาเหมือนแบบฟอร์ม ICS จริงที่จะพิมพ์ — ช่องสีเทาจางคือ<b>ตัวอย่าง</b> (ระบบจะดึง/คำนวณให้เองตอนพิมพ์จริง) กรอกได้แค่ช่องที่มีกรอบเท่านั้น</div>
 
     <div class="field" style="margin-top:4px;">
       <label>P/No. (จาก Part Master)</label>
@@ -195,66 +197,105 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       <div class="hint" id="icsRegPartHint"></div>
     </div>
 
-    <!-- ── หน้าตาตารางด้านล่างนี้ ยึดตามแบบฟอร์ม APK-FR-QA-014 (INSPECTION CHECK SHEET) จริง — คอลัมน์
-    "Item Inspection" คงที่ตรงกับแบบฟอร์มเป๊ะ มีแก้ได้แค่คอลัมน์ "Standard" (สเปคที่ต่างกันไปตาม P/No) ── -->
-    <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;">
-      <tr style="background:var(--navy);color:#fff;">
-        <th style="border:1px solid #000;padding:6px;width:6%;">No.</th>
-        <th style="border:1px solid #000;padding:6px;width:28%;">Item Inspection</th>
-        <th style="border:1px solid #000;padding:6px;">Standard</th>
-      </tr>
-      <tr>
-        <td style="border:1px solid #000;padding:6px;text-align:center;">1</td>
-        <td style="border:1px solid #000;padding:6px;text-align:left;">Plating type</td>
-        <td style="border:1px solid #000;padding:4px;">
-          <input type="text" id="icsRegPlatingType" readonly placeholder="ดึงจาก Part Master อัตโนมัติ — ไม่มีข้อมูลก็ไปเพิ่มที่ part_master.html"
-            style="width:100%;border:none;background:transparent;padding:4px;font-family:inherit;font-size:12px;box-sizing:border-box;">
-        </td>
-      </tr>
-      <tr>
-        <td style="border:1px solid #000;padding:6px;text-align:center;">2</td>
-        <td style="border:1px solid #000;padding:6px;text-align:left;">Thickness of plating</td>
-        <td style="border:1px solid #000;padding:4px;">
-          <div style="display:flex;gap:6px;align-items:center;">
-            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">ต่ำสุด:</span>
-            <input type="number" id="icsRegThickMin" step="0.01" min="0" placeholder="8" oninput="onIcsRegThickMinInput()"
-              style="width:70px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;font-size:12px;">
-            <span style="font-size:11px;color:var(--text-muted);">μm · ข้อความที่พิมพ์:</span>
-            <input type="text" id="icsRegThickLabel" placeholder="≥8μm"
-              style="flex:1;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;font-size:12px;">
-          </div>
-        </td>
-      </tr>
-      <tr>
-        <td style="border:1px solid #000;padding:6px;text-align:center;">3</td>
-        <td style="border:1px solid #000;padding:6px;text-align:left;">Appearance check</td>
-        <td style="border:1px solid #000;padding:4px;">
-          <textarea id="icsRegAppearance" rows="6" placeholder="บรรทัดละ 1 ข้อ"
-            style="width:100%;border:none;background:transparent;font-family:inherit;font-size:12px;box-sizing:border-box;resize:vertical;"></textarea>
-        </td>
-      </tr>
-      <tr>
-        <td style="border:1px solid #000;padding:6px;text-align:center;">4</td>
-        <td style="border:1px solid #000;padding:6px;text-align:left;">Hazardous Substance</td>
-        <td style="border:1px solid #000;padding:4px;">
-          <input type="text" id="icsRegHazard" placeholder="SoC"
-            style="width:100%;border:none;background:transparent;padding:4px;font-family:inherit;font-size:12px;box-sizing:border-box;">
-        </td>
-      </tr>
-    </table>
-
-    <!-- ── ข้อมูลหัวเอกสารอื่นที่ไม่ได้อยู่ในตาราง 4 แถว แต่มีอยู่ในแบบฟอร์มจริง (Cust/Name, P/No, P/Name ดึง
-    จาก Tag Card ตอนพิมพ์อัตโนมัติอยู่แล้ว เหลือแค่ Model ที่ต้องตั้งไว้ล่วงหน้าตรงนี้) ── -->
-    <div class="grid2" style="margin-top:12px;">
-      <div class="field" style="margin-bottom:0;">
-        <label>ลูกค้า (จาก Part Master)</label>
-        <input type="text" id="icsRegCust" readonly>
-      </div>
-      <div class="field" style="margin-bottom:0;">
-        <label>Model</label>
-        <input type="text" id="icsRegModel" placeholder="-">
-      </div>
+    <!-- ── หน้าตาด้านล่างนี้จำลองตามแบบฟอร์ม APK-FR-QA-014 (INSPECTION CHECK SHEET) จริงที่พิมพ์ออกมา —
+    ช่องสีเทาจางตัวเอียง = ตัวอย่าง/placeholder (ดึง/คำนวณตอนพิมพ์จริง ไม่ใช่ช่องกรอก) ช่องกรอบขาว = กรอกได้จริง ── -->
+    <div style="border:1px solid #000;margin-top:14px;font-size:11px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td rowspan="2" style="border:1px solid #000;padding:8px;width:40%;vertical-align:middle;">
+            <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:15px;font-weight:800;">INSPECTION CHECK SHEET</span></div>
+          </td>
+          <td style="border:1px solid #000;padding:3px 6px;font-weight:700;background:#f8fafc;width:18%;">Doc No.</td>
+          <td style="border:1px solid #000;padding:3px 6px;color:#999;font-style:italic;" id="icsPreviewDocNo">ICS-???-???</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:3px 6px;font-weight:700;background:#f8fafc;">Issue Date</td>
+          <td style="border:1px solid #000;padding:3px 6px;color:#999;font-style:italic;" id="icsPreviewIssueDate">วันที่ลงทะเบียนครั้งแรก</td>
+        </tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;border-top:none;">
+        <tr>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;width:16%;">Cust/Name</td>
+          <td style="border:1px solid #000;padding:4px 6px;color:#999;font-style:italic;width:17%;" id="icsPreviewCust">ตัวอย่าง: CASH</td>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;width:16%;">Insp. Date</td>
+          <td style="border:1px solid #000;padding:4px 6px;color:#999;font-style:italic;width:17%;">วันที่พิมพ์</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;">P/No</td>
+          <td style="border:1px solid #000;padding:4px 6px;color:#999;font-style:italic;" id="icsPreviewPartNo">พิมพ์ P/No ด้านบน</td>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;">Delivery Date</td>
+          <td style="border:1px solid #000;padding:4px 6px;color:#999;font-style:italic;">วันที่พิมพ์</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;">P/Name</td>
+          <td style="border:1px solid #000;padding:4px 6px;color:#999;font-style:italic;" id="icsPreviewPartName">จาก Part Master</td>
+          <td style="border:1px solid #000;padding:4px 6px;font-weight:700;background:#f8fafc;">Model</td>
+          <td style="border:1px solid #000;padding:2px;">
+            <input type="text" id="icsRegModel" placeholder="-" style="width:100%;border:none;background:transparent;padding:4px 2px;font-family:inherit;font-size:11px;box-sizing:border-box;">
+          </td>
+        </tr>
+      </table>
+      <!-- ── รูปชิ้นงาน — ย้ายมาไว้เหนือตารางตรวจสอบ กึ่งกลางหน้า (เดิมอยู่ชิดขวาแถวข้อมูล ย้ายตามที่ขอ
+      ให้ตรงกับหน้าพิมพ์จริง) ── -->
+      <div style="border:1px solid #000;border-top:none;padding:4px;text-align:center;color:#999;font-size:10px;min-height:14mm;display:flex;align-items:center;justify-content:center;">Picture</div>
+      <table style="width:100%;border-collapse:collapse;border-top:none;text-align:center;">
+        <tr style="background:#1e3a5f;color:#fff;">
+          <th style="border:1px solid #000;padding:4px;width:4%;">No.</th>
+          <th style="border:1px solid #000;padding:4px;width:17%;">Item Inspection</th>
+          <th style="border:1px solid #000;padding:4px;">Standard</th>
+          <th style="border:1px solid #000;padding:4px;width:12%;">Measurement</th>
+          <th style="border:1px solid #000;padding:4px;width:22%;">Sample / X̄ / R / Result</th>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px;">1</td>
+          <td style="border:1px solid #000;padding:4px;text-align:left;">Plating type</td>
+          <td style="border:1px solid #000;padding:2px;">
+            <input type="text" id="icsRegPlatingType" readonly placeholder="ดึงจาก Part Master อัตโนมัติ"
+              style="width:100%;border:none;background:transparent;padding:4px;font-family:inherit;font-size:11px;box-sizing:border-box;">
+          </td>
+          <td style="border:1px solid #000;padding:4px;">Visual check</td>
+          <td style="border:1px solid #000;padding:4px;color:#999;font-style:italic;">ตัวอย่าง: OK</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px;">2</td>
+          <td style="border:1px solid #000;padding:4px;text-align:left;">Thickness of plating</td>
+          <td style="border:1px solid #000;padding:2px;">
+            <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+              <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ต่ำสุด</span>
+              <input type="text" inputmode="decimal" id="icsRegThickMin" placeholder="8" oninput="onIcsRegThickMinInput()"
+                style="width:40px;border:1px solid var(--border);border-radius:4px;padding:3px;font-family:inherit;font-size:11px;text-align:center;">
+              <span style="font-size:10px;color:var(--text-muted);">μm</span>
+            </div>
+            <input type="text" id="icsRegThickLabel" placeholder="ข้อความที่พิมพ์ เช่น ≥8μm"
+              style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px;font-family:inherit;font-size:11px;margin-top:3px;box-sizing:border-box;text-align:center;">
+          </td>
+          <td style="border:1px solid #000;padding:4px;">Thickness Tester</td>
+          <td style="border:1px solid #000;padding:4px;color:#999;font-style:italic;">ตัวอย่าง: X̄=9.68 OK</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px;">3</td>
+          <td style="border:1px solid #000;padding:4px;text-align:left;">Appearance check</td>
+          <td style="border:1px solid #000;padding:2px;">
+            <textarea id="icsRegAppearance" rows="6" placeholder="บรรทัดละ 1 ข้อ"
+              style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-family:inherit;font-size:10px;box-sizing:border-box;resize:vertical;text-align:left;"></textarea>
+          </td>
+          <td style="border:1px solid #000;padding:4px;">Visual check</td>
+          <td style="border:1px solid #000;padding:4px;color:#999;font-style:italic;">ตัวอย่าง: OK</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000;padding:4px;">4</td>
+          <td style="border:1px solid #000;padding:4px;text-align:left;">Hazardous Substance</td>
+          <td style="border:1px solid #000;padding:2px;">
+            <input type="text" id="icsRegHazard" placeholder="SoC"
+              style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px;font-family:inherit;font-size:11px;box-sizing:border-box;text-align:center;">
+          </td>
+          <td style="border:1px solid #000;padding:4px;">Test Report</td>
+          <td style="border:1px solid #000;padding:4px;color:#999;font-style:italic;">ตัวอย่าง: OK</td>
+        </tr>
+      </table>
+      <div style="padding:6px;font-size:10px;color:#999;font-style:italic;border-top:1px solid #000;">Lot Judgement / ลายเซ็น / ประวัติแก้ไข — แสดงเต็มตอนพิมพ์จริงเท่านั้น</div>
     </div>
+    <input type="text" id="icsRegCust" readonly style="display:none;"> <!-- เก็บค่าไว้ใช้ตอนบันทึก ไม่ต้องแสดงแยกแล้ว (รวมอยู่ใน preview ด้านบน) -->
 
     <button class="btn btn-primary" onclick="saveIcsStandard()" style="margin-top:14px;">💾 บันทึกทะเบียน Standard</button>
     <div id="icsToast" class="toast"></div>
@@ -357,6 +398,7 @@ function onPartNoInput() {
   resetLotDropdown('พิมพ์ P/No ก่อน');
   $('icsStdStatus').textContent = 'พิมพ์ P/No ก่อน เพื่อเช็คว่ามีทะเบียน Standard ไหม';
   $('icsStdStatus').className = 'hint';
+  $('goRegisterIcsBtn').style.display = 'none';
 }
 function onPartNoBlur() {
   var val = $('tgPartNo').value.trim();
@@ -383,10 +425,21 @@ function onPartNoBlur() {
   if (std) {
     $('icsStdStatus').textContent = '✅ P/No นี้มีทะเบียน Standard แล้ว — กรอกความหนา 5 จุด+Lot Size ด้านล่างให้ครบ แล้วพิมพ์ ICS ต่อท้ายได้เลย';
     $('icsStdStatus').className = 'hint ok';
+    $('goRegisterIcsBtn').style.display = 'none';
   } else {
-    $('icsStdStatus').textContent = 'ℹ️ P/No นี้ยังไม่มีทะเบียน Standard — จะพิมพ์ Tag อย่างเดียว ไม่มี ICS ต่อท้าย (ไปลงทะเบียนที่แท็บ "ทะเบียน Standard" ก่อนถ้าต้องการ)';
+    $('icsStdStatus').textContent = 'ℹ️ P/No นี้ยังไม่มีทะเบียน Standard — จะพิมพ์ Tag อย่างเดียว ไม่มี ICS ต่อท้าย';
     $('icsStdStatus').className = 'hint warn';
+    // โชว์ปุ่มลัดเฉพาะแอดมิน + ต้องมี match ใน Part Master จริง (ลงทะเบียนไม่ได้ถ้าไม่มีใน PM อยู่แล้ว)
+    $('goRegisterIcsBtn').style.display = (session.role === 'admin' && match) ? 'inline-block' : 'none';
   }
+}
+// ปุ่มลัด "+ ลงทะเบียน Standard สำหรับ P/No นี้เลย" — สลับไปแท็บทะเบียน Standard พร้อมเติม P/No ให้อัตโนมัติ
+// กันต้องพิมพ์/เลือก P/No ซ้ำสองรอบ (พิมพ์ในฟอร์ม Tag แล้วต้องไปพิมพ์อีกทีในทะเบียน Standard)
+function goRegisterIcs() {
+  var partNo = $('tgPartNo').value.trim();
+  switchView('ics');
+  $('icsRegPartNo').value = partNo;
+  onIcsRegPartNoBlur();
 }
 
 // ══════════════════════════════════════
@@ -467,10 +520,19 @@ function onIcsRegPartNoBlur() {
     $('icsRegPlatingType').value = match.platingType || '';
     $('icsRegPartHint').textContent = match.platingType ? '✅ เจอใน Part Master' : '⚠️ เจอใน Part Master แต่ยังไม่มี Plating Type — ไปเพิ่มที่ part_master.html ก่อน';
     $('icsRegPartHint').className = match.platingType ? 'hint ok' : 'hint warn';
+    // เติม preview ส่วนหัวให้เห็นภาพรวมเหมือนฟอร์มจริงที่จะพิมพ์ออกมา
+    $('icsPreviewDocNo').textContent = computeDocNo(match.customer, match.partNo);
+    $('icsPreviewCust').textContent = match.customer || 'ตัวอย่าง: CASH';
+    $('icsPreviewPartNo').textContent = match.partNo;
+    $('icsPreviewPartName').textContent = match.partName || '(ยังไม่มีชื่อใน Part Master)';
   } else {
     $('icsRegCust').value = ''; $('icsRegPlatingType').value = '';
     $('icsRegPartHint').textContent = '⚠️ ไม่เจอ P/No นี้ใน Part Master — ลงทะเบียนไม่ได้ (ต้องเพิ่มใน Part Master ก่อน)';
     $('icsRegPartHint').className = 'hint err';
+    $('icsPreviewDocNo').textContent = 'ICS-???-???';
+    $('icsPreviewCust').textContent = 'ตัวอย่าง: CASH';
+    $('icsPreviewPartNo').textContent = 'พิมพ์ P/No ด้านบน';
+    $('icsPreviewPartName').textContent = 'จาก Part Master';
     return;
   }
   // ถ้าเคยลงทะเบียนไว้แล้ว ดึงมาแสดงให้แก้ไขต่อได้เลย (ไม่ใช่ลงทะเบียนซ้ำ)
@@ -481,12 +543,14 @@ function onIcsRegPartNoBlur() {
     $('icsRegModel').value = existing.model || '';
     $('icsRegAppearance').value = (existing.appearanceItems||DEFAULT_APPEARANCE).join('\n');
     $('icsRegHazard').value = existing.hazardousStandard || 'SoC';
+    $('icsPreviewIssueDate').textContent = fmtDateTH(existing.issueDate) + ' (ล็อกไว้ตั้งแต่ลงทะเบียนครั้งแรก)';
   } else {
     $('icsRegThickMin').value = '';
     $('icsRegThickLabel').value = '';
     $('icsRegModel').value = '';
     $('icsRegAppearance').value = DEFAULT_APPEARANCE.join('\n');
     $('icsRegHazard').value = 'SoC';
+    $('icsPreviewIssueDate').textContent = fmtDateTH(isoToday()) + ' (วันนี้ — จะล็อกไว้ถาวร)';
   }
 }
 function onIcsRegThickMinInput() {
@@ -699,7 +763,7 @@ function buildIcsPageHtml(ctx) {
            '<td style="border:1px solid #000;padding:4px 6px;width:17%;">'+esc(value)+'</td>';
   }
 
-  return '<div style="width:100%;height:100%;box-sizing:border-box;padding:8mm;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:11px;">'+
+  return '<div style="width:100%;height:100%;box-sizing:border-box;padding:6mm;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:11px;">'+
     // หัวเอกสาร
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;">'+
       '<tr>'+
@@ -717,15 +781,15 @@ function buildIcsPageHtml(ctx) {
         '<td style="border:1px solid #000;padding:3px 6px;">'+esc(ctx.issueDate)+'</td>'+
       '</tr>'+
     '</table>'+
-    '<table style="width:100%;border-collapse:collapse;border-top:none;margin-bottom:10px;">'+
-      '<tr>'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+
-        '<td rowspan="3" style="border:1px solid #000;padding:2px;width:16%;text-align:center;vertical-align:middle;">'+
-          (ctx.photo ? '<img src="'+ctx.photo+'" style="max-width:100%;max-height:28mm;object-fit:contain;">' : '<span style="font-size:10px;color:#666;">Picture</span>')+
-        '</td>'+
-      '</tr>'+
+    '<table style="width:100%;border-collapse:collapse;border-top:none;">'+
+      '<tr>'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
       '<tr>'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
       '<tr>'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
     '</table>'+
+    // ── รูปชิ้นงาน — ย้ายมาไว้เหนือตารางตรวจสอบ กึ่งกลางหน้า (เดิมอยู่ชิดขวาแถวข้อมูล ย้ายตามที่ขอ) ──
+    '<div style="border:1px solid #000;border-top:none;padding:4px;text-align:center;margin-bottom:10px;min-height:22mm;display:flex;align-items:center;justify-content:center;">'+
+      (ctx.photo ? '<img src="'+ctx.photo+'" style="max-width:100%;max-height:26mm;object-fit:contain;">' : '<span style="font-size:10px;color:#666;">Picture</span>')+
+    '</div>'+
     '<table style="width:100%;border-collapse:collapse;text-align:center;">'+
       '<tr style="background:#1e3a5f;color:#fff;">'+
         '<th style="border:1px solid #000;padding:4px;width:3%;">No.</th>'+
@@ -771,20 +835,20 @@ function buildIcsPageHtml(ctx) {
         '<td style="border:1px solid #000;padding:4px;font-weight:700;color:#16a34a;">OK</td>'+
       '</tr>'+
     '</table>'+
-    '<div style="margin-top:10px;font-size:10px;">Remark: </div>'+
-    '<div style="display:flex;justify-content:flex-end;margin-top:14px;">'+
-      '<div style="border:2px solid #000;padding:8px 20px;text-align:center;">'+
-        '<div style="font-weight:700;font-size:10px;margin-bottom:4px;">Lot Judgement</div>'+
-        '<div style="font-size:16px;font-weight:800;color:'+(ctx.lotJudgement==='OK'?'#16a34a':'#dc2626')+';">'+ctx.lotJudgement+'</div>'+
+    '<div style="margin-top:6px;font-size:10px;">Remark: </div>'+
+    '<div style="display:flex;justify-content:flex-end;margin-top:8px;">'+
+      '<div style="border:2px solid #000;padding:5px 18px;text-align:center;">'+
+        '<div style="font-weight:700;font-size:10px;margin-bottom:2px;">Lot Judgement</div>'+
+        '<div style="font-size:15px;font-weight:800;color:'+(ctx.lotJudgement==='OK'?'#16a34a':'#dc2626')+';">'+ctx.lotJudgement+'</div>'+
       '</div>'+
     '</div>'+
-    '<table style="width:100%;border-collapse:collapse;margin-top:20px;font-size:10px;">'+
-      '<tr><td style="border:1px solid #000;padding:14px 6px;width:50%;text-align:center;">Approve by</td>'+
-          '<td style="border:1px solid #000;padding:14px 6px;width:50%;text-align:center;">Inspection by: '+esc(ctx.inspBy)+'</td></tr>'+
+    '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:10px;">'+
+      '<tr><td style="border:1px solid #000;padding:7px 6px;width:50%;text-align:center;">Approve by</td>'+
+          '<td style="border:1px solid #000;padding:7px 6px;width:50%;text-align:center;">Inspection by: '+esc(ctx.inspBy)+'</td></tr>'+
     '</table>'+
     // ── ตารางประวัติแก้ไข — ตรงกับแบบฟอร์ม APK-FR-QA-014 ต้นฉบับ (แถวแรกเป็นค่าเริ่มต้น "ออกใบใหม่" เสมอ
     // เพราะระบบนี้ไม่ได้เก็บประวัติการแก้ไขจริง เป็นแค่การจำลองหน้าตาเอกสารให้ตรงต้นฉบับ) ──
-    '<table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:8px;text-align:center;">'+
+    '<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:8px;text-align:center;">'+
       '<tr style="background:#f1f5f9;">'+
         '<th style="border:1px solid #000;padding:3px;width:6%;">Rev.No</th>'+
         '<th style="border:1px solid #000;padding:3px;width:10%;">Date</th>'+
