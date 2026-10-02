@@ -161,7 +161,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <!-- ── ส่วน ICS (Inspection Check Sheet) — โชว์เฉพาะตอน P/No นี้มีทะเบียน Standard ลงไว้แล้ว
     กรอกผลตรวจจริงตรงนี้ แล้วระบบจะพิมพ์ ICS ต่อท้ายเป็นหน้าสุดท้ายให้อัตโนมัติพร้อม Tag ── -->
     <div id="icsEntryWrap" style="margin-top:14px;padding-top:14px;border-top:1.5px dashed var(--border);">
-      <div class="card-label" style="margin-bottom:10px;">📐 ผลตรวจ ICS (ไม่บังคับ — กรอกครบจะพิมพ์ ICS ต่อท้ายให้อัตโนมัติถ้า P/No นี้มีทะเบียน Standard แล้ว)</div>
+      <div class="card-label" style="margin-bottom:6px;">📐 ผลตรวจ ICS (ไม่บังคับ)</div>
+      <div class="hint" id="icsStdStatus" style="margin-bottom:10px;">พิมพ์ P/No ก่อน เพื่อเช็คว่ามีทะเบียน Standard ไหม</div>
       <div class="field" style="margin-bottom:0;">
         <label>ความหนาที่วัดได้ (μm) — 5 จุด</label>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
@@ -186,50 +187,73 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <div class="wrap" id="icsView" style="display:none;">
   <div class="card">
-    <div class="card-label">📐 ทะเบียน Standard (ลูกค้า + P/No → สเปคการตรวจ ICS)</div>
-    <div class="hint">ตั้งค่าครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ Tag — เฉพาะแอดมินเท่านั้นที่แก้ได้</div>
+    <div class="card-label">📐 ทะเบียน Standard — ตั้งครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ (เฉพาะแอดมิน)</div>
 
-    <div class="field" style="margin-top:12px;">
+    <div class="field" style="margin-top:4px;">
       <label>P/No. (จาก Part Master)</label>
       <input type="text" id="icsRegPartNo" list="tgPartNoList" placeholder="พิมพ์/เลือก P/No" onblur="onIcsRegPartNoBlur()">
       <div class="hint" id="icsRegPartHint"></div>
     </div>
 
+    <!-- ── หน้าตาตารางด้านล่างนี้ ยึดตามแบบฟอร์ม APK-FR-QA-014 (INSPECTION CHECK SHEET) จริง — คอลัมน์
+    "Item Inspection" คงที่ตรงกับแบบฟอร์มเป๊ะ มีแก้ได้แค่คอลัมน์ "Standard" (สเปคที่ต่างกันไปตาม P/No) ── -->
+    <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;">
+      <tr style="background:var(--navy);color:#fff;">
+        <th style="border:1px solid #000;padding:6px;width:6%;">No.</th>
+        <th style="border:1px solid #000;padding:6px;width:28%;">Item Inspection</th>
+        <th style="border:1px solid #000;padding:6px;">Standard</th>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000;padding:6px;text-align:center;">1</td>
+        <td style="border:1px solid #000;padding:6px;text-align:left;">Plating type</td>
+        <td style="border:1px solid #000;padding:4px;">
+          <input type="text" id="icsRegPlatingType" readonly placeholder="ดึงจาก Part Master อัตโนมัติ — ไม่มีข้อมูลก็ไปเพิ่มที่ part_master.html"
+            style="width:100%;border:none;background:transparent;padding:4px;font-family:inherit;font-size:12px;box-sizing:border-box;">
+        </td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000;padding:6px;text-align:center;">2</td>
+        <td style="border:1px solid #000;padding:6px;text-align:left;">Thickness of plating</td>
+        <td style="border:1px solid #000;padding:4px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">ต่ำสุด:</span>
+            <input type="number" id="icsRegThickMin" step="0.01" min="0" placeholder="8" oninput="onIcsRegThickMinInput()"
+              style="width:70px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;font-size:12px;">
+            <span style="font-size:11px;color:var(--text-muted);">μm · ข้อความที่พิมพ์:</span>
+            <input type="text" id="icsRegThickLabel" placeholder="≥8μm"
+              style="flex:1;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-family:inherit;font-size:12px;">
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000;padding:6px;text-align:center;">3</td>
+        <td style="border:1px solid #000;padding:6px;text-align:left;">Appearance check</td>
+        <td style="border:1px solid #000;padding:4px;">
+          <textarea id="icsRegAppearance" rows="6" placeholder="บรรทัดละ 1 ข้อ"
+            style="width:100%;border:none;background:transparent;font-family:inherit;font-size:12px;box-sizing:border-box;resize:vertical;"></textarea>
+        </td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000;padding:6px;text-align:center;">4</td>
+        <td style="border:1px solid #000;padding:6px;text-align:left;">Hazardous Substance</td>
+        <td style="border:1px solid #000;padding:4px;">
+          <input type="text" id="icsRegHazard" placeholder="SoC"
+            style="width:100%;border:none;background:transparent;padding:4px;font-family:inherit;font-size:12px;box-sizing:border-box;">
+        </td>
+      </tr>
+    </table>
+
+    <!-- ── ข้อมูลหัวเอกสารอื่นที่ไม่ได้อยู่ในตาราง 4 แถว แต่มีอยู่ในแบบฟอร์มจริง (Cust/Name, P/No, P/Name ดึง
+    จาก Tag Card ตอนพิมพ์อัตโนมัติอยู่แล้ว เหลือแค่ Model ที่ต้องตั้งไว้ล่วงหน้าตรงนี้) ── -->
     <div class="grid2" style="margin-top:12px;">
       <div class="field" style="margin-bottom:0;">
         <label>ลูกค้า (จาก Part Master)</label>
         <input type="text" id="icsRegCust" readonly>
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label>Plating Type (จาก Part Master)</label>
-        <input type="text" id="icsRegPlatingType" readonly placeholder="ไม่มีข้อมูลใน Part Master">
+        <label>Model</label>
+        <input type="text" id="icsRegModel" placeholder="-">
       </div>
-    </div>
-
-    <div class="grid2" style="margin-top:12px;">
-      <div class="field" style="margin-bottom:0;">
-        <label>ความหนาต่ำสุด (μm)</label>
-        <input type="number" id="icsRegThickMin" step="0.01" min="0" placeholder="8" oninput="onIcsRegThickMinInput()">
-      </div>
-      <div class="field" style="margin-bottom:0;">
-        <label>ข้อความ Standard ที่พิมพ์ (แก้เองได้)</label>
-        <input type="text" id="icsRegThickLabel" placeholder="≥8μm">
-      </div>
-    </div>
-
-    <div class="field" style="margin-top:12px;">
-      <label>Model</label>
-      <input type="text" id="icsRegModel" placeholder="-">
-    </div>
-
-    <div class="field" style="margin-top:12px;">
-      <label>เกณฑ์ตรวจสภาพผิว (Appearance) — บรรทัดละ 1 ข้อ</label>
-      <textarea id="icsRegAppearance" rows="6" style="width:100%;padding:10px 12px;font-family:inherit;font-size:14px;border:1px solid var(--border);border-radius:10px;background:var(--sky-pale);box-sizing:border-box;"></textarea>
-    </div>
-
-    <div class="field" style="margin-top:12px;">
-      <label>Hazardous Substance (Standard)</label>
-      <input type="text" id="icsRegHazard" placeholder="SoC">
     </div>
 
     <button class="btn btn-primary" onclick="saveIcsStandard()" style="margin-top:14px;">💾 บันทึกทะเบียน Standard</button>
@@ -331,6 +355,8 @@ function onPartNoInput() {
   $('tgPartHint').textContent = ''; $('tgPartHint').className = 'hint';
   renderPhotoBox(null);
   resetLotDropdown('พิมพ์ P/No ก่อน');
+  $('icsStdStatus').textContent = 'พิมพ์ P/No ก่อน เพื่อเช็คว่ามีทะเบียน Standard ไหม';
+  $('icsStdStatus').className = 'hint';
 }
 function onPartNoBlur() {
   var val = $('tgPartNo').value.trim();
@@ -351,6 +377,16 @@ function onPartNoBlur() {
     renderPhotoBox(null);
   }
   loadLotOptionsForPartNo(val);
+
+  // แจ้งสถานะทะเบียน Standard ให้เห็นชัดก่อนพิมพ์ กันงงว่าทำไมไม่มี ICS ต่อท้าย (เคยเกิดปัญหานี้มาก่อน)
+  var std = match ? findIcsStandard(match.partNo) : null;
+  if (std) {
+    $('icsStdStatus').textContent = '✅ P/No นี้มีทะเบียน Standard แล้ว — กรอกความหนา 5 จุด+Lot Size ด้านล่างให้ครบ แล้วพิมพ์ ICS ต่อท้ายได้เลย';
+    $('icsStdStatus').className = 'hint ok';
+  } else {
+    $('icsStdStatus').textContent = 'ℹ️ P/No นี้ยังไม่มีทะเบียน Standard — จะพิมพ์ Tag อย่างเดียว ไม่มี ICS ต่อท้าย (ไปลงทะเบียนที่แท็บ "ทะเบียน Standard" ก่อนถ้าต้องการ)';
+    $('icsStdStatus').className = 'hint warn';
+  }
 }
 
 // ══════════════════════════════════════
@@ -682,7 +718,11 @@ function buildIcsPageHtml(ctx) {
       '</tr>'+
     '</table>'+
     '<table style="width:100%;border-collapse:collapse;border-top:none;margin-bottom:10px;">'+
-      '<tr>'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
+      '<tr>'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+
+        '<td rowspan="3" style="border:1px solid #000;padding:2px;width:16%;text-align:center;vertical-align:middle;">'+
+          (ctx.photo ? '<img src="'+ctx.photo+'" style="max-width:100%;max-height:28mm;object-fit:contain;">' : '<span style="font-size:10px;color:#666;">Picture</span>')+
+        '</td>'+
+      '</tr>'+
       '<tr>'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
       '<tr>'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
     '</table>'+
@@ -742,6 +782,27 @@ function buildIcsPageHtml(ctx) {
       '<tr><td style="border:1px solid #000;padding:14px 6px;width:50%;text-align:center;">Approve by</td>'+
           '<td style="border:1px solid #000;padding:14px 6px;width:50%;text-align:center;">Inspection by: '+esc(ctx.inspBy)+'</td></tr>'+
     '</table>'+
+    // ── ตารางประวัติแก้ไข — ตรงกับแบบฟอร์ม APK-FR-QA-014 ต้นฉบับ (แถวแรกเป็นค่าเริ่มต้น "ออกใบใหม่" เสมอ
+    // เพราะระบบนี้ไม่ได้เก็บประวัติการแก้ไขจริง เป็นแค่การจำลองหน้าตาเอกสารให้ตรงต้นฉบับ) ──
+    '<table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:8px;text-align:center;">'+
+      '<tr style="background:#f1f5f9;">'+
+        '<th style="border:1px solid #000;padding:3px;width:6%;">Rev.No</th>'+
+        '<th style="border:1px solid #000;padding:3px;width:10%;">Date</th>'+
+        '<th style="border:1px solid #000;padding:3px;">Detail of Change</th>'+
+        '<th style="border:1px solid #000;padding:3px;width:6%;">App</th>'+
+        '<th style="border:1px solid #000;padding:3px;width:6%;">Chk</th>'+
+        '<th style="border:1px solid #000;padding:3px;width:6%;">Issue</th>'+
+      '</tr>'+
+      '<tr>'+
+        '<td style="border:1px solid #000;padding:3px;">00</td>'+
+        '<td style="border:1px solid #000;padding:3px;">'+esc(ctx.issueDate)+'</td>'+
+        '<td style="border:1px solid #000;padding:3px;text-align:left;">New Issue</td>'+
+        '<td style="border:1px solid #000;padding:3px;"></td>'+
+        '<td style="border:1px solid #000;padding:3px;"></td>'+
+        '<td style="border:1px solid #000;padding:3px;"></td>'+
+      '</tr>'+
+    '</table>'+
+    '<div style="margin-top:4px;font-size:8px;color:#444;">DOC: APK-FR-QA-014 REV.NO.00</div>'+
   '</div>';
 }
 
@@ -788,7 +849,7 @@ function printTags() {
       platingTypeStd: (match && match.platingType) || '-',
       thicknessLabel: icsStd.thicknessLabel, samples: samples, xbar: xr.xbar, r: xr.r, thicknessResult: thicknessResult,
       appearanceItems: icsStd.appearanceItems, hazardousStd: icsStd.hazardousStandard,
-      inspBy: d.inspBy, lotJudgement: thicknessResult
+      inspBy: d.inspBy, lotJudgement: thicknessResult, photo: d.photo
     });
     }
   }
