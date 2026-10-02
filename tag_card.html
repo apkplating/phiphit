@@ -376,7 +376,16 @@ function switchView(view) {
   $('icsView').style.display = view === 'ics' ? 'block' : 'none';
   $('tabTagBtn').style.background = view === 'tag' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
   $('tabIcsBtn').style.background = view === 'ics' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
-  if (view === 'ics') renderIcsRegList();
+  if (view === 'ics') {
+    renderIcsRegList();
+    // เอา P/No ที่พิมพ์ไว้ใน Tag Card มาเติมให้เสมอ ไม่ว่าจะสลับแท็บทางไหน (กดแท็บตรงๆ หรือปุ่มลัด)
+    // กันปัญหาที่เคยเจอ — สลับแท็บตรงๆ แล้วช่อง P/No ว่างเปล่า ทั้งที่พิมพ์ไว้ในฝั่ง Tag Card แล้ว
+    var tagPartNo = $('tgPartNo').value.trim();
+    if (tagPartNo && $('icsRegPartNo').value.trim() !== tagPartNo) {
+      $('icsRegPartNo').value = tagPartNo;
+      onIcsRegPartNoBlur();
+    }
+  }
 }
 
 // ══════════════════════════════════════
@@ -843,7 +852,7 @@ function buildIcsPageHtml(ctx) {
       '</div>'+
     '</div>'+
     '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:10px;">'+
-      '<tr><td style="border:1px solid #000;padding:7px 6px;width:50%;text-align:center;">Approve by</td>'+
+      '<tr><td style="border:1px solid #000;padding:7px 6px;width:50%;text-align:center;">Approve by: ทัพโยธิน</td>'+
           '<td style="border:1px solid #000;padding:7px 6px;width:50%;text-align:center;">Inspection by: '+esc(ctx.inspBy)+'</td></tr>'+
     '</table>'+
     // ── ตารางประวัติแก้ไข — ตรงกับแบบฟอร์ม APK-FR-QA-014 ต้นฉบับ (แถวแรกเป็นค่าเริ่มต้น "ออกใบใหม่" เสมอ
