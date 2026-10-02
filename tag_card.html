@@ -102,6 +102,11 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <div class="field" style="margin-top:12px;">
+      <label>Plating Type (จาก Part Master)</label>
+      <input type="text" id="tgPlatingType" readonly placeholder="เลือก P/No ก่อน — ไม่มีข้อมูลใน Part Master ก็พิมพ์ Tag ได้ตามปกติ">
+    </div>
+
+    <div class="field" style="margin-top:12px;">
       <label>รูปชิ้นงาน (ไม่บังคับ)</label>
       <div class="photo-row">
         <div class="photo-box" id="tgPhotoBox"><div class="ph-empty">ไม่มีรูป</div></div>
@@ -155,8 +160,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
     <!-- ── ส่วน ICS (Inspection Check Sheet) — โชว์เฉพาะตอน P/No นี้มีทะเบียน Standard ลงไว้แล้ว
     กรอกผลตรวจจริงตรงนี้ แล้วระบบจะพิมพ์ ICS ต่อท้ายเป็นหน้าสุดท้ายให้อัตโนมัติพร้อม Tag ── -->
-    <div id="icsEntryWrap" style="display:none;margin-top:14px;padding-top:14px;border-top:1.5px dashed var(--border);">
-      <div class="card-label" style="margin-bottom:10px;">📐 ผลตรวจ ICS (P/No นี้มีทะเบียน Standard แล้ว — จะพิมพ์ ICS ต่อท้ายให้อัตโนมัติ)</div>
+    <div id="icsEntryWrap" style="margin-top:14px;padding-top:14px;border-top:1.5px dashed var(--border);">
+      <div class="card-label" style="margin-bottom:10px;">📐 ผลตรวจ ICS (ไม่บังคับ — กรอกครบจะพิมพ์ ICS ต่อท้ายให้อัตโนมัติถ้า P/No นี้มีทะเบียน Standard แล้ว)</div>
       <div class="field" style="margin-bottom:0;">
         <label>ความหนาที่วัดได้ (μm) — 5 จุด</label>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
@@ -322,10 +327,10 @@ function loadPartList() {
 }
 function onPartNoInput() {
   $('tgPartName').value = '';
+  $('tgPlatingType').value = '';
   $('tgPartHint').textContent = ''; $('tgPartHint').className = 'hint';
   renderPhotoBox(null);
   resetLotDropdown('พิมพ์ P/No ก่อน');
-  $('icsEntryWrap').style.display = 'none';
 }
 function onPartNoBlur() {
   var val = $('tgPartNo').value.trim();
@@ -334,6 +339,7 @@ function onPartNoBlur() {
   if (match) {
     $('tgPartNo').value = match.partNo;
     $('tgPartName').value = match.partName || '';
+    $('tgPlatingType').value = match.platingType || ''; // ดึงจาก Part Master อัตโนมัติ — โชว์ตลอดเวลาไม่ว่าจะมีทะเบียน Standard หรือไม่
     if (match.customer) $('tgCust').value = match.customer; // auto-fill จาก PM (1 P/No : 1 ลูกค้าเสมอ) แก้เองได้ถ้าต้องการ
     $('tgPartHint').textContent = '✅ เจอใน Part Master';
     $('tgPartHint').className = 'hint ok';
@@ -345,11 +351,6 @@ function onPartNoBlur() {
     renderPhotoBox(null);
   }
   loadLotOptionsForPartNo(val);
-
-  // เช็คว่า P/No นี้มีทะเบียน Standard (ICS) ไหม — ถ้ามี โชว์ช่องกรอกผลตรวจ ความหนา 5 จุด + Lot Size
-  // เพื่อพิมพ์ ICS ต่อท้ายให้อัตโนมัติ ถ้าไม่มี ซ่อนไว้ (พิมพ์ Tag ปกติ ไม่มี ICS)
-  var std = match ? findIcsStandard(match.partNo) : null;
-  $('icsEntryWrap').style.display = std ? 'block' : 'none';
 }
 
 // ══════════════════════════════════════
@@ -764,16 +765,17 @@ function printTags() {
 
   savePhotoIfNeeded(d.partNo);
 
-  // ── ICS (Inspection Check Sheet) — ถ้า P/No นี้มีทะเบียน Standard ลงไว้แล้ว ต่อท้ายเป็นหน้าสุดท้ายให้อัตโนมัติ ──
+  // ── ICS (Inspection Check Sheet) — ไม่บังคับ: สร้างต่อท้ายให้อัตโนมัติก็ต่อเมื่อ P/No นี้มีทะเบียน Standard
+  // ลงไว้แล้ว "และ" กรอกผลตรวจ (5 จุด + Lot Size) ครบ — ถ้าอย่างใดอย่างหนึ่งขาด ข้ามการสร้าง ICS เงียบๆ โดยไม่
+  // บล็อกการพิมพ์ Tag เลย (Tag พิมพ์ได้เสมอไม่ว่าจะมีข้อมูล ICS ครบหรือไม่) ──
   var icsStd = findIcsStandard(d.partNo);
   var icsPageHtml = '';
   if (icsStd) {
     var samples = [$('icsT1').value,$('icsT2').value,$('icsT3').value,$('icsT4').value,$('icsT5').value];
     var lotSize = $('icsLotSize').value;
     if (samples.some(function(s){ return s===''; }) || !lotSize) {
-      showToast('⚠️ P/No นี้มีทะเบียน Standard — กรุณากรอกความหนาให้ครบ 5 จุด และ Lot Size ก่อนพิมพ์', 'err');
-      return;
-    }
+      // ข้อมูล ICS ไม่ครบ — ข้ามการสร้าง ICS โดยไม่ error ไม่บล็อกการพิมพ์ Tag
+    } else {
     var xr = computeXbarR(samples);
     var thicknessResult = (xr.xbar!=null && xr.xbar >= icsStd.thicknessMin) ? 'OK' : 'NG';
     var match = partList.find(function(p){ return p.partNo.toLowerCase() === d.partNo.toLowerCase(); });
@@ -788,6 +790,7 @@ function printTags() {
       appearanceItems: icsStd.appearanceItems, hazardousStd: icsStd.hazardousStandard,
       inspBy: d.inspBy, lotJudgement: thicknessResult
     });
+    }
   }
 
   var oneTag = buildTagHtml(d);
