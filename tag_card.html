@@ -858,7 +858,7 @@ function buildIcsPageHtml(ctx) {
     // ── ตารางประวัติแก้ไข + Approve/Inspection by อยู่คู่กัน (ซ้าย-ขวา) ความสูงเท่ากัน ตรงกับต้นฉบับจริง
     // (เดิมแยกเป็นคนละแถวเต็มความกว้าง ย้ายให้อยู่ข้างกันตามต้นฉบับ) แถวแรกของประวัติเป็นค่าเริ่มต้น "ออกใบใหม่"
     // เสมอ เพราะระบบนี้ไม่ได้เก็บประวัติการแก้ไขจริง เป็นแค่การจำลองหน้าตาเอกสารให้ตรงต้นฉบับ ──
-    '<div style="display:flex;margin-top:8px;flex-shrink:0;font-size:8px;">'+
+    '<div style="display:flex;align-items:flex-start;margin-top:8px;flex-shrink:0;font-size:8px;">'+
       '<table style="border-collapse:collapse;text-align:center;flex:1;">'+
         '<tr style="background:#f1f5f9;">'+
           '<th style="border:1px solid #000;padding:3px;width:8%;height:8mm;">Rev.No</th>'+
@@ -868,23 +868,22 @@ function buildIcsPageHtml(ctx) {
           '<th style="border:1px solid #000;padding:3px;width:8%;">Chk</th>'+
           '<th style="border:1px solid #000;padding:3px;width:8%;">Issue</th>'+
         '</tr>'+
+        // ── แถวว่าง 3 แถวขึ้นก่อน แถว "00/New Issue" อยู่ล่างสุดเสมอ (สลับลำดับตามที่ขอ) ──
+        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
+        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
+        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
         '<tr style="height:8mm;">'+
           '<td style="border:1px solid #000;padding:3px;">00</td>'+
           '<td style="border:1px solid #000;padding:3px;">'+esc(ctx.issueDate)+'</td>'+
           '<td style="border:1px solid #000;padding:3px;text-align:left;">New Issue</td>'+
-          '<td style="border:1px solid #000;padding:3px;"></td>'+
-          '<td style="border:1px solid #000;padding:3px;"></td>'+
-          '<td style="border:1px solid #000;padding:3px;"></td>'+
+          '<td style="border:1px solid #000;padding:3px;">พิพิธ</td>'+
+          '<td style="border:1px solid #000;padding:3px;">พิพิธ</td>'+
+          '<td style="border:1px solid #000;padding:3px;">อาภาพร</td>'+
         '</tr>'+
-        // ── แถวว่างอีก 3 แถว (รวมเป็น 4 แถวทั้งหมด) ไว้รองรับการแก้ไขเอกสารในอนาคต ตรงกับต้นฉบับจริงที่เผื่อ
-        // แถวว่างไว้ล่วงหน้า (เห็นสัญลักษณ์สามเหลี่ยม 4 อันในแบบฟอร์มเปล่า) ──
-        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
-        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
-        '<tr style="height:8mm;"><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td><td style="border:1px solid #000;"></td></tr>'+
       '</table>'+
       '<table style="border-collapse:collapse;text-align:center;width:36%;font-size:9px;">'+
-        '<tr><td style="border:1px solid #000;padding:4px 2px;">ทัพโยธิน</td><td style="border:1px solid #000;padding:4px 2px;">'+esc(ctx.inspBy)+'</td></tr>'+
-        '<tr><td style="border:1px solid #000;padding:3px 2px;font-weight:700;">Approve by</td><td style="border:1px solid #000;padding:3px 2px;font-weight:700;">Inspection by</td></tr>'+
+        '<tr style="height:8mm;"><td style="border:1px solid #000;padding:4px 2px;">ทัพโยธิน</td><td style="border:1px solid #000;padding:4px 2px;">'+esc(ctx.inspBy)+'</td></tr>'+
+        '<tr style="height:8mm;"><td style="border:1px solid #000;padding:3px 2px;font-weight:700;">Approve by</td><td style="border:1px solid #000;padding:3px 2px;font-weight:700;">Inspection by</td></tr>'+
       '</table>'+
     '</div>'+
     '<div style="margin-top:4px;font-size:8px;color:#444;flex-shrink:0;display:flex;justify-content:space-between;">'+
