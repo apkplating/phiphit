@@ -91,7 +91,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="grid2">
       <div class="field" style="margin-bottom:0;">
         <label>P/No. (จาก Part Master)</label>
-        <input type="text" id="tgPartNo" list="tgPartNoList" placeholder="พิมพ์/เลือก P/No" oninput="onPartNoInput()" onblur="onPartNoBlur()">
+        <input type="text" id="tgPartNo" list="tgPartNoList" autocomplete="off" placeholder="พิมพ์/เลือก P/No" oninput="onPartNoInput()" onblur="onPartNoBlur()">
         <datalist id="tgPartNoList"></datalist>
         <div class="hint" id="tgPartHint"></div>
       </div>
@@ -119,7 +119,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
     <div class="field" style="margin-top:12px;">
       <label>Cust. Name (ดึงจาก Part Master อัตโนมัติ — แก้เองได้)</label>
-      <input type="text" id="tgCust" placeholder="ชื่อลูกค้า">
+      <input type="text" id="tgCust" autocomplete="off" placeholder="ชื่อลูกค้า">
     </div>
 
     <div class="grid2" style="margin-top:12px;">
@@ -193,7 +193,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
     <div class="field" style="margin-top:4px;">
       <label>P/No. (จาก Part Master)</label>
-      <input type="text" id="icsRegPartNo" list="tgPartNoList" placeholder="พิมพ์/เลือก P/No" onblur="onIcsRegPartNoBlur()">
+      <input type="text" id="icsRegPartNo" list="tgPartNoList" autocomplete="off" placeholder="พิมพ์/เลือก P/No" onblur="onIcsRegPartNoBlur()">
       <div class="hint" id="icsRegPartHint"></div>
     </div>
 
@@ -772,10 +772,14 @@ function buildIcsPageHtml(ctx) {
            '<td style="border:1px solid #000;padding:4px 6px;width:17%;">'+esc(value)+'</td>';
   }
 
+  // ความสูงมาตรฐานต่อแถวของส่วนหัว (Doc No./Issue Date + Cust/Name/P/No/P/Name) — ตั้งเท่ากันทุกแถวเป็นค่า
+  // ต่ำสุด (height บน <tr> คือค่าต่ำสุด ไม่ใช่ค่าตายตัว) ถ้าเนื้อหายาวเกิน 1 บรรทัด (เช่น P/Name ยาวๆ) แถวนั้น
+  // จะขยายสูงขึ้นอัตโนมัติเองโดยไม่กระทบแถวอื่น ──
+  var HDR_ROW_H = 'height:7mm;';
   return '<div style="width:100%;height:100%;box-sizing:border-box;padding:6mm;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:11px;display:flex;flex-direction:column;">'+
     // หัวเอกสาร
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;flex-shrink:0;">'+
-      '<tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+
         '<td rowspan="2" style="border:1px solid #000;padding:6px;width:40%;vertical-align:middle;">'+
           '<div style="display:flex;align-items:center;gap:8px;">'+
             '<img src="data:image/png;base64,'+LOGO_B64+'" style="height:28px;">'+
@@ -785,15 +789,15 @@ function buildIcsPageHtml(ctx) {
         '<td style="border:1px solid #000;padding:3px 6px;font-weight:700;background:#f8fafc;">Doc No.</td>'+
         '<td style="border:1px solid #000;padding:3px 6px;">'+esc(ctx.docNo)+'</td>'+
       '</tr>'+
-      '<tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+
         '<td style="border:1px solid #000;padding:3px 6px;font-weight:700;background:#f8fafc;">Issue Date</td>'+
         '<td style="border:1px solid #000;padding:3px 6px;">'+esc(ctx.issueDate)+'</td>'+
       '</tr>'+
     '</table>'+
     '<table style="width:100%;border-collapse:collapse;border-top:none;flex-shrink:0;">'+
-      '<tr>'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
-      '<tr>'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
-      '<tr>'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
     '</table>'+
     // ── รูปชิ้นงาน — ยืดกินพื้นที่ที่เหลือทั้งหมดเสมอ (flex:1) ตรงกับต้นฉบับจริงที่ให้ช่องรูปใหญ่เต็มพื้นที่
     // ว่างด้านล่าง รับประกันว่าทุกครั้งที่พิมพ์จะเต็มกระดาษ A4 พอดี ไม่ว่าเนื้อหาส่วนอื่นจะสั้น/ยาวแค่ไหน ──
@@ -801,7 +805,7 @@ function buildIcsPageHtml(ctx) {
       (ctx.photo ? '<img src="'+ctx.photo+'" style="max-width:100%;max-height:100%;object-fit:contain;">' : '<span style="font-size:10px;color:#666;">Picture</span>')+
     '</div>'+
     '<table style="width:100%;border-collapse:collapse;text-align:center;flex-shrink:0;margin-top:10px;">'+
-      '<tr style="background:#1e3a5f;color:#fff;">'+
+      '<tr style="background:#1e3a5f;color:#fff;height:7mm;">'+
         '<th style="border:1px solid #000;padding:4px;width:3%;">No.</th>'+
         '<th style="border:1px solid #000;padding:4px;width:15%;">Item Inspection</th>'+
         '<th style="border:1px solid #000;padding:4px;width:17%;">Standard</th>'+
@@ -811,7 +815,9 @@ function buildIcsPageHtml(ctx) {
         '<th style="border:1px solid #000;padding:4px;width:6%;">R</th>'+
         '<th style="border:1px solid #000;padding:4px;width:6%;">Result</th>'+
       '</tr>'+
-      '<tr><td style="border:1px solid #000;padding:4px;">1</td>'+
+      // ── แถว 1,2,4 สูงเท่ากันเป็นค่าเริ่มต้น (8mm) แถว 3 (Appearance) มีเนื้อหา 7 บรรทัด จะขยายสูงขึ้นอัตโนมัติ
+      // เองตามเนื้อหาจริง (height เป็นค่าต่ำสุด ไม่ใช่เพดาน) ไม่ต้องบังคับให้เท่ากับแถวอื่น ──
+      '<tr style="height:8mm;"><td style="border:1px solid #000;padding:4px;">1</td>'+
         '<td style="border:1px solid #000;padding:4px;text-align:left;">Plating type</td>'+
         '<td style="border:1px solid #000;padding:4px;">'+esc(ctx.platingTypeStd||'-')+'</td>'+
         '<td style="border:1px solid #000;padding:4px;">Visual check</td>'+
@@ -819,7 +825,7 @@ function buildIcsPageHtml(ctx) {
         '<td style="border:1px solid #000;padding:4px;">-</td><td style="border:1px solid #000;padding:4px;">-</td>'+
         '<td style="border:1px solid #000;padding:4px;font-weight:700;color:#16a34a;">OK</td>'+
       '</tr>'+
-      '<tr><td style="border:1px solid #000;padding:4px;">2</td>'+
+      '<tr style="height:8mm;"><td style="border:1px solid #000;padding:4px;">2</td>'+
         '<td style="border:1px solid #000;padding:4px;text-align:left;">Thickness of plating</td>'+
         '<td style="border:1px solid #000;padding:4px;">'+esc(ctx.thicknessLabel)+'</td>'+
         '<td style="border:1px solid #000;padding:4px;">Thickness Tester</td>'+
@@ -828,15 +834,28 @@ function buildIcsPageHtml(ctx) {
         '<td style="border:1px solid #000;padding:4px;">'+(ctx.r==null?'-':ctx.r)+'</td>'+
         '<td style="border:1px solid #000;padding:4px;font-weight:700;color:'+(ctx.thicknessResult==='OK'?'#16a34a':'#dc2626')+';">'+ctx.thicknessResult+'</td>'+
       '</tr>'+
-      '<tr><td style="border:1px solid #000;padding:4px;">3</td>'+
-        '<td style="border:1px solid #000;padding:4px;text-align:left;">Appearance check</td>'+
-        '<td style="border:1px solid #000;padding:4px;text-align:left;font-size:9px;">'+ctx.appearanceItems.map(esc).join('<br>')+'</td>'+
-        '<td style="border:1px solid #000;padding:4px;">Visual check</td>'+
-        sampleCellsVisual+
-        '<td style="border:1px solid #000;padding:4px;">-</td><td style="border:1px solid #000;padding:4px;">-</td>'+
-        '<td style="border:1px solid #000;padding:4px;font-weight:700;color:#16a34a;">OK</td>'+
-      '</tr>'+
-      '<tr><td style="border:1px solid #000;padding:4px;">4</td>'+
+      // ── Appearance check — แต่ละหัวข้อ (ซิ้งค์ติดทั่วทั้งตัว, สีเรียบเงา ฯลฯ) มีแถว Sample 1-5/X̄/R/Result
+      // เป็นของตัวเอง แยกกันตามต้นฉบับจริง ไม่ใช่รวมเป็นแถวเดียว (พลาดไปรอบก่อน) ใช้ rowspan ให้ No./Item
+      // Inspection/Measurement คร่อมทุกแถวย่อย จำนวนแถวอิงตาม ctx.appearanceItems.length จริง ไม่ตายตัวที่ 7
+      // เผื่อแอดมินแก้ไขจำนวนหัวข้อในทะเบียน Standard ภายหลัง ──
+      ctx.appearanceItems.map(function(item, idx){
+        var n = ctx.appearanceItems.length;
+        var firstCells = idx === 0
+          ? '<td rowspan="'+n+'" style="border:1px solid #000;padding:4px;">3</td>'+
+            '<td rowspan="'+n+'" style="border:1px solid #000;padding:4px;text-align:left;">Appearance check</td>'
+          : '';
+        var measureCell = idx === 0
+          ? '<td rowspan="'+n+'" style="border:1px solid #000;padding:4px;">Visual check</td>'
+          : '';
+        return '<tr style="height:8mm;">'+firstCells+
+          '<td style="border:1px solid #000;padding:4px;text-align:left;font-size:9px;">'+esc(item)+'</td>'+
+          measureCell+
+          sampleCellsVisual+
+          '<td style="border:1px solid #000;padding:4px;">-</td><td style="border:1px solid #000;padding:4px;">-</td>'+
+          '<td style="border:1px solid #000;padding:4px;font-weight:700;color:#16a34a;">OK</td>'+
+        '</tr>';
+      }).join('')+
+      '<tr style="height:8mm;"><td style="border:1px solid #000;padding:4px;">4</td>'+
         '<td style="border:1px solid #000;padding:4px;text-align:left;">Hazardous Substance</td>'+
         '<td style="border:1px solid #000;padding:4px;">'+esc(ctx.hazardousStd||'-')+'</td>'+
         '<td style="border:1px solid #000;padding:4px;">Test Report</td>'+
@@ -858,9 +877,9 @@ function buildIcsPageHtml(ctx) {
     // ── ตารางประวัติแก้ไข + Approve/Inspection by อยู่คู่กัน (ซ้าย-ขวา) ความสูงเท่ากัน ตรงกับต้นฉบับจริง
     // (เดิมแยกเป็นคนละแถวเต็มความกว้าง ย้ายให้อยู่ข้างกันตามต้นฉบับ) แถวแรกของประวัติเป็นค่าเริ่มต้น "ออกใบใหม่"
     // เสมอ เพราะระบบนี้ไม่ได้เก็บประวัติการแก้ไขจริง เป็นแค่การจำลองหน้าตาเอกสารให้ตรงต้นฉบับ ──
-    '<div style="display:flex;align-items:flex-start;margin-top:8px;flex-shrink:0;font-size:8px;">'+
+    '<div style="display:flex;align-items:flex-end;margin-top:8px;flex-shrink:0;font-size:8px;">'+
       '<table style="border-collapse:collapse;text-align:center;flex:1;">'+
-        '<tr style="background:#f1f5f9;">'+
+        '<tr style="background:#f1f5f9;height:7mm;">'+
           '<th style="border:1px solid #000;padding:3px;width:8%;height:8mm;">Rev.No</th>'+
           '<th style="border:1px solid #000;padding:3px;width:13%;">Date</th>'+
           '<th style="border:1px solid #000;padding:3px;">Detail of Change</th>'+
