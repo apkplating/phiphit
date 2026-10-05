@@ -120,7 +120,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <div style="flex:1;">
           <input type="file" id="tgPhotoFile" accept="image/*" onchange="onPhotoPicked()" style="font-size:11px;">
           <div class="hint" id="tgPhotoHint">เลือกรูปแล้วระบบจะย่อขนาดให้อัตโนมัติก่อนบันทึก</div>
-          <button type="button" id="tgPhotoSaveBtn" onclick="savePartPhotoNow()" style="display:none;margin-top:6px;font-size:12px;font-weight:700;color:#fff;background:var(--blue);border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">💾 บันทึกรูปนี้เข้าระบบ (ไม่ต้องพิมพ์ Tag)</button>
+          <button type="button" id="tgPhotoSaveBtn" onclick="savePartPhotoNow()" disabled title="เลือกไฟล์รูปก่อน แล้วปุ่มนี้จะกดได้" style="margin-top:6px;font-size:12px;font-weight:700;color:#fff;background:var(--blue);border:none;border-radius:8px;padding:8px 12px;cursor:not-allowed;opacity:.45;font-family:'IBM Plex Sans Thai',sans-serif;">💾 บันทึกรูปนี้เข้าระบบ (ไม่ต้องพิมพ์ Tag)</button>
         </div>
       </div>
     </div>
@@ -635,10 +635,18 @@ function getPartPhoto(partNo) {
   return (k && Object.prototype.hasOwnProperty.call(partPhotos, k)) ? partPhotos[k] : null;
 }
 
+// ปุ่มบันทึกรูปแสดงอยู่ตลอด (จะได้หาเจอ) แต่กดได้เฉพาะตอนมีรูปใหม่ที่เลือกไว้และยังไม่ได้บันทึก
+function setPhotoSaveEnabled(on) {
+  var b = $('tgPhotoSaveBtn');
+  b.disabled = !on;
+  b.style.opacity = on ? '1' : '.45';
+  b.style.cursor = on ? 'pointer' : 'not-allowed';
+}
+
 function renderPhotoBox(partNo) {
   _selectedPhotoB64 = null;
   $('tgPhotoFile').value = '';
-  $('tgPhotoSaveBtn').style.display = 'none';
+  setPhotoSaveEnabled(false);
   var box = $('tgPhotoBox');
   var existing = partNo ? getPartPhoto(partNo) : null;
   box.innerHTML = existing ? '<img src="'+existing+'">' : '<div class="ph-empty">ไม่มีรูป</div>';
@@ -665,7 +673,7 @@ function onPhotoPicked() {
       $('tgPhotoBox').innerHTML = '<img src="'+_selectedPhotoB64+'">';
       $('tgPhotoHint').textContent = 'เลือกรูปแล้ว — กด "บันทึกรูปนี้" เพื่อเก็บเข้าระบบเลย (หรือจะบันทึกพร้อมตอนพิมพ์ Tag ก็ได้)';
       $('tgPhotoHint').className = 'hint';
-      $('tgPhotoSaveBtn').style.display = 'inline-block';
+      setPhotoSaveEnabled(true);
     };
     img.src = e.target.result;
   };
@@ -683,7 +691,7 @@ function savePhotoIfNeeded(partNo) {
       partPhotos[key] = b64;
       if (_selectedPhotoB64 === b64) { // ผู้ใช้ยังไม่ได้เปลี่ยนรูประหว่างรอ
         _selectedPhotoB64 = null;
-        $('tgPhotoSaveBtn').style.display = 'none';
+        setPhotoSaveEnabled(false);
         if ($('tgPartNo').value.trim() === partNo) { $('tgPhotoHint').textContent = '✅ บันทึกรูปแล้ว'; $('tgPhotoHint').className = 'hint ok'; }
       }
     }
@@ -702,7 +710,7 @@ function savePartPhotoNow() {
   var btn = $('tgPhotoSaveBtn'), label = btn.textContent;
   _photoSaving = true; btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
   savePhotoIfNeeded(partNo).then(function(ok){
-    _photoSaving = false; btn.disabled = false; btn.textContent = label;
+    _photoSaving = false; btn.textContent = label; setPhotoSaveEnabled(!!_selectedPhotoB64); // สำเร็จ=ไม่มีรูปค้างแล้วปิดปุ่ม / ไม่สำเร็จ=ยังมีรูปค้าง เปิดให้กดซ้ำได้
     if (ok) {
       var inPM = partList.some(function(p){ return p.partNo.toLowerCase() === partNo.toLowerCase(); });
       if (!inPM) hint.textContent = '✅ บันทึกรูปแล้ว (P/No นี้ยังไม่อยู่ใน Part Master — ชื่อชิ้นงาน/ลูกค้าไปเพิ่มที่ part_master.html)';
