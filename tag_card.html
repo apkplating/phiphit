@@ -128,6 +128,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <select id="tgLot" onchange="onLotSelected()" disabled>
           <option value="">พิมพ์ P/No ก่อน</option>
         </select>
+        <input type="text" id="tgLotText" autocomplete="off" placeholder="พิมพ์ Pro Lot No. เอง" style="display:none;">
+        <label style="display:flex;align-items:center;gap:6px;margin:6px 0 0;font-size:12px;font-weight:500;cursor:pointer;">
+          <input type="checkbox" id="tgLotManual" onchange="onLotManualToggle()" style="width:auto;padding:0;margin:0;"> ✏️ พิมพ์เอง (กรณีเน็ตไม่เสถียร)
+        </label>
         <div class="hint" id="tgLotHint"></div>
       </div>
       <div class="field" style="margin-bottom:0;">
@@ -137,7 +141,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <div class="field" style="margin-top:12px;">
-      <label>Insp. By (ดึงจาก QC 100% อัตโนมัติเมื่อเลือก Lot)</label>
+      <label>Insp. By (ดึงจาก QC 100% อัตโนมัติเมื่อเลือก Lot — โหมดพิมพ์เองให้พิมพ์ชื่อเอง)</label>
       <input type="text" id="tgInspBy" readonly placeholder="เลือก Pro Lot No. ก่อน">
       <div class="hint" id="tgInspHint"></div>
     </div>
@@ -149,7 +153,12 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>หน่วย</label>
-        <input type="text" id="tgUnit" value="pcs/Box">
+        <select id="tgUnit" onchange="onUnitChange()">
+          <option value="pcs/Box" selected>pcs/Box (ชิ้น/กล่อง)</option>
+          <option value="pcs/Bag">pcs/Bag (ชิ้น/ถุง)</option>
+          <option value="__other">อื่นๆ (พิมพ์เอง)…</option>
+        </select>
+        <input type="text" id="tgUnitText" autocomplete="off" placeholder="พิมพ์หน่วย เช่น pcs/Pallet" style="display:none;margin-top:6px;">
       </div>
     </div>
 
@@ -651,36 +660,88 @@ function saveIcsRecord(id, ctx) {
 //  ป้องกันเลือก Lot ที่สะกดผิด/ยังไม่เคยตรวจได้ตั้งแต่ต้น ไม่ต้องพึ่งจับคู่ string ที่พิมพ์เองอีกต่อไป
 // ══════════════════════════════════════
 var _qcRecordsForPartNo = []; // record ทั้งหมดของ P/No ปัจจุบัน ที่โหลดมาครั้งเดียว ใช้เลือก Insp.By ต่อได้ทันทีไม่ fetch ซ้ำ
+var _lotLoadSeq = 0;          // เลขรอบการโหลด — ผลของรอบเก่า (P/No เดิม/เน็ตช้า) ที่มาถึงทีหลังจะถูกทิ้ง ไม่ทับของใหม่
+
+// ── โหมด "พิมพ์เอง" — กรณีเน็ตไม่เสถียร โหลดรายการ Lot จาก QC 100% ไม่ได้ ให้พิมพ์ Pro Lot No. และ Insp. By เองได้
+// (ค่าที่พิมพ์เองไม่ได้ตรวจกับข้อมูล QC 100%) ──
+function isLotManual() { return !!$('tgLotManual').checked; }
+function getLotValue() { return isLotManual() ? $('tgLotText').value.trim() : $('tgLot').value.trim(); }
+
+// fetch แบบมีเพดานเวลา — เน็ตไม่เสถียรมักค้างยาวไม่ error ทันที ต้องตัดเองไม่งั้นผู้ใช้รอไม่รู้จบ
+function fetchJsonWithTimeout(url, ms) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, ms);
+  return fetch(url, ctl ? { signal: ctl.signal } : undefined)
+    .then(function(r){ clearTimeout(timer); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .catch(function(e){ clearTimeout(timer); throw e; });
+}
+
+function setLotManual(on, opts) {
+  opts = opts || {};
+  $('tgLotManual').checked = on;
+  $('tgLot').style.display = on ? 'none' : '';
+  $('tgLotText').style.display = on ? '' : 'none';
+  var insp = $('tgInspBy');
+  if (on) {
+    // เริ่มจาก Lot ที่เลือกค้างไว้ในรายการ (ถ้ามี) ให้แก้ต่อได้
+    if (!$('tgLotText').value && $('tgLot').value) $('tgLotText').value = $('tgLot').value;
+    insp.removeAttribute('readonly');
+    insp.placeholder = 'พิมพ์ชื่อผู้ตรวจสอบ';
+    $('tgLotHint').textContent = opts.reason || '✏️ โหมดพิมพ์เอง — Lot/ผู้ตรวจที่พิมพ์ไม่ได้ตรวจกับข้อมูล QC 100%';
+    $('tgLotHint').className = 'hint warn';
+    $('tgInspHint').textContent = '';
+    if (opts.focus) $('tgLotText').focus();
+  } else {
+    insp.setAttribute('readonly', 'readonly');
+    insp.placeholder = 'เลือก Pro Lot No. ก่อน';
+    $('tgLotText').value = '';
+    $('tgLotHint').textContent = ''; $('tgLotHint').className = 'hint';
+    var pn = $('tgPartNo').value.trim();
+    if (pn) loadLotOptionsForPartNo(pn); else resetLotDropdown('พิมพ์ P/No ก่อน');
+  }
+}
+function onLotManualToggle() { setLotManual($('tgLotManual').checked, { focus: true }); }
 
 function resetLotDropdown(placeholderText) {
+  _lotLoadSeq++; // ทำให้ผลโหลดที่ยังค้างอยู่ของ P/No เก่าใช้ไม่ได้
   var sel = $('tgLot');
   sel.innerHTML = '<option value="">'+esc(placeholderText)+'</option>';
   sel.disabled = true;
+  _qcRecordsForPartNo = [];
+  if (isLotManual()) return; // โหมดพิมพ์เอง: ไม่ล้าง Lot/ผู้ตรวจที่พิมพ์ไว้ตอนแก้ P/No
   $('tgLotHint').textContent = '';
   $('tgInspBy').value = '';
   $('tgInspHint').textContent = '';
-  _qcRecordsForPartNo = [];
 }
 
 function loadLotOptionsForPartNo(partNo) {
+  if (isLotManual()) return; // โหมดพิมพ์เอง — ไม่ต้องโหลด (ติ๊กออกเมื่อไหร่ค่อยโหลดใหม่)
   resetLotDropdown('⏳ กำลังค้นหาใน QC 100%...');
+  var seq = _lotLoadSeq;
   var lines = ['B1','B2','R1'];
   Promise.all(lines.map(function(line){
-    return fetch(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json')
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ return (d && Array.isArray(d.records)) ? d.records : []; })
-      .catch(function(){ return []; });
+    return fetchJsonWithTimeout(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json', 10000)
+      .then(function(d){ return { ok: true, recs: (d && Array.isArray(d.records)) ? d.records : [] }; })
+      .catch(function(){ return { ok: false, recs: [] }; });
   })).then(function(results){
-    var all = [].concat.apply([], results);
+    if (seq !== _lotLoadSeq || isLotManual()) return; // P/No เปลี่ยนไปแล้ว หรือผู้ใช้สลับเป็นพิมพ์เองระหว่างรอ
+    var failed = results.filter(function(x){ return !x.ok; }).length;
+    var all = [].concat.apply([], results.map(function(x){ return x.recs; }));
     _qcRecordsForPartNo = all.filter(function(r){
       return r && String(r.partNo||'').trim().toLowerCase() === partNo.toLowerCase() && String(r.lotNo||'').trim();
     }).sort(function(a,b){ return (b.ts||0) - (a.ts||0); }); // ใหม่สุดก่อน
 
     var sel = $('tgLot');
     if (!_qcRecordsForPartNo.length) {
+      if (failed > 0) {
+        // โหลดข้อมูล QC ไม่ได้ (เน็ตไม่เสถียร) — ไม่ใช่ "ไม่มีข้อมูล" จึงเปิดโหมดพิมพ์เองให้เลย จะได้พิมพ์ Tag ต่อได้
+        sel.innerHTML = '<option value="">— โหลดไม่ได้ —</option>';
+        setLotManual(true, { reason: '⚠️ โหลดข้อมูล QC 100% ไม่ได้ (อินเทอร์เน็ตไม่เสถียร) — เปิดโหมดพิมพ์เองให้แล้ว พิมพ์ Pro Lot No. และชื่อผู้ตรวจได้เลย' });
+        return;
+      }
       sel.innerHTML = '<option value="">— ไม่มี —</option>';
       sel.disabled = true;
-      $('tgLotHint').textContent = '🚫 ยังไม่มีข้อมูลตรวจ QC 100% สำหรับ P/No นี้เลย — ต้องตรวจผ่านก่อนถึงจะพิมพ์ Tag ได้';
+      $('tgLotHint').textContent = '🚫 ยังไม่มีข้อมูลตรวจ QC 100% สำหรับ P/No นี้เลย — ต้องตรวจผ่านก่อนถึงจะพิมพ์ Tag ได้ (กรณีจำเป็นติ๊ก "พิมพ์เอง" ได้)';
       $('tgLotHint').className = 'hint err';
       return;
     }
@@ -694,8 +755,14 @@ function loadLotOptionsForPartNo(partNo) {
     });
     sel.innerHTML = options.join('');
     sel.disabled = false;
-    $('tgLotHint').textContent = '✅ เจอ '+Object.keys(seenLots).length+' Lot ที่ผ่าน QC 100% แล้ว';
-    $('tgLotHint').className = 'hint ok';
+    var n = Object.keys(seenLots).length;
+    if (failed > 0) {
+      $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
+      $('tgLotHint').className = 'hint warn';
+    } else {
+      $('tgLotHint').textContent = '✅ เจอ '+n+' Lot ที่ผ่าน QC 100% แล้ว';
+      $('tgLotHint').className = 'hint ok';
+    }
   });
 }
 
@@ -713,6 +780,18 @@ function onLotSelected() {
 // ══════════════════════════════════════
 //  พิมพ์ Tag — 6 ใบต่อหน้า A4 (2 คอลัมน์ x 3 แถว) ประทับ QC PASS อัตโนมัติทุกใบ
 // ══════════════════════════════════════
+// หน่วยของ Q'TY — เลือกจาก pcs/Box, pcs/Bag หรือ "อื่นๆ" แล้วพิมพ์เอง (ช่องเดิมเป็นช่องพิมพ์อิสระ เก็บความยืดหยุ่นนี้ไว้)
+function onUnitChange() {
+  var other = $('tgUnit').value === '__other';
+  $('tgUnitText').style.display = other ? '' : 'none';
+  if (other) $('tgUnitText').focus();
+}
+function getUnitValue() {
+  var v = $('tgUnit').value;
+  if (v === '__other') v = $('tgUnitText').value.trim();
+  return v || 'pcs';
+}
+
 function buildStampSvg(dateStr) {
   // สไตล์เดียวกับตราประทับใน Document Control (stamp_gui.py): กรอบสี่เหลี่ยมขอบหนาสีน้ำเงิน ตัวหนังสือหนากึ่งกลาง
   return '<div style="border:2.5px solid #0033AA;border-radius:3px;padding:1px 6px;display:inline-block;text-align:center;color:#0033AA;font-weight:800;line-height:1.15;transform:rotate(-4deg);">'+
@@ -958,15 +1037,15 @@ function printTags() {
     cust: $('tgCust').value.trim(),
     partNo: $('tgPartNo').value.trim(),
     partName: $('tgPartName').value.trim(),
-    lot: $('tgLot').value.trim(),
+    lot: getLotValue(),
     delDate: $('tgDelDate').value ? fmtDateTH($('tgDelDate').value) : '',
     inspBy: $('tgInspBy').value.trim(),
     qty: $('tgQty').value || '0',
-    unit: $('tgUnit').value.trim() || 'pcs',
+    unit: getUnitValue(),
     photo: (partPhotos[$('tgPartNo').value.trim()] || _selectedPhotoB64 || '')
   };
   if (!d.partNo) { showToast('⚠️ กรุณากรอก P/No', 'err'); return; }
-  if (!d.lot) { showToast('⚠️ กรุณาเลือก Pro Lot No. — ต้องผ่านการตรวจ QC 100% แล้วเท่านั้นถึงจะพิมพ์ Tag ได้', 'err'); return; }
+  if (!d.lot) { showToast(isLotManual() ? '⚠️ กรุณาพิมพ์ Pro Lot No.' : '⚠️ กรุณาเลือก Pro Lot No. — ต้องผ่านการตรวจ QC 100% แล้วเท่านั้นถึงจะพิมพ์ Tag ได้ (เน็ตไม่เสถียร ติ๊ก "พิมพ์เอง" ได้)', 'err'); return; }
   if (!d.cust) { showToast('⚠️ กรุณากรอกชื่อลูกค้า', 'err'); return; }
   var count = parseInt($('tgCount').value, 10) || 1;
   if (count < 1) count = 1;
