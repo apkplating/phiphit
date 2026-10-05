@@ -47,6 +47,14 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 .photo-row{display:flex;gap:12px;align-items:center;}
 .photo-box{width:72px;height:56px;border:1.5px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--sky-pale);}
 .photo-box img{width:100%;height:100%;object-fit:contain;}
+/* รายการ P/No ใกล้เคียง (autocomplete) */
+.ac-list{position:absolute;z-index:60;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,39,68,.18);max-height:300px;overflow-y:auto;display:none;}
+.ac-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #eef2f7;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item.active,.ac-item:hover{background:var(--sky-pale);}
+.ac-no{font-size:14px;font-weight:700;color:var(--text);}
+.ac-sub{font-size:11px;color:var(--text-mid);margin-top:1px;}
+.ac-msg{padding:10px 12px;font-size:12px;color:var(--text-mid);}
 .photo-box .ph-empty{font-size:9px;color:var(--text-muted);text-align:center;}
 .toast{margin-top:8px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;display:none;}
 .toast.ok{background:#ecfdf5;color:var(--green);display:block;}
@@ -91,8 +99,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="grid2">
       <div class="field" style="margin-bottom:0;">
         <label>P/No. (จาก Part Master)</label>
-        <input type="text" id="tgPartNo" list="tgPartNoList" autocomplete="off" placeholder="พิมพ์/เลือก P/No" oninput="onPartNoInput()" onblur="onPartNoBlur()">
-        <datalist id="tgPartNoList"></datalist>
+        <input type="text" id="tgPartNo" autocomplete="off" placeholder="พิมพ์ P/No บางส่วน แล้วเลือกจากรายการ" oninput="onPartNoInput()" onblur="onPartNoBlur()">
         <div class="hint" id="tgPartHint"></div>
       </div>
       <div class="field" style="margin-bottom:0;">
@@ -113,6 +120,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <div style="flex:1;">
           <input type="file" id="tgPhotoFile" accept="image/*" onchange="onPhotoPicked()" style="font-size:11px;">
           <div class="hint" id="tgPhotoHint">เลือกรูปแล้วระบบจะย่อขนาดให้อัตโนมัติก่อนบันทึก</div>
+          <button type="button" id="tgPhotoSaveBtn" onclick="savePartPhotoNow()" style="display:none;margin-top:6px;font-size:12px;font-weight:700;color:#fff;background:var(--blue);border:none;border-radius:8px;padding:8px 12px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">💾 บันทึกรูปนี้เข้าระบบ (ไม่ต้องพิมพ์ Tag)</button>
         </div>
       </div>
     </div>
@@ -202,7 +210,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
     <div class="field" style="margin-top:4px;">
       <label>P/No. (จาก Part Master)</label>
-      <input type="text" id="icsRegPartNo" list="tgPartNoList" autocomplete="off" placeholder="พิมพ์/เลือก P/No" onblur="onIcsRegPartNoBlur()">
+      <input type="text" id="icsRegPartNo" autocomplete="off" placeholder="พิมพ์ P/No บางส่วน แล้วเลือกจากรายการ" onblur="onIcsRegPartNoBlur()">
       <div class="hint" id="icsRegPartHint"></div>
     </div>
 
@@ -391,6 +399,7 @@ function enterApp(){
   $('tabTagBtn').style.display = okTag ? 'inline-block' : 'none';
   if (!okTag && okIcs) switchView('ics');
   if (!okTag && !okIcs) $('tagView').innerHTML = '<div class="card">ยังไม่ได้รับสิทธิ์ใช้แท็บใดในระบบนี้ — ติดต่อแอดมินเพื่อกำหนดสิทธิ์</div>';
+  initPartAutocomplete();
   loadPartList();
   loadPartPhotos();
   loadIcsStandards();
@@ -418,15 +427,144 @@ function switchView(view) {
 // ══════════════════════════════════════
 //  PART MASTER — อ่านอย่างเดียว
 // ══════════════════════════════════════
+// ══════════════════════════════════════
+//  ค้นหา P/No แบบใกล้เคียง — พิมพ์แค่บางส่วนแล้วเลือกจากรายการ (ไม่ใช้ datalist ของเบราว์เซอร์: แต่ละเบราว์เซอร์จับคู่/
+//  แสดงไม่เหมือนกัน บางเครื่องไม่ขึ้นเลย และโดน "Saved data" ของเบราว์เซอร์บังได้) จับคู่แบบตัดขีด/ช่องว่างทิ้ง
+//  พิมพ์ 12370ZF5 ก็เจอ 12370-ZF5-001 และค้นจากชื่อชิ้นงานได้ด้วย
+// ══════════════════════════════════════
+var _partListState = 'loading'; // loading | ok | fail
+var _lastPartRetry = 0;
+var _acRefreshers = [];         // ฟังก์ชันรีเฟรชรายการที่เปิดค้างอยู่ เรียกตอนโหลดรายการ P/No เสร็จทีหลัง
+var _acReady = false;
+
 function loadPartList() {
-  fetch(PM_URL).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+  _partListState = 'loading';
+  return fetchJsonWithTimeout(PM_URL, 20000).then(function(data){
     if (data && Array.isArray(data.parts)) {
       partList = data.parts.map(function(p){ return { partNo:p.partNo||'', partName:p.name||p.partName||'', customer:p.customer||'', platingType:p.platingType||'' }; });
-      $('tgPartNoList').innerHTML = partList.map(function(p){ return '<option value="'+esc(p.partNo)+'">'; }).join('');
     }
-  }).catch(function(e){ console.warn('Part Master load:', e.message); });
+    _partListState = 'ok';
+  }).catch(function(e){
+    _partListState = 'fail';
+    console.warn('Part Master load:', e && e.message);
+  }).then(function(){
+    _acRefreshers.forEach(function(fn){ try { fn(); } catch (x) {} });
+    // พิมพ์ P/No ไว้แล้วแต่รายการเพิ่งโหลดเสร็จ (เน็ตช้า) — เติมชื่อชิ้นงาน/ลูกค้าให้เลย ถ้าไม่ได้กำลังพิมพ์อยู่
+    if (partList.length && _resolvedPartNo === null && $('tgPartNo').value.trim() && document.activeElement !== $('tgPartNo')) onPartNoBlur();
+  });
 }
+// โหลดรายการ P/No ไม่สำเร็จ (เน็ตไม่เสถียร) ลองใหม่อัตโนมัติตอนผู้ใช้กลับมาพิมพ์ (ห่างกันอย่างน้อย 8 วินาที)
+function retryPartList() {
+  if (_partListState === 'loading') return;
+  if (Date.now() - _lastPartRetry < 8000) return;
+  _lastPartRetry = Date.now();
+  loadPartList();
+}
+
+function normKey(s) { return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, ''); }
+
+// เรียงผล: ขึ้นต้นด้วยที่พิมพ์ -> มีที่พิมพ์อยู่ใน P/No -> ตรงกับชื่อชิ้นงาน/ลูกค้า (ในกลุ่มเดียวกันเรียงตาม P/No) ตัด P/No ซ้ำ
+function searchParts(q, limit) {
+  var nq = normKey(q);
+  if (!nq) return [];
+  var starts = [], inNo = [], inOther = [], seen = {};
+  for (var i = 0; i < partList.length; i++) {
+    var p = partList[i], np = normKey(p.partNo), low = String(p.partNo).toLowerCase();
+    if (!np || seen[low]) continue;
+    var k = np.indexOf(nq);
+    if (k === 0) starts.push(p);
+    else if (k > 0) inNo.push(p);
+    else if (normKey(p.partName).indexOf(nq) >= 0 || normKey(p.customer).indexOf(nq) >= 0) inOther.push(p);
+    else continue;
+    seen[low] = true;
+  }
+  function byNo(a, b) { return a.partNo < b.partNo ? -1 : (a.partNo > b.partNo ? 1 : 0); }
+  starts.sort(byNo); inNo.sort(byNo); inOther.sort(byNo);
+  return starts.concat(inNo, inOther).slice(0, limit || 8);
+}
+
+function attachPartAutocomplete(inputId, onPick) {
+  var input = $(inputId), host = input.parentNode;
+  host.style.position = 'relative';
+  var box = document.createElement('div');
+  box.className = 'ac-list';
+  box.setAttribute('role', 'listbox');
+  host.appendChild(box);
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+  var items = [], active = -1;
+
+  function place() {
+    box.style.left = input.offsetLeft + 'px';
+    box.style.top = (input.offsetTop + input.offsetHeight + 2) + 'px';
+    box.style.width = input.offsetWidth + 'px';
+  }
+  function close() {
+    box.style.display = 'none'; box.innerHTML = ''; items = []; active = -1;
+    input.setAttribute('aria-expanded', 'false');
+  }
+  function paint() {
+    var els = box.querySelectorAll('.ac-item');
+    for (var i = 0; i < els.length; i++) els[i].className = 'ac-item' + (i === active ? ' active' : '');
+    if (els[active] && els[active].scrollIntoView) els[active].scrollIntoView({ block: 'nearest' });
+  }
+  function pick(p) { input.value = p.partNo; close(); onPick(p); }
+  function render() {
+    var q = input.value.trim();
+    if (!q) { close(); return; }
+    var html;
+    if (!partList.length) {
+      if (_partListState === 'fail') retryPartList();
+      html = '<div class="ac-msg">' + (_partListState === 'fail' ? '⚠️ โหลดรายการ P/No ไม่ได้ (เน็ตไม่เสถียร) — กำลังลองใหม่ หรือพิมพ์ P/No ให้ครบก็ใช้ได้'
+        : (_partListState === 'loading' ? '⏳ กำลังโหลดรายการ P/No…' : 'ยังไม่มี P/No ใน Part Master')) + '</div>';
+      items = []; active = -1;
+    } else {
+      items = searchParts(q, 8);
+      if (!items.length) { html = '<div class="ac-msg">ไม่พบ P/No ที่ใกล้เคียง — ถ้าเป็นชิ้นงานใหม่ พิมพ์ต่อให้ครบได้เลย</div>'; active = -1; }
+      else {
+        html = items.map(function(p, i){
+          return '<div class="ac-item" role="option" data-i="'+i+'"><div class="ac-no">'+esc(p.partNo)+'</div>'+
+            '<div class="ac-sub">'+esc(p.partName || '—')+(p.customer ? ' · '+esc(p.customer) : '')+'</div></div>';
+        }).join('');
+        active = 0; // เลือกตัวแรกไว้ให้ กด Enter ได้เลย
+      }
+    }
+    box.innerHTML = html;
+    place();
+    box.style.display = 'block';
+    input.setAttribute('aria-expanded', 'true');
+    if (active >= 0) paint();
+  }
+
+  input.addEventListener('input', render);
+  input.addEventListener('focus', render);
+  input.addEventListener('keydown', function(e){
+    if (box.style.display === 'none') return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { active = Math.min(items.length - 1, active + 1); paint(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { active = Math.max(0, active - 1); paint(); } }
+    else if (e.key === 'Enter') { if (active >= 0 && items[active]) { e.preventDefault(); pick(items[active]); } else close(); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  input.addEventListener('blur', function(){ setTimeout(close, 150); }); // รอให้ mousedown เลือกรายการทันก่อนปิด
+  // mousedown (ไม่ใช่ click) + preventDefault: ช่องพิมพ์ไม่เสียโฟกัส จึงไม่ปิดรายการก่อนเลือกทัน (ใช้ได้กับการแตะบนมือถือด้วย)
+  box.addEventListener('mousedown', function(e){
+    e.preventDefault();
+    var el = e.target.closest ? e.target.closest('.ac-item') : null;
+    if (el) { var it = items[parseInt(el.getAttribute('data-i'), 10)]; if (it) pick(it); }
+  });
+  _acRefreshers.push(function(){ if (document.activeElement === input) render(); });
+}
+function initPartAutocomplete() {
+  if (_acReady) return;
+  _acReady = true;
+  attachPartAutocomplete('tgPartNo', function(){ onPartNoInput(); onPartNoBlur(); });
+  attachPartAutocomplete('icsRegPartNo', function(){ onIcsRegPartNoBlur(); });
+}
+var _resolvedPartNo = null; // P/No ที่ onPartNoBlur ประมวลผลไปแล้ว — กันโหลด Lot/รูปซ้ำ และกันรูปที่เพิ่งเลือกหายเวลา blur เฉยๆ
 function onPartNoInput() {
+  _resolvedPartNo = null;
   $('tgPartName').value = '';
   $('tgPlatingType').value = '';
   $('tgPartHint').textContent = ''; $('tgPartHint').className = 'hint';
@@ -439,6 +577,7 @@ function onPartNoInput() {
 function onPartNoBlur() {
   var val = $('tgPartNo').value.trim();
   if (!val) return;
+  if (val === _resolvedPartNo) return;
   var match = partList.find(function(p){ return p.partNo.toLowerCase() === val.toLowerCase(); });
   if (match) {
     $('tgPartNo').value = match.partNo;
@@ -452,7 +591,7 @@ function onPartNoBlur() {
     $('tgPartHint').textContent = '⚠️ ไม่เจอ P/No นี้ใน Part Master — ยังพิมพ์ได้ แต่ต้องกรอกชื่อชิ้นงานเอง';
     $('tgPartHint').className = 'hint warn';
     $('tgPartName').removeAttribute('readonly');
-    renderPhotoBox(null);
+    renderPhotoBox(val); // P/No ที่ยังไม่อยู่ใน Part Master ก็โชว์รูปที่เคยบันทึกไว้ได้
   }
   loadLotOptionsForPartNo(val);
 
@@ -468,6 +607,8 @@ function onPartNoBlur() {
     // โชว์ปุ่มลัดเฉพาะคนที่ได้สิทธิ์แท็บ ICS (และไม่ใช่ viewer) + ต้องมี match ใน Part Master จริง
     $('goRegisterIcsBtn').style.display = (canTab('ics') && session.role !== 'viewer' && match) ? 'inline-block' : 'none';
   }
+  // รายการ P/No ยังโหลดไม่เสร็จ -> ไม่ล็อกผล (blur รอบหน้าจะได้จับคู่ใหม่) และลองโหลดอีกรอบ
+  if (partList.length) _resolvedPartNo = $('tgPartNo').value.trim(); else retryPartList();
 }
 // ปุ่มลัด "+ ลงทะเบียน Standard สำหรับ P/No นี้เลย" — สลับไปแท็บทะเบียน Standard พร้อมเติม P/No ให้อัตโนมัติ
 // กันต้องพิมพ์/เลือก P/No ซ้ำสองรอบ (พิมพ์ในฟอร์ม Tag แล้วต้องไปพิมพ์อีกทีในทะเบียน Standard)
@@ -486,13 +627,23 @@ function loadPartPhotos() {
     partPhotos = (data && typeof data==='object') ? data : {};
   }).catch(function(e){ console.warn('Part photos load:', e.message); });
 }
+// คีย์รูปใน Firebase: ตัดอักขระที่ Firebase ห้ามใช้ในคีย์ (. $ # [ ] /) เป็น _ — เดิมถ้า P/No มี . (เช่น "109.") การบันทึก
+// รูปจะถูกปฏิเสธทั้งก้อนเงียบๆ P/No ปกติ (ไม่มีอักขระเหล่านี้) ได้คีย์เดิมทุกประการ รูปที่เคยบันทึกไว้ยังใช้ได้
+function photoKey(partNo) { return String(partNo || '').trim().replace(/[.$#\[\]\/]/g, '_'); }
+function getPartPhoto(partNo) {
+  var k = photoKey(partNo);
+  return (k && Object.prototype.hasOwnProperty.call(partPhotos, k)) ? partPhotos[k] : null;
+}
+
 function renderPhotoBox(partNo) {
   _selectedPhotoB64 = null;
   $('tgPhotoFile').value = '';
+  $('tgPhotoSaveBtn').style.display = 'none';
   var box = $('tgPhotoBox');
-  var existing = partNo ? partPhotos[partNo] : null;
+  var existing = partNo ? getPartPhoto(partNo) : null;
   box.innerHTML = existing ? '<img src="'+existing+'">' : '<div class="ph-empty">ไม่มีรูป</div>';
   $('tgPhotoHint').textContent = existing ? 'มีรูปอยู่แล้ว — เลือกไฟล์ใหม่เพื่อแทนที่' : 'เลือกรูปแล้วระบบจะย่อขนาดให้อัตโนมัติก่อนบันทึก';
+  $('tgPhotoHint').className = 'hint';
 }
 // ย่อรูปเหลือกว้างไม่เกิน 240px คุณภาพ JPEG 0.6 ก่อนเก็บ — ไฟล์เล็กมาก (ไม่กี่ KB ต่อรูป) ปลอดภัยแม้มีชิ้นงานเป็นร้อยแบบ
 function onPhotoPicked() {
@@ -512,18 +663,54 @@ function onPhotoPicked() {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       _selectedPhotoB64 = canvas.toDataURL('image/jpeg', 0.6);
       $('tgPhotoBox').innerHTML = '<img src="'+_selectedPhotoB64+'">';
-      $('tgPhotoHint').textContent = 'พร้อมบันทึก (จะบันทึกตอนกดพิมพ์ Tag)';
+      $('tgPhotoHint').textContent = 'เลือกรูปแล้ว — กด "บันทึกรูปนี้" เพื่อเก็บเข้าระบบเลย (หรือจะบันทึกพร้อมตอนพิมพ์ Tag ก็ได้)';
+      $('tgPhotoHint').className = 'hint';
+      $('tgPhotoSaveBtn').style.display = 'inline-block';
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
+// บันทึกรูปของ P/No เดียวด้วย PATCH เฉพาะคีย์นั้น คืน Promise<boolean> (เช็คผลจริง)
+// เดิม PUT ทั้งก้อน partPhotos: ถ้าโหลดรูปเดิมไม่สำเร็จตอนเปิดหน้า (เน็ตไม่เสถียร) partPhotos จะว่าง แล้วบันทึกรูปเดียว =
+// เขียนทับรูปของทุก P/No หายหมด และ error ถูกกลืนเงียบ — PATCH ไม่แตะรูปของ P/No อื่นเลย
 function savePhotoIfNeeded(partNo) {
-  if (!_selectedPhotoB64 || !partNo) return Promise.resolve();
-  partPhotos[partNo] = _selectedPhotoB64;
-  return fetch(PHOTO_URL, {
-    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(partPhotos)
-  }).catch(function(e){ console.warn('Part photo save:', e.message); });
+  if (!_selectedPhotoB64 || !partNo) return Promise.resolve(true); // ไม่มีรูปใหม่ให้บันทึก ถือว่าเรียบร้อย
+  var key = photoKey(partNo), b64 = _selectedPhotoB64, body = {};
+  body[key] = b64;
+  return sendJsonWithTimeout('PATCH', PHOTO_URL, body, 20000).then(function(ok){
+    if (ok) {
+      partPhotos[key] = b64;
+      if (_selectedPhotoB64 === b64) { // ผู้ใช้ยังไม่ได้เปลี่ยนรูประหว่างรอ
+        _selectedPhotoB64 = null;
+        $('tgPhotoSaveBtn').style.display = 'none';
+        if ($('tgPartNo').value.trim() === partNo) { $('tgPhotoHint').textContent = '✅ บันทึกรูปแล้ว'; $('tgPhotoHint').className = 'hint ok'; }
+      }
+    }
+    return ok;
+  });
+}
+
+// ปุ่ม "บันทึกรูปนี้เข้าระบบ" — เก็บรูปของ P/No ได้เลยโดยไม่ต้องกรอก Lot/ลูกค้าหรือพิมพ์ Tag
+var _photoSaving = false;
+function savePartPhotoNow() {
+  if (_photoSaving) return;
+  var partNo = $('tgPartNo').value.trim(), hint = $('tgPhotoHint');
+  if (session.role === 'viewer') { hint.textContent = '🚫 ไม่มีสิทธิ์บันทึก (สิทธิ์ผู้ดูเท่านั้น)'; hint.className = 'hint err'; return; }
+  if (!partNo) { hint.textContent = '⚠️ กรอก P/No ก่อน แล้วค่อยบันทึกรูป'; hint.className = 'hint warn'; $('tgPartNo').focus(); return; }
+  if (!_selectedPhotoB64) { hint.textContent = '⚠️ ยังไม่ได้เลือกรูปใหม่'; hint.className = 'hint warn'; return; }
+  var btn = $('tgPhotoSaveBtn'), label = btn.textContent;
+  _photoSaving = true; btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+  savePhotoIfNeeded(partNo).then(function(ok){
+    _photoSaving = false; btn.disabled = false; btn.textContent = label;
+    if (ok) {
+      var inPM = partList.some(function(p){ return p.partNo.toLowerCase() === partNo.toLowerCase(); });
+      if (!inPM) hint.textContent = '✅ บันทึกรูปแล้ว (P/No นี้ยังไม่อยู่ใน Part Master — ชื่อชิ้นงาน/ลูกค้าไปเพิ่มที่ part_master.html)';
+    } else {
+      hint.textContent = '⚠️ บันทึกรูปไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — กดบันทึกใหม่อีกครั้ง';
+      hint.className = 'hint err';
+    }
+  });
 }
 
 // ══════════════════════════════════════
@@ -651,14 +838,15 @@ function generateUniqueId() {
 }
 var ICS_SNAPS_URL = ICS_FB_URL + '/ics-snaps'; // ภาพ JPEG ของใบที่ออกจริง แยก node ต่อ id (ไม่ปนใน ics-records กันตอนดึงรายการแล้วลากภาพหนักมาด้วย)
 
-// PUT แบบมีเพดานเวลา คืน true/false (ไม่ throw) — เน็ตไม่เสถียรมักค้างยาวไม่ error ทันที
-function putJsonWithTimeout(url, obj, ms) {
+// ส่ง JSON แบบมีเพดานเวลา คืน true/false (ไม่ throw) — เน็ตไม่เสถียรมักค้างยาวไม่ error ทันที
+function sendJsonWithTimeout(method, url, obj, ms) {
   var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
   var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, ms);
-  return fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj), signal: ctl ? ctl.signal : undefined })
+  return fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj), signal: ctl ? ctl.signal : undefined })
     .then(function(r){ clearTimeout(timer); return !!r.ok; })
     .catch(function(){ clearTimeout(timer); return false; });
 }
+function putJsonWithTimeout(url, obj, ms) { return sendJsonWithTimeout('PUT', url, obj, ms); }
 function saveIcsRecord(id, ctx) {
   var record = Object.assign({}, ctx, { id: id, printedAt: new Date().toISOString() });
   return putJsonWithTimeout(ICS_RECORDS_URL + '/' + id + '.json', record, 12000);
@@ -1113,7 +1301,7 @@ function printTags() {
     inspBy: $('tgInspBy').value.trim(),
     qty: $('tgQty').value || '0',
     unit: getUnitValue(),
-    photo: (partPhotos[$('tgPartNo').value.trim()] || _selectedPhotoB64 || '')
+    photo: (_selectedPhotoB64 || getPartPhoto($('tgPartNo').value.trim()) || '') // รูปที่เพิ่งเลือกมาก่อนเสมอ (เดิมรูปเก่าชนะ ทำให้เปลี่ยนรูปแล้วพิมพ์รอบแรกยังออกรูปเก่า)
   };
   if (!d.partNo) { showToast('⚠️ กรุณากรอก P/No', 'err'); return; }
   if (!d.lot) { showToast(isLotManual() ? '⚠️ กรุณาพิมพ์ Pro Lot No.' : '⚠️ กรุณาเลือก Pro Lot No. — ต้องผ่านการตรวจ QC 100% แล้วเท่านั้นถึงจะพิมพ์ Tag ได้ (เน็ตไม่เสถียร ติ๊ก "พิมพ์เอง" ได้)', 'err'); return; }
