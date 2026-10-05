@@ -188,7 +188,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <div class="wrap" id="icsView" style="display:none;">
   <div class="card">
-    <div class="card-label" style="margin-bottom:4px;">📐 ทะเบียน Standard — ตั้งครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ (เฉพาะแอดมิน)</div>
+    <div class="card-label" style="margin-bottom:4px;">📐 ทะเบียน Standard — ตั้งครั้งเดียวต่อ P/No ใช้ซ้ำได้ทุกครั้งที่พิมพ์ (สิทธิ์เข้าแท็บนี้กำหนดโดยแอดมินที่หน้าจัดการผู้ใช้)</div>
     <div class="hint" style="margin-bottom:10px;">หน้าตาเหมือนแบบฟอร์ม ICS จริงที่จะพิมพ์ — ช่องสีเทาจางคือ<b>ตัวอย่าง</b> (ระบบจะดึง/คำนวณให้เองตอนพิมพ์จริง) กรอกได้แค่ช่องที่มีกรอบเท่านั้น</div>
 
     <div class="field" style="margin-top:4px;">
@@ -354,6 +354,8 @@ function showIcsToast(msg, kind){ var t=$('icsToast'); t.className='toast '+(kin
 function loadSession(){ try{ var r=sessionStorage.getItem('tagcard_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
 function saveSession(s){ sessionStorage.setItem('tagcard_session', JSON.stringify(s)); }
 function clearSession(){ sessionStorage.removeItem('tagcard_session'); }
+// เช็คสิทธิ์ระดับแท็บตามที่แอดมินตั้งไว้ใน auth_admin: tabs เป็น null/ไม่มี = เห็นทั้งหมด, เป็น array = เห็นเฉพาะที่ติ๊ก
+function canTab(id){ return !session.tabs || session.tabs.indexOf(id) !== -1; }
 function doLogin(pin){
   $('loginErr').textContent = '';
   CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
@@ -371,7 +373,13 @@ function enterApp(){
   $('whoName').textContent = session.user.name || session.pin;
   $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
   $('tgDelDate').value = isoToday();
-  if (session.role === 'admin') $('tabIcsBtn').style.display = 'inline-block'; // ทะเบียน Standard แก้ได้เฉพาะแอดมิน
+  // สิทธิ์แท็บมาจากหน้าจัดการผู้ใช้ (auth_admin) — แอดมินเป็นคนกำหนดเองต่อคน ไม่ฝังไว้ในโค้ดแล้ว
+  // (session.tabs: null = เห็นทุกแท็บ [ค่าเริ่มต้น/แอดมิน], array = เห็นเฉพาะ id ที่ติ๊กไว้ — 'form'=พิมพ์ Tag, 'ics'=ทะเบียน Standard)
+  var okTag = canTab('form'), okIcs = canTab('ics');
+  $('tabIcsBtn').style.display = okIcs ? 'inline-block' : 'none';
+  $('tabTagBtn').style.display = okTag ? 'inline-block' : 'none';
+  if (!okTag && okIcs) switchView('ics');
+  if (!okTag && !okIcs) $('tagView').innerHTML = '<div class="card">ยังไม่ได้รับสิทธิ์ใช้แท็บใดในระบบนี้ — ติดต่อแอดมินเพื่อกำหนดสิทธิ์</div>';
   loadPartList();
   loadPartPhotos();
   loadIcsStandards();
@@ -446,8 +454,8 @@ function onPartNoBlur() {
   } else {
     $('icsStdStatus').textContent = 'ℹ️ P/No นี้ยังไม่มีทะเบียน Standard — จะพิมพ์ Tag อย่างเดียว ไม่มี ICS ต่อท้าย';
     $('icsStdStatus').className = 'hint warn';
-    // โชว์ปุ่มลัดเฉพาะแอดมิน + ต้องมี match ใน Part Master จริง (ลงทะเบียนไม่ได้ถ้าไม่มีใน PM อยู่แล้ว)
-    $('goRegisterIcsBtn').style.display = (session.role === 'admin' && match) ? 'inline-block' : 'none';
+    // โชว์ปุ่มลัดเฉพาะคนที่ได้สิทธิ์แท็บ ICS (และไม่ใช่ viewer) + ต้องมี match ใน Part Master จริง
+    $('goRegisterIcsBtn').style.display = (canTab('ics') && session.role !== 'viewer' && match) ? 'inline-block' : 'none';
   }
 }
 // ปุ่มลัด "+ ลงทะเบียน Standard สำหรับ P/No นี้เลย" — สลับไปแท็บทะเบียน Standard พร้อมเติม P/No ให้อัตโนมัติ
@@ -579,7 +587,7 @@ function onIcsRegThickMinInput() {
   }
 }
 function saveIcsStandard() {
-  if (session.role !== 'admin') { showIcsToast('🚫 เฉพาะแอดมินเท่านั้นที่แก้ทะเบียน Standard ได้', 'err'); return; }
+  if (!canTab('ics') || session.role === 'viewer') { showIcsToast('🚫 ไม่มีสิทธิ์แก้ทะเบียน Standard — ติดต่อแอดมินเพื่อขอสิทธิ์', 'err'); return; }
   var partNo = $('icsRegPartNo').value.trim();
   var match = partList.find(function(p){ return p.partNo.toLowerCase() === partNo.toLowerCase(); });
   if (!partNo || !match) { showIcsToast('⚠️ กรุณาเลือก P/No ที่มีอยู่ใน Part Master ก่อน', 'err'); return; }
@@ -624,9 +632,11 @@ function loadIcsForEdit(partNo) {
 //  มีข้อมูลจริงให้ดู — ใช้ ID สุ่มคาดเดาไม่ได้ (ไม่ใช่เลขรัน) กันลูกค้ารายหนึ่งเดา ID แล้วไปเห็นของลูกค้ารายอื่น
 // ══════════════════════════════════════
 function generateUniqueId() {
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g,'');
+  // ตัดเหลือ 20 ตัวอักษร (สุ่ม 80 บิต ยังเดาไม่ได้จริง) เพื่อให้ URL ใน QR สั้นลง -> QR เหลือ 33x33 จุด (เดิม 37x37)
+  // จุดแต่ละจุดใหญ่ขึ้น กล้องมือถืออ่านง่ายขึ้นตอนพิมพ์เล็กบน Tag — record เก่าที่ id ยาว 32 ตัวยังเปิดดูได้ปกติ
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g,'').slice(0,20);
   // สำรองไว้เผื่อเบราว์เซอร์เก่าไม่มี crypto.randomUUID — สุ่มจาก timestamp+random ผสมกัน ยาวพอจะเดายาก
-  return Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,20);
 }
 function saveIcsRecord(id, ctx) {
   var record = Object.assign({}, ctx, { id: id, printedAt: new Date().toISOString() });
@@ -761,7 +771,12 @@ function buildTagHtml(d) {
     '<div style="display:flex;justify-content:'+(d.icsViewUrl?'space-between':'flex-end')+';align-items:center;margin-top:1px;flex-shrink:0;">'+
       // ── QR Code — โชว์เฉพาะตอน P/No นี้มี ICS จริง (มีทะเบียน Standard + กรอกข้อมูลตรวจครบ) ไม่ใช่ทุก Tag
       // ชี้ไปหน้า ics_view.html สาธารณะโดยตรง ไม่ต้อง login ──
-      (d.icsViewUrl ? '<img src="https://api.qrserver.com/v1/create-qr-code/?size=60x60&data='+encodeURIComponent(d.icsViewUrl)+'" style="width:11mm;height:11mm;">' : '')+
+      // ขอภาพ 200px (เดิม 60px — โค้ดมี ~33x33 จุด เหลือแค่ ~1.7px/จุด เบลอจนสแกนไม่ติดผ่าน LINE) พิมพ์ 15mm เว้นขอบขาว
+      // 1mm รอบ QR ไม่ให้ชิดเส้นกรอบ Tag (ต้องมี quiet zone) พร้อมข้อความ ICS กำกับให้รู้ว่าสแกนแล้วได้อะไร ──
+      (d.icsViewUrl ? '<div style="display:flex;align-items:center;gap:2mm;">'+
+        '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(d.icsViewUrl)+'" style="width:15mm;height:15mm;padding:1mm;background:#fff;box-sizing:content-box;">'+
+        '<div style="line-height:1.2;"><div style="font-size:11px;font-weight:800;">ICS</div><div style="font-size:6.5px;color:#444;">สแกนดูใบตรวจสอบ</div></div>'+
+      '</div>' : '')+
       buildStampSvg(fmtDateTH(isoToday()))+
     '</div>'+
   '</div>';
@@ -1025,7 +1040,17 @@ function printTags() {
   var win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
-  setTimeout(function(){ win.print(); }, 300);
+  // รอให้รูปทั้งหมดในหน้าพิมพ์โหลดเสร็จก่อนสั่ง print (QR โหลดจากอินเทอร์เน็ต อาจช้ากว่า 300ms เดิม ทำให้ QR
+  // ว่างในใบพิมพ์ได้) มีเพดาน 5 วินาที กันค้างถ้าเน็ตมีปัญหา
+  setTimeout(function(){
+    var t0 = Date.now();
+    (function waitImgs(){
+      var pending = 0, imgs = win.document.images;
+      for (var i = 0; i < imgs.length; i++) if (!imgs[i].complete) pending++;
+      if (pending === 0 || Date.now() - t0 > 5000) { win.print(); return; }
+      setTimeout(waitImgs, 200);
+    })();
+  }, 300);
 
   showToast('✅ ส่งไปพิมพ์แล้ว ('+count+' ใบ'+(icsPageHtml?' + ICS 1 แผ่น':'')+')', 'ok');
 }
