@@ -315,6 +315,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 </div>
 </div>
 
+<!-- html2canvas: ถ่ายภาพใบ ICS ตอนพิมพ์เก็บให้ลูกค้าดู — async กันเน็ตไม่เสถียรไปค้างบล็อกสคริปต์หลัก (โหลดไม่ได้ก็พิมพ์ได้ปกติ แค่ไม่มีภาพ) -->
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
 <script>
@@ -647,11 +649,76 @@ function generateUniqueId() {
   // สำรองไว้เผื่อเบราว์เซอร์เก่าไม่มี crypto.randomUUID — สุ่มจาก timestamp+random ผสมกัน ยาวพอจะเดายาก
   return (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0,20);
 }
+var ICS_SNAPS_URL = ICS_FB_URL + '/ics-snaps'; // ภาพ JPEG ของใบที่ออกจริง แยก node ต่อ id (ไม่ปนใน ics-records กันตอนดึงรายการแล้วลากภาพหนักมาด้วย)
+
+// PUT แบบมีเพดานเวลา คืน true/false (ไม่ throw) — เน็ตไม่เสถียรมักค้างยาวไม่ error ทันที
+function putJsonWithTimeout(url, obj, ms) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, ms);
+  return fetch(url, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj), signal: ctl ? ctl.signal : undefined })
+    .then(function(r){ clearTimeout(timer); return !!r.ok; })
+    .catch(function(){ clearTimeout(timer); return false; });
+}
 function saveIcsRecord(id, ctx) {
   var record = Object.assign({}, ctx, { id: id, printedAt: new Date().toISOString() });
-  return fetch(ICS_RECORDS_URL + '/' + id + '.json', {
-    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(record)
+  return putJsonWithTimeout(ICS_RECORDS_URL + '/' + id + '.json', record, 12000);
+}
+function saveIcsSnapshot(id, dataUrl) {
+  return putJsonWithTimeout(ICS_SNAPS_URL + '/' + id + '.json', { img: dataUrl, at: new Date().toISOString() }, 20000);
+}
+
+// ภาพขาวล้วน = ถ่ายพลาด (เช่น เรนเดอร์ไม่ติด) ใบจริงมีเส้นตาราง/ตัวอักษรเยอะ ย่อเหลือ 64x90 แล้วนับพิกเซลที่ไม่ขาว
+function isBlankCanvas(canvas) {
+  try {
+    var w = 64, h = 90, t = document.createElement('canvas');
+    t.width = w; t.height = h;
+    var c2 = t.getContext('2d');
+    c2.drawImage(canvas, 0, 0, w, h);
+    var data = c2.getImageData(0, 0, w, h).data, dark = 0;
+    for (var i = 0; i < data.length; i += 4) {
+      if (data[i] < 235 || data[i+1] < 235 || data[i+2] < 235) dark++;
+    }
+    return dark < 40;
+  } catch (e) { return false; } // ตรวจไม่ได้ ถือว่าไม่ว่าง (ปล่อยผ่าน)
+}
+
+// ถ่ายภาพใบ ICS เป็น JPEG ขนาด A4 (กระดาษ 210x297mm ขอบ 10mm — เหมือนใบที่พิมพ์) คืน dataURL หรือ null ถ้าถ่ายไม่ได้
+// (ไม่ reject เด็ดขาด — ถ่ายไม่ได้ก็พิมพ์ต่อได้ หน้าดูฝั่งลูกค้าจะถอยไปแสดงแบบข้อความแทน)
+function captureIcsSnapshot(pageHtml) {
+  return new Promise(function(resolve){
+    var host = null, finished = false, timer = null;
+    function finish(val) {
+      if (finished) return; finished = true;
+      clearTimeout(timer);
+      if (host && host.parentNode) host.parentNode.removeChild(host);
+      resolve(val);
+    }
+    try {
+      if (typeof html2canvas === 'undefined') { resolve(null); return; } // ไลบรารีโหลดไม่ได้ (เน็ตไม่เสถียร)
+      host = document.createElement('div');
+      host.style.cssText = 'position:fixed;left:-12000px;top:0;width:210mm;height:297mm;padding:10mm;background:#fff;box-sizing:border-box;font-family:"IBM Plex Sans Thai",sans-serif;';
+      host.innerHTML = '<div style="width:186mm;height:265mm;overflow:hidden;">' + pageHtml + '</div>';
+      document.body.appendChild(host);
+      timer = setTimeout(function(){ finish(null); }, 12000);
+      setTimeout(function(){ // รอให้เบราว์เซอร์จัดวาง/โหลดฟอนต์ของใบนี้ก่อนถ่าย
+        Promise.resolve(html2canvas(host, { scale: 2, backgroundColor: '#ffffff', logging: false }))
+          .then(function(canvas){
+            if (!canvas || isBlankCanvas(canvas)) { finish(null); return; }
+            finish(canvas.toDataURL('image/jpeg', 0.85));
+          })
+          .catch(function(){ finish(null); });
+      }, 200);
+    } catch (e) { finish(null); }
   });
+}
+
+// บันทึกใบ (ข้อมูล + ภาพ) ขึ้นระบบพร้อมกัน — recordOk คือสิ่งที่ QR ต้องใช้ (ไม่มี record = QR สแกนแล้วว่าง)
+function publishIcs(id, ctx, pageHtml) {
+  var recP = saveIcsRecord(id, ctx);
+  var snapP = captureIcsSnapshot(pageHtml).then(function(img){
+    return img ? saveIcsSnapshot(id, img) : false;
+  });
+  return Promise.all([recP, snapP]).then(function(r){ return { recordOk: r[0], snapOk: r[1] }; });
 }
 
 // ══════════════════════════════════════
@@ -926,7 +993,9 @@ function buildIcsPageHtml(ctx) {
       (ctx.photo ? '<img src="'+ctx.photo+'" style="max-width:100%;max-height:100%;object-fit:contain;">' : '<span style="font-size:10px;color:#666;">Picture</span>')+
     '</div>'+
     '<table style="width:100%;border-collapse:collapse;text-align:center;flex-shrink:0;margin-top:10px;">'+
-      '<tr style="background:#1e3a5f;color:#fff;height:7mm;">'+
+      // หัวตาราง: พื้นเทาอ่อน+ตัวดำ ตรงกับแบบฟอร์มจริง — เดิมเป็นตัวขาวบนพื้นน้ำเงิน พอเบราว์เซอร์ไม่พิมพ์สีพื้นหลัง
+      // (ค่าเริ่มต้น) ตัวหนังสือขาวจางหายบนกระดาษขาว และหน้าบนมือถือที่โชว์พื้นเต็มก็เลยดูต่างจากใบที่พิมพ์
+      '<tr style="background:#e5e7eb;color:#000;height:7mm;">'+
         '<th style="border:1px solid #000;padding:4px;width:3%;">No.</th>'+
         '<th style="border:1px solid #000;padding:4px;width:15%;">Item Inspection</th>'+
         '<th style="border:1px solid #000;padding:4px;width:17%;">Standard</th>'+
@@ -1032,6 +1101,8 @@ function buildIcsPageHtml(ctx) {
   '</div>';
 }
 
+var _printBusy = false; // กันกดพิมพ์ซ้ำระหว่างที่กำลังบันทึกใบ ICS ขึ้นระบบ
+
 function printTags() {
   var d = {
     cust: $('tgCust').value.trim(),
@@ -1056,37 +1127,70 @@ function printTags() {
   // ลงไว้แล้ว "และ" กรอกผลตรวจ (5 จุด + Lot Size) ครบ — ถ้าอย่างใดอย่างหนึ่งขาด ข้ามการสร้าง ICS เงียบๆ โดยไม่
   // บล็อกการพิมพ์ Tag เลย (Tag พิมพ์ได้เสมอไม่ว่าจะมีข้อมูล ICS ครบหรือไม่) ──
   var icsStd = findIcsStandard(d.partNo);
-  var icsPageHtml = '';
+  var ics = null;
   if (icsStd) {
     var samples = [$('icsT1').value,$('icsT2').value,$('icsT3').value,$('icsT4').value,$('icsT5').value];
     var lotSize = $('icsLotSize').value;
-    if (samples.some(function(s){ return s===''; }) || !lotSize) {
-      // ข้อมูล ICS ไม่ครบ — ข้ามการสร้าง ICS โดยไม่ error ไม่บล็อกการพิมพ์ Tag
-    } else {
-    var xr = computeXbarR(samples);
-    var thicknessResult = (xr.xbar!=null && xr.xbar >= icsStd.thicknessMin) ? 'OK' : 'NG';
-    var match = partList.find(function(p){ return p.partNo.toLowerCase() === d.partNo.toLowerCase(); });
-    var icsId = generateUniqueId();
-    var icsViewUrl = ICS_VIEW_BASE + '?id=' + icsId;
-    d.icsViewUrl = icsViewUrl; // ส่งเข้า d ก่อนเรียก buildTagHtml(d) ด้านล่าง ให้ Tag โชว์ QR ได้ (ย้าย QR มาไว้ที่ Tag แทน ICS แล้ว)
-    var icsCtx = {
-      docNo: computeDocNo(icsStd.customer, icsStd.partNo),
-      issueDate: fmtDateTH(icsStd.issueDate),
-      custName: d.cust, inspDate: fmtDateTH(isoToday()), lotSize: lotSize,
-      partNo: d.partNo, deliveryDate: d.delDate, proLotNo: d.lot,
-      partName: d.partName, model: icsStd.model, samplingSize: 5,
-      platingTypeStd: (match && match.platingType) || '-',
-      thicknessLabel: icsStd.thicknessLabel, samples: samples, xbar: xr.xbar, r: xr.r, thicknessResult: thicknessResult,
-      appearanceItems: icsStd.appearanceItems, hazardousStd: icsStd.hazardousStandard,
-      inspBy: d.inspBy, lotJudgement: thicknessResult, photo: d.photo, viewUrl: icsViewUrl
-    };
-    icsPageHtml = buildIcsPageHtml(icsCtx);
-    saveIcsRecord(icsId, icsCtx); // บันทึกพื้นหลัง ไม่ต้องรอผลก่อนพิมพ์ (ไม่บล็อก UX)
+    if (!(samples.some(function(s){ return s===''; }) || !lotSize)) {
+      var xr = computeXbarR(samples);
+      var thicknessResult = (xr.xbar!=null && xr.xbar >= icsStd.thicknessMin) ? 'OK' : 'NG';
+      var match = partList.find(function(p){ return p.partNo.toLowerCase() === d.partNo.toLowerCase(); });
+      var icsId = generateUniqueId();
+      var icsViewUrl = ICS_VIEW_BASE + '?id=' + icsId;
+      var icsCtx = {
+        docNo: computeDocNo(icsStd.customer, icsStd.partNo),
+        issueDate: fmtDateTH(icsStd.issueDate),
+        custName: d.cust, inspDate: fmtDateTH(isoToday()), lotSize: lotSize,
+        partNo: d.partNo, deliveryDate: d.delDate, proLotNo: d.lot,
+        partName: d.partName, model: icsStd.model, samplingSize: 5,
+        platingTypeStd: (match && match.platingType) || '-',
+        thicknessLabel: icsStd.thicknessLabel, samples: samples, xbar: xr.xbar, r: xr.r, thicknessResult: thicknessResult,
+        appearanceItems: icsStd.appearanceItems, hazardousStd: icsStd.hazardousStandard,
+        inspBy: d.inspBy, lotJudgement: thicknessResult, photo: d.photo, viewUrl: icsViewUrl
+      };
+      ics = { id: icsId, viewUrl: icsViewUrl, ctx: icsCtx, pageHtml: buildIcsPageHtml(icsCtx) };
     }
   }
 
+  // ไม่มี ICS: พิมพ์ทันทีเหมือนเดิมทุกอย่าง (ไม่มีขั้นตอนรอ)
+  if (!ics) { renderAndPrint(d, count, '', null, {}); return; }
+
+  // มี ICS: ต้องบันทึกขึ้นระบบให้สำเร็จก่อนค่อยพิมพ์ QR — กัน QR บน Tag ที่สแกนแล้วเจอหน้าว่างเพราะตอนพิมพ์เน็ตหลุด
+  // เปิดหน้าต่างพิมพ์ตั้งแต่ตอนกดปุ่มเลย (ถ้ารอบันทึกเสร็จก่อนค่อยเปิด เบราว์เซอร์จะมองว่าเป็น pop-up แล้วบล็อก)
+  if (_printBusy) { showToast('⏳ กำลังเตรียมใบตรวจสอบอยู่ รอสักครู่', 'err'); return; }
+  var win = window.open('', '_blank');
+  if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
+  _printBusy = true;
+  try {
+    win.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>กำลังเตรียม…</title></head><body style="font-family:sans-serif;padding:24px;color:#334155;">⏳ กำลังเตรียมใบตรวจสอบและบันทึกขึ้นระบบ… (ถ้าเน็ตช้าอาจใช้เวลาสักครู่)</body></html>');
+    win.document.close();
+  } catch (e) {}
+
+  publishIcs(ics.id, ics.ctx, ics.pageHtml).then(function(res){
+    _printBusy = false;
+    if (win.closed) return; // ผู้ใช้ปิดหน้าต่างพิมพ์ไปเองระหว่างรอ — ยกเลิกเงียบๆ
+    var info = { snapOk: res.snapOk, qr: true };
+    if (res.recordOk) {
+      d.icsViewUrl = ics.viewUrl;
+    } else {
+      var go = confirm('บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR\n\nกด OK = พิมพ์ต่อโดยไม่มี QR\nกด Cancel = ยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)');
+      if (!go) { try { win.close(); } catch (e) {} return; }
+      info.qr = false;
+    }
+    renderAndPrint(d, count, ics.pageHtml, win, info);
+  }).catch(function(e){
+    _printBusy = false;
+    console.warn(e);
+    try { win.close(); } catch (x) {}
+    showToast('⚠️ เตรียมใบตรวจสอบไม่สำเร็จ — ลองใหม่อีกครั้ง', 'err');
+  });
+}
+
+// สร้างหน้าพิมพ์ (Tag + ICS ต่อท้ายถ้ามี) แล้วสั่ง print — win คือหน้าต่างที่เปิดรอไว้แล้ว (ถ้าไม่มีจะเปิดใหม่ตรงนี้)
+function renderAndPrint(d, count, icsPageHtml, win, info) {
+  info = info || {};
   var oneTag = buildTagHtml(d);
-  // จัดกลุ่มทีละ 6 ใบต่อหน้า (2 คอลัมน์ x 3 แถว) ขึ้นหน้าใหม่อัตโนมัติถ้าเกิน — ใช้ CSS Grid ขนาด mm ตายตัว
+  // จัดกลุ่มทีละ 8 ใบต่อหน้า (2 คอลัมน์ x 4 แถว) ขึ้นหน้าใหม่อัตโนมัติถ้าเกิน — ใช้ CSS Grid ขนาด mm ตายตัว
   // (เดิมใช้ flexbox + height:100vh ซึ่งวัดความสูง "หน้าต่างเบราว์เซอร์" ไม่ใช่ความสูงหน้ากระดาษจริงตอนพิมพ์ จึง
   // ล้นออกนอกขอบพิมพ์ได้ โดยเฉพาะถ้าตั้งค่าเครื่องพิมพ์เป็นแนวนอนค้างจากงานพิมพ์ก่อนหน้า) บังคับแนวตั้ง (portrait)
   // ไว้ใน @page ไม่ให้สลับเป็นแนวนอนเองด้วย
@@ -1115,8 +1219,9 @@ function printTags() {
     '</style>'+
     '</head><body>'+pagesHtml+'</body></html>';
 
-
-  var win = window.open('', '_blank');
+  if (!win) win = window.open('', '_blank');
+  if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
+  win.document.open();
   win.document.write(html);
   win.document.close();
   // รอให้รูปทั้งหมดในหน้าพิมพ์โหลดเสร็จก่อนสั่ง print (QR โหลดจากอินเทอร์เน็ต อาจช้ากว่า 300ms เดิม ทำให้ QR
@@ -1131,7 +1236,11 @@ function printTags() {
     })();
   }, 300);
 
-  showToast('✅ ส่งไปพิมพ์แล้ว ('+count+' ใบ'+(icsPageHtml?' + ICS 1 แผ่น':'')+')', 'ok');
+  var msg = '✅ ส่งไปพิมพ์แล้ว ('+count+' ใบ'+(icsPageHtml?' + ICS 1 แผ่น':'')+')';
+  var kind = 'ok';
+  if (icsPageHtml && info.qr === false) { msg += ' — ไม่มี QR เพราะบันทึกขึ้นระบบไม่สำเร็จ'; kind = 'err'; }
+  else if (icsPageHtml && info.snapOk === false) { msg += ' — ใบออนไลน์ยังไม่มีภาพ (ลูกค้าจะเห็นแบบข้อความแทน)'; kind = 'err'; }
+  showToast(msg, kind);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
