@@ -1063,7 +1063,14 @@ function buildStampSvg(dateStr) {
     '</div>';
 }
 function buildTagHtml(d) {
-  var photoHtml = d.photo ? '<img src="'+d.photo+'" style="width:100%;height:100%;object-fit:contain;">' : '<span style="font-size:8px;color:#666;">Picture</span>';
+  // รูปชิ้นงาน: วางแบบ absolute ในช่อง (ช่องเป็น position:relative) เพื่อให้รูป "ไม่มีผล" ต่อความสูงของแถวเลย — เดิมใช้
+  // height:100% ซึ่งในช่องตารางที่ความสูงยังไม่แน่นอนจะถูกมองเป็น auto = ใช้ความสูงจริงของรูป ทำให้รูปจัตุรัส/แนวตั้งดัน
+  // แถว 1-3 สูงขึ้น บีบแถว 4-5 และดันตารางล้นกรอบ จน QR/ตราที่อยู่ล่างสุดถูกตัดทิ้ง (วัดด้วยเบราว์เซอร์จริงแล้ว)
+  // ตอนนี้แถวสูงตายตัว รูปเป็นฝ่ายหดให้พอดีช่อง (object-fit:contain คงสัดส่วน ไม่บิดรูป)
+  var photoHtml = d.photo ? '<img src="'+d.photo+'" style="position:absolute;left:1px;top:1px;width:calc(100% - 2px);height:calc(100% - 2px);object-fit:contain;">' : '<span style="font-size:8px;color:#666;">Picture</span>';
+  // ความสูงแถวตายตัว (mm) ตามแพทเทิร์น 5 แถวเท่ากัน — มี QR ต้องเว้นที่ล่างสุดให้ QR 15mm+ขอบขาว จึงเตี้ยกว่าแบบไม่มี QR
+  var ROW = d.icsViewUrl ? 7 : 8.6; // แบบไม่มี QR เว้นที่ล่างให้ตรา QC PASS ไม่ชิดเส้นกรอบ (เดิมก้นตราห่างขอบนอกแค่ 0.55mm)
+  var TR = '<tr style="height:'+ROW+'mm;">';
   // เส้นแนวนอนลากเต็มความกว้างทั้งแถวเสมอ (label/โคลอน/ค่า ใช้ border-bottom เดียวกันหมด) — เส้นแนวตั้งอยู่
   // หลังโคลอน (ก่อนค่า) ทุกช่อง ตามที่วาดชี้ไว้ — ไม่มีเส้นระหว่าง label กับโคลอน
   var TD   = 'border-bottom:1px solid #000;padding:1px 4px;overflow:hidden;white-space:nowrap;';   // ช่องกรอกข้อมูล
@@ -1082,28 +1089,28 @@ function buildTagHtml(d) {
       '<div style="font-size:6.5px;font-weight:700;line-height:1.1;">บริษัท เอพีเค เพลตติ้ง เซอร์วิส จำกัด (สำนักงานใหญ่)</div>'+
     '</div>'+
     '<div style="text-align:center;font-weight:800;font-size:9.5px;margin-bottom:1px;flex-shrink:0;border-bottom:1px solid #000;padding:1px 0;">ใบกำกับผลิตภัณฑ์</div>'+
-    '<table style="border-collapse:collapse;width:100%;flex:1;table-layout:fixed;">'+
+    '<table style="border-collapse:collapse;width:100%;flex:none;height:'+(ROW*5)+'mm;table-layout:fixed;">'+
       '<colgroup><col style="width:16%"><col style="width:2%"><col style="width:16%"><col style="width:14%"><col style="width:12%"><col style="width:2%"><col style="width:19%"><col style="width:19%"></colgroup>'+
-      '<tr style="height:20%;">'+
+      TR+
         '<td style="'+LBL+'">Cust. Name</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TDR+'">'+esc(d.cust)+'</td>'+
-        '<td rowspan="3" colspan="2" style="border:1px solid #000;padding:1px;text-align:center;vertical-align:middle;">'+photoHtml+'</td>'+
+        '<td rowspan="3" colspan="2" style="border:1px solid #000;padding:0;text-align:center;vertical-align:middle;position:relative;overflow:hidden;">'+photoHtml+'</td>'+
       '</tr>'+
-      '<tr style="height:20%;">'+
+      TR+
         '<td style="'+LBL+'">P/No.</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TDR+'">'+esc(d.partNo)+'</td>'+
       '</tr>'+
-      '<tr style="height:20%;">'+
+      TR+
         '<td style="'+LBL+'">P/Name</td><td style="'+NOB+'">:</td>'+
         '<td colspan="4" style="'+TDR+'">'+esc(d.partName)+'</td>'+
       '</tr>'+
-      '<tr style="height:20%;">'+
+      TR+
         '<td style="'+LBL+'">Pro Lot No.</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.lot)+'</td>'+
         '<td style="'+LBL+'">Q\'TY</td><td style="'+NOB+'">:</td>'+
         '<td style="'+TDQ+'">'+esc(d.qty)+'</td><td style="border-bottom:1px solid #000;padding:1px 2px;overflow:hidden;white-space:nowrap;border-right:1px solid #000;">'+esc(d.unit)+'</td>'+
       '</tr>'+
-      '<tr style="height:20%;">'+
+      TR+
         '<td style="'+LBL+'">Del. Date</td><td style="'+NOB+'">:</td>'+
         '<td colspan="2" style="'+TD+'">'+esc(d.delDate)+'</td>'+
         '<td style="'+LBL+'">Insp. By</td><td style="'+NOB+'">:</td>'+
