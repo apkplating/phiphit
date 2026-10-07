@@ -319,6 +319,20 @@ if ('caches' in window) {
       <div class="empty-note" id="emptyNote" style="display:none;">ยังไม่มีผู้ใช้ในระบบ — เพิ่มผู้ใช้แรกด้านบน</div>
     </div>
 
+    <!-- รหัสผ่านลูกค้า ICS -->
+    <div class="card" id="icsPwCard" style="display:none;">
+      <div class="card-head">
+        <h3>🔐 รหัสผ่านเปิดดูใบ ICS ต่อลูกค้า</h3>
+        <p>ลูกค้าสแกน QR แล้วต้องกรอกรหัสของตัวเองเท่านั้นถึงเปิดดูใบได้ — ใบจะถูกเข้ารหัสก่อนเก็บ ใช้รหัสของลูกค้ารายอื่นเปิดไม่ได้</p>
+      </div>
+      <div class="hint-box" style="font-size:12px;line-height:1.8;color:#475569;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <b>เงื่อนไขรหัส:</b> ยาว 6–8 ตัว · มีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัวขึ้นไป (เช่น ! @ # $ % &amp; * ? - _) · ห้ามมีชื่อลูกค้าอยู่ในรหัส · ห้ามอักขระซ้ำ/เรียงกัน 3 ตัว (aaa, 123) · ห้ามมีช่องว่าง · แนะนำ 8 ตัว (กด 🎲 สุ่มให้)<br>
+        <b>ข้อควรรู้:</b> เปลี่ยน/ลบรหัสมีผลกับใบที่พิมพ์ <u>ต่อจากนี้</u> ใบที่ออกไปแล้วยังใช้รหัสเดิมตอนพิมพ์ · รหัสเก็บในระบบ APK (ผู้ที่เข้าถึงฐานข้อมูลภายในอ่านได้) · ลืมรหัสแล้วกู้ใบที่เข้ารหัสไว้ไม่ได้ ควรจดรหัสไว้ · รหัสเดียวใช้ร่วมกันทั้งบริษัทลูกค้า
+      </div>
+      <div id="icsPwList"></div>
+      <div id="icsPwMsg" style="min-height:18px;margin-top:8px;font-size:12px;"></div>
+    </div>
+
   </div>
 
 </main>
@@ -497,6 +511,7 @@ function renderTable() {
 
     return '<tr>' + cells + '</tr>';
   }).join('');
+  if (typeof renderIcsPwPanel === 'function') renderIcsPwPanel();
 }
 
 // ── ลายเซ็นผู้ใช้ — อัปโหลดรูป/พรีวิว/ลบ ──
@@ -817,6 +832,175 @@ window.addEventListener('load', function(){
     doLogin();
   }
 });
+
+// ══════════════════════════════════════
+//  รหัสผ่านเปิดดูใบ ICS ต่อลูกค้า (แอดมินที่มีสิทธิ์ "รหัสลูกค้า ICS" = แอดมิน)
+//  เก็บที่ B1 /ics-customer-pw.json รูปแบบ { ชื่อลูกค้า: {pw, by, at} } — ตัวเดียวกับที่ tag_card.html อ่านไปเข้ารหัสใบตอนพิมพ์
+// ══════════════════════════════════════
+var B1_URL = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var ICS_PW_URL = B1_URL + '/ics-customer-pw.json';
+var ICS_PM_URL = B1_URL + '/part-master.json';
+var ICS_STD_URL = B1_URL + '/part-ics-standards.json';
+var ICS_PW_MIN = 6, ICS_PW_MAX = 8;
+var icsPwData = {}, icsPwBad = {}, icsPwCust = {}, icsPwState = 'idle', icsPwEditKey = null, icsPwShown = {}, icsPwRows = [];
+
+// คีย์ลูกค้า: ต้องตรงกับ tag_card.html (ตัวพิมพ์ใหญ่ ตัดช่องว่างหัวท้าย แทนอักขระต้องห้ามของ Firebase ด้วย _)
+function icsPwKey(c) { return String(c || '').trim().toUpperCase().replace(/[.$#\[\]\/]/g, '_'); }
+
+function icsPwCanManage() {
+  var u = currentUserPin && users[currentUserPin];
+  return !!(u && u.permissions && u.permissions.icspw === 'admin');
+}
+function icsPwSay(kind, text) {
+  var m = document.getElementById('icsPwMsg');
+  m.style.color = kind === 'err' ? 'var(--red)' : kind === 'ok' ? 'var(--green)' : kind === 'warn' ? 'var(--amber)' : '#475569';
+  m.textContent = text || '';
+}
+function icsFetchJson(url, ms) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var t = setTimeout(function(){ if (ctl) ctl.abort(); }, ms);
+  return fetch(url, ctl ? { signal: ctl.signal } : undefined).then(function(r){
+    clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+  }).catch(function(e){ clearTimeout(t); throw e; });
+}
+function icsPatch(body) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var t = setTimeout(function(){ if (ctl) ctl.abort(); }, 15000);
+  return fetch(ICS_PW_URL, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined })
+    .then(function(r){ clearTimeout(t); return !!r.ok; }).catch(function(){ clearTimeout(t); return false; });
+}
+
+// ── ตรวจเงื่อนไขรหัส: คืนข้อความผิดพลาด (ว่าง = ผ่าน) ──
+function icsPwCheck(pw, label) {
+  if (pw.length < ICS_PW_MIN || pw.length > ICS_PW_MAX) return 'รหัสต้องยาว ' + ICS_PW_MIN + '–' + ICS_PW_MAX + ' ตัวอักษร (ตอนนี้ ' + pw.length + ')';
+  for (var i = 0; i < pw.length; i++) { var c = pw.charCodeAt(i); if (c < 33 || c > 126) return 'ใช้ได้เฉพาะตัวอักษรอังกฤษ ตัวเลข และอักขระพิเศษ (ห้ามช่องว่างและภาษาไทย)'; }
+  if (!/[A-Z]/.test(pw)) return 'ต้องมีตัวพิมพ์ใหญ่ (A–Z) อย่างน้อย 1 ตัว';
+  if (!/[a-z]/.test(pw)) return 'ต้องมีตัวพิมพ์เล็ก (a–z) อย่างน้อย 1 ตัว';
+  if (!/[0-9]/.test(pw)) return 'ต้องมีตัวเลข (0–9) อย่างน้อย 1 ตัว';
+  if (!/[^A-Za-z0-9]/.test(pw)) return 'ต้องมีอักขระพิเศษ เช่น ! @ # $ % & * ? - _ อย่างน้อย 1 ตัว';
+  if (/(.)\1\1/.test(pw)) return 'ห้ามมีอักขระเดียวกันซ้ำติดกัน 3 ตัว (เช่น aaa)';
+  var low = pw.toLowerCase();
+  for (var j = 0; j + 2 < low.length; j++) {
+    var a = low.charCodeAt(j), b = low.charCodeAt(j + 1), d = low.charCodeAt(j + 2);
+    if ((b - a === 1 && d - b === 1) || (a - b === 1 && b - d === 1)) {
+      var seq = low.substr(j, 3); if (/^[a-z0-9]{3}$/.test(seq)) return 'ห้ามมีตัวอักษร/ตัวเลขเรียงกัน 3 ตัว (เช่น abc, 123)';
+    }
+  }
+  var toks = String(label || '').toLowerCase().split(/[^a-z0-9]+/);
+  for (var k = 0; k < toks.length; k++) if (toks[k].length >= 3 && low.indexOf(toks[k]) !== -1) return 'ห้ามมีชื่อลูกค้า (' + toks[k].toUpperCase() + ') อยู่ในรหัส';
+  return '';
+}
+function icsRnd(n) { var b = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n; do { crypto.getRandomValues(b); } while (b[0] >= lim); return b[0] % n; }
+function icsPick(s) { return s.charAt(icsRnd(s.length)); }
+// สุ่ม 8 ตัว มีครบ 4 กลุ่ม ตัดตัวที่ดูสับสน (0/O/1/l/I) และต้องผ่านเงื่อนไขทุกข้อ
+function icsPwGenerate(label) {
+  var U = 'ABCDEFGHJKLMNPQRSTUVWXYZ', L = 'abcdefghijkmnpqrstuvwxyz', D = '23456789', S = '!@#$%&*?-_', ALL = U + L + D + S;
+  for (var t = 0; t < 500; t++) {
+    var ch = [icsPick(U), icsPick(L), icsPick(D), icsPick(S)];
+    while (ch.length < 8) ch.push(icsPick(ALL));
+    for (var i = ch.length - 1; i > 0; i--) { var j = icsRnd(i + 1), x = ch[i]; ch[i] = ch[j]; ch[j] = x; }
+    var pw = ch.join('');
+    if (!icsPwCheck(pw, label)) return pw;
+  }
+  return '';
+}
+
+function icsPwLoad() {
+  icsPwState = 'loading'; renderIcsPwPanel();
+  var pwP = icsFetchJson(ICS_PW_URL, 15000).then(function(d){
+    var m = {}, bad = {};
+    if (d && typeof d === 'object') Object.keys(d).forEach(function(k){ var e = d[k]; if (e && typeof e.pw === 'string' && e.pw) m[k] = e; else if (e !== null && e !== undefined) bad[k] = true; });
+    icsPwData = m; icsPwBad = bad; icsPwState = 'ok';
+  }).catch(function(e){ icsPwState = 'fail'; });
+  var add = function(list, field) { (list || []).forEach(function(p){ var k = icsPwKey(p && p.customer); if (k) icsPwCust[k] = String(p.customer).trim().toUpperCase(); }); };
+  var pmP = icsFetchJson(ICS_PM_URL, 20000).then(function(d){ add(d && d.parts); }).catch(function(){});
+  var stP = icsFetchJson(ICS_STD_URL, 20000).then(function(d){ add(d && d.list); }).catch(function(){});
+  return Promise.all([pwP, pmP, stP]).then(renderIcsPwPanel);
+}
+
+function renderIcsPwPanel() {
+  var card = document.getElementById('icsPwCard');
+  if (!card || !currentUserPin) return;
+  card.style.display = 'block';
+  var list = document.getElementById('icsPwList');
+  if (!icsPwCanManage()) {
+    list.innerHTML = '<div style="font-size:13px;color:#475569;">🚫 บัญชีนี้ยังไม่มีสิทธิ์จัดการรหัสลูกค้า ICS — ตั้งสิทธิ์ที่คอลัมน์ "รหัสลูกค้า ICS" ในตารางด้านบนเป็น "แอดมิน"</div>';
+    icsPwSay('', ''); return;
+  }
+  if (icsPwState === 'idle') { icsPwLoad(); return; }
+  if (icsPwState === 'loading') { list.innerHTML = '<div style="font-size:13px;">⏳ กำลังโหลดรายการลูกค้าและรหัส…</div>'; return; }
+  if (icsPwState === 'fail') {
+    list.innerHTML = '<button class="btn secondary" onclick="icsPwLoad()">🔄 โหลดใหม่</button>';
+    icsPwSay('err', '⚠️ โหลดรหัสที่มีอยู่ไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — ยังไม่เปิดให้แก้ไขเพื่อกันตั้งทับโดยไม่เห็นค่าเดิม'); return;
+  }
+  var map = {};
+  Object.keys(icsPwCust).forEach(function(k){ map[k] = icsPwCust[k]; });
+  Object.keys(icsPwData).forEach(function(k){ if (!map[k]) map[k] = k; });
+  Object.keys(icsPwBad).forEach(function(k){ if (!map[k]) map[k] = k; });
+  icsPwRows = Object.keys(map).sort().map(function(k){ return { key: k, label: map[k] }; });
+  if (!icsPwRows.length) { list.innerHTML = '<div style="font-size:13px;color:#475569;">ยังไม่มีรายชื่อลูกค้า (ดึงจาก Part Master และทะเบียน Standard)</div>'; return; }
+  var btn = 'font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;';
+  list.innerHTML = icsPwRows.map(function(r, i){
+    var e = icsPwData[r.key], bad = icsPwBad[r.key], editing = (icsPwEditKey === r.key);
+    var status = bad ? '<span style="color:var(--red);font-weight:700;">⚠️ ข้อมูลรหัสเสียหาย — ตั้งใหม่</span>'
+      : e ? '<span style="color:var(--green);font-weight:700;">🔒 ตั้งรหัสแล้ว</span>' + ((e.pw.length > ICS_PW_MAX || e.pw.length < ICS_PW_MIN || icsPwCheck(e.pw, r.label)) ? ' <span style="color:var(--amber);font-size:11px;">(รหัสเดิม ไม่ตรงเงื่อนไขใหม่ — แนะนำเปลี่ยน)</span>' : '')
+      : '<span style="color:#94a3b8;">— ยังไม่ตั้ง (ใบไม่ถูกป้องกัน)</span>';
+    var acts = (e && !bad)
+      ? '<button style="' + btn + '" onclick="icsPwToggleShow(' + i + ')">' + (icsPwShown[r.key] ? 'ซ่อนรหัส' : 'แสดงรหัส') + '</button>' +
+        '<button style="' + btn + '" onclick="icsPwStartEdit(' + i + ')">เปลี่ยน</button>' +
+        '<button style="' + btn + 'color:var(--red);" onclick="icsPwDelete(' + i + ')">ลบ</button>'
+      : '<button style="' + btn + '" onclick="icsPwStartEdit(' + i + ')">ตั้งรหัส</button>';
+    var shown = (e && icsPwShown[r.key]) ? '<div style="margin-top:6px;font-size:12px;">รหัส: <code style="background:#fff;padding:2px 6px;border-radius:4px;user-select:all;">' + esc(e.pw) + '</code>' +
+      (e.by ? ' <span style="color:#94a3b8;">· ตั้งโดย ' + esc(e.by) + '</span>' : '') + '</div>' : '';
+    var edit = editing ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+      '<input id="icsPwInput" type="text" autocomplete="off" spellcheck="false" maxlength="' + ICS_PW_MAX + '" placeholder="รหัสใหม่ ' + ICS_PW_MIN + '–' + ICS_PW_MAX + ' ตัว" oninput="icsPwLive(' + i + ')" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:13px;width:150px;">' +
+      '<button style="' + btn + '" onclick="icsPwFill(' + i + ')">🎲 สุ่มให้</button>' +
+      '<button style="' + btn + 'background:var(--blue2);color:#fff;border-color:var(--blue2);" onclick="icsPwSave(' + i + ')">บันทึก</button>' +
+      '<button style="' + btn + '" onclick="icsPwCancel()">ยกเลิก</button>' +
+      '<span id="icsPwLiveHint" style="font-size:11px;"></span></div>' : '';
+    return '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:#fafbfd;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div><b>' + esc(r.label) + '</b> &nbsp;' + status + '</div><span style="display:flex;gap:6px;">' + acts + '</span></div>' + shown + edit + '</div>';
+  }).join('');
+}
+function icsPwToggleShow(i) { var k = icsPwRows[i].key; icsPwShown[k] = !icsPwShown[k]; renderIcsPwPanel(); }
+function icsPwStartEdit(i) { icsPwEditKey = icsPwRows[i].key; renderIcsPwPanel(); icsPwSay('', ''); var el = document.getElementById('icsPwInput'); if (el) el.focus(); }
+function icsPwCancel() { icsPwEditKey = null; renderIcsPwPanel(); icsPwSay('', ''); }
+function icsPwFill(i) {
+  var el = document.getElementById('icsPwInput'); if (!el) return;
+  el.value = icsPwGenerate(icsPwRows[i].label); icsPwLive(i);
+}
+function icsPwLive(i) {
+  var el = document.getElementById('icsPwInput'), h = document.getElementById('icsPwLiveHint'); if (!el || !h) return;
+  var v = el.value;
+  if (!v) { h.textContent = ''; return; }
+  var err = icsPwCheck(v, icsPwRows[i].label);
+  if (err) { h.style.color = 'var(--red)'; h.textContent = '✖ ' + err; }
+  else if (v.length < 8) { h.style.color = 'var(--amber)'; h.textContent = '⚠️ ผ่านเงื่อนไข แต่ ' + v.length + ' ตัวค่อนข้างเสี่ยง — แนะนำ 8 ตัว'; }
+  else { h.style.color = 'var(--green)'; h.textContent = '✔ ผ่านเงื่อนไข'; }
+}
+function icsPwWrite(row, value, okText) {
+  if (!icsPwCanManage()) { icsPwSay('err', '🚫 ไม่มีสิทธิ์จัดการรหัสลูกค้า ICS'); return; }
+  var body = {}; body[row.key] = value;
+  icsPwSay('', '⏳ กำลังบันทึก…');
+  icsPatch(body).then(function(ok){
+    if (!ok) { icsPwSay('err', '⚠️ บันทึกไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — ลองใหม่อีกครั้ง'); return; }
+    if (value) { icsPwData[row.key] = value; delete icsPwBad[row.key]; icsPwShown[row.key] = true; } else { delete icsPwData[row.key]; delete icsPwBad[row.key]; }
+    icsPwEditKey = null; renderIcsPwPanel(); icsPwSay('ok', okText);
+  });
+}
+function icsPwSave(i) {
+  var row = icsPwRows[i], el = document.getElementById('icsPwInput'), v = el ? el.value : '';
+  var err = icsPwCheck(v, row.label);
+  if (err) { icsPwSay('err', '⚠️ ' + err); return; }
+  var me = users[currentUserPin] || {};
+  icsPwWrite(row, { pw: v, by: me.name || currentUserPin || '', at: new Date().toISOString() },
+    '✅ บันทึกรหัสของ ' + row.label + ' แล้ว — มีผลกับใบที่พิมพ์ต่อจากนี้ (จดรหัสแจ้งลูกค้าด้วย)');
+}
+function icsPwDelete(i) {
+  var row = icsPwRows[i];
+  if (!confirm('ลบรหัสของ ' + row.label + ' ?\n\nใบที่พิมพ์ต่อจากนี้จะไม่ถูกป้องกัน (เปิดดูได้โดยไม่ต้องใช้รหัส) ใบที่ออกไปแล้วยังใช้รหัสเดิม')) return;
+  icsPwWrite(row, null, '✅ ลบรหัสของ ' + row.label + ' แล้ว — ใบที่พิมพ์ต่อจากนี้ไม่ป้องกัน');
+}
 </script>
 
 </body>

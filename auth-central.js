@@ -169,6 +169,10 @@
       ]
     },
     {
+      // ไม่ใช่หน้าเว็บ — เป็นสิทธิ์จัดการ "รหัสผ่านลูกค้าเปิดดูใบ ICS" ใน auth_admin.html (เฉพาะ role แอดมินเท่านั้นที่เห็นแผงนี้)
+      key: 'icspw', label: 'รหัสลูกค้า ICS', group: 'คุณภาพ & ISO'
+    },
+    {
       key: 'qms_context_risk', label: 'QMS บริบทองค์กร/ความเสี่ยง', group: 'คุณภาพ & ISO',
       tabs: [
         { id: 'overview',     label: 'ภาพรวม' },

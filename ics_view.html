@@ -393,7 +393,7 @@ function submitPw() {
   tryUnlock(pw).then(function(ok) {
     setPwBusy(false);
     if (ok) { lsSet(PW_LS_KEY, document.getElementById('pwRemember').checked ? pw : null); return; }
-    lockErr('รหัสผ่านไม่ถูกต้อง (หรือข้อมูลเสียหาย) — ตรวจรหัสแล้วลองใหม่');
+    lockErr('รหัสไม่ถูกต้อง หรือคุณไม่มีสิทธิ์เข้าถึงไฟล์ข้อมูลนี้ — ตรวจรหัสของบริษัทท่านแล้วลองใหม่');
     var el = document.getElementById('pwInput'); el.focus(); el.select();
   }).catch(function() {
     setPwBusy(false);
@@ -412,7 +412,7 @@ function startLock(id, rec, snap, src) {
   // มีรหัสที่จำไว้ในเครื่องนี้: ลองเปิดให้เองก่อน โดยยังไม่โชว์ช่องกรอก (ไม่ให้ฟอร์มวูบขึ้นมาแล้วหาย) — ไม่ผ่าน (เช่น เป็นใบของลูกค้าคนละราย) ค่อยโชว์ให้กรอกเอง
   st.className = 'state-box'; st.style.display = 'block'; st.textContent = '🔓 กำลังเปิดใบด้วยรหัสที่จำไว้ในเครื่องนี้…';
   tryUnlock(saved).then(function(ok) {
-    if (!ok) showForm('รหัสที่จำไว้ในเครื่องนี้ใช้กับใบนี้ไม่ได้ — กรอกรหัสของใบนี้');
+    if (!ok) showForm('รหัสที่จำไว้ในเครื่องนี้เปิดใบนี้ไม่ได้ (รหัสผิด หรือไม่มีสิทธิ์เข้าถึงไฟล์ข้อมูลนี้) — กรอกรหัสของบริษัทท่าน');
   }).catch(function() { showForm('เบราว์เซอร์นี้ถอดรหัสไม่ได้ — เปิดด้วย Chrome, Edge หรือ Safari รุ่นล่าสุด ผ่านที่อยู่ที่ขึ้นต้นด้วย https'); });
 }
 (function wireLock() {
