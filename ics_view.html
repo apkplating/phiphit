@@ -62,6 +62,10 @@
 
 <div class="topbar">
   <div class="title">🔍 ใบตรวจสอบคุณภาพ (Inspection Check Sheet)</div>
+  <div id="navRow" style="display:none;gap:8px;margin-bottom:8px;">
+    <button class="btn" id="navBack" onclick="history.back()" style="display:none;">← กลับ</button>
+    <a class="btn" id="navHome" href="index.html" style="display:none;text-decoration:none;">🏠 หน้าแรก</a>
+  </div>
   <div class="sub" id="topSub">APK Plating Service Co.,Ltd. — เปิดดูได้สาธารณะ ไม่ต้องเข้าสู่ระบบ</div>
   <div class="btns" id="btnRow" style="display:none;">
     <button class="btn primary" id="pdfBtn" onclick="downloadPdf()" style="display:none;">⬇️ ดาวน์โหลด PDF</button>
@@ -448,6 +452,21 @@ function loadRecord() {
   });
 }
 loadRecord();
+</script>
+<script>
+// ปุ่มกลับ/หน้าแรก: แสดงเฉพาะเมื่อเปิดจากภายในระบบ APK (พนักงาน) — ลูกค้าที่สแกน QR ไม่มีหน้าก่อนหน้า จึงไม่เห็นปุ่ม
+(function(){
+  try{
+    var sameOrigin=false;
+    try{ sameOrigin = !!document.referrer && new URL(document.referrer).origin===location.origin; }catch(e){}
+    var canBack = history.length>1 && sameOrigin;
+    if(canBack||sameOrigin){
+      document.getElementById('navRow').style.display='flex';
+      if(canBack) document.getElementById('navBack').style.display='';
+      if(sameOrigin) document.getElementById('navHome').style.display='';
+    }
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
