@@ -951,7 +951,8 @@ function renderIcsPwPanel() {
   var dis = missing ? '' : ' disabled';
   var bulkBtn = '<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
     '<button class="btn" onclick="icsPwBulkSet(\'pattern\')"' + dis + '>📝 ตั้งรหัสแบบ ชื่อ+อักขระ+ลำดับที่ ให้ทุกรายที่ยังไม่มีรหัส (' + missing + ' ราย)</button>' +
-    '<button class="btn secondary" onclick="icsPwBulkSet(\'random\')"' + dis + '>🎲 สุ่ม 8 ตัว (ปลอดภัยกว่า)</button></div>';
+    '<button class="btn secondary" onclick="icsPwBulkSet(\'random\')"' + dis + '>🎲 สุ่ม 8 ตัว (ปลอดภัยกว่า)</button>' +
+    '<button class="btn danger" onclick="icsPwBulkSet(\'pattern-all\')">♻️ ตั้งแบบ ชื่อ+อักขระ+ลำดับที่ ให้ทุกราย (ทับรหัสเดิม)</button></div>';
   list.innerHTML = bulkBtn + icsPwRows.map(function(r, i){
     var e = icsPwData[r.key], bad = icsPwBad[r.key], editing = (icsPwEditKey === r.key);
     var status = bad ? '<span style="color:var(--red);font-weight:700;">⚠️ ข้อมูลรหัสเสียหาย — ตั้งใหม่</span>'
@@ -966,8 +967,8 @@ function renderIcsPwPanel() {
       (e.by ? ' <span style="color:#94a3b8;">· ตั้งโดย ' + esc(e.by) + '</span>' : '') + '</div>' : '';
     var edit = editing ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
       '<input id="icsPwInput" type="text" autocomplete="off" spellcheck="false" maxlength="' + ICS_PW_MAX + '" placeholder="รหัสใหม่ ' + ICS_PW_MIN + '–' + ICS_PW_MAX + ' ตัว" oninput="icsPwLive(' + i + ')" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:13px;width:150px;">' +
-      '<button style="' + btn + '" onclick="icsPwFill(' + i + ')">🎲 สุ่มให้</button>' +
-      '<button style="' + btn + '" onclick="icsPwFillPattern(' + i + ')">📝 ชื่อ+ลำดับที่</button>' +
+      '<button style="' + btn + 'background:#eff6ff;border-color:var(--blue2);" onclick="icsPwFillPattern(' + i + ')">📝 ตามรูปแบบ ชื่อ+อักขระ+ลำดับที่</button>' +
+      '<button style="' + btn + '" onclick="icsPwFill(' + i + ')">🎲 สุ่ม 8 ตัว</button>' +
       '<button style="' + btn + 'background:var(--blue2);color:#fff;border-color:var(--blue2);" onclick="icsPwSave(' + i + ')">บันทึก</button>' +
       '<button style="' + btn + '" onclick="icsPwCancel()">ยกเลิก</button>' +
       '<span id="icsPwLiveHint" style="font-size:11px;"></span></div>' : '';
@@ -1025,13 +1026,15 @@ function icsPwDelete(i) {
 var icsPwBulkLast = [];
 function icsPwBulkSet(mode) {
   if (!icsPwCanManage()) { icsPwSay('err', '🚫 ไม่มีสิทธิ์จัดการรหัสลูกค้า ICS'); return; }
-  var todo = icsPwRows.filter(function(r){ return !icsPwData[r.key]; });
+  var all = (mode === 'pattern-all'), todo = icsPwRows.filter(function(r){ return all || !icsPwData[r.key]; });
   if (!todo.length) { icsPwSay('', 'ทุกรายมีรหัสแล้ว'); return; }
-  if (!confirm('ตั้งรหัส' + (mode === 'pattern' ? 'แบบ ชื่อ+อักขระ+ลำดับที่' : 'สุ่ม 8 ตัว') + 'ให้ลูกค้า ' + todo.length + ' ราย?\n\nรายที่มีรหัสอยู่แล้วจะไม่ถูกเปลี่ยน · ใบ ICS ที่พิมพ์ต่อจากนี้ของรายเหล่านี้จะถูกเข้ารหัส\nหลังบันทึกจะมีตารางชื่อ/รหัสให้คัดลอกไปแจ้งลูกค้า')) return;
+  var had = todo.filter(function(r){ return icsPwData[r.key]; }).length;
+  if (all && had && !confirm('⚠️ จะเปลี่ยนรหัสเดิมของลูกค้า ' + had + ' ราย เป็นรหัสแบบใหม่\n\nลูกค้าที่ได้รับรหัสเดิมไปแล้วต้องแจ้งรหัสใหม่ · ใบที่พิมพ์ไปแล้วยังใช้รหัสเดิมตอนเปิด\n\nแน่ใจนะ?')) return;
+  if (!confirm('ตั้งรหัส' + (mode === 'random' ? 'สุ่ม 8 ตัว' : 'แบบ ชื่อ+อักขระ+ลำดับที่') + 'ให้ลูกค้า ' + todo.length + ' ราย?\n\n' + (all ? 'รหัสเดิมของทุกรายจะถูกแทนที่' : 'รายที่มีรหัสอยู่แล้วจะไม่ถูกเปลี่ยน') + ' · ใบ ICS ที่พิมพ์ต่อจากนี้ของรายเหล่านี้จะถูกเข้ารหัส\nหลังบันทึกจะมีตารางชื่อ/รหัสให้คัดลอกไปแจ้งลูกค้า')) return;
   var me = users[currentUserPin] || {}, at = new Date().toISOString(), body = {}, out = [];
   for (var i = 0; i < todo.length; i++) {
     var seq = icsPwRows.indexOf(todo[i]) + 1, pw = '', note = '';
-    if (mode === 'pattern') { pw = icsPwPattern(todo[i].label, seq); if (!pw) note = ' (ชื่อสร้างตามรูปแบบไม่ได้ — ใช้รหัสสุ่มแทน)'; }
+    if (mode === 'pattern' || all) { pw = icsPwPattern(todo[i].label, seq); if (!pw) note = ' (ชื่อสร้างตามรูปแบบไม่ได้ — ใช้รหัสสุ่มแทน)'; }
     if (!pw) pw = icsPwGenerate(todo[i].label);
     if (!pw) { icsPwSay('err', '⚠️ สร้างรหัสไม่สำเร็จ — ลองใหม่'); return; }
     body[todo[i].key] = { pw: pw, by: me.name || currentUserPin || '', at: at };
