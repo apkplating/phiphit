@@ -326,9 +326,10 @@ if ('caches' in window) {
         <p>ลูกค้าสแกน QR แล้วต้องกรอกรหัสของตัวเองเท่านั้นถึงเปิดดูใบได้ — ใบจะถูกเข้ารหัสก่อนเก็บ ใช้รหัสของลูกค้ารายอื่นเปิดไม่ได้</p>
       </div>
       <div class="hint-box" style="font-size:12px;line-height:1.8;color:#475569;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-        <b>เงื่อนไขรหัส:</b> ยาว 6–8 ตัว · มีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัวขึ้นไป (เช่น ! @ # $ % &amp; * ? - _) · ห้ามมีชื่อลูกค้าอยู่ในรหัส · ห้ามอักขระซ้ำ/เรียงกัน 3 ตัว (aaa, 123) · ห้ามมีช่องว่าง · แนะนำ 8 ตัว (กด 🎲 สุ่มให้)<br>
+        <b>เงื่อนไขรหัส:</b> ยาว 6–8 ตัว · มีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัวขึ้นไป (เช่น ! @ # $ % &amp; * ? - _) · ห้ามอักขระซ้ำ/เรียงกัน 3 ตัว (aaa, 123) · ห้ามมีช่องว่าง · รหัสตั้งต้นแบบจำง่าย = ชื่อลูกค้า 4 ตัวแรก (ตัวแรกพิมพ์ใหญ่) + อักขระพิเศษ + ลำดับที่ เช่น Jozu@01 · รหัสสุ่ม 8 ตัว (🎲) ปลอดภัยกว่า<br>
         <b>ข้อควรรู้:</b> เปลี่ยน/ลบรหัสมีผลกับใบที่พิมพ์ <u>ต่อจากนี้</u> ใบที่ออกไปแล้วยังใช้รหัสเดิมตอนพิมพ์ · รหัสเก็บในระบบ APK (ผู้ที่เข้าถึงฐานข้อมูลภายในอ่านได้) · ลืมรหัสแล้วกู้ใบที่เข้ารหัสไว้ไม่ได้ ควรจดรหัสไว้ · รหัสเดียวใช้ร่วมกันทั้งบริษัทลูกค้า
       </div>
+      <div id="icsPwBulk"></div>
       <div id="icsPwList"></div>
       <div id="icsPwMsg" style="min-height:18px;margin-top:8px;font-size:12px;"></div>
     </div>
@@ -886,8 +887,6 @@ function icsPwCheck(pw, label) {
       var seq = low.substr(j, 3); if (/^[a-z0-9]{3}$/.test(seq)) return 'ห้ามมีตัวอักษร/ตัวเลขเรียงกัน 3 ตัว (เช่น abc, 123)';
     }
   }
-  var toks = String(label || '').toLowerCase().split(/[^a-z0-9]+/);
-  for (var k = 0; k < toks.length; k++) if (toks[k].length >= 3 && low.indexOf(toks[k]) !== -1) return 'ห้ามมีชื่อลูกค้า (' + toks[k].toUpperCase() + ') อยู่ในรหัส';
   return '';
 }
 function icsRnd(n) { var b = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n; do { crypto.getRandomValues(b); } while (b[0] >= lim); return b[0] % n; }
@@ -896,15 +895,23 @@ function icsPick(s) { return s.charAt(icsRnd(s.length)); }
 function icsPwGenerate(label) {
   var U = 'ABCDEFGHJKLMNPQRSTUVWXYZ', L = 'abcdefghijkmnpqrstuvwxyz', D = '23456789', S = '!@#$%&*?-_', ALL = U + L + D + S;
   for (var t = 0; t < 500; t++) {
-    var ch = [icsPick(U), icsPick(L), icsPick(D), icsPick(S)];
-    while (ch.length < 8) ch.push(icsPick(ALL));
+    var ch = [icsPick(U), icsPick(L), icsPick(D), icsPick(S)], c;
+    while (ch.length < 8) { c = icsPick(ALL); if (ch.indexOf(c) === -1) ch.push(c); } // ไม่ซ้ำกันเลยทั้ง 8 ตัว
     for (var i = ch.length - 1; i > 0; i--) { var j = icsRnd(i + 1), x = ch[i]; ch[i] = ch[j]; ch[j] = x; }
     var pw = ch.join('');
-    if (!icsPwCheck(pw, label)) return pw;
+    if (!icsPwCheck(pw, label)) return pw; // ตัวพิมพ์ใหญ่/เล็ก/เลข/พิเศษ กระจายตำแหน่งแบบสุ่ม (สลับกันหน้า-กลาง-หลัง)
   }
   return '';
 }
 
+// รหัสตั้งต้นแบบจำง่าย: ชื่อลูกค้า 4 ตัวแรก (ตัวแรกพิมพ์ใหญ่) + อักขระพิเศษสุ่ม + ลำดับที่ในรายชื่อ (เรียง A–Z) 2 หลัก เช่น Jozu@01
+// ผ่านเงื่อนไขไม่ได้ (ชื่อสั้นเกิน/ชื่อเรียงกัน เช่น Abcd) → คืนค่าว่าง ให้ผู้เรียกถอยไปใช้รหัสสุ่ม
+function icsPwPattern(label, seq) {
+  var m = String(label || '').match(/[A-Za-z]+/); if (!m) return '';
+  var t = m[0].slice(0, 4), name = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  var pw = name + icsPick('!@#$%&*?-_') + ('0' + seq).slice(-2);
+  return icsPwCheck(pw, label) ? '' : pw;
+}
 function icsPwLoad() {
   icsPwState = 'loading'; renderIcsPwPanel();
   var pwP = icsFetchJson(ICS_PW_URL, 15000).then(function(d){
@@ -940,7 +947,12 @@ function renderIcsPwPanel() {
   icsPwRows = Object.keys(map).sort().map(function(k){ return { key: k, label: map[k] }; });
   if (!icsPwRows.length) { list.innerHTML = '<div style="font-size:13px;color:#475569;">ยังไม่มีรายชื่อลูกค้า (ดึงจาก Part Master และทะเบียน Standard)</div>'; return; }
   var btn = 'font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;';
-  list.innerHTML = icsPwRows.map(function(r, i){
+  var missing = icsPwRows.filter(function(r){ return !icsPwData[r.key]; }).length;
+  var dis = missing ? '' : ' disabled';
+  var bulkBtn = '<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+    '<button class="btn" onclick="icsPwBulkSet(\'pattern\')"' + dis + '>📝 ตั้งรหัสแบบ ชื่อ+อักขระ+ลำดับที่ ให้ทุกรายที่ยังไม่มีรหัส (' + missing + ' ราย)</button>' +
+    '<button class="btn secondary" onclick="icsPwBulkSet(\'random\')"' + dis + '>🎲 สุ่ม 8 ตัว (ปลอดภัยกว่า)</button></div>';
+  list.innerHTML = bulkBtn + icsPwRows.map(function(r, i){
     var e = icsPwData[r.key], bad = icsPwBad[r.key], editing = (icsPwEditKey === r.key);
     var status = bad ? '<span style="color:var(--red);font-weight:700;">⚠️ ข้อมูลรหัสเสียหาย — ตั้งใหม่</span>'
       : e ? '<span style="color:var(--green);font-weight:700;">🔒 ตั้งรหัสแล้ว</span>' + ((e.pw.length > ICS_PW_MAX || e.pw.length < ICS_PW_MIN || icsPwCheck(e.pw, r.label)) ? ' <span style="color:var(--amber);font-size:11px;">(รหัสเดิม ไม่ตรงเงื่อนไขใหม่ — แนะนำเปลี่ยน)</span>' : '')
@@ -955,6 +967,7 @@ function renderIcsPwPanel() {
     var edit = editing ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
       '<input id="icsPwInput" type="text" autocomplete="off" spellcheck="false" maxlength="' + ICS_PW_MAX + '" placeholder="รหัสใหม่ ' + ICS_PW_MIN + '–' + ICS_PW_MAX + ' ตัว" oninput="icsPwLive(' + i + ')" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:\'IBM Plex Mono\',monospace;font-size:13px;width:150px;">' +
       '<button style="' + btn + '" onclick="icsPwFill(' + i + ')">🎲 สุ่มให้</button>' +
+      '<button style="' + btn + '" onclick="icsPwFillPattern(' + i + ')">📝 ชื่อ+ลำดับที่</button>' +
       '<button style="' + btn + 'background:var(--blue2);color:#fff;border-color:var(--blue2);" onclick="icsPwSave(' + i + ')">บันทึก</button>' +
       '<button style="' + btn + '" onclick="icsPwCancel()">ยกเลิก</button>' +
       '<span id="icsPwLiveHint" style="font-size:11px;"></span></div>' : '';
@@ -968,6 +981,12 @@ function icsPwCancel() { icsPwEditKey = null; renderIcsPwPanel(); icsPwSay('', '
 function icsPwFill(i) {
   var el = document.getElementById('icsPwInput'); if (!el) return;
   el.value = icsPwGenerate(icsPwRows[i].label); icsPwLive(i);
+}
+function icsPwFillPattern(i) {
+  var el = document.getElementById('icsPwInput'); if (!el) return;
+  var pw = icsPwPattern(icsPwRows[i].label, i + 1);
+  if (!pw) { icsPwSay('warn', 'ชื่อนี้สร้างรหัสตามรูปแบบไม่ได้ (สั้นเกินหรือตัวอักษรเรียงกัน) — ใช้ 🎲 สุ่มให้ หรือพิมพ์เอง'); return; }
+  el.value = pw; icsPwLive(i);
 }
 function icsPwLive(i) {
   var el = document.getElementById('icsPwInput'), h = document.getElementById('icsPwLiveHint'); if (!el || !h) return;
@@ -1000,6 +1019,52 @@ function icsPwDelete(i) {
   var row = icsPwRows[i];
   if (!confirm('ลบรหัสของ ' + row.label + ' ?\n\nใบที่พิมพ์ต่อจากนี้จะไม่ถูกป้องกัน (เปิดดูได้โดยไม่ต้องใช้รหัส) ใบที่ออกไปแล้วยังใช้รหัสเดิม')) return;
   icsPwWrite(row, null, '✅ ลบรหัสของ ' + row.label + ' แล้ว — ใบที่พิมพ์ต่อจากนี้ไม่ป้องกัน');
+}
+
+// ── ตั้งรหัสสุ่มให้ทุกรายที่ยังไม่มีรหัส (บันทึกครั้งเดียว) แล้วแสดงตารางชื่อ/รหัสให้คัดลอกไปแจ้งลูกค้า ──
+var icsPwBulkLast = [];
+function icsPwBulkSet(mode) {
+  if (!icsPwCanManage()) { icsPwSay('err', '🚫 ไม่มีสิทธิ์จัดการรหัสลูกค้า ICS'); return; }
+  var todo = icsPwRows.filter(function(r){ return !icsPwData[r.key]; });
+  if (!todo.length) { icsPwSay('', 'ทุกรายมีรหัสแล้ว'); return; }
+  if (!confirm('ตั้งรหัส' + (mode === 'pattern' ? 'แบบ ชื่อ+อักขระ+ลำดับที่' : 'สุ่ม 8 ตัว') + 'ให้ลูกค้า ' + todo.length + ' ราย?\n\nรายที่มีรหัสอยู่แล้วจะไม่ถูกเปลี่ยน · ใบ ICS ที่พิมพ์ต่อจากนี้ของรายเหล่านี้จะถูกเข้ารหัส\nหลังบันทึกจะมีตารางชื่อ/รหัสให้คัดลอกไปแจ้งลูกค้า')) return;
+  var me = users[currentUserPin] || {}, at = new Date().toISOString(), body = {}, out = [];
+  for (var i = 0; i < todo.length; i++) {
+    var seq = icsPwRows.indexOf(todo[i]) + 1, pw = '', note = '';
+    if (mode === 'pattern') { pw = icsPwPattern(todo[i].label, seq); if (!pw) note = ' (ชื่อสร้างตามรูปแบบไม่ได้ — ใช้รหัสสุ่มแทน)'; }
+    if (!pw) pw = icsPwGenerate(todo[i].label);
+    if (!pw) { icsPwSay('err', '⚠️ สร้างรหัสไม่สำเร็จ — ลองใหม่'); return; }
+    body[todo[i].key] = { pw: pw, by: me.name || currentUserPin || '', at: at };
+    out.push({ label: todo[i].label, pw: pw, note: note });
+  }
+  icsPwSay('', '⏳ กำลังบันทึก ' + todo.length + ' ราย…');
+  icsPatch(body).then(function(ok){
+    if (!ok) { icsPwSay('err', '⚠️ บันทึกไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — ยังไม่มีการเปลี่ยนแปลง ลองใหม่อีกครั้ง'); return; }
+    Object.keys(body).forEach(function(k){ icsPwData[k] = body[k]; delete icsPwBad[k]; });
+    icsPwBulkLast = out; renderIcsPwPanel(); icsPwRenderBulk();
+    icsPwSay('ok', '✅ ตั้งรหัสให้ ' + out.length + ' รายแล้ว — คัดลอกตารางด้านบนไปแจ้งลูกค้า (ปิดตารางแล้วยังกด "แสดงรหัส" ดูได้)');
+  });
+}
+function icsPwBulkText() { return icsPwBulkLast.map(function(x){ return x.label + '\t' + x.pw; }).join('\n'); }
+function icsPwRenderBulk() {
+  var box = document.getElementById('icsPwBulk');
+  if (!icsPwBulkLast.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="border:1.5px solid var(--green);background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:12px;">' +
+    '<div style="font-weight:700;margin-bottom:6px;">รหัสที่เพิ่งตั้ง (' + icsPwBulkLast.length + ' ราย) — จดหรือคัดลอกไว้</div>' +
+    '<table style="font-size:12px;border-collapse:collapse;">' + icsPwBulkLast.map(function(x){
+      return '<tr><td style="padding:2px 14px 2px 0;">' + esc(x.label) + '</td><td><code style="user-select:all;">' + esc(x.pw) + '</code>' + (x.note ? ' <span style="color:var(--amber);font-size:11px;">' + esc(x.note) + '</span>' : '') + '</td></tr>'; }).join('') + '</table>' +
+    '<div style="margin-top:8px;display:flex;gap:6px;"><button class="btn secondary" onclick="icsPwBulkCopy()">📋 คัดลอกทั้งหมด</button>' +
+    '<button class="btn secondary" onclick="icsPwBulkLast=[];icsPwRenderBulk();">ปิดตาราง</button></div></div>';
+}
+function icsPwBulkCopy() {
+  var t = icsPwBulkText();
+  var done = function(){ showToast('คัดลอกแล้ว'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done, function(){ icsPwCopyFallback(t, done); }); }
+  else icsPwCopyFallback(t, done);
+}
+function icsPwCopyFallback(t, done) {
+  var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { showToast('คัดลอกไม่ได้ — ลากเลือกตารางแล้วคัดลอกเอง', 'err'); } document.body.removeChild(ta);
 }
 </script>
 
