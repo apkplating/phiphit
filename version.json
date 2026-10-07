@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-07.85",
+  "version": "2026-10-07.86",
   "updatedAt": "2026-10-07T00:00:00+07:00",
-  "note": "auth_admin.html: ตั้งรหัสชุดแรกด้วยปุ่มตั้งทุกรายเสร็จแล้ว ปุ่มตั้งทีเดียวทุกรายหายถาวร (สถานะที่ B1 /ics-pw-meta.json) — ลูกค้ารายใหม่ขึ้นกรอบเหลือง แอดมินกำหนดรหัสเองทีละราย"
+  "note": "คลัง ICS: แท็บ \"คลัง ICS\" ใน tag_card.html ค้นหาด้วย P/No (ดัชนี B1 /ics-index) + ส่งสำเนา PDF ขึ้น Google Drive ผ่าน Apps Script (apk_ics_drive_script.gs) ทุกครั้งที่พิมพ์ ICS; auth-central.js เพิ่มสิทธิ์แท็บ archive"
 }

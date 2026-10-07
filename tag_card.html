@@ -88,6 +88,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
   <div class="who-row" id="viewTabRow" style="margin-top:8px;">
     <button class="btn-logout" id="tabTagBtn" onclick="switchView('tag')" style="background:rgba(255,255,255,.25);">🏷️ พิมพ์ Tag</button>
     <button class="btn-logout" id="tabIcsBtn" onclick="switchView('ics')" style="display:none;">📐 ทะเบียน Standard (ICS)</button>
+    <button class="btn-logout" id="tabArchiveBtn" onclick="switchView('archive')" style="display:none;">🗄️ คลัง ICS</button>
   </div>
 </div>
 
@@ -203,6 +204,27 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div id="toast" class="toast"></div>
   </div>
 
+</div>
+
+<div class="wrap" id="archiveView" style="display:none;">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:4px;">🗄️ คลัง ICS — ค้นหาสำเนา PDF ใบตรวจสอบที่พิมพ์แล้ว</div>
+    <div class="hint" style="margin-bottom:10px;">ค้นด้วย P/No (พิมพ์บางส่วนได้ ไม่ต้องใส่ขีด เช่น 12370ZF5) · ทุกครั้งที่พิมพ์ ICS ระบบเก็บรายการนี้ไว้ และส่งสำเนา PDF ขึ้น Google Drive ของบริษัท</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="arcQ" autocomplete="off" placeholder="P/No เช่น 12370ZF5" onkeydown="if(event.key==='Enter')archiveSearch()">
+      <button class="btn btn-primary" onclick="archiveSearch()" style="width:auto;white-space:nowrap;">🔍 ค้นหา</button>
+    </div>
+    <div id="arcPending" style="margin-top:10px;"></div>
+    <div id="arcResult" style="margin-top:12px;"></div>
+  </div>
+  <div class="card" id="arcCfgCard" style="display:none;">
+    <div class="card-label" style="margin-bottom:4px;">⚙️ ตั้งค่าการส่ง PDF ขึ้น Google Drive (เฉพาะแอดมิน)</div>
+    <div class="hint" style="margin-bottom:8px;">ใส่ Web app URL และ TOKEN จาก Apps Script (ดูขั้นตอนในไฟล์ apk_ics_drive_script.gs) · ยังไม่ตั้ง = ระบบเก็บรายการค้นหาอย่างเดียว ยังไม่ส่ง PDF</div>
+    <div class="field"><label>Web app URL</label><input type="text" id="arcCfgUrl" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="field"><label>TOKEN</label><input type="password" id="arcCfgToken" autocomplete="off" spellcheck="false" placeholder="รหัสลับเดียวกับใน Script properties"></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" onclick="arcSaveCfg()" style="width:auto;">💾 บันทึก</button><button class="btn" onclick="arcTestCfg()" style="width:auto;">🧪 ทดสอบ URL</button></div>
+    <div id="arcCfgMsg" class="hint" style="margin-top:8px;min-height:16px;"></div>
+  </div>
 </div>
 
 <div class="wrap" id="icsView" style="display:none;">
@@ -328,6 +350,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <!-- html2canvas: ถ่ายภาพใบ ICS ตอนพิมพ์เก็บให้ลูกค้าดู — async กันเน็ตไม่เสถียรไปค้างบล็อกสคริปต์หลัก (โหลดไม่ได้ก็พิมพ์ได้ปกติ แค่ไม่มีภาพ) -->
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- jsPDF: สร้างสำเนา PDF ของใบ ICS ส่งขึ้น Google Drive ตอนพิมพ์ (async กันเน็ตช้าไปบล็อกหน้า) -->
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
 <script>
@@ -397,11 +421,13 @@ function enterApp(){
   $('tgDelDate').value = isoToday();
   // สิทธิ์แท็บมาจากหน้าจัดการผู้ใช้ (auth_admin) — แอดมินเป็นคนกำหนดเองต่อคน ไม่ฝังไว้ในโค้ดแล้ว
   // (session.tabs: null = เห็นทุกแท็บ [ค่าเริ่มต้น/แอดมิน], array = เห็นเฉพาะ id ที่ติ๊กไว้ — 'form'=พิมพ์ Tag, 'ics'=ทะเบียน Standard)
-  var okTag = canTab('form'), okIcs = canTab('ics');
+  var okTag = canTab('form'), okIcs = canTab('ics'), okArc = canTab('archive');
   $('tabIcsBtn').style.display = okIcs ? 'inline-block' : 'none';
+  $('tabArchiveBtn').style.display = okArc ? 'inline-block' : 'none';
+  if (okArc) loadDriveConfig();
   $('tabTagBtn').style.display = okTag ? 'inline-block' : 'none';
-  if (!okTag && okIcs) switchView('ics');
-  if (!okTag && !okIcs) $('tagView').innerHTML = '<div class="card">ยังไม่ได้รับสิทธิ์ใช้แท็บใดในระบบนี้ — ติดต่อแอดมินเพื่อกำหนดสิทธิ์</div>';
+  if (!okTag && okIcs) switchView('ics'); else if (!okTag && okArc) switchView('archive');
+  if (!okTag && !okIcs && !okArc) $('tagView').innerHTML = '<div class="card">ยังไม่ได้รับสิทธิ์ใช้แท็บใดในระบบนี้ — ติดต่อแอดมินเพื่อกำหนดสิทธิ์</div>';
   initPartAutocomplete();
   loadPartList();
   loadPartPhotos();
@@ -414,6 +440,9 @@ function switchView(view) {
   currentView = view;
   $('tagView').style.display = view === 'tag' ? 'block' : 'none';
   $('icsView').style.display = view === 'ics' ? 'block' : 'none';
+  $('archiveView').style.display = view === 'archive' ? 'block' : 'none';
+  $('tabArchiveBtn').style.background = view === 'archive' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
+  if (view === 'archive') archiveOpen();
   $('tabTagBtn').style.background = view === 'tag' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
   $('tabIcsBtn').style.background = view === 'ics' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
   if (view === 'ics') {
@@ -779,6 +808,169 @@ function icsEncrypt(P, obj, id) {
 }
 
 // (แผงตั้งรหัสลูกค้าย้ายไปที่ auth_admin.html แล้ว — หน้านี้อ่านรหัสไปเข้ารหัสใบตอนพิมพ์เท่านั้น)
+
+// ══════════════════════════════════════
+//  คลัง ICS — ดัชนีค้นหา P/No (B1 /ics-index/{P/No ตัวอักษร+ตัวเลขล้วน}/{id}) + สำเนา PDF บน Google Drive
+//  ดัชนีเป็นข้อมูลเล็กๆ ไม่มีภาพ → ค้นเร็ว · PDF ส่งผ่าน Apps Script (ดู apk_ics_drive_script.gs) · เขียนครั้งเดียวต่อ id ไม่ทับกัน
+//  ส่ง Drive ไม่สำเร็จ = ไม่กระทบการพิมพ์ ค้างไว้ส่งซ้ำได้ในแท็บ "คลัง ICS" (ค้างในหน่วยความจำหน้านี้ — ปิดหน้าต่างแล้วหาย
+//  แต่รายการในดัชนียังอยู่และมีป้ายเตือน "ยังไม่มี PDF")
+// ══════════════════════════════════════
+var ICS_INDEX_URL = FB_LINES.B1 + '/ics-index';
+var ICS_DRIVE_CFG_URL = FB_LINES.B1 + '/ics-drive-config.json';
+var _driveCfg = null, _driveCfgLoaded = false, _archivePending = {}, _arcLast = [];
+
+function idxKey(partNo) { return String(partNo || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function arcSafe(s) { return String(s == null ? '' : s).replace(/[\\\/:*?"<>|#%\[\]\r\n\t.]+/g, '_').replace(/\s+/g, ' ').replace(/^_+|_+$/g, '').trim().slice(0, 50) || 'x'; }
+
+function loadDriveConfig() {
+  return fetchJsonWithTimeout(ICS_DRIVE_CFG_URL, 12000).then(function(d){
+    _driveCfg = (d && typeof d.url === 'string' && /^https:\/\/script\.google\.com\//.test(d.url) && typeof d.token === 'string' && d.token) ? { url: d.url, token: d.token } : null;
+    _driveCfgLoaded = true;
+  }).catch(function(){ _driveCfgLoaded = false; });
+}
+
+function waitFor(testFn, ms) {
+  return new Promise(function(resolve){
+    var t0 = Date.now();
+    (function tick(){ if (testFn()) return resolve(true); if (Date.now() - t0 > ms) return resolve(false); setTimeout(tick, 150); })();
+  });
+}
+function buildIcsPdfBase64(img) {
+  return waitFor(function(){ return window.jspdf && window.jspdf.jsPDF; }, 8000).then(function(ok){
+    if (!ok) throw new Error('jspdf');
+    var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    pdf.addImage(img, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    var uri = pdf.output('datauristring');
+    return uri.slice(uri.indexOf('base64,') + 7);
+  });
+}
+function icsIndexUrl(entry) { return ICS_INDEX_URL + '/' + (idxKey(entry.partNo) || 'UNKNOWN') + '/' + entry.id + '.json'; }
+
+// หลังพิมพ์ใบ ICS สำเร็จ: 1) เขียนรายการดัชนี 2) สร้าง PDF ส่งขึ้น Drive (ถ้าตั้งค่าแล้ว)
+function archiveAfterPrint(ics, res) {
+  var c = ics.ctx;
+  var entry = {
+    id: ics.id, partNo: c.partNo, partName: c.partName || '', customer: c.custName || '', lot: c.proLotNo || '',
+    inspDate: isoToday(), docNo: c.docNo || '', lotSize: c.lotSize, lotUnit: c.lotUnit || 'pcs',
+    judgement: c.lotJudgement || '', inspBy: c.inspBy || '', encrypted: !!res.encrypted,
+    printedAt: new Date().toISOString(), printedBy: (session && session.user && session.user.name) || (session && session.pin) || '',
+    drive: null
+  };
+  var year = entry.inspDate.slice(0, 4);
+  var fileName = 'ICS_' + arcSafe(entry.partNo) + '_' + entry.inspDate + '_' + arcSafe(entry.lot) + '_' + entry.id.slice(0, 8) + '.pdf';
+  var job = { entry: entry, fileName: fileName, folders: [arcSafe(entry.customer || 'UNKNOWN'), year], pdf: null };
+  sendJsonWithTimeout('PUT', icsIndexUrl(entry), entry, 12000).then(function(ok){
+    if (!ok) showToast('⚠️ บันทึกรายการค้นหา (คลัง ICS) ไม่สำเร็จ — ใบพิมพ์ได้ตามปกติ แต่ค้นหาจากคลังไม่เจอ', 'err');
+  });
+  if (!_driveCfg) { if (_driveCfgLoaded) return; loadDriveConfig().then(function(){ if (_driveCfg) startArchiveUpload(job, res.img); }); return; }
+  startArchiveUpload(job, res.img);
+}
+function startArchiveUpload(job, img) {
+  if (!img) { _archivePending[job.entry.id] = job; job.reason = 'ไม่มีภาพใบ (ถ่ายภาพไม่สำเร็จ)'; renderArchivePending(); return; }
+  buildIcsPdfBase64(img).then(function(b64){ job.pdf = b64; return uploadArchiveJob(job); })
+    .catch(function(){ job.reason = 'สร้าง PDF ไม่สำเร็จ'; _archivePending[job.entry.id] = job; renderArchivePending(); showToast('⚠️ ยังไม่ได้เก็บสำเนา PDF ลง Drive — ส่งซ้ำได้ที่แท็บ คลัง ICS', 'err'); });
+}
+// ส่ง PDF ขึ้น Drive: text/plain กัน preflight ของ CORS (Apps Script อ่านเนื้อหาจาก postData ได้เหมือนกัน)
+function uploadArchiveJob(job) {
+  if (!_driveCfg) { _archivePending[job.entry.id] = job; job.reason = 'ยังไม่ได้ตั้งค่า Drive'; renderArchivePending(); return Promise.resolve(false); }
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, 60000);
+  return fetch(_driveCfg.url, { method: 'POST', body: JSON.stringify({ token: _driveCfg.token, fileName: job.fileName, folders: job.folders, pdfBase64: job.pdf }), signal: ctl ? ctl.signal : undefined })
+    .then(function(r){ clearTimeout(timer); return r.json(); })
+    .then(function(r){
+      if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+      return sendJsonWithTimeout('PATCH', icsIndexUrl(job.entry), { drive: { fileId: r.fileId, url: r.url, at: new Date().toISOString() } }, 12000).then(function(){
+        delete _archivePending[job.entry.id]; renderArchivePending(); return true;
+      });
+    })
+    .catch(function(e){
+      clearTimeout(timer);
+      job.reason = 'ส่งขึ้น Drive ไม่สำเร็จ (' + ((e && e.message) || 'เน็ต') + ')';
+      _archivePending[job.entry.id] = job; renderArchivePending();
+      showToast('⚠️ ส่งสำเนา PDF ขึ้น Drive ไม่สำเร็จ — ค้างไว้ส่งซ้ำที่แท็บ คลัง ICS', 'err');
+      return false;
+    });
+}
+function archiveRetryAll() {
+  var ids = Object.keys(_archivePending);
+  if (!ids.length) return;
+  var chain = Promise.resolve();
+  ids.forEach(function(id){
+    chain = chain.then(function(){
+      var job = _archivePending[id]; if (!job) return;
+      if (job.pdf) return uploadArchiveJob(job);
+      return null; // ไม่มี PDF ในหน่วยความจำ (สร้างไม่สำเร็จ) — ต้องพิมพ์ใบใหม่
+    });
+  });
+  chain.then(function(){ renderArchivePending(); if ($('arcQ').value.trim()) archiveSearch(); });
+}
+function renderArchivePending() {
+  var el = $('arcPending'); if (!el) return;
+  var ids = Object.keys(_archivePending);
+  if (!ids.length) { el.innerHTML = ''; return; }
+  var retryable = ids.filter(function(i){ return _archivePending[i].pdf; }).length;
+  el.innerHTML = '<div style="border:1.5px solid var(--amber);background:#fffbeb;border-radius:8px;padding:8px 12px;font-size:12px;">⚠️ มี PDF ค้างส่งขึ้น Drive <b>' + ids.length + '</b> ใบ' +
+    (retryable ? ' <button class="btn" onclick="archiveRetryAll()" style="width:auto;display:inline-block;padding:4px 10px;margin-left:8px;">📤 ส่งซ้ำ</button>' : '') +
+    '<div style="margin-top:4px;color:#7c5a10;">' + ids.map(function(i){ var j = _archivePending[i]; return esc(j.entry.partNo) + ' · ' + esc(j.entry.lot) + ' — ' + esc(j.reason || 'รอส่ง'); }).join('<br>') + '</div></div>';
+}
+
+function archiveOpen() {
+  renderArchivePending();
+  $('arcCfgCard').style.display = (session && session.role === 'admin') ? 'block' : 'none';
+  if (session && session.role === 'admin') loadDriveConfig().then(function(){ if (_driveCfg && !$('arcCfgUrl').value) { $('arcCfgUrl').value = _driveCfg.url; $('arcCfgToken').placeholder = 'ตั้งค่าไว้แล้ว (ใส่ใหม่เพื่อเปลี่ยน)'; } });
+  setTimeout(function(){ $('arcQ').focus(); }, 50);
+}
+function archiveSearch() {
+  var q = idxKey($('arcQ').value), box = $('arcResult');
+  if (!q) { box.innerHTML = '<div class="hint">พิมพ์ P/No อย่างน้อย 1 ตัวอักษร</div>'; return; }
+  box.innerHTML = '<div class="hint">⏳ กำลังค้นหา…</div>';
+  var url = ICS_INDEX_URL + '.json?orderBy=' + encodeURIComponent('"$key"') + '&startAt=' + encodeURIComponent('"' + q + '"') + '&endAt=' + encodeURIComponent('"' + q + '"') + '&limitToFirst=20';
+  fetchJsonWithTimeout(url, 15000).then(function(map){
+    var rows = [];
+    Object.keys(map || {}).forEach(function(pk){ var g = map[pk] || {}; Object.keys(g).forEach(function(id){ if (g[id] && typeof g[id] === 'object') rows.push(g[id]); }); });
+    rows.sort(function(a, b){ return String(b.printedAt || '').localeCompare(String(a.printedAt || '')); });
+    _arcLast = rows;
+    if (!rows.length) { box.innerHTML = '<div class="hint">ไม่พบรายการของ P/No ที่ขึ้นต้นด้วย "' + esc($('arcQ').value.trim()) + '"</div>'; return; }
+    var cap = rows.length > 200; if (cap) rows = rows.slice(0, 200);
+    box.innerHTML = '<div class="hint" style="margin-bottom:6px;">พบ ' + rows.length + ' รายการ' + (cap ? ' (แสดง 200 ล่าสุด)' : '') + ' · ใหม่สุดก่อน</div>' + rows.map(archiveRowHtml).join('');
+  }).catch(function(e){
+    box.innerHTML = '<div class="hint" style="color:var(--red);">⚠️ ค้นหาไม่สำเร็จ (' + esc((e && e.message) || 'อินเทอร์เน็ต') + ') — ลองใหม่</div>';
+  });
+}
+function archiveRowHtml(r) {
+  var ok = String(r.judgement || '').toUpperCase() === 'OK';
+  var badge = r.judgement ? '<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:' + (ok ? '#d1fae5;color:#065f46' : '#fee2e2;color:#991b1b') + ';">' + esc(r.judgement) + '</span>' : '';
+  var file = (r.drive && /^https:\/\/(drive|docs)\.google\.com\//.test(r.drive.url || ''))
+    ? '<a href="' + esc(r.drive.url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;white-space:nowrap;">📄 เปิด PDF</a>'
+    : '<span style="font-size:11px;color:var(--amber);white-space:nowrap;">' + (_archivePending[r.id] ? '⏳ ค้างส่ง' : '⚠️ ยังไม่มี PDF') + '</span>';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+    '<div style="min-width:0;"><div style="font-weight:700;">' + esc(r.partNo) + ' ' + badge + '</div>' +
+    '<div style="font-size:12px;color:var(--text-mid);">' + esc(r.inspDate) + ' · Lot ' + esc(r.lot) + ' · ' + esc(r.customer) + ' · ' + esc(r.lotSize) + ' ' + esc(r.lotUnit || 'pcs') + (r.encrypted ? ' · 🔒' : '') + '</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);">' + esc(r.docNo) + ' · ผู้ตรวจ ' + esc(r.inspBy) + '</div></div>' + file + '</div>';
+}
+function arcCfgMsg(kind, t) { var m = $('arcCfgMsg'); m.style.color = kind === 'err' ? 'var(--red)' : kind === 'ok' ? 'var(--green)' : ''; m.textContent = t || ''; }
+function arcSaveCfg() {
+  if (!session || session.role !== 'admin') { arcCfgMsg('err', '🚫 เฉพาะแอดมิน'); return; }
+  var url = $('arcCfgUrl').value.trim(), token = $('arcCfgToken').value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\s]+\/exec$/.test(url)) { arcCfgMsg('err', '⚠️ URL ต้องเป็น Web app URL ของ Apps Script (https://script.google.com/macros/s/…/exec)'); return; }
+  if (!token && _driveCfg) token = _driveCfg.token; // ไม่ใส่ token ใหม่ = ใช้ของเดิม
+  if (!token) { arcCfgMsg('err', '⚠️ ใส่ TOKEN'); return; }
+  arcCfgMsg('', '⏳ กำลังบันทึก…');
+  sendJsonWithTimeout('PUT', ICS_DRIVE_CFG_URL, { url: url, token: token, by: (session.user && session.user.name) || session.pin || '', at: new Date().toISOString() }, 12000).then(function(ok){
+    if (!ok) { arcCfgMsg('err', '⚠️ บันทึกไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)'); return; }
+    _driveCfg = { url: url, token: token }; _driveCfgLoaded = true; $('arcCfgToken').value = '';
+    arcCfgMsg('ok', '✅ บันทึกแล้ว — ใบ ICS ที่พิมพ์ต่อจากนี้จะส่งสำเนา PDF ขึ้น Drive');
+  });
+}
+function arcTestCfg() {
+  var url = $('arcCfgUrl').value.trim();
+  if (!/^https:\/\/script\.google\.com\//.test(url)) { arcCfgMsg('err', '⚠️ ใส่ URL ก่อน'); return; }
+  arcCfgMsg('', '⏳ กำลังทดสอบ…');
+  fetchJsonWithTimeout(url, 20000).then(function(r){
+    arcCfgMsg(r && r.ok && r.service === 'apk-ics-archive' ? 'ok' : 'err', r && r.ok && r.service === 'apk-ics-archive' ? '✅ สคริปต์ตอบกลับปกติ' : '⚠️ URL ตอบกลับแต่ไม่ใช่สคริปต์ APK ICS Archive');
+  }).catch(function(){ arcCfgMsg('err', '⚠️ เรียก URL ไม่สำเร็จ — ตรวจว่า Deploy เป็น Web app และ Who has access = Anyone'); });
+}
+
 function findIcsStandard(partNo) {
   return icsStandards.find(function(s){ return s.partNo.toLowerCase() === String(partNo||'').trim().toLowerCase(); });
 }
@@ -963,7 +1155,7 @@ function captureIcsSnapshot(pageHtml) {
 
 // บันทึกใบ (ข้อมูล + ภาพ) ขึ้นระบบพร้อมกัน — recordOk คือสิ่งที่ QR ต้องใช้ (ไม่มี record = QR สแกนแล้วว่าง)
 function publishIcs(id, ctx, pageHtml, password) {
-  var P = null, setup = Promise.resolve();
+  var P = null, setup = Promise.resolve(), capturedImg = null;
   if (password) {
     // ต้องเข้ารหัส: ถ้าเบราว์เซอร์ไม่มี WebCrypto (เช่น เปิดผ่าน http) = ไม่บันทึกอะไรเลย ห้ามถอยไปเก็บแบบไม่เข้ารหัส
     if (!(window.crypto && crypto.subtle && crypto.getRandomValues && typeof TextEncoder !== 'undefined')) return Promise.resolve({ recordOk: false, snapOk: false, encrypted: true, reason: 'encrypt' });
@@ -972,9 +1164,9 @@ function publishIcs(id, ctx, pageHtml, password) {
   }
   return setup.then(function(){
     var recP = saveIcsRecord(id, ctx, P);
-    var snapP = captureIcsSnapshot(pageHtml).then(function(img){ return img ? saveIcsSnapshot(id, img, P) : false; });
+    var snapP = captureIcsSnapshot(pageHtml).then(function(img){ capturedImg = img; return img ? saveIcsSnapshot(id, img, P) : false; });
     return Promise.all([recP, snapP]);
-  }).then(function(r){ return { recordOk: r[0], snapOk: r[1], encrypted: !!password }; })
+  }).then(function(r){ return { recordOk: r[0], snapOk: r[1], encrypted: !!password, img: capturedImg }; })
     .catch(function(e){ if (!password) throw e; return { recordOk: false, snapOk: false, encrypted: true, reason: 'encrypt' }; });
 }
 
@@ -1452,6 +1644,7 @@ function printTags() {
     var info = { snapOk: res.snapOk, qr: true, encrypted: !!res.encrypted };
     if (res.recordOk) {
       d.icsViewUrl = ics.viewUrl;
+      try { archiveAfterPrint(ics, res); } catch (e) { console.warn('archive:', e); } // ไม่รอ ไม่บล็อกการพิมพ์
     } else {
       var why = res.reason === 'pwunknown'
         ? 'อ่านการตั้งค่ารหัสป้องกันใบ ICS ของลูกค้าไม่ได้ (อินเทอร์เน็ตไม่เสถียร หรือข้อมูลการตั้งค่าเสียหาย)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'

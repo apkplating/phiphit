@@ -165,7 +165,8 @@
       key: 'tagcard', label: 'Tag Card', group: 'คุณภาพ & ISO',
       tabs: [
         { id: 'form', label: 'พิมพ์ใบกำกับผลิตภัณฑ์' },
-        { id: 'ics',  label: 'ทะเบียน Standard (ICS)' }
+        { id: 'ics',  label: 'ทะเบียน Standard (ICS)' },
+        { id: 'archive', label: 'คลัง ICS (ค้นหา/สำเนา PDF)' }
       ]
     },
     {
