@@ -164,9 +164,11 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <select id="tgUnit" onchange="onUnitChange()">
           <option value="pcs/Box" selected>pcs/Box (ชิ้น/กล่อง)</option>
           <option value="pcs/Bag">pcs/Bag (ชิ้น/ถุง)</option>
+          <option value="kg/Box">kg/Box (กก./กล่อง)</option>
+          <option value="kg/Bag">kg/Bag (กก./ถุง)</option>
           <option value="__other">อื่นๆ (พิมพ์เอง)…</option>
         </select>
-        <input type="text" id="tgUnitText" autocomplete="off" placeholder="พิมพ์หน่วย เช่น pcs/Pallet" style="display:none;margin-top:6px;">
+        <input type="text" id="tgUnitText" autocomplete="off" oninput="updateLotUnitLabel()" placeholder="พิมพ์หน่วย เช่น pcs/Pallet" style="display:none;margin-top:6px;">
       </div>
     </div>
 
@@ -192,7 +194,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         </div>
       </div>
       <div class="field" style="margin-top:12px;margin-bottom:0;">
-        <label>Lot Size (pcs)</label>
+        <label>Lot Size (<span id="icsLotUnitLbl">pcs</span>)</label>
         <input type="text" inputmode="decimal" id="icsLotSize" placeholder="0">
       </div>
     </div>
@@ -320,6 +322,17 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="hint" style="margin-top:14px;font-weight:700;">P/No ที่ลงทะเบียนแล้ว (<span id="icsRegCount">0</span>)</div>
     <div id="icsRegList" style="margin-top:6px;"></div>
   </div>
+
+  <div class="card" id="icsPwCard" style="display:none;">
+    <div class="card-label" style="margin-bottom:4px;">🔐 รหัสผ่านเปิดดูใบ ICS ต่อลูกค้า (เฉพาะแอดมิน)</div>
+    <div class="hint" style="margin-bottom:10px;line-height:1.7;">
+      ลูกค้ารายที่ตั้งรหัสไว้: ใบ ICS ที่พิมพ์ใหม่จะถูก<b>เข้ารหัสก่อนเก็บ</b> ลูกค้าสแกน QR แล้วต้องกรอกรหัสนี้ถึงเห็นข้อมูล · รายที่ไม่ตั้งรหัสเปิดดูด้วยลิงก์เหมือนเดิม ·
+      เปลี่ยนหรือลบรหัสมีผลกับใบ<b>ที่พิมพ์ต่อจากนี้</b> ใบที่ออกไปแล้วยังใช้รหัสเดิมตอนพิมพ์ · ใบเก่าที่ออกก่อนตั้งรหัสยังเปิดได้ด้วยลิงก์ ·
+      รหัสเก็บในระบบ APK (ผู้ที่เข้าถึงฐานข้อมูลภายในอ่านได้) · ลืมรหัสแล้วกู้คืนใบที่เข้ารหัสไว้ไม่ได้ ควรจดรหัสเก็บไว้
+    </div>
+    <div id="icsPwList"></div>
+    <div id="icsPwMsg" class="hint" style="min-height:16px;margin-top:6px;"></div>
+  </div>
 </div>
 </div>
 
@@ -403,6 +416,7 @@ function enterApp(){
   loadPartList();
   loadPartPhotos();
   loadIcsStandards();
+  loadIcsPasswords();
 }
 function isoToday(){ return new Date().toISOString().split('T')[0]; }
 
@@ -414,6 +428,7 @@ function switchView(view) {
   $('tabIcsBtn').style.background = view === 'ics' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
   if (view === 'ics') {
     renderIcsRegList();
+    renderIcsPwPanel();
     // เอา P/No ที่พิมพ์ไว้ใน Tag Card มาเติมให้เสมอ ไม่ว่าจะสลับแท็บทางไหน (กดแท็บตรงๆ หรือปุ่มลัด)
     // กันปัญหาที่เคยเจอ — สลับแท็บตรงๆ แล้วช่อง P/No ว่างเปล่า ทั้งที่พิมพ์ไว้ในฝั่ง Tag Card แล้ว
     var tagPartNo = $('tgPartNo').value.trim();
@@ -732,6 +747,113 @@ function loadIcsStandards() {
     icsStandards = (data && Array.isArray(data.list)) ? data.list : [];
   }).catch(function(e){ console.warn('ICS standards load:', e.message); });
 }
+
+// ══════════════════════════════════════
+//  รหัสผ่านป้องกันใบ ICS ต่อลูกค้า — แอดมินตั้ง เก็บในระบบ APK (B1: /ics-customer-pw.json รูปแบบ { ชื่อลูกค้า: {pw, by, at} })
+//  ลูกค้ารายที่ตั้งรหัสไว้: ใบ (ข้อมูล+ภาพ) ถูกเข้ารหัส AES-256-GCM ก่อนเก็บขึ้นฐานข้อมูลสาธารณะ กุญแจได้จากรหัสด้วย PBKDF2-SHA256
+//  600,000 รอบ + salt สุ่มต่อใบ (ผูก id ของใบเป็น additionalData กันสลับข้อมูลข้ามใบ) — ข้อมูลที่เก็บไม่มีข้อความอ่านได้เลย
+//  ลูกค้าสแกน QR แล้วกรอกรหัสในหน้า ics_view.html ถอดรหัสบนเครื่องตัวเอง
+//  ปิดทางรั่ว (fail closed): โหลดรหัสไม่ได้ หรือเข้ารหัสไม่สำเร็จ = ไม่บันทึกใบแบบไม่เข้ารหัสเด็ดขาด (ไม่พิมพ์ QR แทน)
+// ══════════════════════════════════════
+var ICS_PW_URL = FB_LINES.B1 + '/ics-customer-pw.json';
+var ICS_KDF_ITER = 600000;
+var _icsPw = {}, _icsPwBad = {}, _icsPwState = 'loading', _icsPwEdit = -1, _icsPwShow = {}, _icsPwRows = [], _icsPwWarn = false;
+
+// คีย์ลูกค้า: ตัวพิมพ์ใหญ่ ตัดช่องว่างหัวท้าย และแทนอักขระที่ Firebase ห้ามใช้ในคีย์ (ใช้ตัวเดียวกับคีย์รูปชิ้นงาน)
+function icsPwKey(customer) { return photoKey(String(customer || '').trim().toUpperCase()); }
+
+function loadIcsPasswords() {
+  _icsPwState = 'loading';
+  return fetchJsonWithTimeout(ICS_PW_URL, 15000).then(function(d){
+    var m = {}, bad = {};
+    // รายการที่มีอยู่แต่รูปแบบเสียหาย (ไม่มี pw ที่ใช้ได้) = ไม่รู้ว่าตั้งใจป้องกันหรือไม่ → เก็บไว้ใน _icsPwBad เพื่อหยุดพิมพ์ ไม่เงียบๆ ถือว่าไม่ป้องกัน
+    if (d && typeof d === 'object') Object.keys(d).forEach(function(k){ var e = d[k]; if (e && typeof e.pw === 'string' && e.pw) m[k] = e; else if (e !== null && e !== undefined) bad[k] = true; });
+    _icsPw = m; _icsPwBad = bad; _icsPwState = 'ok';
+  }).catch(function(e){
+    _icsPwState = 'fail'; console.warn('ICS passwords load:', e && e.message);
+  }).then(function(){ if (currentView === 'ics') renderIcsPwPanel(); });
+}
+
+function icsB64(u8) { var s = '', CH = 0x8000; for (var i = 0; i < u8.length; i += CH) s += String.fromCharCode.apply(null, u8.subarray(i, i + CH)); return btoa(s); }
+function icsDeriveKey(password, salt, iter) {
+  var enc = new TextEncoder();
+  return crypto.subtle.importKey('raw', enc.encode(String(password).normalize('NFC')), 'PBKDF2', false, ['deriveKey']).then(function(base){
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  });
+}
+// P = { key, salt, iter } ได้จาก icsDeriveKey ครั้งเดียวต่อใบ (ใช้กับทั้งข้อมูลและภาพ คนละ iv) คืนซองข้อมูลที่เก็บลงฐานข้อมูล
+function icsEncrypt(P, obj, id) {
+  var iv = crypto.getRandomValues(new Uint8Array(12)), enc = new TextEncoder();
+  return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: enc.encode(id) }, P.key, enc.encode(JSON.stringify(obj))).then(function(ct){
+    return { v: 1, enc: 'AES-GCM', kdf: 'PBKDF2-SHA256', iter: P.iter, salt: icsB64(P.salt), iv: icsB64(iv), ct: icsB64(new Uint8Array(ct)) };
+  });
+}
+
+// ── แผงแอดมินตั้งรหัสต่อลูกค้า ──
+function icsPwMsg(kind, text) { var m = $('icsPwMsg'); m.className = 'hint ' + kind; m.textContent = text; }
+function icsPwGenerate() {
+  // 14 ตัวจากตัวอักษรที่ไม่สับสน (ตัด 0/O/1/l/I) สุ่มแบบไม่เอียง ≈ 81 บิต
+  var A = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', out = '', buf = new Uint8Array(1), lim = 256 - (256 % A.length);
+  while (out.length < 14) { crypto.getRandomValues(buf); if (buf[0] < lim) out += A.charAt(buf[0] % A.length); }
+  return out;
+}
+function renderIcsPwPanel() {
+  var card = $('icsPwCard');
+  if (!session || session.role !== 'admin') { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  var map = {};
+  partList.forEach(function(p){ var k = icsPwKey(p.customer); if (k) map[k] = String(p.customer).trim().toUpperCase(); });
+  icsStandards.forEach(function(x){ var k = icsPwKey(x.customer); if (k) map[k] = String(x.customer).trim().toUpperCase(); });
+  Object.keys(_icsPw).forEach(function(k){ if (!map[k]) map[k] = k; });
+  _icsPwRows = Object.keys(map).sort().map(function(k){ return { key: k, label: map[k] }; });
+  var btn = 'font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit;';
+  if (_icsPwState === 'fail') { icsPwMsg('warn', '⚠️ โหลดรายการรหัสไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — ตอนนี้พิมพ์ใบ ICS ที่มี QR ไม่ได้ จนกว่าจะโหลดได้'); _icsPwWarn = true; }
+  else if (_icsPwWarn) { _icsPwWarn = false; icsPwMsg('', ''); } // โหลดได้แล้ว: เอาคำเตือนเดิมออก ไม่ให้ค้าง
+  if (!_icsPwRows.length) { $('icsPwList').innerHTML = '<div class="hint">ยังไม่มีรายชื่อลูกค้า (ดึงจาก Part Master และทะเบียน Standard)</div>'; return; }
+  $('icsPwList').innerHTML = _icsPwRows.map(function(r, i){
+    var e = _icsPw[r.key], editing = (_icsPwEdit === i);
+    var head = '<span><b>' + esc(r.label) + '</b> &nbsp;' + (e ? '<span style="color:var(--green);">🔒 ตั้งรหัสแล้ว</span>' : '<span style="color:var(--text-muted);">— ไม่ป้องกัน</span>') + '</span>';
+    var acts = '<span style="display:flex;gap:6px;flex-wrap:wrap;">' + (e ?
+        '<button style="' + btn + '" onclick="icsPwToggle(' + i + ')">' + (_icsPwShow[r.key] ? 'ซ่อนรหัส' : 'แสดงรหัส') + '</button>' +
+        '<button style="' + btn + '" onclick="icsPwEdit(' + i + ')">เปลี่ยน</button>' +
+        '<button style="' + btn + 'color:var(--red);" onclick="icsPwDelete(' + i + ')">ลบ</button>'
+      : '<button style="' + btn + '" onclick="icsPwEdit(' + i + ')">ตั้งรหัส</button>') + '</span>';
+    var shown = (e && _icsPwShow[r.key]) ? '<div style="margin-top:6px;font-size:12px;">รหัส: <code style="background:#fff;padding:2px 6px;border-radius:4px;user-select:all;">' + esc(e.pw) + '</code> <span class="hint" style="display:inline;">ตั้งโดย ' + esc(e.by || '-') + '</span></div>' : '';
+    var edit = editing ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+        '<input id="icsPwInput" type="text" autocomplete="off" spellcheck="false" placeholder="รหัสผ่านใหม่ (10–64 ตัวอักษร)" style="flex:1;min-width:170px;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;">' +
+        '<button style="' + btn + '" onclick="icsPwFill()">🎲 สุ่มให้</button>' +
+        '<button style="' + btn + 'background:var(--blue);color:#fff;border-color:var(--blue);" onclick="icsPwSave(' + i + ')">บันทึก</button>' +
+        '<button style="' + btn + '" onclick="icsPwCancel()">ยกเลิก</button></div>' : '';
+    return '<div style="padding:8px 10px;background:var(--sky-pale);border-radius:8px;margin-bottom:6px;font-size:12px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">' + head + acts + '</div>' + shown + edit + '</div>';
+  }).join('');
+}
+function icsPwEdit(i) { _icsPwEdit = i; renderIcsPwPanel(); var el = $('icsPwInput'); if (el) el.focus(); }
+function icsPwCancel() { _icsPwEdit = -1; renderIcsPwPanel(); icsPwMsg('', ''); }
+function icsPwFill() { var el = $('icsPwInput'); if (el) el.value = icsPwGenerate(); }
+function icsPwToggle(i) { var k = _icsPwRows[i].key; _icsPwShow[k] = !_icsPwShow[k]; renderIcsPwPanel(); }
+function icsPwWrite(row, value, okText) {
+  if (!session || session.role !== 'admin') { icsPwMsg('err', '🚫 เฉพาะแอดมินเท่านั้น'); return; }
+  var body = {}; body[row.key] = value;
+  icsPwMsg('', '⏳ กำลังบันทึก…');
+  sendJsonWithTimeout('PATCH', ICS_PW_URL, body, 15000).then(function(ok){
+    if (!ok) { icsPwMsg('err', '⚠️ บันทึกไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร) — ลองใหม่อีกครั้ง'); return; }
+    if (value) { _icsPw[row.key] = value; _icsPwShow[row.key] = true; } else { delete _icsPw[row.key]; }
+    _icsPwEdit = -1; renderIcsPwPanel(); icsPwMsg('ok', okText);
+  });
+}
+function icsPwSave(i) {
+  var row = _icsPwRows[i], el = $('icsPwInput'), v = el ? el.value : '';
+  if (v.length < 10 || v.length > 64) { icsPwMsg('err', '⚠️ รหัสต้องยาว 10–64 ตัวอักษร (กด 🎲 สุ่มให้ ได้รหัสที่เดายากและพิมพ์ง่าย)'); return; }
+  if (v !== v.trim()) { icsPwMsg('err', '⚠️ ห้ามมีช่องว่างหน้าหรือหลังรหัส'); return; }
+  icsPwWrite(row, { pw: v, by: (session.user && session.user.name) || session.pin || '', at: new Date().toISOString() },
+    '✅ ตั้งรหัสของ ' + row.label + ' แล้ว — ใช้กับใบที่พิมพ์ต่อจากนี้ · แจ้งรหัสให้ลูกค้าทางช่องทางที่ปลอดภัย (ไม่พิมพ์รหัสไว้ใกล้ QR)');
+}
+function icsPwDelete(i) {
+  var row = _icsPwRows[i];
+  if (!confirm('ลบรหัสของ ' + row.label + ' ?\n\nใบที่พิมพ์ต่อจากนี้จะไม่ถูกป้องกัน (เปิดด้วยลิงก์ได้เลย)\nใบที่ออกไปแล้วและเข้ารหัสไว้ ยังต้องใช้รหัสเดิม — จดรหัสเดิมไว้ก่อนลบ')) return;
+  icsPwWrite(row, null, '✅ ลบรหัสของ ' + row.label + ' แล้ว — ใบที่พิมพ์ต่อจากนี้ไม่ป้องกัน');
+}
 function findIcsStandard(partNo) {
   return icsStandards.find(function(s){ return s.partNo.toLowerCase() === String(partNo||'').trim().toLowerCase(); });
 }
@@ -855,12 +977,18 @@ function sendJsonWithTimeout(method, url, obj, ms) {
     .catch(function(){ clearTimeout(timer); return false; });
 }
 function putJsonWithTimeout(url, obj, ms) { return sendJsonWithTimeout('PUT', url, obj, ms); }
-function saveIcsRecord(id, ctx) {
+function saveIcsRecord(id, ctx, P) {
   var record = Object.assign({}, ctx, { id: id, printedAt: new Date().toISOString() });
-  return putJsonWithTimeout(ICS_RECORDS_URL + '/' + id + '.json', record, 12000);
+  var url = ICS_RECORDS_URL + '/' + id + '.json';
+  if (!P) return putJsonWithTimeout(url, record, 12000);
+  // ใบของลูกค้าที่ตั้งรหัส: ส่งขึ้นไปเฉพาะซองที่เข้ารหัสแล้ว (ไม่มีข้อความอ่านได้) — เข้ารหัสไม่สำเร็จ = false ไม่ส่งอะไรขึ้นไปเลย
+  return icsEncrypt(P, record, id).then(function(env){ return putJsonWithTimeout(url, env, 12000); }).catch(function(){ return false; });
 }
-function saveIcsSnapshot(id, dataUrl) {
-  return putJsonWithTimeout(ICS_SNAPS_URL + '/' + id + '.json', { img: dataUrl, at: new Date().toISOString() }, 20000);
+function saveIcsSnapshot(id, dataUrl, P) {
+  var snap = { img: dataUrl, at: new Date().toISOString() };
+  var url = ICS_SNAPS_URL + '/' + id + '.json';
+  if (!P) return putJsonWithTimeout(url, snap, 20000);
+  return icsEncrypt(P, snap, id).then(function(env){ return putJsonWithTimeout(url, env, 20000); }).catch(function(){ return false; });
 }
 
 // ภาพขาวล้วน = ถ่ายพลาด (เช่น เรนเดอร์ไม่ติด) ใบจริงมีเส้นตาราง/ตัวอักษรเยอะ ย่อเหลือ 64x90 แล้วนับพิกเซลที่ไม่ขาว
@@ -909,12 +1037,20 @@ function captureIcsSnapshot(pageHtml) {
 }
 
 // บันทึกใบ (ข้อมูล + ภาพ) ขึ้นระบบพร้อมกัน — recordOk คือสิ่งที่ QR ต้องใช้ (ไม่มี record = QR สแกนแล้วว่าง)
-function publishIcs(id, ctx, pageHtml) {
-  var recP = saveIcsRecord(id, ctx);
-  var snapP = captureIcsSnapshot(pageHtml).then(function(img){
-    return img ? saveIcsSnapshot(id, img) : false;
-  });
-  return Promise.all([recP, snapP]).then(function(r){ return { recordOk: r[0], snapOk: r[1] }; });
+function publishIcs(id, ctx, pageHtml, password) {
+  var P = null, setup = Promise.resolve();
+  if (password) {
+    // ต้องเข้ารหัส: ถ้าเบราว์เซอร์ไม่มี WebCrypto (เช่น เปิดผ่าน http) = ไม่บันทึกอะไรเลย ห้ามถอยไปเก็บแบบไม่เข้ารหัส
+    if (!(window.crypto && crypto.subtle && crypto.getRandomValues && typeof TextEncoder !== 'undefined')) return Promise.resolve({ recordOk: false, snapOk: false, encrypted: true, reason: 'encrypt' });
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    setup = icsDeriveKey(password, salt, ICS_KDF_ITER).then(function(key){ P = { key: key, salt: salt, iter: ICS_KDF_ITER }; });
+  }
+  return setup.then(function(){
+    var recP = saveIcsRecord(id, ctx, P);
+    var snapP = captureIcsSnapshot(pageHtml).then(function(img){ return img ? saveIcsSnapshot(id, img, P) : false; });
+    return Promise.all([recP, snapP]);
+  }).then(function(r){ return { recordOk: r[0], snapOk: r[1], encrypted: !!password }; })
+    .catch(function(e){ if (!password) throw e; return { recordOk: false, snapOk: false, encrypted: true, reason: 'encrypt' }; });
 }
 
 // ══════════════════════════════════════
@@ -1048,6 +1184,15 @@ function onUnitChange() {
   var other = $('tgUnit').value === '__other';
   $('tgUnitText').style.display = other ? '' : 'none';
   if (other) $('tgUnitText').focus();
+  updateLotUnitLabel();
+}
+// หน่วยของ Lot Size = ส่วนหน้า "/" ของหน่วยจำนวน (pcs/Box→pcs, kg/Bag→kg, พิมพ์เอง "kg"→kg) ไม่มีค่า→pcs
+function getLotUnit() {
+  var u = getUnitValue().split('/')[0].trim();
+  return u || 'pcs';
+}
+function updateLotUnitLabel() {
+  var el = $('icsLotUnitLbl'); if (el) el.textContent = getLotUnit();
 }
 function getUnitValue() {
   var v = $('tgUnit').value;
@@ -1186,7 +1331,7 @@ function buildIcsPageHtml(ctx) {
       '</tr>'+
     '</table>'+
     '<table style="width:100%;border-collapse:collapse;border-top:none;flex-shrink:0;">'+
-      '<tr style="'+HDR_ROW_H+'">'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' '+(ctx.lotUnit||'pcs'))+'</tr>'+
       '<tr style="'+HDR_ROW_H+'">'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
       '<tr style="'+HDR_ROW_H+'">'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
     '</table>'+
@@ -1343,7 +1488,7 @@ function printTags() {
       var icsCtx = {
         docNo: computeDocNo(icsStd.customer, icsStd.partNo),
         issueDate: fmtDateTH(icsStd.issueDate),
-        custName: d.cust, inspDate: fmtDateTH(isoToday()), lotSize: lotSize,
+        custName: d.cust, inspDate: fmtDateTH(isoToday()), lotSize: lotSize, lotUnit: getLotUnit(),
         partNo: d.partNo, deliveryDate: d.delDate, proLotNo: d.lot,
         partName: d.partName, model: icsStd.model, samplingSize: 5,
         platingTypeStd: (match && match.platingType) || '-',
@@ -1369,14 +1514,26 @@ function printTags() {
     win.document.close();
   } catch (e) {}
 
-  publishIcs(ics.id, ics.ctx, ics.pageHtml).then(function(res){
+  // รีโหลดรหัสป้องกันสดทุกครั้งที่พิมพ์ (กันใช้ค่าเก่าที่แอดมินเพิ่งตั้ง/เปลี่ยน) — โหลดไม่ได้ = ไม่รู้ว่าลูกค้ารายนี้ต้องป้องกันหรือไม่
+  // จึงไม่บันทึกใบขึ้นระบบ (ปิดทางรั่ว) แล้วถามว่าจะพิมพ์ต่อโดยไม่มี QR หรือยกเลิก
+  var custKey = icsPwKey(icsStd.customer);
+  loadIcsPasswords().then(function(){
+    if (_icsPwState !== 'ok' || _icsPwBad[custKey]) return { recordOk: false, snapOk: false, reason: 'pwunknown' };
+    var entry = _icsPw[custKey];
+    return publishIcs(ics.id, ics.ctx, ics.pageHtml, entry ? entry.pw : '');
+  }).then(function(res){
     _printBusy = false;
     if (win.closed) return; // ผู้ใช้ปิดหน้าต่างพิมพ์ไปเองระหว่างรอ — ยกเลิกเงียบๆ
-    var info = { snapOk: res.snapOk, qr: true };
+    var info = { snapOk: res.snapOk, qr: true, encrypted: !!res.encrypted };
     if (res.recordOk) {
       d.icsViewUrl = ics.viewUrl;
     } else {
-      var go = confirm('บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR\n\nกด OK = พิมพ์ต่อโดยไม่มี QR\nกด Cancel = ยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)');
+      var why = res.reason === 'pwunknown'
+        ? 'อ่านการตั้งค่ารหัสป้องกันใบ ICS ของลูกค้าไม่ได้ (อินเทอร์เน็ตไม่เสถียร หรือข้อมูลการตั้งค่าเสียหาย)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
+        : (res.reason === 'encrypt'
+          ? 'เข้ารหัสใบ ICS ของลูกค้านี้ไม่สำเร็จ (เบราว์เซอร์อาจไม่รองรับ หรือเปิดหน้านี้ผ่านที่อยู่ที่ไม่ใช่ https)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
+          : 'บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR');
+      var go = confirm(why + '\n\nกด OK = พิมพ์ต่อโดยไม่มี QR\nกด Cancel = ยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)');
       if (!go) { try { win.close(); } catch (e) {} return; }
       info.qr = false;
     }
@@ -1443,6 +1600,7 @@ function renderAndPrint(d, count, icsPageHtml, win, info) {
   var kind = 'ok';
   if (icsPageHtml && info.qr === false) { msg += ' — ไม่มี QR เพราะบันทึกขึ้นระบบไม่สำเร็จ'; kind = 'err'; }
   else if (icsPageHtml && info.snapOk === false) { msg += ' — ใบออนไลน์ยังไม่มีภาพ (ลูกค้าจะเห็นแบบข้อความแทน)'; kind = 'err'; }
+  if (icsPageHtml && info.qr !== false && info.encrypted) msg += ' · 🔒 ใบออนไลน์ป้องกันด้วยรหัสผ่านแล้ว';
   showToast(msg, kind);
 }
 

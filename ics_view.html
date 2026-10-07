@@ -31,7 +31,21 @@
   .ics-page{width:186mm;height:265mm;overflow:hidden;}
   .state-box{text-align:center;padding:60px 20px;color:#64748b;font-size:14px;}
   .state-box.err{color:#dc2626;}
+  /* หน้ากรอกรหัสผ่าน (ใบที่ลูกค้าป้องกันไว้) */
+  .lockbox{max-width:380px;margin:26px auto;background:#fff;border-radius:16px;padding:22px 18px;box-shadow:0 2px 14px rgba(0,0,0,.14);text-align:center;}
+  .lock-ico{font-size:34px;line-height:1;}
+  .lock-title{font-size:16px;font-weight:700;margin:8px 0 4px;color:#0f2744;}
+  .lock-sub{font-size:12.5px;color:#64748b;margin-bottom:14px;line-height:1.5;}
+  .lock-row{display:flex;gap:6px;}
+  .lock-row input{flex:1;min-width:0;font-size:16px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;font-family:inherit;}
+  .lock-eye{width:46px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:10px;font-size:17px;cursor:pointer;}
+  .lock-rem{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#475569;margin:12px 2px 0;text-align:left;}
+  .lock-btn{width:100%;margin-top:14px;padding:12px;border:none;border-radius:10px;background:#2e75b6;color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
+  .lock-btn:disabled{opacity:.6;cursor:wait;}
+  .lock-err{min-height:18px;margin-top:10px;font-size:13px;color:#dc2626;font-weight:600;}
+  .lock-forget{margin-top:6px;background:none;border:none;color:#64748b;font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit;}
   @media print {
+    .lockbox{display:none !important;}
     @page{size:A4 portrait;margin:0;}
     html,body{background:#fff;margin:0;}
     .topbar,.hintbar,.msgbar,.state-box{display:none !important;}
@@ -48,7 +62,7 @@
 
 <div class="topbar">
   <div class="title">🔍 ใบตรวจสอบคุณภาพ (Inspection Check Sheet)</div>
-  <div class="sub">APK Plating Service Co.,Ltd. — เปิดดูได้สาธารณะ ไม่ต้องเข้าสู่ระบบ</div>
+  <div class="sub" id="topSub">APK Plating Service Co.,Ltd. — เปิดดูได้สาธารณะ ไม่ต้องเข้าสู่ระบบ</div>
   <div class="btns" id="btnRow" style="display:none;">
     <button class="btn primary" id="pdfBtn" onclick="downloadPdf()" style="display:none;">⬇️ ดาวน์โหลด PDF</button>
     <button class="btn" id="printBtn" onclick="window.print()" style="display:none;">🖨️ พิมพ์</button>
@@ -59,6 +73,19 @@
 
 <div class="stage" id="stage">
   <div id="stateArea" class="state-box">⏳ กำลังโหลดข้อมูล...</div>
+  <div class="lockbox" id="lockBox" style="display:none;">
+    <div class="lock-ico">🔒</div>
+    <div class="lock-title">ใบตรวจสอบนี้ป้องกันด้วยรหัสผ่าน</div>
+    <div class="lock-sub">กรอกรหัสผ่านที่ APK Plating แจ้งให้ท่าน เพื่อเปิดดูใบตรวจสอบ</div>
+    <div class="lock-row">
+      <input type="password" id="pwInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="รหัสผ่าน" aria-label="รหัสผ่าน">
+      <button type="button" class="lock-eye" id="pwEye" aria-label="แสดงหรือซ่อนรหัสผ่าน">👁</button>
+    </div>
+    <label class="lock-rem"><input type="checkbox" id="pwRemember"> จำรหัสไว้ในเครื่องนี้ (ใช้เฉพาะเครื่องส่วนตัวของท่าน)</label>
+    <button type="button" class="lock-btn" id="pwBtn">เปิดดูใบตรวจสอบ</button>
+    <div class="lock-err" id="pwErr" role="alert"></div>
+    <button type="button" class="lock-forget" id="pwForget" style="display:none;">ลืมรหัสที่จำไว้ในเครื่องนี้</button>
+  </div>
   <div class="snap-wrap" id="snapWrap" style="display:none;"><img class="snap-img" id="snapImg" alt="ใบตรวจสอบคุณภาพ (Inspection Check Sheet)"></div>
   <div class="stage-inner" id="stageInner">
     <div class="sheet" id="sheet" style="display:none;"><div class="ics-page" id="icsPage"></div></div>
@@ -109,7 +136,7 @@ function buildIcsPageHtml(ctx) {
       '</tr>'+
     '</table>'+
     '<table style="width:100%;border-collapse:collapse;border-top:none;flex-shrink:0;">'+
-      '<tr style="'+HDR_ROW_H+'">'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' pcs')+'</tr>'+
+      '<tr style="'+HDR_ROW_H+'">'+infoCell('Cust/Name', ctx.custName)+infoCell('Insp. Date', ctx.inspDate)+infoCell('Lot Size', ctx.lotSize+' '+(ctx.lotUnit||'pcs'))+'</tr>'+
       '<tr style="'+HDR_ROW_H+'">'+infoCell('P/No', ctx.partNo)+infoCell('Delivery Date', ctx.deliveryDate)+infoCell('Pro Lot No.', ctx.proLotNo)+'</tr>'+
       '<tr style="'+HDR_ROW_H+'">'+infoCell('P/Name', ctx.partName)+infoCell('Model', ctx.model||'-')+infoCell('Sampling Size', ctx.samplingSize+' pcs')+'</tr>'+
     '</table>'+
@@ -308,6 +335,91 @@ function showHtmlMode(record) {
   fitSheet();
 }
 
+// ── ใบที่ป้องกันด้วยรหัสผ่าน (AES-256-GCM, กุญแจจากรหัสด้วย PBKDF2-SHA256) — ต้องตรงกับ icsEncrypt/icsDeriveKey ใน tag_card.html ──
+// ข้อมูลที่เก็บบนฐานข้อมูลเป็นซองเข้ารหัส { v, enc, kdf, iter, salt, iv, ct } ไม่มีข้อความอ่านได้ ถอดรหัสบนเครื่องของท่านเท่านั้น
+var PW_LS_KEY = 'apk_ics_pw';
+var _lock = null;   // { id, rec, snap, src } ซองที่รอถอดรหัส
+function unb64(s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+// iter จำกัด 100,000–1,000,000 กันซองที่ถูกสร้างมาให้เครื่องผู้เปิดคำนวณนานผิดปกติ
+function envOk(e) { return !!e && e.v === 1 && e.enc === 'AES-GCM' && e.kdf === 'PBKDF2-SHA256' && typeof e.salt === 'string' && typeof e.iv === 'string' && typeof e.ct === 'string' && isFinite(e.iter) && e.iter >= 100000 && e.iter <= 1000000; }
+function decryptEnv(key, env, id) {
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv), additionalData: new TextEncoder().encode(id) }, key, unb64(env.ct))
+    .then(function(buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+}
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+function lockErr(t) { document.getElementById('pwErr').textContent = t || ''; }
+
+// ลองถอดรหัสด้วยรหัสที่ให้มา → Promise<true|false> (false = รหัสผิดหรือข้อมูลเสีย) / reject 'nocrypto' ถ้าเบราว์เซอร์ไม่รองรับ
+function tryUnlock(password) {
+  var L = _lock;
+  if (!(window.crypto && crypto.subtle && typeof TextEncoder !== 'undefined')) return Promise.reject(new Error('nocrypto'));
+  if (!envOk(L.src)) return Promise.resolve(false);
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(String(password).normalize('NFC')), 'PBKDF2', false, ['deriveKey'])
+    .then(function(base) { return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: unb64(L.src.salt), iterations: L.src.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']); })
+    .then(function(key) {
+      var recP = (L.rec && envOk(L.rec)) ? decryptEnv(key, L.rec, L.id) : Promise.resolve(null);
+      // ภาพถอดไม่ได้ไม่ถือว่ารหัสผิด (ถอยไปแสดงจากข้อมูลแทน) แต่ถ้าไม่มีทั้งข้อมูลและภาพที่ถอดได้ = ไม่สำเร็จ
+      var snapP = (L.snap && envOk(L.snap)) ? decryptEnv(key, L.snap, L.id).catch(function() { return null; }) : Promise.resolve(null);
+      return Promise.all([recP, snapP]);
+    })
+    .then(function(r) {
+      if (!r[0] && !(r[1] && r[1].img)) return false;
+      showUnlocked(r[0], r[1]);
+      return true;
+    })
+    .catch(function(e) { if (e && e.message === 'nocrypto') throw e; return false; });
+}
+function showUnlocked(rec, snap) {
+  currentRecord = rec || null;
+  document.getElementById('lockBox').style.display = 'none';
+  document.getElementById('stateArea').style.display = 'none';
+  document.getElementById('topSub').textContent = 'APK Plating Service Co.,Ltd. — ใบนี้ป้องกันด้วยรหัสผ่าน';
+  document.getElementById('pwInput').value = '';
+  if (snap && snap.img) showImageMode(snap.img); else if (rec) showHtmlMode(rec);
+}
+function setPwBusy(b) {
+  document.getElementById('pwBtn').disabled = b;
+  document.getElementById('pwBtn').textContent = b ? 'กำลังตรวจรหัสผ่าน…' : 'เปิดดูใบตรวจสอบ';
+}
+function submitPw() {
+  var pw = document.getElementById('pwInput').value;
+  if (!pw) { lockErr('กรอกรหัสผ่านก่อน'); return; }
+  lockErr(''); setPwBusy(true);
+  tryUnlock(pw).then(function(ok) {
+    setPwBusy(false);
+    if (ok) { lsSet(PW_LS_KEY, document.getElementById('pwRemember').checked ? pw : null); return; }
+    lockErr('รหัสผ่านไม่ถูกต้อง (หรือข้อมูลเสียหาย) — ตรวจรหัสแล้วลองใหม่');
+    var el = document.getElementById('pwInput'); el.focus(); el.select();
+  }).catch(function() {
+    setPwBusy(false);
+    lockErr('เบราว์เซอร์นี้ถอดรหัสไม่ได้ — เปิดด้วย Chrome, Edge หรือ Safari รุ่นล่าสุด ผ่านที่อยู่ที่ขึ้นต้นด้วย https');
+  });
+}
+function startLock(id, rec, snap, src) {
+  _lock = { id: id, rec: rec, snap: snap, src: src };
+  document.getElementById('topSub').textContent = 'APK Plating Service Co.,Ltd. — ใบนี้ป้องกันด้วยรหัสผ่าน';
+  var box = document.getElementById('lockBox'), st = document.getElementById('stateArea');
+  var saved = lsGet(PW_LS_KEY);
+  document.getElementById('pwForget').style.display = saved ? 'inline' : 'none';
+  document.getElementById('pwRemember').checked = !!saved;
+  function showForm(msg) { st.style.display = 'none'; box.style.display = 'block'; lockErr(msg || ''); if (!msg) document.getElementById('pwInput').focus(); }
+  if (!saved) { showForm(''); return; }
+  // มีรหัสที่จำไว้ในเครื่องนี้: ลองเปิดให้เองก่อน โดยยังไม่โชว์ช่องกรอก (ไม่ให้ฟอร์มวูบขึ้นมาแล้วหาย) — ไม่ผ่าน (เช่น เป็นใบของลูกค้าคนละราย) ค่อยโชว์ให้กรอกเอง
+  st.className = 'state-box'; st.style.display = 'block'; st.textContent = '🔓 กำลังเปิดใบด้วยรหัสที่จำไว้ในเครื่องนี้…';
+  tryUnlock(saved).then(function(ok) {
+    if (!ok) showForm('รหัสที่จำไว้ในเครื่องนี้ใช้กับใบนี้ไม่ได้ — กรอกรหัสของใบนี้');
+  }).catch(function() { showForm('เบราว์เซอร์นี้ถอดรหัสไม่ได้ — เปิดด้วย Chrome, Edge หรือ Safari รุ่นล่าสุด ผ่านที่อยู่ที่ขึ้นต้นด้วย https'); });
+}
+(function wireLock() {
+  document.getElementById('pwBtn').addEventListener('click', submitPw);
+  document.getElementById('pwInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); submitPw(); } });
+  document.getElementById('pwEye').addEventListener('click', function() { var i = document.getElementById('pwInput'); i.type = (i.type === 'password') ? 'text' : 'password'; });
+  document.getElementById('pwForget').addEventListener('click', function() {
+    lsSet(PW_LS_KEY, null); document.getElementById('pwForget').style.display = 'none'; document.getElementById('pwRemember').checked = false; lockErr('ลืมรหัสที่จำไว้แล้ว');
+  });
+})();
+
 function loadRecord() {
   var id = getIdFromUrl();
   // กันคนเผลอแปะ URL เพี้ยน — เช็คความยาวคร่าวๆ ก่อนยิง fetch (ไม่ใช่มาตรการความปลอดภัยจริงจัง แค่กัน fetch เปล่าประโยชน์)
@@ -318,6 +430,9 @@ function loadRecord() {
   var snapP = getJson(ICS_SNAPS_URL   + '/' + enc + '.json').catch(function(){ return undefined; });
   Promise.all([recP, snapP]).then(function(r){
     var rec = r[0], snap = r[1];
+    // ใบที่เข้ารหัส: ยังไม่แสดงอะไรจนกว่าจะกรอกรหัสถูก (ไม่ใช้ข้อมูล/ภาพแบบไม่เข้ารหัสที่ปะปนมา)
+    var encSrc = (rec && rec.enc) ? rec : ((snap && snap.enc) ? snap : null);
+    if (encSrc) { startLock(id, (rec && rec.enc) ? rec : null, (snap && snap.enc) ? snap : null, encSrc); return; }
     currentRecord = rec || null;
     if (snap && snap.img) {
       document.getElementById('stateArea').style.display = 'none';
