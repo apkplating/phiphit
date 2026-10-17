@@ -349,6 +349,10 @@ if ('caches' in window) {
       </div>
     </div>
     <div class="field">
+      <label>Cust. Lot No. <span style="font-size:10px;color:var(--text-muted);">— Lot ของลูกค้า (ไม่บังคับ เว้นว่างได้ · จะติดไปที่ INV และ Tag Card อัตโนมัติ)</span></label>
+      <input type="text" id="inCustLot" placeholder="เช่น A2610-0457 (ถ้าไม่มีเว้นว่าง)" autocomplete="off">
+    </div>
+    <div class="field">
       <label>กำหนดส่ง</label>
       <input type="date" id="inDueDate" oninput="inDueDateManual=true">
     </div>
@@ -503,7 +507,7 @@ if ('caches' in window) {
     <div class="grid2">
       <div class="field" style="margin:0;">
         <label id="invLineLotLabel">เลขที่ LOT / อ้างอิง</label>
-        <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02">
+        <input type="text" id="invLineLot" placeholder="เช่น LOT26-03-02" oninput="this.dataset.auto=''">
       </div>
     </div>
     <button class="btn btn-outline" id="invAddLineBtn" onclick="addInvLine()">➕ เพิ่มลงในบิล INV</button>
@@ -1083,6 +1087,10 @@ if ('caches' in window) {
         <input type="date" id="editDueDate">
       </div>
       <div class="field" style="margin:0;">
+        <label>Cust. Lot No. (ไม่บังคับ)</label>
+        <input type="text" id="editCustLot" autocomplete="off">
+      </div>
+      <div class="field" style="margin:0;">
         <label>หมายเหตุ</label>
         <input type="text" id="editNote">
       </div>
@@ -1276,7 +1284,7 @@ function applyRole() {
 function applyStockOverridePermission() {
   var boxEl = document.getElementById('invStockOverrideBox');
   if (!boxEl) return;
-  var allowed = (currentRole === 'admin') || currentStockOverrideApprove;
+  var allowed = (currentRole === 'admin'); // เฉพาะ admin เท่านั้น (ไม่รับสิทธิ์พิเศษรายคนอีกต่อไป)
   boxEl.style.display = allowed ? 'flex' : 'none';
   if (!allowed) {
     var cb = document.getElementById('invStockOverride');
@@ -2051,6 +2059,7 @@ function addJobIn() {
   var qtyKg    = parseFloat(document.getElementById('inQtyKg').value)|| 0;
   var dueDate  = document.getElementById('inDueDate').value;
   var note     = document.getElementById('inNote').value.trim();
+  var custLot  = (document.getElementById('inCustLot')||{value:''}).value.trim();
 
   if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
   if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
@@ -2069,13 +2078,13 @@ function addJobIn() {
   var jobId = 'J'+Date.now();
   jobItems.unshift({ id:jobId, bill:bill, date:date, partName:partName, customer:customer,
                      qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
-                     dueDate:dueDate, note:note });
+                     dueDate:dueDate, note:note, custLot:custLot });
   jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'in', date:date,
                        qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
                        inv:'', by:'', note:note });
   saveLocal(); fbSave();
 
-  ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote'].forEach(function(id){
+  ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote','inCustLot'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value='';
   });
   _inPartSelected = false;
@@ -2430,6 +2439,12 @@ function onInvLineJobSelect() {
     if (lotEl && !lotEl.value.trim() && job.bill) lotEl.value = job.bill;
   } else {
     // auto-fill ราคา/หน่วย — จาก "ทะเบียนราคา" เท่านั้น (ไม่ดึงจากประวัติ INV เก่า)
+    // Cust. Lot No. จากตอนรับเข้า → ติดมาที่ช่อง LOT/อ้างอิงของรายการ INV อัตโนมัติ (ไม่มี = ปล่อยว่าง, แก้เองได้)
+    var lotElS = document.getElementById('invLineLot');
+    if (lotElS && (!lotElS.value.trim() || lotElS.dataset.auto === '1')) {
+      if (job.custLot) { lotElS.value = 'Cust. Lot: ' + job.custLot; lotElS.dataset.auto = '1'; }
+      else if (lotElS.dataset.auto === '1') { lotElS.value = ''; lotElS.dataset.auto = ''; }
+    }
     var found = getPriceForPart(job.partName, job.customer);
     if (found) {
       var foundUnitTH = (found.priceUnit==='kg') ? 'กก.' : 'ชิ้น';
@@ -2713,7 +2728,7 @@ function addInvLine() {
   // จำนวนที่ใช้ตัดสต็อก ต้องอยู่ในหน่วยเดียวกับบิลรับเข้า (job.unit) เสมอ
   var stockQty = isKg ? totalKg : totalPcs;
   var overrideEl = document.getElementById('invStockOverride');
-  var stockOverride = !!(overrideEl && overrideEl.checked);
+  var stockOverride = !!(overrideEl && overrideEl.checked) && currentRole === 'admin';
 
   // ตรวจสอบคงเหลือ (รวมรายการที่เพิ่มไปแล้วในบิลนี้ด้วย) — เทียบตามหน่วยของ "บิลผลิต" (ชิ้น/กก.) เสมอ
   // ข้ามการตรวจสอบนี้ได้ถ้าติ๊ก "โหมดแก้ไขสต๊อกเก่า" ไว้ (ใช้ตอนเคลียร์ยอดสต๊อกเก่าให้ตรงของจริงเท่านั้น)
@@ -5380,6 +5395,7 @@ function openEditModal(jobId) {
   document.getElementById('editQtyKg').value    = job.qtyKg   || '';
   document.getElementById('editDueDate').value  = job.dueDate || '';
   document.getElementById('editNote').value     = job.note    || '';
+  var _ecl = document.getElementById('editCustLot'); if (_ecl) _ecl.value = job.custLot || '';
   // แสดงคำเตือน+checkbox ปลดล็อก ถ้าบิลนี้ถูกปิดไว้ (job.closed) — คงเหลือถูกล็อกเป็น 0 ใน calcJob() จนกว่าจะปลดล็อก
   var closedWarn = document.getElementById('editClosedWarn');
   var unlockChk  = document.getElementById('editUnlockClosed');
@@ -5410,6 +5426,7 @@ function saveEditJob() {
   var qtyKg    = parseFloat(document.getElementById('editQtyKg').value)|| 0;
   var dueDate  = document.getElementById('editDueDate').value;
   var note     = document.getElementById('editNote').value.trim();
+  var custLot  = (document.getElementById('editCustLot')||{value:''}).value.trim();
 
   if (!bill)     { showToast('edit','กรุณากรอกเลขที่บิล','err'); return; }
   if (!partName) { showToast('edit','กรุณากรอกชื่อชิ้นงาน','err'); return; }
@@ -5421,7 +5438,7 @@ function saveEditJob() {
   var stayClosed = jobItems[idx].closed && !(unlockChk && unlockChk.checked);
   var patch = { bill:bill, date:date, partName:partName, customer:customer,
       unit:unit, qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0,
-      dueDate:dueDate, note:note, closed: stayClosed };
+      dueDate:dueDate, note:note, custLot:custLot, closed: stayClosed };
   jobItems[idx] = Object.assign({}, jobItems[idx], patch);
 
   // อัปเดต record 'in' ตัวแรกด้วย (qty หลัก)
