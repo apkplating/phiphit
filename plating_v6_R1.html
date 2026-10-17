@@ -4023,7 +4023,7 @@ function updateLiveIndicator(ok, data) {
     var label = '🟢 Live ' + barrels + ' รอบ';
     if (recorder && recorder !== '–') label += ' · ' + recorder;
     label += ' · ' + timeStr;
-    if (autoOn) label += ' · Discord✓';
+    if (typeof autoOn !== 'undefined' && autoOn) label += ' · Discord✓';
     el.textContent = label;
     el.style.color = '#0d6e56';
   } else {
