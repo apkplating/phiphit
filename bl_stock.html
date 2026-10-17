@@ -464,6 +464,8 @@ var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedataba
 
 // Job Master อยู่ใน DB_B1 /job-master
 var JM_URL  = DB_B1 + '/job-master.json';
+var TMP_NOTES_URL = DB_B1 + '/temp-notes.json'; // ใบส่งของชั่วคราว (หน้า temp_delivery.html) — ส่งของแล้วแต่ยังไม่ออก INV
+var tmpNotesPrev = [];
 var PM_URL     = DB_B1 + '/part-master.json';  // Part Master — ทะเบียนชิ้นงานกลาง
 // Delivery ที่บันทึกใน bl_stock เก็บที่ DB_B1 /bl-delivery
 var DEL_URL    = DB_B1 + '/bl-delivery.json';
@@ -586,9 +588,10 @@ async function loadAll(manual) {
 // ── Job Master + Intake ─────────────────────────────
 async function loadJobMaster() {
   // ดึงทั้ง /job-master.json (items/records) และ /intake.json (intakeJobs)
-  var [jmRes, intakeRes] = await Promise.all([
+  var [jmRes, intakeRes, tmpRes] = await Promise.all([
     fetch(JM_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
     fetch(INTAKE_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
+    fetch(TMP_NOTES_URL, {cache:'no-store'}).catch(function(){ return {ok:false}; }),
   ]);
 
   // สำคัญ: ไม่รีเซ็ตเป็น [] ก่อนเช็คผลจริงอีกต่อไป — เดิมรีเซ็ตทิ้งทันทีตรงนี้ก่อน แล้วค่อยเติมใหม่จาก fetch
@@ -636,6 +639,25 @@ async function loadJobMaster() {
   jmRecords  = newJmRecords.length  ? newJmRecords  : prevJmRecords;
   // ตัดรายการจ่ายออกที่ถูกยกเลิก (voided) — INV ที่ยกเลิก / ใบส่งของชั่วคราวที่ถูกปิดโดย INV จริง ไม่ให้นับซ้ำ (ตรงกับ job_master.html)
   jmRecords  = jmRecords.filter(function(r){ return !(r && r.type==='out' && r.voided); });
+  // ใบส่งของชั่วคราวที่ยังค้าง (ยังไม่ออก INV / ไม่ถูกยกเลิก) → สร้างเป็น out-record สมมติ นับเป็น "ส่งลูกค้าแล้ว"
+  // พอออก INV จริง Job Master จะปิดบรรทัดนั้น (convertedTo) แล้วยอดไปนับจาก INV แทน — ไม่นับซ้ำ
+  var tmpNotesNow = tmpNotesPrev;
+  if (tmpRes && tmpRes.ok) {
+    try {
+      var tmpData = await tmpRes.json();
+      tmpNotesNow = !tmpData ? [] : (Array.isArray(tmpData) ? tmpData.filter(Boolean) : Object.keys(tmpData).map(function(k){ return tmpData[k]; }).filter(Boolean));
+      tmpNotesPrev = tmpNotesNow;
+    } catch(e) {}
+  }
+  tmpNotesNow.forEach(function(n){
+    if (!n || n.status !== 'open') return;
+    (n.lines||[]).forEach(function(l, i){
+      if (l.convertedTo) return;
+      var kg = (l.unit === 'kg');
+      jmRecords.push({ id: 'TMP-' + n.id + '-' + i, type: 'out', jobId: l.jobId, docType: 'temp', inv: 'TMP:' + n.no,
+        date: n.date, qty: kg ? 0 : Number(l.qty||0), qtyKg: kg ? Number(l.qty||0) : 0 });
+    });
+  });
   blInvoices = newBlInvoices.length ? newBlInvoices : prevBlInvoices;
   _realInvNoSet = null; // รีเซ็ต cache เสมอ — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef() จาก blInvoices ล่าสุด (ใหม่หรือค่าเดิมที่คงไว้)
 
