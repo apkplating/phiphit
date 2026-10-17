@@ -98,25 +98,46 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <div class="wrap" id="newView">
   <div class="card">
-    <div class="card-label">📄 บันทึกใบส่งของชั่วคราว (ตัดสต็อกทันที)</div>
+    <div class="card-label">📄 ออกบิลส่งของชั่วคราว (ตัดสต็อกทันที)</div>
     <div class="hint" style="margin-bottom:10px;">ใช้บันทึกของที่ส่งออกไปแล้วด้วยใบเขียนมือ/ไม่ผ่านระบบ เพื่อให้ยอดคงเหลือและ B/L Stock ตรงกับของจริง · ฝ่ายบัญชีจะนำเลขที่ใบนี้ไปอ้างอิงตอนออก INV จริง</div>
     <div class="grid2">
       <div class="field" style="margin-bottom:0;">
-        <label>เลขที่ใบส่งของชั่วคราว *</label>
-        <input type="text" id="tmpNo" autocomplete="off" placeholder="เลขที่ตามเล่มที่เขียนมือ">
+        <label>เลขที่บิล (ออกอัตโนมัติ)</label>
+        <input type="text" id="tmpNo" readonly style="background:#f1f5f9;font-weight:700;">
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>วันที่ส่งของ *</label>
-        <input type="date" id="tmpDate">
+        <input type="date" id="tmpDate" onchange="refreshNo()">
       </div>
     </div>
-    <div class="field" style="margin-top:12px;">
-      <label>ค้นหาบิล/ชิ้นงาน (พิมพ์ P/No, ชื่อ, ลูกค้า หรือเลขบิล อย่างน้อย 2 ตัวอักษร)</label>
+    <div class="grid2" style="margin-top:12px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>ลูกค้า (ตามรายการแรก)</label>
+        <input type="text" id="tmpCust" readonly style="background:#f1f5f9;" placeholder="— เลือกรายการก่อน —">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>ผู้ออกบิล</label>
+        <input type="text" id="tmpIssuer" readonly style="background:#f1f5f9;">
+      </div>
+    </div>
+    <div class="card-label" style="margin-top:16px;">รายการสินค้าในบิล (1 บิลเพิ่มได้หลายรายการ)</div>
+    <div class="field">
+      <label>ค้นหาหมายเลขชิ้นงาน/บิลรับเข้า (พิมพ์ P/No, ชื่อ, ลูกค้า หรือเลขบิล อย่างน้อย 2 ตัวอักษร)</label>
       <input type="text" id="tmpSearch" autocomplete="off" placeholder="เช่น 77208" oninput="renderJobSel()">
       <select id="tmpJobSel" size="1" class="sel-list" style="display:none;" onchange="onJobPick()"></select>
       <div class="hint" id="tmpJobHint"></div>
     </div>
     <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>Pro Lot No.</label>
+        <input type="text" id="tmpProLot" autocomplete="off" placeholder="เช่น 17102026">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Cust. Lot No.</label>
+        <input type="text" id="tmpCustLot" autocomplete="off" placeholder="ดึงจากบิลรับเข้าอัตโนมัติ (แก้ได้)">
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:12px;">
       <div class="field" style="margin-bottom:0;">
         <label>จำนวนที่ส่ง <span id="tmpUnitLbl" class="hint" style="display:inline;"></span></label>
         <input type="number" id="tmpQty" min="0" step="any" inputmode="decimal" placeholder="0">
@@ -198,7 +219,7 @@ function enterApp(){
   $('app').style.display = 'block';
   $('whoName').textContent = myName();
   $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
-  $('tmpDate').value = bkkToday();
+  $('tmpDate').value = bkkToday(); $('tmpIssuer').value = myName();
   var okNew = canTab('new'), okList = canTab('list');
   $('tabNewBtn').style.display = okNew ? 'inline-block' : 'none';
   $('tabListBtn').style.display = okList ? 'inline-block' : 'none';
@@ -234,7 +255,7 @@ function loadAll(){
     invNoSet = {};
     toArr(res[2]).forEach(function(i){ if (i.invNo) invNoSet[i.invNo] = true; });
     notes = toArr(res[3]);
-    _loaded = true;
+    _loaded = true; refreshNo();
     $('tmpJobHint').textContent = '✅ โหลดข้อมูลแล้ว (' + jobItems.length + ' บิล)';
     renderLists();
   }).catch(function(e){
@@ -297,7 +318,15 @@ function renderJobSel(){
 function onJobPick(){
   var j = jobItems.find(function(x){ return x.id === $('tmpJobSel').value; });
   $('tmpUnitLbl').textContent = j ? '(' + (isKgJob(j) ? 'กก.' : 'ชิ้น') + ')' : '';
+  if (j) $('tmpCustLot').value = j.custLot || '';
 }
+function nextNo(date){
+  var ym = String(date||bkkToday()).slice(0,7).replace('-','');
+  var mx = 0;
+  notes.forEach(function(n){ var m = /^(\d{6})\/(\d+)$/.exec(n.no||''); if (m && m[1]===ym) mx = Math.max(mx, parseInt(m[2],10)); });
+  return ym + '/' + String(mx+1).padStart(3,'0');
+}
+function refreshNo(){ $('tmpNo').value = nextNo($('tmpDate').value); }
 function addLine(){
   var id = $('tmpJobSel').value, qty = parseFloat($('tmpQty').value) || 0;
   var j = jobItems.find(function(x){ return x.id === id; });
@@ -306,32 +335,36 @@ function addLine(){
   var used = draft.filter(function(l){ return l.jobId === id; }).reduce(function(s,l){ return s + l.qty; }, 0);
   var rem = jobRemain(j);
   if (qty + used > rem + 0.0001) { showToast('⚠️ เกินคงเหลือของบิลนี้ (เหลือ ' + (rem - used) + (isKgJob(j) ? ' กก.' : ' ชิ้น') + ')', 'err'); return; }
-  draft.push({ jobId: id, bill: j.bill || '', partName: j.partName || '', customer: j.customer || '', qty: qty, unit: j.unit || 'pcs' });
-  $('tmpQty').value = ''; $('tmpSearch').value = '';
+  if (draft.length && (draft[0].customer||'') !== (j.customer||'')) { showToast('⚠️ 1 บิลต้องเป็นลูกค้าเดียวกัน (' + (draft[0].customer||'-') + ') — ออกอีกบิลสำหรับลูกค้าอื่น', 'err'); return; }
+  draft.push({ jobId: id, bill: j.bill || '', partName: j.partName || '', customer: j.customer || '', qty: qty, unit: j.unit || 'pcs',
+    proLot: $('tmpProLot').value.trim(), custLot: $('tmpCustLot').value.trim() });
+  $('tmpQty').value = ''; $('tmpSearch').value = ''; $('tmpProLot').value = ''; $('tmpCustLot').value = '';
   $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none'; $('tmpUnitLbl').textContent='';
   renderDraft();
 }
 function delLine(i){ draft.splice(i,1); renderDraft(); }
+function lotTxt(l){ return (l.proLot ? 'Pro Lot No.: '+esc(l.proLot) : '') + (l.proLot && l.custLot ? ' · ' : '') + (l.custLot ? 'Cust. Lot: '+esc(l.custLot) : ''); }
 function renderDraft(){
   var box = $('tmpDraftBox');
+  $('tmpCust').value = draft.length ? (draft[0].customer || '') : '';
   if (!draft.length) { box.innerHTML=''; return; }
-  box.innerHTML = '<table class="tbl"><tr><th>ชิ้นงาน</th><th>บิล</th><th>จำนวน</th><th></th></tr>' + draft.map(function(l,i){
-    return '<tr><td>'+esc(l.partName)+'<div class="hint">'+esc(l.customer)+'</div></td><td>'+esc(l.bill||'-')+'</td><td><b>'+l.qty+'</b> '+(l.unit==='kg'?'กก.':'ชิ้น')+'</td><td><button class="btn-x" onclick="delLine('+i+')">✕</button></td></tr>';
+  box.innerHTML = '<table class="tbl"><tr><th>#</th><th>หมายเลขชิ้นงาน</th><th>บิลรับเข้า</th><th>Lot</th><th>จำนวน</th><th></th></tr>' + draft.map(function(l,i){
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(l.partName)+'</td><td>'+esc(l.bill||'-')+'</td><td class="hint">'+(lotTxt(l)||'-')+'</td><td><b>'+l.qty+'</b> '+(l.unit==='kg'?'กก.':'ชิ้น')+'</td><td><button class="btn-x" onclick="delLine('+i+')">✕</button></td></tr>';
   }).join('') + '</table>';
 }
 
 // ── บันทึกใบ ──
 function saveNote(){
-  var no = $('tmpNo').value.trim().replace(/["'<>\\\/#?\[\]$.]/g,'');
+  var no = '';
   var date = $('tmpDate').value, memo = $('tmpNote').value.trim();
-  if (!no) { showToast('กรุณากรอกเลขที่ใบส่งของชั่วคราว', 'err'); return; }
   if (!date) { showToast('กรุณาระบุวันที่ส่งของ', 'err'); return; }
   if (!draft.length) { showToast('กรุณาเพิ่มรายการก่อนบันทึก', 'err'); return; }
   var btn = $('tmpSaveBtn'); btn.disabled = true;
   // โหลดใบล่าสุดซ้ำก่อนบันทึก — กันสองคนส่งบิลเดียวกันพร้อมกันจนเกินคงเหลือ / เลขซ้ำ
   getJSON(TMP_URL + '.json').then(function(d){
     notes = toArr(d);
-    if (notes.some(function(n){ return n.no === no; }) || invNoSet[no]) throw { user: '🚫 เลขที่ "' + no + '" ถูกใช้แล้ว — ใช้เลขอื่น' };
+    no = nextNo(date);   // รันเลขใหม่จากข้อมูลล่าสุดตอนบันทึก กันสองคนได้เลขซ้ำ
+    if (notes.some(function(n){ return n.no === no; })) throw { user: '🚫 เลขซ้ำ ลองบันทึกอีกครั้ง' };
     var sums = {};
     draft.forEach(function(l){ sums[l.jobId] = (sums[l.jobId]||0) + l.qty; });
     var bad = Object.keys(sums).filter(function(id){
@@ -341,16 +374,17 @@ function saveNote(){
     if (bad.length) throw { user: '⚠️ มีบิลที่คงเหลือไม่พอ (มีคนบันทึกไปก่อนหน้านี้) — ตรวจรายการอีกครั้ง' };
     var id = 'T' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
     var note = { id: id, no: no, date: date, customer: draft[0].customer || '',
-      lines: draft.map(function(l){ return { jobId:l.jobId, bill:l.bill, partName:l.partName, customer:l.customer, qty:l.qty, unit:l.unit }; }),
-      note: memo, by: myName(), createdAt: new Date().toISOString(), status: 'open' };
+      lines: draft.map(function(l){ return { jobId:l.jobId, bill:l.bill, partName:l.partName, customer:l.customer, qty:l.qty, unit:l.unit, proLot:l.proLot||'', custLot:l.custLot||'' }; }),
+      note: memo, by: myName(), issuer: myName(), createdAt: new Date().toISOString(), status: 'open' };
     return fetch(TMP_URL + '/' + id + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(note) })
       .then(function(r){ if (!r.ok) throw { user: '⚠️ บันทึกไม่สำเร็จ (HTTP ' + r.status + ') — ตรวจ Tailscale แล้วลองใหม่' }; notes.push(note); return note; });
   }).then(function(note){
     var n = note.lines.length;
-    draft = []; ['tmpNo','tmpNote','tmpQty','tmpSearch'].forEach(function(i){ $(i).value=''; });
+    draft = []; ['tmpNote','tmpQty','tmpSearch','tmpProLot','tmpCustLot'].forEach(function(i){ $(i).value=''; }); refreshNo();
     $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none';
     renderDraft(); renderLists();
-    showToast('✅ บันทึกใบ ' + note.no + ' (' + n + ' รายการ) — ตัดสต็อกแล้ว', 'ok');
+    showToast('✅ บันทึกบิล ' + note.no + ' (' + n + ' รายการ) — ตัดสต็อกแล้ว', 'ok');
+    if (confirm('บันทึกแล้ว — พิมพ์บิล ' + note.no + ' เลยหรือไม่?')) printNote(note.id);
   }).catch(function(e){
     showToast((e && e.user) || '⚠️ บันทึกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่', 'err');
   }).then(function(){ btn.disabled = false; });
@@ -375,7 +409,7 @@ function cancelNote(id){
     .catch(function(){ alert('ยกเลิกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่'); });
 }
 function linesText(n){
-  return (n.lines||[]).map(function(l){ return esc(l.partName) + ' × ' + l.qty + (l.unit==='kg'?' กก.':' ชิ้น') + (l.convertedTo ? ' <span class="pill done">INV ' + esc(l.convertedTo) + '</span>' : ''); }).join('<br>');
+  return (n.lines||[]).map(function(l){ return esc(l.partName) + (lotTxt(l) ? ' <span class="hint" style="display:inline;">['+lotTxt(l)+']</span>' : '') + ' × ' + l.qty + (l.unit==='kg'?' กก.':' ชิ้น') + (l.convertedTo ? ' <span class="pill done">INV ' + esc(l.convertedTo) + '</span>' : ''); }).join('<br>');
 }
 function renderLists(){
   var open = notes.filter(function(n){ return n.status === 'open'; }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
@@ -384,15 +418,37 @@ function renderLists(){
     '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>ลูกค้า / รายการ</th><th>ค้าง</th><th></th></tr>' + open.map(function(n){
       var d = daysSince(n.date);
       return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+' · '+esc(n.by||'')+'</div></td><td>'+esc(n.customer||'')+'<div class="hint">'+linesText(n)+'</div>'+(n.note?'<div class="hint">📝 '+esc(n.note)+'</div>':'')+'</td>' +
-        '<td style="white-space:nowrap;font-weight:700;color:'+(d>7?'#dc2626':'#92400e')+';">'+d+' วัน</td><td>'+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
+        '<td style="white-space:nowrap;font-weight:700;color:'+(d>7?'#dc2626':'#92400e')+';">'+d+' วัน</td><td>'+'<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin-bottom:4px;" onclick="printNote(\''+esc(n.id)+'\')">🖨️ พิมพ์</button> '+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
     }).join('') + '</table>';
   var cut = Date.now() - 30*86400000;
   var hist = notes.filter(function(n){ return n.status !== 'open' && new Date(n.createdAt||n.date||0).getTime() >= cut; })
     .sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
   $('histList').innerHTML = !hist.length ? '<div class="hint">ยังไม่มีประวัติ</div>' :
-    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>รายการ</th><th>สถานะ</th></tr>' + hist.map(function(n){
-      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+'</div></td><td>'+linesText(n)+'</td><td>'+(n.status==='cancelled'?'<span class="pill cancel">ยกเลิก</span><div class="hint">'+esc(n.cancelledBy||'')+'</div>':'<span class="pill done">ออก INV แล้ว</span>')+'</td></tr>';
+    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>รายการ</th><th>สถานะ</th><th></th></tr>' + hist.map(function(n){
+      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+'</div></td><td>'+linesText(n)+'</td><td>'+(n.status==='cancelled'?'<span class="pill cancel">ยกเลิก</span><div class="hint">'+esc(n.cancelledBy||'')+'</div>':'<span class="pill done">ออก INV แล้ว</span>')+'</td><td><button class="btn-x" style="background:#eff6ff;color:#1d4ed8;" onclick="printNote(\''+esc(n.id)+'\')">🖨️</button></td></tr>';
     }).join('') + '</table>';
+}
+
+function printNote(id){
+  var n = notes.find(function(x){ return x.id === id; });
+  if (!n) { alert('ไม่พบบิล'); return; }
+  var rows = (n.lines||[]).map(function(l,i){
+    return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+esc(l.partName)+'</td><td>'+esc(l.bill||'-')+'</td><td>'+esc(l.proLot||'-')+'</td><td>'+esc(l.custLot||'-')+'</td><td style="text-align:right"><b>'+l.qty+'</b></td><td style="text-align:center">'+(l.unit==='kg'?'กก.':'ชิ้น')+'</td></tr>';
+  }).join('');
+  for (var k=(n.lines||[]).length; k<8; k++) rows += '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+  var html = '<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบส่งของชั่วคราว '+esc(n.no)+'</title>'+
+   '<style>@page{size:A4;margin:14mm}body{font-family:"Sarabun","Tahoma","Noto Sans Thai",sans-serif;font-size:13px;color:#000}h1{font-size:20px;margin:0}h2{font-size:16px;margin:2px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:5px 6px}th{background:#eee}.meta td{border:none;padding:2px 4px}.sig{display:flex;gap:20px;margin-top:40px}.sig div{flex:1;text-align:center;border-top:1px solid #000;padding-top:4px}.st{color:#b91c1c;font-weight:700;border:2px solid #b91c1c;display:inline-block;padding:2px 10px;transform:rotate(-6deg)}</style></head><body>'+
+   '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>APK Plating Service Co., Ltd.</h1><h2>ใบส่งของชั่วคราว (Temporary Delivery Note)</h2></div>'+(n.status==='cancelled'?'<div class="st">ยกเลิก</div>':'')+'</div>'+
+   '<table class="meta"><tr><td style="width:15%">เลขที่บิล</td><td style="width:35%"><b>'+esc(n.no)+'</b></td><td style="width:15%">วันที่ส่งของ</td><td><b>'+fmtDate(n.date)+'</b></td></tr>'+
+   '<tr><td>ลูกค้า</td><td><b>'+esc(n.customer||'-')+'</b></td><td>ผู้ออกบิล</td><td><b>'+esc(n.issuer||n.by||'-')+'</b></td></tr></table><br>'+
+   '<table><tr><th style="width:5%">#</th><th>หมายเลขชิ้นงาน</th><th style="width:13%">บิลรับเข้า</th><th style="width:14%">Pro Lot No.</th><th style="width:16%">Cust. Lot No.</th><th style="width:10%">จำนวน</th><th style="width:7%">หน่วย</th></tr>'+rows+'</table>'+
+   (n.note?'<p>หมายเหตุ: '+esc(n.note)+'</p>':'')+
+   '<p style="font-size:11px;color:#444">เอกสารชั่วคราว — ฝ่ายบัญชีจะออก INV อ้างอิงเลขที่นี้ในภายหลัง</p>'+
+   '<div class="sig"><div>ผู้ออกบิล / ผู้ส่งของ</div><div>ผู้ตรวจสอบ</div><div>ผู้รับสินค้า</div></div>'+
+   '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+  var w = window.open('', '_blank');
+  if (!w) { alert('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up แล้วลองใหม่'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 document.addEventListener('DOMContentLoaded', function(){
