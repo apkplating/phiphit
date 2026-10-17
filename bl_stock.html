@@ -480,6 +480,7 @@ var blInvoices = []; // ใบ INV จริงจาก job_master.html (data.i
 var _realInvNoSet = null;
 function isRealInvRef(r) {
   if (!r || !r.inv) return false;
+  if (r.docType === 'temp') return true; // ใบส่งของชั่วคราว (job_master) — ส่งของแล้วจริง นับเป็นส่งลูกค้า
   if (!_realInvNoSet) {
     _realInvNoSet = {};
     blInvoices.forEach(function(inv){ if (inv.invNo) _realInvNoSet[inv.invNo] = true; });
@@ -633,6 +634,8 @@ async function loadJobMaster() {
   // ใช้ค่าใหม่ถ้ามีข้อมูลจริง (ไม่ใช่ [] ว่างเปล่า) — ถ้ารอบนี้ได้ [] ว่างเปล่ามา (โหลดพลาด/ชนจังหวะ) ให้คงค่าก่อนหน้าไว้แทนที่จะทิ้ง
   jmItems    = newJmItems.length    ? newJmItems    : prevJmItems;
   jmRecords  = newJmRecords.length  ? newJmRecords  : prevJmRecords;
+  // ตัดรายการจ่ายออกที่ถูกยกเลิก (voided) — INV ที่ยกเลิก / ใบส่งของชั่วคราวที่ถูกปิดโดย INV จริง ไม่ให้นับซ้ำ (ตรงกับ job_master.html)
+  jmRecords  = jmRecords.filter(function(r){ return !(r && r.type==='out' && r.voided); });
   blInvoices = newBlInvoices.length ? newBlInvoices : prevBlInvoices;
   _realInvNoSet = null; // รีเซ็ต cache เสมอ — จะสร้างใหม่รอบถัดไปที่เรียก isRealInvRef() จาก blInvoices ล่าสุด (ใหม่หรือค่าเดิมที่คงไว้)
 
