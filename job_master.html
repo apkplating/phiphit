@@ -1345,6 +1345,19 @@ var _fbLastSavedAt = '';
 // "invoices" ในหน่วยความจำยังเป็น [] ว่างเปล่าอยู่ (ค่าเริ่มต้น) fbSave() จะ PUT ทับข้อมูลจริงบนเซิร์ฟเวอร์
 // ด้วยค่าว่างเปล่าทันที เพราะ PUT ของ Firebase แทนที่ทั้งก้อน ไม่ใช่ merge
 var _hasSuccessfulCloudSync = false;
+// ★ แก้บั๊ก INV/รายการเก่าหาย (ตุลาคม 2569): ธงนี้เป็นจริงก็ต่อเมื่อ "ข้อมูลในหน่วยความจำมาจากเซิร์ฟเวอร์จริงแล้ว" เท่านั้น
+// (เดิมมีแค่ _hasSuccessfulCloudSync ที่ตั้งตั้งแต่เริ่มโหลด ทั้งที่ยังไม่ได้เอาข้อมูลเซิร์ฟเวอร์มาใช้ — ถ้าตอนนั้นมีการบันทึก
+// ระบบจะเอาแคชในเครื่อง (ที่ตัดเหลือ 60 วัน) ขึ้นไปเขียนทับข้อมูลจริงทั้งก้อน)
+var _cloudLoadedOnce = false;
+var _cloudCounts = { invoices: 0, records: 0, items: 0 }; // จำนวนล่าสุดที่รู้ว่าอยู่บนเซิร์ฟเวอร์ ใช้ตรวจว่าที่จะบันทึกไม่หดผิดปกติ
+var _shrinkOkUntil = 0;
+function _shrinkConfirmed(list) {
+  if (Date.now() < _shrinkOkUntil) return true;
+  var ok = window.confirm('⚠️ ข้อมูลที่จะบันทึกน้อยกว่าที่อยู่บนเซิร์ฟเวอร์มากผิดปกติ\n\n' + list.join('\n') +
+    '\n\nถ้าคุณไม่ได้ตั้งใจลบข้อมูลเอง ให้กด "ยกเลิก" แล้วรีเฟรชหน้า (F5) เพื่อโหลดข้อมูลล่าสุด\nกด "ตกลง" เฉพาะเมื่อตั้งใจลบข้อมูลจำนวนมากจริงๆ');
+  if (ok) _shrinkOkUntil = Date.now() + 60000;
+  return ok;
+}
 
 // เอาข้อมูลจาก cloud เป็นหลัก (เผื่อ cloud มีการแก้ไข field อื่นๆ ของ record เดิมที่เครื่องนี้ไม่รู้) แล้วเติม
 // รายการที่มีอยู่ในเครื่องนี้แต่ยังไม่มีใน cloud (เพิ่งเพิ่มไปตอนกำลังจะบันทึกพอดีกับที่อีกเครื่องบันทึกไปก่อน)
@@ -1378,11 +1391,11 @@ async function fbSave() {
   // รอสูงสุด ~5 วินาที (10 ครั้ง x 500ms) ให้ fbLoad() รอบแรกโหลดเสร็จก่อน ถ้ายังไม่เสร็จก็ยกเลิกการบันทึกรอบนี้ไปเลย
   // (ปลอดภัยกว่าเสี่ยงเขียนทับ — ผู้ใช้กดบันทึกซ้ำได้เมื่อระบบซิงค์เสร็จ)
   var waitCount = 0;
-  while (!_hasSuccessfulCloudSync && waitCount < 10) {
+  while (!_cloudLoadedOnce && waitCount < 10) {
     await new Promise(function(r){ setTimeout(r, 500); });
     waitCount++;
   }
-  if (!_hasSuccessfulCloudSync) {
+  if (!_cloudLoadedOnce) {
     console.warn('[Job Master] fbSave() ยกเลิก — ยังไม่เคยซิงค์กับคลาวด์สำเร็จในเซสชันนี้ (กันข้อมูลว่างเปล่าไปเขียนทับของจริง)');
     setSyncErr();
     return false;
@@ -1398,6 +1411,16 @@ async function fbSave() {
         return false;
       }
     } catch(e) {}
+  }
+  // ★ ด่านกันข้อมูลหดผิดปกติ: จำนวนที่จะบันทึกต้องไม่น้อยกว่าที่เพิ่งรู้ว่าอยู่บนเซิร์ฟเวอร์เกิน 20% (ถ้าหด ถามยืนยันก่อน)
+  var _shr = [];
+  [['ใบ INV', invoices.length, _cloudCounts.invoices], ['รายการรับ/จ่าย', jobRecords.length, _cloudCounts.records], ['บิลรับงาน', jobItems.length, _cloudCounts.items]].forEach(function(c){
+    if (c[2] >= 50 && c[1] < c[2] * 0.8) _shr.push(c[0] + ' ' + c[2] + ' → ' + c[1]);
+  });
+  if (_shr.length && !_shrinkConfirmed(_shr)) {
+    console.warn('[Job Master] fbSave() ยกเลิก — ข้อมูลหดผิดปกติ', _shr);
+    setSyncErr();
+    return false;
   }
   // ป้องกันแท็บ/เครื่องอื่นบันทึกทับกัน (เจอเป็นสาเหตุจริงที่ทำให้ "รับงานเข้า" หายไปทั้งก้อน ~47 รายการ):
   // ก่อน PUT ทุกครั้ง เช็คก่อนว่า savedAt บนคลาวด์ตอนนี้ตรงกับที่แท็บนี้รู้ล่าสุดไหม — ถ้าไม่ตรง
@@ -1463,7 +1486,7 @@ async function fbSave() {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, custInvGuard:custInvGuard, savedAt:savedAt })
     });
-    if (res.ok) { _fbLastSavedAt = savedAt; _localDirty = false; setSyncOk(); return true; }
+    if (res.ok) { _fbLastSavedAt = savedAt; _localDirty = false; _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length }; setSyncOk(); return true; }
     setSyncErr();
     return false;
   } catch(e) { setSyncErr(); return false; }
@@ -1482,11 +1505,17 @@ async function fbLoad() {
       // เซิร์ฟเวอร์มาทับข้อมูลในเครื่องที่เพิ่งกรอกไปทันทีที่เน็ตกลับมา — การเช็ค cloudSavedAt<=_fbLastSavedAt
       // ด้านล่างป้องกันไม่ได้เลยถ้า _fbLastSavedAt ยังว่างอยู่ (ไม่เคยบันทึกสำเร็จเลยในเซสชันนี้) จึงต้องเช็คธง
       // _localDirty แยกต่างหาก ไม่พึ่งการเทียบเวลาอย่างเดียว) ──
+      var _firstMerge = false;
       if (_localDirty) {
-        console.warn('[Job Master] fbLoad() พบข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ — ข้ามการดึงข้อมูลรอบนี้ และลองบันทึกซ้ำแทน');
-        fbSave(); // เน็ตกลับมาแล้ว (fbLoad() เพิ่งสำเร็จ) ลองส่งข้อมูลในเครื่องขึ้นไปแทนที่จะดึงของเก่าลงมาทับ
-        setSyncOk();
-        return;
+        if (_cloudLoadedOnce) {
+          console.warn('[Job Master] fbLoad() พบข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้นเซิร์ฟเวอร์สำเร็จ — ข้ามการดึงข้อมูลรอบนี้ และลองบันทึกซ้ำแทน');
+          fbSave(); // เน็ตกลับมาแล้ว ลองส่งข้อมูลในเครื่องขึ้นไปแทนที่จะดึงของเก่าลงมาทับ
+          setSyncOk();
+          return;
+        }
+        // ★ ครั้งแรกของเซสชัน: ข้อมูลในเครื่องเป็นแค่แคช 60 วัน ห้ามเอาไปเขียนทับของจริง
+        // → เอาของเซิร์ฟเวอร์เป็นหลัก แล้วรวมเฉพาะรายการที่มีแต่ในเครื่อง (เพิ่งกรอกและยังไม่ขึ้นเซิร์ฟเวอร์) เข้าไป
+        _firstMerge = true;
       }
 
       // ถ้า cloud ไม่ใหม่กว่าที่เราเพิ่งบันทึกขึ้นไปเอง ห้ามทับ local —
@@ -1494,6 +1523,8 @@ async function fbLoad() {
       var cloudSavedAt = data.savedAt || '';
       if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
+      var _loc = _firstMerge ? { items: jobItems, records: jobRecords, invoices: invoices, customers: customers, priceList: priceList,
+        billStatements: billStatements, hidden: hiddenCustomers, guard: custInvGuard } : null;
       if (Array.isArray(data.items))    jobItems   = data.items;
       if (Array.isArray(data.records))  jobRecords = data.records;
       // รองรับกรณี Firebase เก็บ invoices เป็น object คีย์ตัวเลขแทน array ปกติ (เจอเป็นสาเหตุจริงของปัญหาข้อมูลหายมาแล้ว)
@@ -1507,8 +1538,28 @@ async function fbLoad() {
       if (Array.isArray(data.priceList)) priceList = data.priceList;
       if (Array.isArray(data.hiddenCustomers)) hiddenCustomers = data.hiddenCustomers;
       if (data.custInvGuard && typeof data.custInvGuard === 'object') custInvGuard = data.custInvGuard;
+      var _cloudTotal = invoices.length + jobRecords.length + jobItems.length;
+      _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length };
+      if (_loc) {
+        jobItems       = mergeArraysById(_loc.items, jobItems);
+        jobRecords     = mergeArraysById(_loc.records, jobRecords);
+        invoices       = mergeArraysById(_loc.invoices, invoices);
+        customers      = mergeArraysById(_loc.customers, customers);
+        priceList      = mergeArraysById(_loc.priceList, priceList);
+        billStatements = mergeArraysById(_loc.billStatements, billStatements);
+        hiddenCustomers = mergeStringArrays(_loc.hidden, hiddenCustomers);
+        custInvGuard   = mergeObjectKeys(_loc.guard, custInvGuard);
+        _realInvNoSet = null;
+      }
+      var _wasLoaded = _cloudLoadedOnce;
+      _cloudLoadedOnce = true; // ← จากจุดนี้ข้อมูลในหน่วยความจำมาจากเซิร์ฟเวอร์จริงแล้ว fbSave() ถึงจะทำงานได้
       saveLocal();
+      if (_loc) {
+        var _added = (invoices.length + jobRecords.length + jobItems.length) - _cloudTotal;
+        if (_added > 0) { fbSave(); } else { _localDirty = false; }
+      }
       setSyncOk();
+      if (!_wasLoaded) setTimeout(function(){ try { pullFromLines(); } catch(e){} }, 300); // ดึงรอบชุบจากไลน์ได้ก็ต่อเมื่อโหลดข้อมูลจริงแล้ว
       // refresh UI
       var active = document.querySelector('.view.active');
       if (active) tab(active.id.replace('v-',''));
@@ -1516,11 +1567,23 @@ async function fbLoad() {
   } catch(e) { setSyncErr(); }
 }
 
+// เช็คแบบเบา: อ่านแค่ savedAt (ไม่กี่ไบต์) ถ้าไม่เปลี่ยนก็ไม่ต้องโหลดข้อมูลทั้งก้อน
+async function fbCheck() {
+  if (!_cloudLoadedOnce || _localDirty) { return fbLoad(); }
+  try {
+    var r = await fetch(FB_PATH + '/savedAt.json', { cache: 'no-store' });
+    if (!r.ok) { setSyncErr(); return; }
+    var sa = await r.json();
+    if (sa && sa !== _fbLastSavedAt) { return fbLoad(); }
+    setSyncOk();
+  } catch (e) { setSyncErr(); }
+}
+
 function startPoll() {
   if (_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(function(){
     _pollCount++;
-    if (_pollCount%6===0) fbLoad();
+    if (_pollCount%6===0) fbCheck();
     if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที
   }, 5000);
 }
@@ -1532,7 +1595,7 @@ document.addEventListener('visibilitychange', function(){
   if (document.hidden) {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   } else {
-    fbLoad(); // ดึงทันทีตอนกลับมาดู กันข้อมูลเก่าค้าง
+    fbCheck(); // เช็คทันทีตอนกลับมาดู (โหลดเต็มเฉพาะเมื่อข้อมูลเปลี่ยน)
     startPoll();
   }
 });
@@ -5593,6 +5656,7 @@ function normalizePartKey(s) {
 }
 
 async function pullFromLines() {
+  if (!_cloudLoadedOnce) return; // ห้ามตัดสต็อก/บันทึกก่อนข้อมูลจริงจากเซิร์ฟเวอร์จะโหลดเสร็จ (ต้นเหตุข้อมูลเก่าหาย)
   // โหลด processedRoundIds จาก jobRecords
   processedRoundIds = {};
   jobRecords.forEach(function(r){
