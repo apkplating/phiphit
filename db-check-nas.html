@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ตรวจการเชื่อมต่อฐานข้อมูล</title>
+<style>
+  body{font-family:system-ui,"Sarabun",sans-serif;margin:0;padding:16px;background:#f1f5f9;color:#0f172a}
+  h1{font-size:18px;margin:0 0 12px}
+  .row{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+  .dot{width:12px;height:12px;border-radius:50%;margin-top:4px;flex:none;background:#cbd5e1}
+  .ok{background:#16a34a}.bad{background:#dc2626}
+  small{color:#64748b;display:block;word-break:break-all}
+  button{padding:10px 16px;border:0;border-radius:8px;background:#0f2557;color:#fff;font-size:15px}
+</style></head><body>
+<h1>🔌 ตรวจการเชื่อมต่อฐานข้อมูล APK</h1>
+<div id="list"></div>
+<button onclick="run()">ตรวจอีกครั้ง</button>
+<script src="fb-auth-nas.js"></script>
+<script>
+var OLD='https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+function row(ok,title,detail){var d=document.createElement('div');d.className='row';d.innerHTML='<div class="dot '+(ok?'ok':'bad')+'"></div><div><b>'+title+'</b><small>'+(detail||'')+'</small></div>';document.getElementById('list').appendChild(d);}
+async function run(){
+  document.getElementById('list').innerHTML='';
+  var base=window.APK_DB&&APK_DB.base();
+  row(!!base,'ที่อยู่เซิร์ฟเวอร์',base||'ยังไม่ได้ตั้งค่า PUBLIC_DB_URL ใน fb-auth.js');
+  if(!base)return;
+  try{var h=await APK_DB.health();row(h.ok,'เซิร์ฟเวอร์ทำงาน','ทำงานมาแล้ว '+Math.round(h.uptimeSec/60)+' นาที · seq '+h.seq);}catch(e){row(false,'เซิร์ฟเวอร์ไม่ตอบ',e.message);return;}
+  try{var t=await getFbAuthToken();row(!!t,'ขอสิทธิ์เข้าใช้งาน (token)','สำเร็จ');}catch(e){row(false,'ขอ token ไม่ได้',e.message);return;}
+  try{var s=await (await fetch(OLD+'/job-master/savedAt.json',{cache:'no-store'})).json();row(true,'อ่านฐานข้อมูลได้','job-master บันทึกล่าสุด: '+s);}catch(e){row(false,'อ่านฐานข้อมูลไม่ได้',e.message);}
+  try{var j=await (await fetch(OLD+'/job-master/invoices.json?shallow=true')).json();var n=j?Object.keys(j).length:0;row(n>0,'จำนวนใบ INV ในระบบ',n+' ใบ');}catch(e){row(false,'นับ INV ไม่ได้',e.message);}
+}
+run();
+</script></body></html>
