@@ -468,6 +468,62 @@ if ('caches' in window) {
       </div>
     </div>
 
+    <!-- ── Section 6: Performance B1 (เทียบ CT มาตรฐาน) ── -->
+    <div class="section-sep"></div>
+    <div class="section-title">🎯 Performance — B1 (เทียบ CT มาตรฐาน)</div>
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;">
+        <div>
+          <div class="kpi-label">CT มาตรฐาน (นาที/โม่)</div>
+          <input type="number" id="perfCtStd" value="7.5" min="0.5" step="0.1" oninput="perfSettingsChanged()" style="width:110px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;margin:4px 0;">
+          <div class="kpi-sub">เวลาตั้ง PLC ÷ จำนวนโม่ เช่น 60 ÷ 8 = 7.5 (ไลน์เต็ม 8 โม่)</div>
+        </div>
+        <div>
+          <div class="kpi-label">ช้ากว่ามาตรฐานเกิน (นาที) = "หยุด"</div>
+          <input type="number" id="perfStopExcess" value="5" min="0" step="1" oninput="perfSettingsChanged()" style="width:110px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;margin:4px 0;">
+          <div class="kpi-sub">ช้าไม่ถึงเกณฑ์ = ช้าลง (Performance) · เกินเกณฑ์ = หยุด (Availability)</div>
+        </div>
+      </div>
+      <div class="kpi-sub" style="margin-top:8px;line-height:1.6;">
+        วิธีคิด: ช่วงห่างระหว่างโม่ติดกัน (วันเดียวกัน) = CT จริง · ไลน์เดินตลอดไม่มีพัก ทุกช่วงที่เกิน CT มาตรฐานจึงนับเป็นความสูญเสีย ·
+        เวลาเดิน = Σช่วงห่างที่ไม่ใช่หยุด + (จำนวนครั้งที่หยุด × CT มาตรฐาน) ·
+        <b>Performance</b> = CT มาตรฐาน × จำนวนช่วงห่าง ÷ เวลาเดิน · <b>Availability</b> (ช่วงที่มีบันทึก) = เวลาเดิน ÷ ช่วงเวลารวม ·
+        ใช้ช่วงวันที่และสายจากตัวกรองด้านบน (ต้องเลือก B1 หรือทั้งหมด)
+      </div>
+      <div id="perfMsg" style="display:none;margin-top:10px;font-size:12px;color:var(--text-mid);"></div>
+    </div>
+    <div id="perfBody" style="display:none;">
+      <div class="grid4">
+        <div class="kpi-card"><div class="kpi-label">Performance (B1)</div><div class="kpi-value" id="perfKpiP">—</div><div class="kpi-sub" id="perfKpiPSub">&nbsp;</div></div>
+        <div class="kpi-card"><div class="kpi-label">CT จริงขณะเดิน (เฉลี่ย)</div><div class="kpi-value b1" id="perfKpiCt">—</div><div class="kpi-sub" id="perfKpiCtSub">นาที/โม่</div></div>
+        <div class="kpi-card"><div class="kpi-label">การหยุด</div><div class="kpi-value" id="perfKpiStops">—</div><div class="kpi-sub" id="perfKpiStopsSub">&nbsp;</div></div>
+        <div class="kpi-card"><div class="kpi-label">Availability โดยประมาณ</div><div class="kpi-value" id="perfKpiA">—</div><div class="kpi-sub">เฉพาะช่วงที่มีบันทึก (โม่แรก→โม่สุดท้ายของวัน)</div></div>
+        <div class="kpi-card"><div class="kpi-label">ช่วงห่างที่วิเคราะห์</div><div class="kpi-value" id="perfKpiN">—</div><div class="kpi-sub" id="perfKpiNSub">&nbsp;</div></div>
+        <div class="kpi-card"><div class="kpi-label">ช่วงเวลารวม</div><div class="kpi-value" id="perfKpiSpan">—</div><div class="kpi-sub">ชั่วโมง</div></div>
+        <div class="kpi-card"><div class="kpi-label">กก./ชม.</div><div class="kpi-value" id="perfKpiKgH">—</div><div class="kpi-sub">ตลอดช่วงที่มีบันทึก</div></div>
+        <div class="kpi-card"><div class="kpi-label">กก./โม่ เฉลี่ย</div><div class="kpi-value" id="perfKpiKgB">—</div><div class="kpi-sub">น้ำหนักผันแปรตามความหนา ไม่กระทบ CT</div></div>
+      </div>
+      <div class="card" id="perfSummary" style="margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-mid);"></div>
+      <div class="grid2">
+        <div class="card">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">Performance รายวัน (เส้น) · นาทีที่หยุด (แท่ง)</div>
+          <div class="chart-wrap-lg"><canvas id="chartPerfDaily"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:10px;">การกระจายของช่วงห่างระหว่างโม่ (นาที) · เทียบ CT มาตรฐาน</div>
+          <div class="chart-wrap-lg"><canvas id="chartPerfHist"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px;">การหยุดที่นานที่สุด 10 อันดับ (ดูว่าตรงกับวันที่ใบตรวจเครื่องจักรมี ✗/⚠ หรือไม่)</div>
+        <div class="tbl-wrap"><table id="tblPerfStops">
+          <thead><tr><th style="text-align:left;">วันที่</th><th>จากโม่เวลา</th><th>ถึงโม่เวลา</th><th>ห่างกัน (นาที)</th><th>เกินมาตรฐาน (นาที)</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card" id="perfDq" style="margin-top:12px;font-size:11px;color:var(--text-mid);line-height:1.8;"></div>
+    </div>
+
   </main>
 </div>
 
@@ -603,6 +659,7 @@ async function loadAndRender() {
   renderRework(records, dateFrom, dateTo);
   renderAH(records, dateFrom, dateTo);
   renderTime(records, dateFrom, dateTo);
+  try { renderPerformance(records); } catch(e) { console.error('[analytics] renderPerformance', e); }
 }
 
 // ══════════════════════════════════════════════
@@ -610,6 +667,8 @@ async function loadAndRender() {
 //  ⚠️ ยอดขายที่แท้จริงถูกกรอก/จัดการอยู่ใน job_master.html ไฟล์นี้แค่ "ดึงมาวิเคราะห์" อย่างเดียว ไม่มีการ
 //  แก้ไขข้อมูล invoices ใดๆ ทั้งสิ้น (read-only) ตามที่ตกลงไว้
 // ══════════════════════════════════════════════
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
 var _jmCache = null;
 async function fetchJobMasterData() {
   if (_jmCache) return _jmCache;
@@ -649,7 +708,7 @@ async function renderSalesSection() {
       '<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ โหลดข้อมูลยอดขายไม่สำเร็จ ('+esc(data._error)+') — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้านี้ (ข้อมูลยอดขายจริงไม่ได้หาย อยู่ใน job_master ตามเดิม)</td></tr>';
     return;
   }
-  var invoices = Array.isArray(data.invoices) ? data.invoices : [];
+  var invoices = _jmArr(data.invoices);
   // ไม่รวมใบเคลม/ที่ยกเลิกแล้ว — เกณฑ์เดียวกับที่ job_master.html ใช้เองในแท็บยอดขาย
   var validInvAll = invoices.filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
 
@@ -948,7 +1007,7 @@ async function renderCostRatio() {
     vSel.value = vendor;
   }
 
-  var validInv = (Array.isArray(jm.invoices) ? jm.invoices : []).filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
+  var validInv = _jmArr(jm.invoices).filter(function(inv){ return inv.docType !== 'claim' && !inv.voided; });
   var salesMap = costSalesByMonth(validInv, basis);
   var sources = [ { label:'ยอดซื้อ (PO)', byMonth: costPoByMonth(po.poList, basis, vendor) } ];   // ← เพิ่มแหล่งต้นทุนอื่นที่นี่ภายหลัง
 
@@ -1766,6 +1825,222 @@ function renderTime(records, dateFrom, dateTo) {
     },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:9},maxRotation:45}},y:{stacked:true,ticks:{font:{size:10}}}}}
   });
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 6: Performance B1 — เทียบ CT มาตรฐาน
+//  ใช้เวลาของโม่ (rows ใน dayRecords): ช่วงห่างระหว่างโม่ติดกันในวันเดียวกัน = CT จริง
+//  CT มาตรฐาน = เวลาตั้ง PLC ÷ จำนวนโม่ในไลน์ (ไลน์เต็ม 8 โม่ เดินตลอดไม่มีพักเที่ยง → ช่วงห่างที่เกิน CT มาตรฐานคือความสูญเสีย)
+//  ช่วงห่างที่ช้ากว่ามาตรฐานเกิน X นาที = "หยุด" (Availability) ที่เหลือที่ช้ากว่าเล็กน้อย = ช้าลง (Performance)
+//    เวลาเดิน (Operating) = Σช่วงห่างที่ไม่ใช่หยุด + จำนวนครั้งที่หยุด × CT มาตรฐาน (การหยุดแต่ละครั้งนับ 1 รอบมาตรฐานเป็นเวลาเดิน ส่วนเกินคือสูญเสีย)
+//    Performance = CT มาตรฐาน × จำนวนช่วงห่าง ÷ เวลาเดิน        Availability(ช่วงที่มีบันทึก) = เวลาเดิน ÷ ช่วงเวลารวม
+//    → Availability × Performance = CT มาตรฐาน × จำนวนช่วงห่าง ÷ ช่วงเวลารวม เสมอ
+//  ไม่ตัดช่วงห่าง ≥120 นาทีทิ้งแบบการ์ด Cycle Time เฉลี่ยด้านบน แต่นับเป็นการหยุดเพื่อให้เวลารวมครบ
+// ══════════════════════════════════════════════
+var PERF_LS_CT = 'apk_perf_ct_B1', PERF_LS_EX = 'apk_perf_stop_excess';
+var _perfRecords = [], _perfInit = false;
+
+// เวลาของแต่ละโม่เป็นนาที: ใช้ id (เวลาจริงตอนกดบันทึก ละเอียดระดับมิลลิวินาที ไม่มีปัญหาข้ามเที่ยงคืน) ถ้าทุกแถวมี และ
+// ตรงกับ time ของแถว (±3 นาที) อย่างน้อย 80% — ไม่งั้นถอยไปใช้ time (hh:mm) พร้อมแก้ข้ามเที่ยงคืนตามลำดับแถว
+function perfRowTimes(rows) {
+  var all = rows || [];
+  var valid = all.filter(function(r){ return r && typeof r.time === 'string' && /^\d{1,2}:\d{2}/.test(r.time); });
+  var skipped = all.length - valid.length;
+  var useId = valid.length > 0 && valid.every(function(r){ return typeof r.id === 'number' && r.id > 1e12; });
+  if (useId) {
+    var match = 0;
+    valid.forEach(function(r){
+      var d = new Date(r.id), m = d.getHours()*60 + d.getMinutes(), diff = Math.abs(m - timeToMin(r.time));
+      if (Math.min(diff, 1440 - diff) <= 3) match++;
+    });
+    useId = match / valid.length >= 0.8;
+  }
+  var items, usedFallback = false;
+  if (useId) {
+    // วัดเวลาสัมพัทธ์จากโม่แรกของวัน (ไม่ใช้ "นาทีนับจากปี 1970" ที่เป็นเลขใหญ่ ~29 ล้าน ทศนิยม double ผิดพลาดระดับ 1e-9 ทำให้ 47.5 เป็น 47.4999…)
+    var base = Math.min.apply(null, valid.map(function(r){ return r.id; }));
+    items = valid.map(function(r){ return { ts: (r.id - base) / 60000, time: r.time, kg: Number(r.kg) || 0 }; });
+  } else {
+    usedFallback = true;
+    var day = 0, prev = null;
+    items = valid.map(function(r){
+      var m = timeToMin(r.time), t = m + day * 1440;
+      if (prev !== null && t < prev - 600) { day++; t = m + day * 1440; } // เวลาถอยหลังเกิน 10 ชม. = ข้ามเที่ยงคืน
+      prev = t;
+      return { ts: t, time: r.time, kg: Number(r.kg) || 0 };
+    });
+  }
+  items.sort(function(a, b){ return a.ts - b.ts; });
+  return { items: items, usedFallback: usedFallback, skipped: skipped };
+}
+
+// ขอบกลุ่มของฮิสโตแกรม (นาที) อิง CT มาตรฐาน: <1 | 1–CT | CT–CT+2 | +2–+5 | +5–+15 | +15–+30 | +30–+60 | ≥+60
+function perfBinEdges(ct) { return [Math.min(1, ct), ct, ct + 2, ct + 5, ct + 15, ct + 30, ct + 60]; }
+function perfBinLabels(ct) {
+  var e = perfBinEdges(ct), f = function(x){ return String(Math.round(x * 10) / 10); };
+  return ['<' + f(e[0]) + ' (กดรวบ?)', f(e[0]) + '–' + f(e[1]) + ' (เร็วกว่า)', f(e[1]) + '–' + f(e[2]) + ' (ตรงมาตรฐาน)',
+    f(e[2]) + '–' + f(e[3]), f(e[3]) + '–' + f(e[4]), f(e[4]) + '–' + f(e[5]), f(e[5]) + '–' + f(e[6]), '≥' + f(e[6])];
+}
+
+function computeLinePerformance(records, line, opts) {
+  var ct = opts.ctStd, stopLimit = ct + opts.stopExcess;
+  var edges = perfBinEdges(ct), counts = new Array(edges.length + 1).fill(0);
+  var out = { days: [], stops: [], counts: counts, dq: { days: 0, daysSkipped: 0, daysFallback: 0, rowsNoTime: 0, batch: 0 } };
+  var T = { nAll: 0, nRun: 0, nStop: 0, span: 0, runGap: 0, stopLoss: 0, kg: 0 };
+  var runGaps = [];
+  (records || []).forEach(function(rec){
+    if (!rec || rec.line !== line) return;
+    var rt = perfRowTimes(rec.rows), it = rt.items;
+    out.dq.rowsNoTime += rt.skipped;
+    if (it.length < 2) { out.dq.daysSkipped++; return; }
+    out.dq.days++; if (rt.usedFallback) out.dq.daysFallback++;
+    var d = { date: rec.date, rows: it.length, nAll: 0, nRun: 0, nStop: 0, span: 0, runGap: 0, stopLoss: 0, kg: 0 };
+    for (var i = 1; i < it.length; i++) {
+      var gap = it[i].ts - it[i - 1].ts;
+      d.nAll++; d.span += gap; d.kg += it[i].kg; // kg นับเฉพาะโม่ที่มีช่วงห่างนำหน้า (ตัดโม่แรกของวัน ให้ตรงกับช่วงเวลาที่วัด)
+      var b = 0; while (b < edges.length && gap >= edges[b]) b++; counts[b]++;
+      if (gap < 1) out.dq.batch++;
+      if (gap > stopLimit) {
+        var loss = gap - ct;
+        d.nStop++; d.stopLoss += loss;
+        out.stops.push({ date: rec.date, from: it[i - 1].time, to: it[i].time, gap: gap, loss: loss });
+      } else { d.nRun++; d.runGap += gap; runGaps.push(gap); }
+    }
+    d.operating = d.runGap + d.nStop * ct;
+    d.perf = d.operating > 0 ? ct * d.nAll / d.operating : null;
+    d.avail = d.span > 0 ? d.operating / d.span : null;
+    out.days.push(d);
+    T.nAll += d.nAll; T.nRun += d.nRun; T.nStop += d.nStop; T.span += d.span; T.runGap += d.runGap; T.stopLoss += d.stopLoss; T.kg += d.kg;
+  });
+  out.days.sort(function(a, b){ return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+  out.stops.sort(function(a, b){ return b.gap - a.gap; });
+  var operating = T.runGap + T.nStop * ct;
+  runGaps.sort(function(a, b){ return a - b; });
+  var med = null;
+  if (runGaps.length) { var h = Math.floor(runGaps.length / 2); med = runGaps.length % 2 ? runGaps[h] : (runGaps[h - 1] + runGaps[h]) / 2; }
+  out.totals = {
+    nAll: T.nAll, nRun: T.nRun, nStop: T.nStop, spanMin: T.span, operatingMin: operating, stopLossMin: T.stopLoss, runGapMin: T.runGap,
+    perf: operating > 0 ? ct * T.nAll / operating : null,
+    avail: T.span > 0 ? operating / T.span : null,
+    ctMean: T.nRun > 0 ? T.runGap / T.nRun : null, ctMedian: med,
+    slowLossMin: T.runGap - T.nRun * ct, // นาทีที่ช้ากว่ามาตรฐานในช่วงที่ไม่ใช่หยุด (ติดลบ = เร็วกว่ามาตรฐาน)
+    kgPerHour: T.span > 0 ? T.kg / (T.span / 60) : null, kgPerBarrel: T.nAll > 0 ? T.kg / T.nAll : null
+  };
+  return out;
+}
+
+function perfReadNum(id, def, min) {
+  var el = document.getElementById(id), v = el ? parseFloat(el.value) : NaN;
+  return (isFinite(v) && v >= min) ? v : def;
+}
+function perfInitSettings() {
+  if (_perfInit) return;
+  _perfInit = true;
+  try {
+    var c = localStorage.getItem(PERF_LS_CT), e = localStorage.getItem(PERF_LS_EX);
+    if (c) document.getElementById('perfCtStd').value = c;
+    if (e) document.getElementById('perfStopExcess').value = e;
+  } catch (x) {}
+}
+function perfSettingsChanged() {
+  try {
+    localStorage.setItem(PERF_LS_CT, document.getElementById('perfCtStd').value);
+    localStorage.setItem(PERF_LS_EX, document.getElementById('perfStopExcess').value);
+  } catch (x) {}
+  renderPerformance(_perfRecords);
+}
+// สี Performance: >100% ม่วง (ผิดปกติ ดูหมายเหตุ) · ≥95% เขียว · ≥85% เหลือง · ต่ำกว่าแดง
+function perfColor(p) { return p == null ? '' : (p > 1.0001 ? '#7c3aed' : (p >= 0.95 ? '#16a34a' : (p >= 0.85 ? '#d97706' : '#dc2626'))); }
+
+function renderPerformance(records) {
+  perfInitSettings();
+  if (records) _perfRecords = records;
+  var ct = perfReadNum('perfCtStd', 7.5, 0.5), ex = perfReadNum('perfStopExcess', 5, 0);
+  var res = computeLinePerformance(_perfRecords, 'B1', { ctStd: ct, stopExcess: ex });
+  var $ = function(id){ return document.getElementById(id); };
+  var msg = $('perfMsg'), body = $('perfBody');
+  if (!res.days.length) {
+    var hasB1 = _perfRecords.some(function(r){ return r.line === 'B1'; });
+    msg.textContent = hasB1 ? 'มีข้อมูล B1 แต่ทุกวันมีโม่น้อยกว่า 2 โม่ — ต้องมีอย่างน้อย 2 โม่ต่อวันถึงจะคำนวณช่วงห่างได้'
+                            : 'ไม่มีข้อมูล B1 ในช่วงที่เลือก — เลือกสาย B1 หรือ "ทั้งหมด" และขยายช่วงวันที่ในตัวกรองด้านบน';
+    msg.style.display = 'block'; body.style.display = 'none';
+    destroyChart('chartPerfDaily'); destroyChart('chartPerfHist');
+    return;
+  }
+  msg.style.display = 'none'; body.style.display = 'block';
+  var t = res.totals;
+  var pct = function(x){ return x == null ? '—' : (x * 100).toFixed(1) + '%'; };
+
+  $('perfKpiP').textContent = pct(t.perf);
+  $('perfKpiP').style.color = perfColor(t.perf);
+  $('perfKpiPSub').textContent = t.perf != null && t.perf > 1.0001
+    ? 'เกิน 100%: ช่วงห่างสั้นกว่า CT มาตรฐาน (กดบันทึกรวบ หรือ CT มาตรฐานตั้งไว้ช้ากว่าจริง)'
+    : 'CT มาตรฐาน ' + fmt(ct, 2) + ' ÷ CT จริง (ไม่นับเวลาที่หยุด)';
+  $('perfKpiCt').textContent = t.ctMean == null ? '—' : fmt(t.ctMean, 2);
+  $('perfKpiCtSub').textContent = 'นาที/โม่' + (t.ctMedian == null ? '' : ' · ค่ากลาง ' + fmt(t.ctMedian, 2) + ' · มาตรฐาน ' + fmt(ct, 2));
+  $('perfKpiStops').textContent = t.nStop + ' ครั้ง';
+  $('perfKpiStopsSub').textContent = 'รวม ' + fmt(t.stopLossMin, 0) + ' นาที (ส่วนที่เกิน CT มาตรฐาน)';
+  $('perfKpiA').textContent = pct(t.avail);
+  $('perfKpiN').textContent = fmt(t.nAll, 0);
+  $('perfKpiNSub').textContent = 'จาก ' + res.dq.days + ' วัน · เดินต่อเนื่อง ' + t.nRun + ' · หยุด ' + t.nStop;
+  $('perfKpiSpan').textContent = fmt(t.spanMin / 60, 1);
+  $('perfKpiKgH').textContent = t.kgPerHour == null ? '—' : fmt(t.kgPerHour, 1);
+  $('perfKpiKgB').textContent = t.kgPerBarrel == null ? '—' : fmt(t.kgPerBarrel, 1);
+
+  // สรุปเวลาที่สูญเสียแยกเป็น 2 ก้อน
+  var slow = t.slowLossMin;
+  $('perfSummary').innerHTML = '<b>เวลาที่สูญเสีย (จากช่วงเวลารวม ' + fmt(t.spanMin, 0) + ' นาที):</b> ' +
+    'ช้ากว่ามาตรฐาน (กระทบ Performance) <b>' + (slow >= 0 ? fmt(slow, 0) + ' นาที' : 'เร็วกว่ามาตรฐาน ' + fmt(-slow, 0) + ' นาที') + '</b> · ' +
+    'หยุด (กระทบ Availability) <b>' + fmt(t.stopLossMin, 0) + ' นาที</b> (' + t.nStop + ' ครั้ง) · ' +
+    'Availability × Performance = <b>' + (t.perf != null && t.avail != null ? (t.perf * t.avail * 100).toFixed(1) + '%' : '—') + '</b> ' +
+    '(= CT มาตรฐาน × ' + t.nAll + ' ช่วง ÷ ช่วงเวลารวม) · ยังไม่รวม Quality';
+
+  // กราฟรายวัน
+  destroyChart('chartPerfDaily');
+  _charts['chartPerfDaily'] = new Chart($('chartPerfDaily'), {
+    data: {
+      labels: res.days.map(function(d){ return d.date; }),
+      datasets: [
+        { type: 'line', label: 'Performance %', data: res.days.map(function(d){ return d.perf == null ? null : +(d.perf * 100).toFixed(1); }),
+          borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .25, pointRadius: 3, yAxisID: 'y', order: 1, spanGaps: true },
+        { type: 'line', label: '100%', data: res.days.map(function(){ return 100; }), borderColor: '#94a3b8', borderDash: [5, 4], pointRadius: 0, yAxisID: 'y', order: 2 },
+        { type: 'bar', label: 'นาทีที่หยุด (ต่อวัน)', data: res.days.map(function(d){ return +d.stopLoss.toFixed(1); }), backgroundColor: 'rgba(239,68,68,.55)', yAxisID: 'y1', order: 3 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+      scales: { x: { ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: { suggestedMin: 0, ticks: { font: { size: 10 } }, title: { display: true, text: 'Performance %', font: { size: 10 } } },
+        y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { font: { size: 10 } }, title: { display: true, text: 'นาที', font: { size: 10 } } } } }
+  });
+
+  // ฮิสโตแกรมช่วงห่าง
+  var colors = ['#9ca3af', '#60a5fa', '#22c55e', '#facc15', '#fb923c', '#ef4444', '#dc2626', '#991b1b'];
+  destroyChart('chartPerfHist');
+  _charts['chartPerfHist'] = new Chart($('chartPerfHist'), {
+    type: 'bar',
+    data: { labels: perfBinLabels(ct), datasets: [{ label: 'จำนวนช่วงห่าง', data: res.counts, backgroundColor: colors }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 10 } } },
+      scales: { x: { ticks: { font: { size: 9 } } }, y: { beginAtZero: true, grace: '10%', ticks: { font: { size: 10 } } } } }
+  });
+
+  // ตารางการหยุดที่นานที่สุด
+  var tb = document.querySelector('#tblPerfStops tbody');
+  tb.innerHTML = res.stops.slice(0, 10).map(function(s){
+    return '<tr><td style="text-align:left;">' + esc(s.date) + '</td><td>' + esc(s.from) + '</td><td>' + esc(s.to) + '</td><td>' + fmt(s.gap, 0) + '</td><td>' + fmt(s.loss, 0) + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="loading">ไม่มีการหยุดตามเกณฑ์ที่ตั้ง</td></tr>';
+
+  // คุณภาพข้อมูล
+  var dq = res.dq, lines = [];
+  lines.push('วิเคราะห์ <b>' + dq.days + '</b> วัน' + (dq.daysSkipped ? ' (ข้าม ' + dq.daysSkipped + ' วันที่มีน้อยกว่า 2 โม่)' : '') + ' · ช่วงห่างทั้งหมด ' + t.nAll);
+  var batchPct = t.nAll ? dq.batch / t.nAll * 100 : 0;
+  lines.push((batchPct > 10 ? '⚠️ ' : '') + 'ช่วงห่างสั้นกว่า 1 นาที: ' + dq.batch + ' (' + batchPct.toFixed(1) + '%)' +
+    (batchPct > 10 ? ' — น่าจะกดบันทึกหลายโม่รวบ ตัวเลขน่าเชื่อถือน้อยลง ควรกดทีละโม่ตอนโม่ออก/เข้าตามจังหวะจริง' : ' — ปกติ'));
+  if (dq.daysFallback) lines.push(dq.daysFallback + ' วันไม่มีเวลาจริงตอนบันทึกที่ตรงกัน จึงใช้เวลา hh:mm (ละเอียดระดับนาที ข้ามเที่ยงคืนแก้ตามลำดับแถว)');
+  if (dq.rowsNoTime) lines.push('⚠️ มี ' + dq.rowsNoTime + ' แถวไม่มีเวลา ถูกข้าม');
+  lines.push('ข้อสมมติ: ไลน์เต็ม ' + 8 + ' โม่ เดินตลอดไม่มีพัก · บันทึกเวลาตอนกดเพิ่มโม่ (ไม่ใช่เวลาเริ่มชุบ) · CT มาตรฐานคงที่ (เวลา/กระแสไฟคงที่ น้ำหนักผันแปรตามความหนา)');
+  $('perfDq').innerHTML = lines.join('<br>');
 }
 
 // ══════════════════════════════════════════════

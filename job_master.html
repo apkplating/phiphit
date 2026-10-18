@@ -1217,6 +1217,8 @@ var hiddenCustomers = []; // คีย์ (บรรทัดแรกของ�
 // ══════════════════════════════════════
 var custInvGuard = {};
 var _pollTimer = null, _pollCount = 0;
+var _saveInFlight = false;
+var _tabId = Math.random().toString(36).slice(2);   // แยกแท็บ — ใช้ล็อกกันหลายแท็บ pull รอบชุบซ้ำกัน
 var currentRole = '';
 var currentTabs = null;
 var currentStockOverrideApprove = false; // สิทธิ์ "ข้ามตรวจสอบคงเหลือ" — ตั้งจากหน้า auth_admin (permissions.job_master_stockoverride) หรือ role admin ได้เสมอ
@@ -1331,6 +1333,8 @@ function tab(t) {
 // ── ธงบอกว่า "มีข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ" — แยกจากการเทียบเวลา _fbLastSavedAt เดิม
 // เพราะการเทียบเวลาใช้ไม่ได้เลยถ้ายังไม่เคยบันทึกสำเร็จในเซสชันนี้มาก่อน (ตรงกับเคสเน็ตหลุดตั้งแต่ครั้งแรกที่กดบันทึก
 // ซึ่งเป็นสาเหตุจริงที่ทำให้ข้อมูลที่เพิ่งกรอกหายไป เพราะ poll/กลับมาเปิดแท็บดึงข้อมูลเก่ามาทับโดยไม่มีอะไรกันเลย) ──
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
 var _localDirty = false;
 
 function loadLocal() {
@@ -1465,8 +1469,8 @@ async function fbSave() {
             if (cloudData) {
               var cloudInvoices = Array.isArray(cloudData.invoices) ? cloudData.invoices :
                 (cloudData.invoices && typeof cloudData.invoices==='object' ? Object.values(cloudData.invoices) : []);
-              var cloudItems   = Array.isArray(cloudData.items)   ? cloudData.items   : [];
-              var cloudRecords = Array.isArray(cloudData.records) ? cloudData.records : [];
+              var cloudItems   = _jmArr(cloudData.items);
+              var cloudRecords = _jmArr(cloudData.records);
               invoices   = mergeArraysById(invoices, cloudInvoices);
               jobItems   = mergeArraysById(jobItems, cloudItems);
               jobRecords = mergeArraysById(jobRecords, cloudRecords);
@@ -1545,8 +1549,8 @@ async function fbLoad() {
       if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
       var _loc = _firstMerge ? { items: jobItems, records: jobRecords, invoices: invoices, customers: customers, priceList: priceList,
         billStatements: billStatements, hidden: hiddenCustomers, guard: custInvGuard } : null;
-      if (Array.isArray(data.items))    jobItems   = data.items;
-      if (Array.isArray(data.records))  jobRecords = data.records;
+      if (data.items   && typeof data.items   === 'object') jobItems   = _jmArr(data.items);
+      if (data.records && typeof data.records === 'object') jobRecords = _jmArr(data.records);
       // รองรับกรณี Firebase เก็บ invoices เป็น object คีย์ตัวเลขแทน array ปกติ (เจอเป็นสาเหตุจริงของปัญหาข้อมูลหายมาแล้ว)
       if (Array.isArray(data.invoices)) { invoices = data.invoices; _realInvNoSet = null; }
       else if (data.invoices && typeof data.invoices === 'object') {
@@ -1573,23 +1577,48 @@ async function fbLoad() {
       }
       var _wasLoaded = _cloudLoadedOnce;
       _cloudLoadedOnce = true; // ← จากจุดนี้ข้อมูลในหน่วยความจำมาจากเซิร์ฟเวอร์จริงแล้ว fbSave() ถึงจะทำงานได้
+      // saveLocal() ตั้งธง "แก้ไขในเครื่อง" (_localDirty) ทุกครั้ง — แต่ตรงนี้แค่เก็บสำเนาที่ดึงมาจากเซิร์ฟเวอร์ ไม่ใช่การแก้ไข
+      // ถ้าปล่อยให้ธงติด รอบถัดไป (fbCheck) จะเข้าใจว่ามีของค้างแล้วอัปโหลดทั้งก้อนซ้ำ → savedAt เปลี่ยน → ทุกเครื่องโหลดใหม่ → ติดธงอีก
+      // วนเป็นลูป "ping-pong" ระหว่างเครื่องทุก 30 วินาที (ช้า + เสี่ยงเขียนชนกัน) — จึงคืนค่าธงเดิมหลังเก็บแคช
+      var _dirtyBefore = _localDirty;
       saveLocal();
+      if (!_loc) _localDirty = _dirtyBefore;
       if (_loc) {
         var _added = (invoices.length + jobRecords.length + jobItems.length) - _cloudTotal;
         if (_added > 0) { fbSave(); } else { _localDirty = false; }
       }
       setSyncOk();
       if (!_wasLoaded) setTimeout(function(){ try { pullFromLines(); } catch(e){} }, 300); // ดึงรอบชุบจากไลน์ได้ก็ต่อเมื่อโหลดข้อมูลจริงแล้ว
-      // refresh UI
-      var active = document.querySelector('.view.active');
-      if (active) tab(active.id.replace('v-',''));
+      // refresh UI — ถ้าผู้ใช้กำลังพิมพ์/เลือกในช่องกรอก ให้เลื่อนการวาดใหม่ไปจนกว่าจะออกจากช่อง
+      // (กันฟอร์มที่กำลังกรอกอยู่ถูกล้าง/กระตุกเวลามีคนอื่นบันทึกเข้ามา)
+      uiRefreshSafe();
     }
   } catch(e) { setSyncErr(); }
+}
+var _uiRefreshPending = false;
+function uiRefreshSafe() {
+  var ae = document.activeElement;
+  var typing = ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && ae.closest && ae.closest('.view.active');
+  if (typing) {
+    if (!_uiRefreshPending) {
+      _uiRefreshPending = true;
+      ae.addEventListener('blur', function onb(){
+        ae.removeEventListener('blur', onb);
+        setTimeout(function(){ _uiRefreshPending = false; uiRefreshSafe(); }, 400);
+      });
+    }
+    return;
+  }
+  var active = document.querySelector('.view.active');
+  if (active) tab(active.id.replace('v-',''));
 }
 
 // เช็คแบบเบา: อ่านแค่ savedAt (ไม่กี่ไบต์) ถ้าไม่เปลี่ยนก็ไม่ต้องโหลดข้อมูลทั้งก้อน
 async function fbCheck() {
-  if (!_cloudLoadedOnce || _localDirty) { return fbLoad(); }
+  if (!_cloudLoadedOnce) { return fbLoad(); }
+  // มีข้อมูลค้างในเครื่องที่ยังไม่ขึ้นเซิร์ฟเวอร์ → ลองส่งเลย (fbSave มีด่านเช็ค/merge ของตัวเองอยู่แล้ว)
+  // เดิมโหลดทั้งก้อนมาก่อนทุก 30 วินาทีแล้วค่อยส่ง — เปลืองทั้งที่ผลลัพธ์เหมือนกัน
+  if (_localDirty) { if (!_saveInFlight) { _saveInFlight = true; fbSave().finally(function(){ _saveInFlight = false; }); } return; }
   try {
     var r = await fetch(FB_PATH + '/savedAt.json', { cache: 'no-store' });
     if (!r.ok) { setSyncErr(); return; }
@@ -1601,10 +1630,11 @@ async function fbCheck() {
 
 function startPoll() {
   if (_pollTimer) clearInterval(_pollTimer);
+  _pollCount = Math.floor(Math.random() * 6);   // เริ่มคนละจังหวะ — กันหลายเครื่อง/หลายแท็บยิงพร้อมกันเป๊ะ
   _pollTimer = setInterval(function(){
     _pollCount++;
     if (_pollCount%6===0) { fbCheck(); loadTmpNotes(); }
-    if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที
+    if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที (แต่ข้ามเองถ้าไลน์ไม่เปลี่ยน/แท็บอื่นทำอยู่)
   }, 5000);
 }
 
@@ -5191,8 +5221,8 @@ function searchHistoryInArchive(invSearch) {
       if (curSearch !== invSearch) return;
 
       var tbody = document.getElementById('histBody');
-      var archRecords = (data && Array.isArray(data.records)) ? data.records : [];
-      var archItems   = (data && Array.isArray(data.items))   ? data.items   : [];
+      var archRecords = _jmArr(data && data.records);
+      var archItems   = _jmArr(data && data.items);
       var matched = archRecords.filter(function(r){ return String(r.inv||'').toLowerCase().indexOf(invSearch) !== -1; });
 
       if (!matched.length) {
@@ -5824,8 +5854,17 @@ function normalizePartKey(s) {
   return (s||'').toUpperCase().replace(/[^A-Z0-9\u0E00-\u0E7F]/g,'');
 }
 
+var _lineSigAt = {};
+var _lineSig = {};   // ลายเซ็นล่าสุดของแต่ละไลน์ที่ประมวลผลแล้ว (ถ้าไม่เปลี่ยน ไม่ต้องโหลดไฟล์ไลน์ทั้งก้อนซ้ำ)
 async function pullFromLines() {
-  if (!_cloudLoadedOnce) return; // ห้ามตัดสต็อก/บันทึกก่อนข้อมูลจริงจากเซิร์ฟเวอร์จะโหลดเสร็จ (ต้นเหตุข้อมูลเก่าหาย)
+  if (!_cloudLoadedOnce) return;
+  // กันหลายแท็บ (หรือหลายเครื่องบนเบราว์เซอร์เดียวกัน) ดึงรอบชุบพร้อมกัน — แท็บที่ได้ล็อกก่อนเป็นคนทำ ที่เหลือข้าม
+  // (ผลจะถูกบันทึกขึ้นเซิร์ฟเวอร์ แล้วแท็บอื่นรับผ่าน fbCheck เอง) ล็อกหมดอายุใน 45 วินาที
+  try {
+    var _lk = JSON.parse(localStorage.getItem('jm_pull_lock') || 'null');
+    if (_lk && _lk.id !== _tabId && Date.now() - _lk.t < 45000) return;
+    localStorage.setItem('jm_pull_lock', JSON.stringify({ id: _tabId, t: Date.now() }));
+  } catch(e) {} // ห้ามตัดสต็อก/บันทึกก่อนข้อมูลจริงจากเซิร์ฟเวอร์จะโหลดเสร็จ (ต้นเหตุข้อมูลเก่าหาย)
   // โหลด processedRoundIds จาก jobRecords
   processedRoundIds = {};
   jobRecords.forEach(function(r){
@@ -5836,6 +5875,17 @@ async function pullFromLines() {
 
   for (var lineName in LINE_FB_PATHS) {
     try {
+      // เช็คแบบเบาก่อน: อ่านแค่ savedAt ของไลน์ (ไม่กี่ไบต์) — ถ้าไลน์ไม่เปลี่ยนและฝั่ง JM ก็ไม่เปลี่ยน ข้ามการโหลดไฟล์ไลน์ทั้งก้อน (~200 kB)
+      var _sig = null;
+      try {
+        var sr = await fetch(LINE_FB_PATHS[lineName] + '/savedAt.json', { cache: 'no-store' });
+        if (sr.ok) {
+          var lsa = await sr.json();
+          if (lsa) _sig = lsa + '|' + jobItems.length + '|' + jobRecords.length;
+        }
+      } catch(e) {}
+      if (_sig && _lineSig[lineName] === _sig && Date.now() - (_lineSigAt[lineName]||0) < 600000) continue;   // ข้ามได้ไม่เกิน 10 นาที แล้วสแกนเต็มอีกรอบเป็นตาข่ายนิรภัย (เช่น INV ถูกยกเลิกคืนสต็อกแล้วมีรอบชุบรอจัดสรร)
+
       var res = await fetch(LINE_FB_PATHS[lineName] + '.json');
       if (!res.ok) continue;
       var data = await res.json();
@@ -5940,6 +5990,8 @@ async function pullFromLines() {
           }
         });
       });
+      // จำลายเซ็นไว้ (คำนวณหลังประมวลผล เพราะ jobRecords อาจเพิ่มจากรอบนี้เอง)
+      if (_sig) { _lineSig[lineName] = _sig.split('|')[0] + '|' + jobItems.length + '|' + jobRecords.length; _lineSigAt[lineName] = Date.now(); }
     } catch(e) {
       console.warn('pullFromLines', lineName, e);
     }
@@ -5948,8 +6000,7 @@ async function pullFromLines() {
   if (changed) {
     saveLocal();
     fbSave();
-    var active = document.querySelector('.view.active');
-    if (active) tab(active.id.replace('v-',''));
+    uiRefreshSafe();
   }
 }
 

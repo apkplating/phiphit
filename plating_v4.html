@@ -6755,6 +6755,8 @@ var FB_JOB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master'
 var jobMasterItems   = [];
 var jobMasterRecords = [];
 
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
 async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
   // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
@@ -6765,8 +6767,8 @@ async function jobMasterLoad() {
     if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
     var data = await res.json();
     if (data) {
-      jobMasterItems   = Array.isArray(data.items)   ? data.items   : [];
-      jobMasterRecords = Array.isArray(data.records) ? data.records : [];
+      jobMasterItems   = _jmArr(data.items);
+      jobMasterRecords = _jmArr(data.records);
     }
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
