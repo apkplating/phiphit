@@ -167,6 +167,9 @@ if ('caches' in window) {
   }).catch(function(){});
 }
 </script>
+<!-- html2canvas + jsPDF: สร้างสำเนา PDF ของใบ INV/ใบเคลมตอนพิมพ์ ส่งเก็บที่ NAS (async กันเน็ตช้าไปบล็อกหน้า) -->
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <!-- ปุ่มลอยกลับหน้าหลัก (index.html) — คงที่มุมจอ ไม่บังส่วนอื่นของหน้า ใช้ตัวเดียวกันทุกไฟล์ -->
@@ -671,6 +674,15 @@ if ('caches' in window) {
 <div id="v-sales" class="view">
 
   <div id="toast-sales" class="toast"></div>
+
+  <!-- สำเนา PDF ใบ INV ย้อนหลัง (แอดมินเท่านั้น) -->
+  <div class="card" id="pdfBackfillCard" style="display:none;">
+    <div class="card-label">🗂 สำเนา PDF ใบ INV / ใบเคลม → NAS (โฟลเดอร์ INV.Storage)</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">สร้างสำเนา PDF ของใบเก่าที่ยังไม่มีไฟล์ใน NAS (ทำครั้งเดียว ข้ามใบที่มีแล้ว) — ใบใหม่จะถูกเก็บอัตโนมัติทุกครั้งที่กดพิมพ์</div>
+    <button class="btn" id="btnPdfBackfill" onclick="backfillInvPdfs()">สร้างสำเนา PDF ย้อนหลัง</button>
+    <button class="btn" id="btnPdfBackfillStop" onclick="stopPdfBackfill()" style="display:none;background:#dc2626;">หยุด</button>
+    <div id="pdfBackfillMsg" style="margin-top:8px;font-size:12px;"></div>
+  </div>
 
   <!-- Filter -->
   <div class="card">
@@ -1263,6 +1275,7 @@ function checkPin() {
     loadLocal();
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
+    setTimeout(flushPdfQueue, 3000);
     loadTmpNotes().then(function(){ try { renderBoard(); } catch(e){} });
     setTimeout(fbLoad, 800);
     loadPartMaster().then(function(){ updatePmStatusHint(); renderCustomerFilter(); pullFromLines(); });
@@ -1288,6 +1301,7 @@ function applyRole() {
     if (firstVisible) tab(firstVisible);
   }
   applyStockOverridePermission();
+  var _pbc = document.getElementById('pdfBackfillCard'); if (_pbc) _pbc.style.display = (currentRole === 'admin') ? '' : 'none';
 }
 
 // ══════════════════════════════════════
@@ -1334,7 +1348,37 @@ function tab(t) {
 // เพราะการเทียบเวลาใช้ไม่ได้เลยถ้ายังไม่เคยบันทึกสำเร็จในเซสชันนี้มาก่อน (ตรงกับเคสเน็ตหลุดตั้งแต่ครั้งแรกที่กดบันทึก
 // ซึ่งเป็นสาเหตุจริงที่ทำให้ข้อมูลที่เพิ่งกรอกหายไป เพราะ poll/กลับมาเปิดแท็บดึงข้อมูลเก่ามาทับโดยไม่มีอะไรกันเลย) ──
 // รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
-function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
+
+// ── โครงสร้างใหม่ของ /job-master (_fmt = 2): items/records/invoices เก็บเป็นโหนดต่อ id + ฟิลด์ _seq (ใหม่=ใหญ่) ──
+var _cloudFmt = 0;      // 0 = แบบเดิม (array ก้อนเดียว), 2 = แบบแยกโหนดต่อ id
+var _synced = null;     // { items:{id:json}, records:{id:json}, invoices:{id:json}, small:json } — สิ่งที่เซิร์ฟเวอร์มีตามที่เครื่องนี้รู้ล่าสุด
+function _idKeyOK(id) { var t = String(id); return t !== '' && !/[.$#\[\]\/]/.test(t); }
+function _snapSection(arr) { var m = {}; (arr || []).forEach(function(o){ if (o && o.id != null) m[String(o.id)] = JSON.stringify(o); }); return m; }
+function _smallJson() { return JSON.stringify([customers, billStatements, priceList, hiddenCustomers, custInvGuard]); }
+function _snapAll() { _synced = { items: _snapSection(jobItems), records: _snapSection(jobRecords), invoices: _snapSection(invoices), small: _smallJson() }; }
+function _buildDelta() {
+  var body = {}, n = 0, base = Date.now();
+  [['items', jobItems], ['records', jobRecords], ['invoices', invoices]].forEach(function(p){
+    var sec = p[0], arr = p[1], old = _synced[sec], seen = {};
+    // รายการใหม่ (ยังไม่มี _seq): array เรียงใหม่สุดก่อน → ตัวแรกได้ _seq สูงสุด
+    var missing = arr.filter(function(o){ return o && o.id != null && o._seq == null; });
+    missing.forEach(function(o, i){ o._seq = base + (missing.length - i); });
+    arr.forEach(function(o){
+      if (!o || o.id == null) return;
+      var k = String(o.id);
+      if (!_idKeyOK(k)) throw new Error('id ใช้เป็นคีย์ไม่ได้: ' + k);
+      seen[k] = 1;
+      if (old[k] !== JSON.stringify(o)) { body[sec + '/' + k] = o; n++; }
+    });
+    Object.keys(old).forEach(function(k){ if (!seen[k]) { body[sec + '/' + k] = null; n++; } });
+  });
+  if (_smallJson() !== _synced.small) {
+    body.customers = customers; body.billStatements = billStatements; body.priceList = priceList;
+    body.hiddenCustomers = hiddenCustomers; body.custInvGuard = custInvGuard; n++;
+  }
+  return { body: body, n: n };
+}
 var _localDirty = false;
 
 function loadLocal() {
@@ -1446,6 +1490,28 @@ async function fbSave() {
     setSyncErr();
     return false;
   }
+  // ★ โครงสร้างใหม่ (_fmt = 2): ส่ง "เฉพาะรายการที่เปลี่ยน/ถูกลบ" ของ items/records/invoices (โหนดละ 1 id) แทนส่งทั้งก้อน
+  // รายการที่เครื่องอื่นเพิ่มเข้ามาไม่อยู่ใน _synced ของเครื่องนี้ จึงไม่มีทางถูกลบ/ทับโดยเครื่องนี้ (ต่างจากเดิมที่ PUT ทั้งก้อน)
+  if (_cloudFmt === 2 && _synced) {
+    try {
+      var _d = _buildDelta();
+      if (!_d.n) { _localDirty = false; setSyncOk(); return true; }
+      var _prevLast = _fbLastSavedAt, _cloudNow = null;
+      try { var _cr = await fetch(FB_PATH + '/savedAt.json', { cache: 'no-store' }); if (_cr.ok) _cloudNow = await _cr.json(); } catch(e) {}
+      var _sa = new Date().toISOString();
+      _d.body.savedAt = _sa;
+      var _pr = await fetch(FB_PATH + '.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_d.body) });
+      if (_pr.ok) {
+        _snapAll(); _fbLastSavedAt = _sa; _localDirty = false;
+        _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length };
+        setSyncOk();
+        // มีเครื่องอื่นบันทึกไประหว่างที่เครื่องนี้เปิดอยู่ → ดึงของล่าสุดมารวม (ไม่งั้น poll จะคิดว่าไม่มีอะไรเปลี่ยน)
+        if (_cloudNow && _prevLast && _cloudNow !== _prevLast) { _fbLastSavedAt = ''; setTimeout(function(){ try { fbLoad(); } catch(e){} }, 300); }
+        return true;
+      }
+      setSyncErr(); return false;
+    } catch(e) { console.warn('[Job Master] fbSave(fmt2):', e); setSyncErr(); return false; }
+  }
   // ป้องกันแท็บ/เครื่องอื่นบันทึกทับกัน (เจอเป็นสาเหตุจริงที่ทำให้ "รับงานเข้า" หายไปทั้งก้อน ~47 รายการ):
   // ก่อน PUT ทุกครั้ง เช็คก่อนว่า savedAt บนคลาวด์ตอนนี้ตรงกับที่แท็บนี้รู้ล่าสุดไหม — ถ้าไม่ตรง
   // แปลว่ามีแท็บ/เครื่องอื่นบันทึกข้อมูลใหม่ไปแล้วโดยที่แท็บนี้ไม่รู้ (ยังถือข้อมูลเก่าอยู่ในหน่วยความจำ)
@@ -1554,7 +1620,7 @@ async function fbLoad() {
       // รองรับกรณี Firebase เก็บ invoices เป็น object คีย์ตัวเลขแทน array ปกติ (เจอเป็นสาเหตุจริงของปัญหาข้อมูลหายมาแล้ว)
       if (Array.isArray(data.invoices)) { invoices = data.invoices; _realInvNoSet = null; }
       else if (data.invoices && typeof data.invoices === 'object') {
-        var invArr = Object.values(data.invoices);
+        var invArr = _jmArr(data.invoices);
         if (invArr.length) { invoices = invArr; _realInvNoSet = null; }
       }
       if (Array.isArray(data.customers)) customers = data.customers;
@@ -1564,6 +1630,8 @@ async function fbLoad() {
       if (data.custInvGuard && typeof data.custInvGuard === 'object') custInvGuard = data.custInvGuard;
       var _cloudTotal = invoices.length + jobRecords.length + jobItems.length;
       _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length };
+      _cloudFmt = (data._fmt === 2) ? 2 : 0;
+      if (_cloudFmt === 2) _snapAll(); // สแนปช็อตของ "ที่เซิร์ฟเวอร์มีตอนนี้" (ก่อนรวมของในเครื่อง) ใช้คำนวณว่าต้องส่งอะไรบ้าง
       if (_loc) {
         jobItems       = mergeArraysById(_loc.items, jobItems);
         jobRecords     = mergeArraysById(_loc.records, jobRecords);
@@ -1634,6 +1702,7 @@ function startPoll() {
   _pollTimer = setInterval(function(){
     _pollCount++;
     if (_pollCount%6===0) { fbCheck(); loadTmpNotes(); }
+    if (_pollCount%60===0) flushPdfQueue(); // ลองส่งสำเนา PDF ที่ค้างคิวทุก ~5 นาที
     if (_pollCount%12===0) pullFromLines(); // ทุก ~60 วินาที (แต่ข้ามเองถ้าไลน์ไม่เปลี่ยน/แท็บอื่นทำอยู่)
   }, 5000);
 }
@@ -3562,7 +3631,160 @@ function cancelEditInvoice() {
 }
 
 // สร้าง HTML ใบส่งสินค้า แล้วเปิดหน้าต่างพิมพ์
-function printInvoice(inv) {
+// ══════════════════════════════════════
+//  สำเนา PDF ของใบ INV / ใบส่งคืนงานเคลม → เก็บที่ NAS (โฟลเดอร์ INV.Storage)
+//  - สร้างจากฟอร์มพิมพ์สำเร็จรูปของระบบเอง (ตัวเดียวกับที่พิมพ์ออกกระดาษ) ทุกครั้งที่กดพิมพ์
+//  - ชื่อไฟล์: <เลขที่>.pdf (ต้นฉบับ) | _reprintN (พิมพ์ซ้ำเนื้อหาเดิม) | _revN (เนื้อหาถูกแก้ไขแล้วพิมพ์ใหม่) — เซิร์ฟเวอร์สร้างใหม่เท่านั้น ไม่ทับ ไม่ลบ
+//  - ส่งไม่สำเร็จ (เน็ต/NAS ล่ม) → เก็บคิวใน IndexedDB ของเครื่อง แล้วลองส่งซ้ำเอง ไม่ขัดจังหวะการพิมพ์/บันทึก INV
+//  - โหมด "ฟอร์มสำเร็จรูป" พิมพ์เฉพาะตัวอักษรลงกระดาษที่พิมพ์ฟอร์มมาแล้ว → ถ้ามีไฟล์ภาพฟอร์มเปล่า inv_form_bg.jpg (สแกน A4) วางข้างหน้านี้
+//    จะใช้เป็นพื้นหลังซ้อนตัวอักษร ถ้าไม่มีไฟล์จะใช้ฟอร์มกระดาษเปล่าเต็มหน้าแทน (ครบทุกข้อมูลเสมอ)
+// ══════════════════════════════════════
+var ARCH_BASE = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '');
+var _formBgOk = null;
+function _hashStr(str) { var h = 5381; for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+function _invSig(inv) {
+  return _hashStr(JSON.stringify([inv.invNo, inv.date, inv.customer, inv.po, inv.term, inv.docType, inv.grandTotal, inv.vat, inv.netTotal,
+    (inv.items || []).map(function(l){ return [l.partName, l.qty, l.unit, l.price, l.amount, l.lot, l.weight]; })]));
+}
+function _pdfBase(inv) { var b = String(inv.invNo || inv.id || 'noname').replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '_'); return b.slice(0, 60) || 'noname'; }
+function _pdfDir(inv) { var m = /^(\d{4})-(\d{2})/.exec(inv.date || ''); if (m) return m[1] + '/' + m[2]; var d = new Date(); return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
+
+// ── คิวส่งซ้ำ (IndexedDB) ──
+function _qdb() {
+  return new Promise(function(res, rej){
+    try { var r = indexedDB.open('apk_inv_pdf', 1); r.onupgradeneeded = function(){ r.result.createObjectStore('q', { keyPath: 'k' }); }; r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; } catch(e) { rej(e); }
+  });
+}
+function _qop(mode, fn) { return _qdb().then(function(db){ return new Promise(function(res, rej){ var tx = db.transaction('q', mode), st = tx.objectStore('q'), rq = fn(st); tx.oncomplete = function(){ res(rq && rq.result); }; tx.onerror = function(){ rej(tx.error); }; }); }); }
+function _qPut(item) { return _qop('readwrite', function(st){ return st.put(item); }); }
+function _qDel(k) { return _qop('readwrite', function(st){ return st.delete(k); }); }
+function _qAll() { return _qop('readonly', function(st){ return st.getAll(); }); }
+
+async function _postPdf(item) {
+  var r = await fetch(ARCH_BASE + '/__files/inv', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: item.dir, base: item.base, kind: item.kind, pdfBase64: item.pdf }) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function _setPdfLog(item, name) {
+  await fetch(ARCH_BASE + '/inv-pdf-log/' + encodeURIComponent(item.base) + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sig: item.sig, last: name, at: new Date().toISOString() }) });
+}
+var _flushing = false;
+async function flushPdfQueue() {
+  if (_flushing) return; _flushing = true;
+  try {
+    var items = await _qAll();
+    for (var i = 0; i < items.length; i++) {
+      try { var j = await _postPdf(items[i]); await _setPdfLog(items[i], j.name); await _qDel(items[i].k); }
+      catch (e) { break; } // ยังส่งไม่ได้ — เก็บไว้ลองรอบหน้า
+    }
+  } catch (e) {} finally { _flushing = false; }
+}
+
+// ── วาด HTML เป็น PDF (A4 หลายหน้าได้) ──
+function _waitLib() {
+  return new Promise(function(res){ var n = 0; (function chk(){ if (window.html2canvas && window.jspdf && window.jspdf.jsPDF) return res(true); if (++n > 40) return res(false); setTimeout(chk, 250); })(); });
+}
+async function htmlToPdfBase64(html) {
+  if (!(await _waitLib())) throw new Error('lib ยังไม่พร้อม');
+  var fr = document.createElement('iframe');
+  fr.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;height:1123px;border:0;background:#fff;';
+  document.body.appendChild(fr);
+  try {
+    await new Promise(function(res){ fr.onload = res; fr.srcdoc = html; });
+    var doc = fr.contentDocument;
+    try { if (doc.fonts && doc.fonts.ready) await doc.fonts.ready; } catch(e) {}
+    await Promise.all(Array.prototype.map.call(doc.images || [], function(im){ return im.complete ? 0 : new Promise(function(r){ im.onload = im.onerror = r; }); }));
+    var h = Math.max(1123, doc.documentElement.scrollHeight);
+    fr.style.height = h + 'px';
+    var canvas = await html2canvas(doc.documentElement, { scale: 2, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: h, useCORS: true });
+    var pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    var pageHpx = Math.floor(canvas.width * 297 / 210), y = 0, first = true;
+    while (y < canvas.height - 2) {
+      var sh = Math.min(pageHpx, canvas.height - y);
+      var pc = document.createElement('canvas'); pc.width = canvas.width; pc.height = sh;
+      var ctx = pc.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, pc.width, pc.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, sh, 0, 0, canvas.width, sh);
+      if (!first) pdf.addPage();
+      pdf.addImage(pc.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, sh * 210 / canvas.width);
+      first = false; y += sh;
+    }
+    return pdf.output('datauristring').split(',')[1];
+  } finally { fr.remove(); }
+}
+
+var _formBgData = '';
+function formBgAvailable() {   // โหลดภาพฟอร์มเปล่ามาเป็น data URL (กัน canvas ถูก "taint" ตอนแปลงเป็น PDF)
+  if (_formBgOk !== null) return Promise.resolve(_formBgOk);
+  return fetch('inv_form_bg.jpg').then(function(r){ if (!r.ok) throw new Error('no bg'); return r.blob(); })
+    .then(function(bl){ return new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(fr.result); }; fr.onerror = rej; fr.readAsDataURL(bl); }); })
+    .then(function(d){ _formBgData = d; _formBgOk = true; return true; }, function(){ _formBgOk = false; return false; });
+}
+// HTML ฟอร์มสำเร็จรูป สำหรับ PDF: ภาพฟอร์มเปล่าเป็นพื้นหลัง + ตัวอักษรซ้อนตำแหน่งเดียวกับที่พิมพ์ (ไม่ใส่ offset ของเครื่องพิมพ์)
+function formPdfHtml(inv) {
+  return '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><style>' +
+    'html,body{margin:0;padding:0;} body{width:210mm;height:297mm;position:relative;font-family:"IBM Plex Sans Thai","Sarabun",sans-serif;font-size:10pt;color:#000;}' +
+    '.f{position:absolute;white-space:nowrap;line-height:1.15;} .r{text-align:right;} .c{text-align:center;} .b{font-weight:700;} .small{font-size:7pt;color:#444;}' +
+    '</style></head><body><img src="' + _formBgData + '" style="position:absolute;left:0;top:0;width:210mm;height:297mm;">' +
+    '<div style="position:absolute;left:0;top:0;width:210mm;height:297mm;">' + buildFormOverlayBody(inv) + '</div></body></html>';
+}
+
+async function archiveInvPdf(inv, mode) {
+  if (!inv || !inv.items) return;
+  var html;
+  if (mode === 'form' && inv.docType !== 'claim' && await formBgAvailable()) html = formPdfHtml(inv);
+  else html = inv.docType === 'claim' ? claimNoteHtml(inv) : invoicePlainHtml(inv);
+  var base = _pdfBase(inv), sig = _invSig(inv), kind = 'original';
+  try {
+    var r = await fetch(ARCH_BASE + '/inv-pdf-log/' + encodeURIComponent(base) + '.json', { cache: 'no-store' });
+    if (r.ok) { var lg = await r.json(); if (lg && lg.sig) kind = (lg.sig === sig) ? 'reprint' : 'rev'; }
+  } catch (e) { /* ออฟไลน์ — ถือเป็น original แล้วให้เซิร์ฟเวอร์เลือกชื่อไม่ซ้ำเอง */ }
+  var pdf = await htmlToPdfBase64(html);
+  var item = { k: base + '|' + sig + '|' + Date.now(), base: base, dir: _pdfDir(inv), kind: kind, sig: sig, pdf: pdf };
+  await _qPut(item);          // เก็บคิวก่อนเสมอ แล้วค่อยส่ง — กันหายถ้าปิดหน้า/เน็ตหลุดกลางทาง
+  flushPdfQueue();
+}
+
+// ── สร้างสำเนา PDF ย้อนหลังครั้งเดียว (แอดมิน) — ข้ามเลขที่ที่มีไฟล์ใน NAS แล้ว ──
+var _bfStop = false, _bfRunning = false;
+function stopPdfBackfill() { _bfStop = true; }
+async function _flushLogBatch(b) { if (!Object.keys(b).length) return; try { await fetch(ARCH_BASE + '/inv-pdf-log.json', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); } catch (e) {} }
+async function backfillInvPdfs() {
+  if (_bfRunning) return;
+  var msg = document.getElementById('pdfBackfillMsg');
+  if (currentRole !== 'admin') { msg.textContent = 'เฉพาะแอดมิน'; return; }
+  if (!confirm('สร้างสำเนา PDF ของ INV/ใบเคลมเก่าทั้งหมดที่ยังไม่มีไฟล์ใน NAS ใช่ไหม?\n(ใช้เวลาหลายนาที ห้ามปิดหน้านี้ระหว่างทำงาน — หยุดได้ด้วยปุ่ม "หยุด")')) return;
+  _bfRunning = true; _bfStop = false;
+  document.getElementById('btnPdfBackfill').disabled = true; document.getElementById('btnPdfBackfillStop').style.display = '';
+  try {
+    msg.textContent = 'กำลังตรวจรายชื่อไฟล์ใน NAS...';
+    var ir = await fetch(ARCH_BASE + '/__files/inv/index', { cache: 'no-store' });
+    if (!ir.ok) throw new Error('อ่านรายชื่อไฟล์จาก NAS ไม่ได้ (HTTP ' + ir.status + ') — ตรวจว่าอัปเดตเซิร์ฟเวอร์ NAS แล้ว');
+    var have = {};
+    ((await ir.json()).files || []).forEach(function(f){ var n = f.split('/').pop().replace(/\.pdf$/i, '').replace(/_(reprint|rev)\d+$/, ''); have[n] = true; });
+    var todo = invoices.filter(function(inv){ return inv && inv.items && inv.items.length && !have[_pdfBase(inv)]; });
+    var done = 0, fail = 0, logBatch = {};
+    for (var i = 0; i < todo.length && !_bfStop; i++) {
+      var inv = todo[i];
+      msg.textContent = 'กำลังสร้าง ' + (i + 1) + ' / ' + todo.length + ' (' + inv.invNo + ') — สำเร็จ ' + done + ' ผิดพลาด ' + fail;
+      try {
+        var pdf = await htmlToPdfBase64(inv.docType === 'claim' ? claimNoteHtml(inv) : invoicePlainHtml(inv));
+        var item = { base: _pdfBase(inv), dir: _pdfDir(inv), kind: 'original', sig: _invSig(inv), pdf: pdf };
+        var j = await _postPdf(item);
+        logBatch[encodeURIComponent(item.base)] = { sig: item.sig, last: j.name, at: new Date().toISOString(), backfill: true };
+        done++;
+      } catch (e) { fail++; console.warn('[backfill]', inv.invNo, e); }
+      if ((done + fail) % 25 === 0) { await _flushLogBatch(logBatch); logBatch = {}; }
+      await new Promise(function(r){ setTimeout(r, 30); });
+    }
+    await _flushLogBatch(logBatch);
+    msg.textContent = (_bfStop ? '⏹ หยุดแล้ว — ' : '✅ เสร็จ — ') + 'สร้างสำเร็จ ' + done + ' ใบ, ผิดพลาด ' + fail + ' ใบ, เหลือที่ยังไม่ได้ทำ ' + Math.max(0, todo.length - done - fail) + ' ใบ (กดซ้ำได้ ระบบข้ามใบที่มีแล้ว)';
+  } catch (e) { msg.textContent = '❌ ' + e.message; }
+  _bfRunning = false; document.getElementById('btnPdfBackfill').disabled = false; document.getElementById('btnPdfBackfillStop').style.display = 'none';
+}
+
+function invoicePlainHtml(inv) {
   var monthNames=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   var d = new Date(inv.date+'T00:00:00');
   var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
@@ -3650,6 +3872,12 @@ function printInvoice(inv) {
     '</div>'+
     '</body></html>';
 
+  return html;
+}
+
+function printInvoice(inv) {
+  var html = invoicePlainHtml(inv);
+  try { archiveInvPdf(inv, 'plain'); } catch(e) { console.warn('[PDF archive]', e); }
   var w = window.open('', '_blank');
   if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
   w.document.write(html);
@@ -3684,7 +3912,7 @@ function renderInvClaimHistory() {
   }).join('');
 }
 
-function printClaimNote(inv) {
+function claimNoteHtml(inv) {
   var d = new Date(inv.date+'T00:00:00');
   var dateStr = d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();
 
@@ -3748,6 +3976,12 @@ function printClaimNote(inv) {
     '</div>'+
     '</body></html>';
 
+  return html;
+}
+
+function printClaimNote(inv) {
+  var html = claimNoteHtml(inv);
+  try { archiveInvPdf(inv, 'plain'); } catch(e) { console.warn('[PDF archive]', e); }
   var w = window.open('', '_blank');
   if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
   w.document.write(html);
@@ -3909,6 +4143,7 @@ function buildFormOverlayBody(inv) {
 
 // พิมพ์ INV ลงฟอร์มสำเร็จรูป (เฉพาะข้อมูล ไม่มีกรอบ/หัวกระดาษ)
 function printInvoiceOnForm(inv) {
+  try { archiveInvPdf(inv, 'form'); } catch(e) { console.warn('[PDF archive]', e); }
   if (inv.items.length > FORM_POS.maxRows) {
     showToast('out','⚠️ รายการมากกว่า '+FORM_POS.maxRows+' แถว อาจล้นกรอบฟอร์ม','err');
   }
