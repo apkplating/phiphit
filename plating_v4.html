@@ -2163,7 +2163,7 @@ async function autoJobOut(rec) {
     await fetch(FB_JOB_PATH + '.json', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() })
+      body: JSON.stringify(await jmPatchBody(newOuts))
     });
     showToast('entry', '📦 ตัดยอด Job ' + newOuts.length + ' รายการอัตโนมัติ', 'ok');
     if (typeof renderJobBoard === 'function') renderJobBoard();
@@ -6756,7 +6756,21 @@ var jobMasterItems   = [];
 var jobMasterRecords = [];
 
 // รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
-function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
+// ── เขียนรายการตัดยอดใหม่ขึ้น /job-master ──
+// โครงสร้างใหม่ (_fmt = 2): ส่งเฉพาะ record ใหม่ที่ records/<id> (ไม่ส่งทั้งอาร์เรย์ → เร็ว และไม่ไปทับรายการที่เครื่องอื่นเพิ่งเพิ่ม)
+// โครงสร้างเดิม: ส่ง items+records ทั้งอาร์เรย์เหมือนเดิม — เช็ค _fmt ที่เซิร์ฟเวอร์ทุกครั้ง (ไม่กี่ไบต์) กันหน้าที่เปิดค้างข้ามการย้ายข้อมูล
+async function jmPatchBody(newRecs) {
+  var fmt = 0;
+  try { var fr = await fetch(FB_JOB_PATH + '/_fmt.json', { cache: 'no-store' }); if (fr.ok) fmt = (await fr.json()) === 2 ? 2 : 0; } catch(e) {}
+  if (fmt === 2) {
+    var b = {}, t = Date.now();
+    newRecs.forEach(function(r, i){ if (r._seq == null) r._seq = t + (newRecs.length - i); b['records/' + r.id] = r; });
+    b.savedAt = new Date().toISOString();
+    return b;
+  }
+  return { items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() };
+}
 async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
   // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
@@ -7411,7 +7425,7 @@ async function confirmJobOut() {
     // ⚠️ ใช้ PATCH ไม่ใช่ PUT — เหตุผลเดียวกับใน autoJobOut() (กันเขียนทับ invoices/customers/ฯลฯ ทิ้ง)
     await fetch(FB_JOB_PATH + '.json', {
       method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobMasterItems, records:jobMasterRecords, savedAt:new Date().toISOString() })
+      body: JSON.stringify(await jmPatchBody([rec]))
     });
     showToast('job','✅ เบิกสำเร็จ — '+qty+' ชิ้น','ok');
     setTimeout(function(){ closeJobOutModal(); renderJobBoard(); }, 1200);

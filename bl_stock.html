@@ -464,7 +464,7 @@ var DB_R1   = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedataba
 
 // Job Master อยู่ใน DB_B1 /job-master
 // รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
-function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 var JM_URL  = DB_B1 + '/job-master.json';
 var TMP_NOTES_URL = DB_B1 + '/temp-notes.json'; // ใบส่งของชั่วคราว (หน้า temp_delivery.html) — ส่งของแล้วแต่ยังไม่ออก INV
 var tmpNotesPrev = [];

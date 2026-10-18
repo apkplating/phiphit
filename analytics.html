@@ -219,6 +219,21 @@ if ('caches' in window) {
       <div class="kpi-card"><div class="kpi-label">AH รวม</div><div class="kpi-value" id="kpiAH">—</div><div class="kpi-sub" id="kpiAHSub"></div></div>
     </div>
 
+    <!-- ── Section 1a: ประวัติรายเดือน 12 เดือนล่าสุด (เลือกตัวชี้วัดได้ — แสดงทีละ 1 กราฟ) ── -->
+    <div class="card" style="margin-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-mid);">📈 ประวัติรายเดือน · 12 เดือนล่าสุด <span style="font-weight:400;color:var(--text-muted);">(ตามสายที่เลือกด้านบน · ไม่ผูกกับช่วงเวลา)</span></div>
+        <select id="histMetric" onchange="renderHistory12()" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;">
+          <option value="kg">น้ำหนักรวม (kg)</option>
+          <option value="barrels">จำนวนรอบ</option>
+          <option value="rework">งานซ่อม / NG (%)</option>
+          <option value="ah">AH รวม</option>
+        </select>
+      </div>
+      <div class="chart-wrap-lg"><canvas id="chartHist12"></canvas></div>
+      <div id="histBadge" style="margin-top:8px;font-size:11px;color:var(--text-mid);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
+    </div>
+
     <!-- ── Section 1b: ยอดขาย (Sales) — ดึงจาก job-master.json (job_master.html เป็นเจ้าของข้อมูลจริง) ── -->
     <div class="section-sep"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -649,6 +664,7 @@ async function loadAndRender() {
   document.getElementById('loadStatus').textContent = 'โหลด '+records.length+' กะ · อัปเดต '+new Date().toLocaleTimeString('th-TH');
 
   renderKPI(records);
+  renderHistory12().catch(function(e){ console.error('[analytics] renderHistory12', e); var b=document.getElementById('histBadge'); if(b){ b.style.color='#dc2626'; b.textContent='⚠️ แสดงกราฟประวัติไม่สำเร็จ: '+(e&&e.message?e.message:e); } });
   renderSalesSection().catch(function(e){ console.error('[analytics] renderSalesSection', e); var tb=document.querySelector('#tblSalesByMonth tbody'); if(tb) tb.innerHTML='<tr><td colspan="4" style="color:#dc2626;padding:14px;">⚠️ แสดงผลยอดขายไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // ยอดขาย — ดึงจาก job-master.json แยกต่างหาก ไม่ผูกกับ dateFrom/dateTo (ดู 12 เดือนล่าสุดเสมอ)
   renderCostRatio().catch(function(e){ console.error('[analytics] renderCostRatio', e); var n=document.getElementById('costNote'); if(n){ n.style.color='#dc2626'; n.textContent='⚠️ แสดงผลต้นทุน/ยอดขายไม่สำเร็จ: '+(e&&e.message||e); } }); // ต้นทุนซื้อเทียบยอดขาย — ไม่ผูกกับ dateFrom/dateTo
   renderQcSummary().catch(function(e){ console.error('[analytics] renderQcSummary', e); var tb=document.querySelector('#tblQcMonthly tbody'); if(tb) tb.innerHTML='<tr><td colspan="5" style="color:#dc2626;padding:14px;">⚠️ แสดงผล QC100% ไม่สำเร็จ: '+esc(e&&e.message||e)+'</td></tr>'; }); // QC100% — ไม่ผูกกับ dateFrom/dateTo (12 เดือนล่าสุดเสมอ)
@@ -668,7 +684,7 @@ async function loadAndRender() {
 //  แก้ไขข้อมูล invoices ใดๆ ทั้งสิ้น (read-only) ตามที่ตกลงไว้
 // ══════════════════════════════════════════════
 // รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
-function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; }
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 var _jmCache = null;
 async function fetchJobMasterData() {
   if (_jmCache) return _jmCache;
@@ -1216,6 +1232,81 @@ function renderKPI(records) {
   document.getElementById('kpiReworkSub').textContent = fmt(totalRework)+' kg งานซ่อม';
   document.getElementById('kpiAH').textContent = fmt(totalAH);
   document.getElementById('kpiAHSub').textContent = fmt(totalKg>0?totalAH/totalKg:0,2)+' AH/kg เฉลี่ย';
+}
+
+// ══════════════════════════════════════════════
+//  SECTION 1a: ประวัติรายเดือน 12 เดือนล่าสุด — เลือกตัวชี้วัดจาก dropdown (kg / รอบ / NG % / AH) แสดงทีละกราฟ
+//  รวมเดือนปัจจุบัน (ยังไม่สิ้นเดือน) ด้วย — ติดดาวกำกับที่ป้ายเดือน
+//  ใช้ข้อมูลชุดเดียวกับส่วนอื่น (fetchLineData มี cache) เปลี่ยน dropdown แล้ววาดใหม่ทันที ไม่โหลดซ้ำ
+// ══════════════════════════════════════════════
+var HIST_META = {
+  kg:      { label:'น้ำหนักรวม (kg)',  unit:'kg',  dec:0 },
+  barrels: { label:'จำนวนรอบ',          unit:'รอบ', dec:0 },
+  ah:      { label:'AH รวม',            unit:'AH',  dec:0 },
+  rework:  { label:'งานซ่อม / NG (%)',  unit:'%',   dec:1 }
+};
+async function renderHistory12(){
+  var metric = (document.getElementById('histMetric')||{}).value || 'kg';
+  var meta = HIST_META[metric];
+  var lineSel = (document.getElementById('lineFilter')||{}).value || 'ALL';
+  var lines = lineSel === 'ALL' ? ['B1','B2','R1'] : [lineSel];
+  var months = lastNMonths(12), monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
+  var agg = {}; months.forEach(function(m){ agg[m] = {}; lines.forEach(function(l){ agg[m][l] = {kg:0, barrels:0, ah:0, rework:0}; }); });
+  for (var i=0; i<lines.length; i++){
+    var line = lines[i], data = await fetchLineData(line);
+    (Array.isArray(data.dayRecords) ? data.dayRecords : []).forEach(function(day){
+      if (!day || !day.date) return;
+      var ym = String(day.date).slice(0,7); if (!monthSet[ym]) return;
+      var a = agg[ym][line];
+      a.kg += Number(day.totalKg||0); a.barrels += Number(day.barrels||0); a.ah += Number(day.ah||0); a.rework += Number(day.reworkKg||0);
+    });
+  }
+  var curYM = months[months.length-1], today = new Date();
+  var labels = months.map(function(m){ return monthLabelTH(m) + (m === curYM ? ' *' : ''); });
+  function val(m, l){ var a = agg[m][l]; return metric === 'rework' ? (a.kg > 0 ? a.rework / a.kg * 100 : 0) : a[metric]; }
+  function tot(m){ return lines.reduce(function(s,l){ return s + agg[m][l]; }, 0); }
+  var datasets;
+  if (metric === 'rework') {
+    datasets = lines.map(function(l){
+      return { type:'line', label:l.replace('B','B-').replace('R','R-'), data:months.map(function(m){ return val(m,l); }), borderColor:LINE_COLORS[l].replace('.7','1'), backgroundColor:LINE_COLORS[l], tension:.3, pointRadius:3, borderWidth: lines.length === 1 ? 3 : 1.5 };
+    });
+    if (lines.length > 1) {
+      datasets.push({ type:'line', label:'รวมทุกสาย', data:months.map(function(m){ var k=0, r=0; lines.forEach(function(l){ k+=agg[m][l].kg; r+=agg[m][l].rework; }); return k>0 ? r/k*100 : 0; }), borderColor:'#0f172a', backgroundColor:'#0f172a', tension:.3, pointRadius:4, borderWidth:3 });
+    }
+  } else {
+    datasets = lines.map(function(l){
+      return { type:'bar', label:l.replace('B','B-').replace('R','R-'), data:months.map(function(m){ return val(m,l); }), backgroundColor:LINE_COLORS[l] };
+    });
+  }
+  var single = lines.length === 1 && metric !== 'rework';
+  if (single) datasets[0].datalabels = { display:true, anchor:'end', align:'top', font:{size:9}, formatter:function(v){ return v > 0 ? fmt(v, meta.dec) : ''; } };
+  destroyChart('chartHist12');
+  _charts['chartHist12'] = new Chart(document.getElementById('chartHist12'), {
+    data:{ labels:labels, datasets:datasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ font:{size:11} } }, datalabels:{ display:false },
+        tooltip:{ callbacks:{
+          label:function(c){ return c.dataset.label + ': ' + fmt(c.parsed.y, meta.dec) + ' ' + meta.unit; },
+          footer:function(items){ if (metric === 'rework' || items.length < 2) return ''; var t = 0; items.forEach(function(it){ t += it.parsed.y; }); return 'รวม: ' + fmt(t, meta.dec) + ' ' + meta.unit; }
+        } } },
+      scales:{ x:{ stacked: metric !== 'rework', ticks:{ font:{size:10} } },
+               y:{ stacked: metric !== 'rework', beginAtZero:true, ticks:{ font:{size:10} }, title:{ display:true, text:meta.unit, font:{size:10} } } }
+    }
+  });
+  // สรุปใต้กราฟ: ยอดรวม/เฉลี่ยต่อเดือน (เฉลี่ยไม่นับเดือนปัจจุบันที่ยังไม่จบ) + ยอดเดือนปัจจุบันถึงวันนี้
+  var done = months.slice(0, -1), badge = document.getElementById('histBadge');
+  if (!badge) return;
+  badge.style.color = '';
+  var curTxt = ' · * = เดือนปัจจุบัน (ข้อมูลถึงวันที่ ' + today.getDate() + ')';
+  if (metric === 'rework') {
+    var K=0, R=0; done.forEach(function(m){ lines.forEach(function(l){ K += agg[m][l].kg; R += agg[m][l].rework; }); });
+    var kc=0, rc=0; lines.forEach(function(l){ kc += agg[curYM][l].kg; rc += agg[curYM][l].rework; });
+    badge.innerHTML = '📊 เฉลี่ย 11 เดือนที่จบแล้ว <b>' + fmt(K>0?R/K*100:0,1) + '%</b> · เดือนนี้ถึงวันนี้ <b>' + fmt(kc>0?rc/kc*100:0,1) + '%</b>' + curTxt;
+  } else {
+    var sum = 0; done.forEach(function(m){ lines.forEach(function(l){ sum += agg[m][l][metric]; }); });
+    var cur = 0; lines.forEach(function(l){ cur += agg[curYM][l][metric]; });
+    badge.innerHTML = '📊 เฉลี่ย 11 เดือนที่จบแล้ว <b>' + fmt(sum/Math.max(done.length,1), meta.dec) + ' ' + meta.unit + '/เดือน</b> · เดือนนี้ถึงวันนี้ <b>' + fmt(cur, meta.dec) + ' ' + meta.unit + '</b>' + curTxt;
+  }
 }
 
 // ══════════════════════════════════════════════

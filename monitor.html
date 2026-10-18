@@ -389,13 +389,15 @@ function getBill(jobId) {
   return j ? (j.bill||'') : '';
 }
 
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master) — เรียงใหม่สุดก่อนตาม _seq
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 // ── Fetch job master ──
 async function fetchJM() {
   try {
     var res = await fetch(PATHS.jm);
     if (!res.ok) return;
     var data = await res.json();
-    state.jmItems = Array.isArray(data.items) ? data.items : [];
+    state.jmItems = _jmArr(data.items);
   } catch(e) {}
 }
 

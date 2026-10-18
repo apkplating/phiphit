@@ -365,6 +365,8 @@ var FB_LINES = {
 
 // ── BL Stock source (สำหรับดึง "รายการรอชุบ" มาโชว์ให้เลือกเข้าคิว) ──
 // ใช้ path เดียวกับ bl_stock.html ทุกจุด เพื่อให้ตัวเลขตรงกัน
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master) — เรียงใหม่สุดก่อนตาม _seq
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 var JM_URL     = FB_BASE + '/job-master.json';
 var INTAKE_URL = FB_BASE + '/intake.json';
 var DEL_URL    = FB_BASE + '/bl-delivery.json';
@@ -874,8 +876,8 @@ async function loadBLStockSource() {
     if (results[0].ok) {
       var jmData = await results[0].json();
       if (jmData) {
-        blJmItems   = Array.isArray(jmData.items)   ? jmData.items   : [];
-        blJmRecords = Array.isArray(jmData.records) ? jmData.records : [];
+        blJmItems   = _jmArr(jmData.items);
+        blJmRecords = _jmArr(jmData.records);
       }
     }
     if (results[1].ok) {

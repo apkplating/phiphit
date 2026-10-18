@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ย้ายโครงสร้าง Job Master — APK Plating</title>
+<style>
+:root{--navy:#0f2744;--blue:#2e75b6;--border:#d5e2ef;--red:#dc2626;--green:#047857;--amber:#b45309;}
+*{box-sizing:border-box;}
+body{margin:0;background:#eef3f8;font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:14px;color:var(--navy);}
+.wrap{max-width:860px;margin:0 auto;padding:16px;}
+h1{font-size:20px;margin:6px 0 2px;} .sub{color:#587;font-size:12px;margin-bottom:14px;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+.card h2{font-size:15px;margin:0 0 8px;}
+button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer;font-family:inherit;}
+button:disabled{background:#9db4c9;cursor:not-allowed;} button.danger{background:var(--red);} button.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue);}
+table{border-collapse:collapse;width:100%;font-size:13px;} td,th{border:1px solid var(--border);padding:6px 8px;text-align:left;} th{background:#f3f8fc;}
+.ok{color:var(--green);font-weight:700;} .bad{color:var(--red);font-weight:700;} .warn{color:var(--amber);font-weight:700;}
+pre{background:#0f2744;color:#cfe3f5;padding:10px;border-radius:8px;font-size:12px;max-height:240px;overflow:auto;white-space:pre-wrap;}
+input[type=password]{font-size:20px;letter-spacing:6px;text-align:center;padding:8px;border:1px solid var(--border);border-radius:8px;width:200px;}
+#login{text-align:center;padding:40px 10px;} .hide{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛠 ย้ายโครงสร้างข้อมูล Job Master</h1>
+  <div class="sub">เปลี่ยน items / records / invoices จาก "อาร์เรย์ก้อนเดียว" เป็น "โหนดละ 1 id" (สำรองก่อนเสมอ ย้อนกลับได้) — สำหรับผู้ดูแลระบบเท่านั้น</div>
+
+  <div id="login" class="card">
+    <div style="margin-bottom:10px;">กรอก PIN ผู้ดูแลระบบ</div>
+    <input type="password" id="pin" maxlength="12" autocomplete="off">
+    <div style="margin-top:12px;"><button onclick="doLogin()">เข้าสู่ระบบ</button></div>
+    <div id="loginErr" class="bad" style="margin-top:10px;"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="card">
+      <h2>0) สถานะปัจจุบันบน NAS</h2>
+      <div id="state">กำลังโหลด...</div>
+      <div style="margin-top:10px;"><button class="ghost" onclick="loadState()">🔄 โหลดสถานะใหม่</button></div>
+    </div>
+
+    <div class="card" id="c1">
+      <h2>1) ก่อนเริ่ม — ทำให้ครบทุกข้อ</h2>
+      <ul style="margin:0 0 8px 18px;padding:0;line-height:1.7;">
+        <li>อัปโหลดไฟล์ชุด patch7 ทั้งหมดขึ้น GitHub แล้ว</li>
+        <li>ปิดหรือรีเฟรชหน้า Job Master / plating v4, v5, v6 ทุกเครื่อง (tablet 1-4, pc1, pc2) ให้โหลดไฟล์ใหม่แล้ว</li>
+        <li>ระหว่างย้าย (ไม่กี่วินาที) ห้ามกดบันทึกที่เครื่องใดเลย</li>
+      </ul>
+      <label><input type="checkbox" id="chkReady" onchange="refreshButtons()"> ยืนยัน: ทำครบทุกข้อข้างบนแล้ว</label>
+    </div>
+
+    <div class="card">
+      <h2>2) สำรองข้อมูล (บังคับ)</h2>
+      <div style="margin-bottom:8px;">ดาวน์โหลดไฟล์สำรองลงเครื่องนี้ และเก็บสำเนาไว้บน NAS ที่ <code>/archive/jm-premigrate-…</code> ด้วย</div>
+      <button id="btnBackup" onclick="doBackup()">💾 สำรองข้อมูลตอนนี้</button>
+      <div id="backupMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>3) ตรวจความพร้อม</h2>
+      <button id="btnValidate" onclick="doValidate()">🔍 ตรวจ id ของทุกรายการ</button>
+      <div id="validateMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>4) ย้ายข้อมูล</h2>
+      <div style="margin-bottom:8px;">ระบบจะโหลดข้อมูลสดใหม่อีกรอบ แปลงเป็นโหนดต่อ id แล้วเขียนในคำสั่งเดียว หลังเสร็จจะตรวจเทียบกับไฟล์สำรองทุกรายการ</div>
+      <button id="btnMigrate" class="danger" onclick="doMigrate()">🚀 เริ่มย้ายข้อมูล</button>
+      <div id="migrateMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>ย้อนกลับ (ถ้าเจอปัญหา)</h2>
+      <div style="margin-bottom:8px;">แปลงกลับเป็นอาร์เรย์แบบเดิม (เรียงใหม่สุดก่อน) แล้วลบตัวสลับโครงสร้าง ข้อมูลที่บันทึกไปแล้วหลังย้ายยังอยู่ครบ</div>
+      <button id="btnRollback" class="ghost" onclick="doRollback()">↩️ ย้อนกลับเป็นแบบเดิม</button>
+      <div id="rollbackMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card"><h2>บันทึกการทำงาน</h2><pre id="log"></pre></div>
+  </div>
+</div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+var DB = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var JM = DB + '/job-master';
+var SECS = ['items', 'records', 'invoices'];
+var backupData = null, validated = false;
+
+function $(id){ return document.getElementById(id); }
+function log(m){ var el = $('log'); el.textContent += '[' + new Date().toLocaleTimeString('th-TH') + '] ' + m + '\n'; el.scrollTop = el.scrollHeight; }
+function toArr(x){ if (Array.isArray(x)) return x.filter(function(v){ return v != null; }); if (x && typeof x === 'object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v != null; }); return []; }
+function isArrayShape(x){ return Array.isArray(x) || (x && typeof x === 'object' && Object.keys(x).every(function(k){ return /^\d+$/.test(k); })); }
+function keyOK(id){ var t = String(id); return t !== '' && !/[.$#\[\]\/]/.test(t); }
+function getJSON(u){ return fetch(u, { cache: 'no-store' }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
+function send(method, url, body, force){
+  var h = { 'Content-Type': 'application/json' }; if (force) h['X-APK-Force'] = '1';
+  return fetch(url, { method: method, headers: h, body: JSON.stringify(body) }).then(function(r){ if (!r.ok) return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 200)); }); return r.json().catch(function(){ return null; }); });
+}
+function stamp(){ var d = new Date(Date.now() + 7*3600*1000).toISOString(); return d.slice(0,10).replace(/-/g,'') + '-' + d.slice(11,16).replace(':',''); }
+
+function doLogin(){
+  var pin = $('pin').value.trim(); if (!pin) return;
+  $('loginErr').textContent = '';
+  CentralAuth.fetchUsers().then(function(r){
+    if (!r.ok) { $('loginErr').textContent = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + r.error + ')'; return; }
+    var u = r.users[pin], p = u ? (u.permissions || {}) : {};
+    if (!u || p.auth_admin !== 'admin') { $('loginErr').textContent = 'PIN ไม่ถูกต้อง หรือไม่ใช่ผู้ดูแลระบบ'; return; }
+    $('login').classList.add('hide'); $('app').classList.remove('hide'); loadState();
+  });
+}
+$('pin').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+
+function describe(d){
+  var rows = SECS.map(function(s){
+    var v = d[s]; var shape = v == null ? '—' : (isArrayShape(v) ? 'อาร์เรย์เดิม' : 'โหนดต่อ id');
+    return '<tr><td>' + s + '</td><td>' + (v == null ? 0 : Object.keys(v).length) + '</td><td>' + shape + '</td></tr>';
+  }).join('');
+  var ago = d.savedAt ? Math.round((Date.now() - new Date(d.savedAt).getTime()) / 60000) : null;
+  return '<table><tr><th>ส่วน</th><th>จำนวน</th><th>รูปแบบ</th></tr>' + rows + '</table>' +
+    '<div style="margin-top:8px;">โครงสร้าง (_fmt): <b>' + (d._fmt === 2 ? '2 (ใหม่ — ย้ายแล้ว)' : 'ยังเป็นแบบเดิม') + '</b> • บันทึกล่าสุด: ' +
+    (d.savedAt ? d.savedAt + ' (' + (ago < 60 ? ago + ' นาทีที่แล้ว' : Math.round(ago / 60) + ' ชม.ที่แล้ว') + ')' : '—') + '</div>';
+}
+var cur = null;
+function loadState(){
+  $('state').textContent = 'กำลังโหลด...';
+  getJSON(JM + '.json').then(function(d){ cur = d || {}; $('state').innerHTML = describe(cur); log('โหลดสถานะแล้ว'); refreshButtons(); })
+    .catch(function(e){ $('state').innerHTML = '<span class="bad">โหลดไม่สำเร็จ: ' + e.message + '</span>'; });
+}
+function refreshButtons(){
+  var migrated = cur && cur._fmt === 2, ready = $('chkReady').checked;
+  $('btnBackup').disabled = !ready || !cur;
+  $('btnValidate').disabled = !backupData || migrated;
+  $('btnMigrate').disabled = !backupData || !validated || migrated;
+  $('btnRollback').disabled = !migrated;
+}
+
+function doBackup(){
+  $('btnBackup').disabled = true; $('backupMsg').textContent = 'กำลังสำรอง...';
+  getJSON(JM + '.json').then(function(d){
+    backupData = d; validated = false;
+    var txt = JSON.stringify(d), name = 'job-master-backup-' + stamp() + '.json';
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    return send('PUT', DB + '/archive/jm-premigrate-' + stamp() + '.json', d, true).then(function(){
+      $('backupMsg').innerHTML = '<span class="ok">✅ สำรองแล้ว (' + Math.round(txt.length / 1024) + ' KB) — ไฟล์ ' + name + ' อยู่ในโฟลเดอร์ดาวน์โหลด และเก็บบน NAS แล้ว</span>';
+      log('สำรองแล้ว ' + name); refreshButtons();
+    });
+  }).catch(function(e){ $('backupMsg').innerHTML = '<span class="bad">สำรองไม่สำเร็จ: ' + e.message + ' — ห้ามไปขั้นต่อไป</span>'; backupData = null; refreshButtons(); });
+}
+
+function problems(d){
+  var out = [];
+  SECS.forEach(function(s){
+    var arr = toArr(d[s]), seen = {};
+    arr.forEach(function(o, i){
+      if (!o || typeof o !== 'object') { out.push(s + '[' + i + '] ไม่ใช่ object'); return; }
+      if (o.id == null || String(o.id) === '') { out.push(s + '[' + i + '] ไม่มี id'); return; }
+      var k = String(o.id);
+      if (!keyOK(k)) out.push(s + ' id ใช้เป็นคีย์ไม่ได้: ' + k);
+      if (seen[k]) out.push(s + ' id ซ้ำ: ' + k); seen[k] = 1;
+    });
+  });
+  return out;
+}
+function doValidate(){
+  var p = problems(backupData); validated = p.length === 0;
+  if (validated) {
+    var n = SECS.map(function(s){ return s + ' ' + toArr(backupData[s]).length; }).join(', ');
+    $('validateMsg').innerHTML = '<span class="ok">✅ ทุกรายการมี id ไม่ซ้ำและใช้เป็นคีย์ได้ (' + n + ')</span>';
+  } else {
+    $('validateMsg').innerHTML = '<span class="bad">❌ พบ ' + p.length + ' ปัญหา — ยังย้ายไม่ได้ ส่งรายการนี้ให้ผู้พัฒนา</span><pre>' + p.slice(0, 40).join('\n') + '</pre>';
+  }
+  log('ตรวจ id: ' + (validated ? 'ผ่าน' : p.length + ' ปัญหา')); refreshButtons();
+}
+
+function strip(o){ var c = Object.assign({}, o); delete c._seq; return c; }
+function canon(v){   // JSON ที่เรียงคีย์ทุกระดับ — เทียบเนื้อหาโดยไม่สนลำดับคีย์
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(function(k){ return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+function sameSet(origArr, newArr){
+  if (origArr.length !== newArr.length) return 'จำนวนไม่เท่ากัน ' + origArr.length + ' → ' + newArr.length;
+  var m = {}; newArr.forEach(function(o){ m[String(o.id)] = o; });
+  for (var i = 0; i < origArr.length; i++) {
+    var n = m[String(origArr[i].id)];
+    if (!n) return 'หาย id ' + origArr[i].id;
+    if (canon(strip(origArr[i])) !== canon(strip(n))) return 'เนื้อหาไม่ตรง id ' + origArr[i].id;
+  }
+  return null;
+}
+
+async function doMigrate(){
+  $('btnMigrate').disabled = true; $('migrateMsg').textContent = 'กำลังย้าย...';
+  try {
+    var d = await getJSON(JM + '.json');
+    if (d._fmt === 2) throw new Error('ย้ายไปแล้ว');
+    var p = problems(d); if (p.length) throw new Error('ข้อมูลสดมีปัญหา id (' + p.length + ') — ตรวจใหม่');
+    var body = {}; var orig = {};
+    SECS.forEach(function(s){
+      var arr = toArr(d[s]); orig[s] = arr; var o = {};
+      arr.forEach(function(r, i){ var c = Object.assign({}, r); c._seq = arr.length - i; o[String(r.id)] = c; });   // ลำดับ 0 = ใหม่สุด → _seq สูงสุด
+      body[s] = o;
+    });
+    body._fmt = 2;
+    body.savedAt = new Date().toISOString();
+    // กันชน: ถ้ามีคนบันทึกระหว่างนี้ ให้ยกเลิก
+    var sa = await getJSON(JM + '/savedAt.json');
+    if (sa !== d.savedAt) throw new Error('มีการบันทึกข้อมูลระหว่างโหลด — ยกเลิก ลองใหม่อีกครั้ง');
+    log('ส่งคำสั่งย้าย...');
+    await send('PATCH', JM + '.json', body, true);
+    // ตรวจเทียบทุกรายการ
+    var after = await getJSON(JM + '.json'), msgs = [];
+    if (after._fmt !== 2) msgs.push('ไม่พบตัวสลับ _fmt');
+    SECS.forEach(function(s){ var e = sameSet(orig[s], toArr(after[s])); if (e) msgs.push(s + ': ' + e); });
+    ['customers', 'billStatements', 'priceList'].forEach(function(s){ if (JSON.stringify(d[s] || null) !== JSON.stringify(after[s] || null)) msgs.push(s + ' เปลี่ยนไป'); });
+    if (msgs.length) { $('migrateMsg').innerHTML = '<span class="bad">❌ ตรวจเทียบไม่ผ่าน: ' + msgs.join(' | ') + ' — กด "ย้อนกลับ" แล้วแจ้งผู้พัฒนา</span>'; log('ตรวจเทียบไม่ผ่าน ' + msgs.join(' | ')); }
+    else { $('migrateMsg').innerHTML = '<span class="ok">✅ ย้ายสำเร็จและตรวจเทียบครบทุกรายการ (' + SECS.map(function(s){ return s + ' ' + orig[s].length; }).join(', ') + ') — ให้รีเฟรชทุกเครื่องได้เลย</span>'; log('ย้ายสำเร็จ'); }
+    cur = after; $('state').innerHTML = describe(after); refreshButtons();
+  } catch (e) { $('migrateMsg').innerHTML = '<span class="bad">❌ ' + e.message + '</span>'; log('ผิดพลาด: ' + e.message); loadState(); }
+}
+
+async function doRollback(){
+  if (!confirm('ย้อนกลับเป็นโครงสร้างแบบเดิมใช่ไหม? (ให้ทุกเครื่องหยุดบันทึกระหว่างนี้)')) return;
+  $('btnRollback').disabled = true; $('rollbackMsg').textContent = 'กำลังย้อนกลับ...';
+  try {
+    var d = await getJSON(JM + '.json');
+    var body = {};
+    SECS.forEach(function(s){
+      var arr = toArr(d[s]).sort(function(a, b){ return (b._seq || 0) - (a._seq || 0); }).map(strip);
+      body[s] = arr;
+    });
+    body._fmt = null; body.savedAt = new Date().toISOString();
+    await send('PATCH', JM + '.json', body, true);
+    var after = await getJSON(JM + '.json'), bad = [];
+    SECS.forEach(function(s){ if (!Array.isArray(after[s]) && !isArrayShape(after[s])) bad.push(s); if (toArr(after[s]).length !== body[s].length) bad.push(s + ' จำนวนไม่ตรง'); });
+    $('rollbackMsg').innerHTML = bad.length ? '<span class="bad">❌ ' + bad.join(', ') + '</span>' : '<span class="ok">✅ ย้อนกลับแล้ว — ให้รีเฟรชทุกเครื่อง</span>';
+    log('ย้อนกลับ: ' + (bad.length ? 'มีปัญหา ' + bad.join(', ') : 'สำเร็จ'));
+    cur = after; $('state').innerHTML = describe(after); validated = false; refreshButtons();
+  } catch (e) { $('rollbackMsg').innerHTML = '<span class="bad">❌ ' + e.message + '</span>'; loadState(); }
+}
+</script>
+</body>
+</html>

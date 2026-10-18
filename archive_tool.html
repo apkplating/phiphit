@@ -234,6 +234,8 @@ function checkPin() {
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master) — เรียงใหม่สุดก่อนตาม _seq
+function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 async function loadAllAndAnalyze() {
   try {
     var results = await Promise.all([
@@ -245,9 +247,9 @@ async function loadAllAndAnalyze() {
     ]);
 
     var jm = results[0] || {};
-    jobItems   = Array.isArray(jm.items)   ? jm.items   : [];
-    jobRecords = Array.isArray(jm.records) ? jm.records : [];
-    invoices   = Array.isArray(jm.invoices)? jm.invoices: [];
+    jobItems   = _jmArr(jm.items);
+    jobRecords = _jmArr(jm.records);
+    invoices   = _jmArr(jm.invoices);
 
     plateDayRecords.B1 = Array.isArray((results[1]||{}).dayRecords) ? results[1].dayRecords : [];
     plateDayRecords.B2 = Array.isArray((results[2]||{}).dayRecords) ? results[2].dayRecords : [];
@@ -559,21 +561,32 @@ async function moveToArchive() {
     // ── 1) Job Master ──
     pushLog('กำลังย้ายข้อมูล Job Master...');
     var freshJM = await (await fetch(DB_B1 + '/job-master.json', {cache:'no-store'})).json() || {};
-    var jmItemsAll   = Array.isArray(freshJM.items)   ? freshJM.items   : [];
-    var jmRecordsAll = Array.isArray(freshJM.records) ? freshJM.records : [];
+    var jmItemsAll   = _jmArr(freshJM.items);
+    var jmRecordsAll = _jmArr(freshJM.records);
     var archItems   = jmItemsAll.filter(function(j){ return archivedJobIds[j.id]; });
     var keepItems    = jmItemsAll.filter(function(j){ return !archivedJobIds[j.id]; });
     var archRecords  = jmRecordsAll.filter(function(r){ return archivedJobIds[r.jobId]; });
     var keepRecords  = jmRecordsAll.filter(function(r){ return !archivedJobIds[r.jobId]; });
 
     var existingArchJM = await (await fetch(DB_B1 + '/archive/job-master.json', {cache:'no-store'})).json() || {};
+    function _noSeq(o){ var c = Object.assign({}, o); delete c._seq; return c; }
     var mergedArchJM = {
-      items:   (existingArchJM.items||[]).concat(archItems),
-      records: (existingArchJM.records||[]).concat(archRecords)
+      items:   _jmArr(existingArchJM.items).concat(archItems.map(_noSeq)),
+      records: _jmArr(existingArchJM.records).concat(archRecords.map(_noSeq))
     };
     await fetch(DB_B1 + '/archive/job-master.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mergedArchJM)});
-    var newJM = Object.assign({}, freshJM, { items: keepItems, records: keepRecords });
-    await fetch(DB_B1 + '/job-master.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newJM)});
+    if (freshJM._fmt === 2) {
+      // โครงสร้างใหม่ (โหนดต่อ id): ลบเฉพาะรายการที่ย้ายไป archive ไม่เขียนทับทั้งก้อน
+      var delBody = {};
+      archItems.forEach(function(j){ delBody['items/' + j.id] = null; });
+      archRecords.forEach(function(r){ delBody['records/' + r.id] = null; });
+      delBody.savedAt = new Date().toISOString();
+      var delRes = await fetch(DB_B1 + '/job-master.json', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(delBody)});
+      if (!delRes.ok) throw new Error('ลบรายการที่ย้ายออกจาก Job Master ไม่สำเร็จ HTTP ' + delRes.status);
+    } else {
+      var newJM = Object.assign({}, freshJM, { items: keepItems, records: keepRecords });
+      await fetch(DB_B1 + '/job-master.json', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newJM)});
+    }
     pushLog('Job Master: ย้าย ' + archItems.length + ' บิล, ' + archRecords.length + ' records สำเร็จ', true);
 
     // ── 2) ไลน์ชุบ B1 / B2 / R1 ──
