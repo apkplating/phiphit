@@ -170,6 +170,7 @@ if ('caches' in window) {
 <!-- html2canvas + jsPDF: สร้างสำเนา PDF ของใบ INV/ใบเคลมตอนพิมพ์ ส่งเก็บที่ NAS (async กันเน็ตช้าไปบล็อกหน้า) -->
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <!-- ปุ่มลอยกลับหน้าหลัก (index.html) — คงที่มุมจอ ไม่บังส่วนอื่นของหน้า ใช้ตัวเดียวกันทุกไฟล์ -->
@@ -235,7 +236,7 @@ if ('caches' in window) {
         <option value="">— ทุกเดือน —</option>
       </select>
       <button onclick="exportBoardCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
-      <button onclick="openBulkCloseModal()" class="btn btn-outline btn-sm" style="color:#b91c1c;border-color:#fca5a5;">🧹 ปิดบิลเก่าเป็นชุด</button>
+      <button id="bulkCloseBtn" onclick="openBulkCloseModal()" class="btn btn-outline btn-sm" style="display:none;color:#b91c1c;border-color:#fca5a5;">🧹 ปิดบิลเก่าเป็นชุด</button>
     </div>
   </div>
 
@@ -1301,6 +1302,7 @@ function applyRole() {
     if (firstVisible) tab(firstVisible);
   }
   applyStockOverridePermission();
+  var _bcb = document.getElementById('bulkCloseBtn'); if (_bcb) _bcb.style.display = (currentRole === 'admin') ? '' : 'none';
   var _pbc = document.getElementById('pdfBackfillCard'); if (_pbc) _pbc.style.display = (currentRole === 'admin') ? '' : 'none';
 }
 
@@ -5880,6 +5882,7 @@ function saveEditJob() {
 var _bulkCloseCandidates = [];
 
 function openBulkCloseModal() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
   document.getElementById('bulkClosePreview').innerHTML = '';
   document.getElementById('bulkCloseConfirmBtn').style.display = 'none';
   document.getElementById('bulkCloseModal').classList.add('open');
@@ -5961,11 +5964,52 @@ function bulkCloseBill(jobId) {
   return true;
 }
 
-function confirmBulkClose() {
+
+// สำเนาก่อนปิดบิลเป็นชุด: Excel 1 ไฟล์ (ดาวน์โหลด) + snapshot ดิบบน NAS (/archive/bulkclose-<ts>)
+async function bulkCloseSnapshot(ids) {
+  var ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  var jobs = [], rows = [], byCust = {};
+  ids.forEach(function(id){
+    var j = jobItems.find(function(x){ return x.id===id; }); if (!j) return;
+    var b = calcJob(id), isKg = j.unit==='kg';
+    var recs = jobRecords.filter(function(r){ return r.jobId===id; });
+    var inQ = isKg ? b.totalInKg : b.totalIn, outQ = isKg ? b.totalOutKg : b.totalOut;
+    var remain = isKg ? b.remainKg : b.remain;
+    jobs.push({ item: j, records: recs });
+    rows.push([j.bill||'', j.date||'', j.partName||'', j.customer||'', isKg?'กก.':'ชิ้น', inQ, outQ, remain, daysSince(j.date)]);
+    var c = j.customer||'(ไม่ระบุ)'; byCust[c] = byCust[c] || { n:0, pcs:0, kg:0 };
+    byCust[c].n++; if (isKg) byCust[c].kg += remain; else byCust[c].pcs += remain;
+  });
+  var head1 = ['เลขบิล','วันรับ','ชิ้นงาน','ลูกค้า','หน่วย','รับเข้า','ออก INV แล้ว','คงเหลือที่ถูกตัด','อายุ(วัน)'];
+  var sum = Object.keys(byCust).sort().map(function(c){ return [c, byCust[c].n, byCust[c].pcs, +byCust[c].kg.toFixed(2)]; });
+  rows.sort(function(a,b){ return String(a[3]).localeCompare(String(b[3])) || String(a[1]).localeCompare(String(b[1])); });
+  var fname = 'bulkclose_' + ts + '.xlsx';
+  if (window.XLSX) {
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['ลูกค้า','จำนวนบิล','คงเหลือที่ถูกตัด (ชิ้น)','คงเหลือที่ถูกตัด (กก.)']].concat(sum)), 'สรุปตามลูกค้า');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head1].concat(rows)), 'รายการบิล');
+    XLSX.writeFile(wb, fname);
+  } else {
+    dlCSV([head1].concat(rows), 'bulkclose_' + ts + '.csv');
+  }
+  var url = ARCH_BASE + '/archive/bulkclose-' + ts + '.json';
+  var r = await fetch(url, { method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ at: new Date().toISOString(), count: jobs.length, jobs: jobs }) });
+  if (!r.ok) throw new Error('บันทึก snapshot ไม่สำเร็จ HTTP '+r.status);
+  return ts;
+}
+
+async function confirmBulkClose() {
   var checked = Array.from(document.querySelectorAll('.bcChk:checked')).map(function(c){ return c.value; });
   if (!checked.length) { showToast('bulkclose','ยังไม่ได้เลือกบิล','err'); return; }
   if (!confirm('ยืนยันปิด '+checked.length+' บิล? ระบบจะตัดคงเหลือของบิลที่เลือกเป็น 0 ทันที (ไม่กระทบ INV ที่ออกไปแล้ว แก้ไขย้อนกลับได้ทีหลัง)')) return;
 
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var snap;
+  try { snap = await bulkCloseSnapshot(checked); }
+  catch (e) {
+    if (!confirm('เก็บสำเนาไม่สำเร็จ ('+(e&&e.message||e)+')\nปิดบิลต่อโดยไม่มีสำเนาหรือไม่?')) return;
+  }
   var count = 0;
   checked.forEach(function(jobId){ if (bulkCloseBill(jobId)) count++; });
 
