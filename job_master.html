@@ -1267,6 +1267,7 @@ function checkPin() {
       return;
     }
     currentRole = result.role;
+    currentUserName = (result.user && result.user.name) || '';
     currentTabs = result.tabs;
     currentStockOverrideApprove = !!result.stockOverrideApprove;
     document.getElementById('loginScreen').style.display = 'none';
@@ -1277,6 +1278,7 @@ function checkPin() {
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(flushPdfQueue, 3000);
+    setTimeout(loadJmDue, 1500);
     loadTmpNotes().then(function(){ try { renderBoard(); } catch(e){} });
     setTimeout(fbLoad, 800);
     loadPartMaster().then(function(){ updatePmStatusHint(); renderCustomerFilter(); pullFromLines(); });
@@ -1930,6 +1932,223 @@ function passCustInvGuard(customerName, excludeJobIds) {
   return true;
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  DUE-TRACK (เฟส 1 โหมดทดลอง — ไม่ล็อก) — ตารางบิลเกิน 7 วัน + กำหนด due ต่อบิล + log
+//  • ออก INV ใบแรกของวัน (ทั้งบริษัท) → popup ตารางบิลเกินกำหนดทุกลูกค้า ให้ลง due ใหม่ต่อบิล
+//    (ถ้าไม่มี → ขึ้น "ระบบ INV พร้อมใช้งาน") แล้วบันทึกต่อได้ตามปกติ ไม่บล็อก
+//  • ข้อมูลเก็บเป็น node แยก (ไม่ปนก้อน job-master):  /jm-due/<jobId>, /jm-due-log/<id>, /jm-due-daily/<วัน>
+//  • บิลที่มี due และยังไม่ถึงวัน = ไม่ถูกถามซ้ำ  ถึงวันแล้วยังไม่ปิด = กลับมาถามใหม่
+// ══════════════════════════════════════════════════════════════
+var jmDue = {};            // jobId -> {due, by, at, prev, bill, customer}
+var currentUserName = '';
+var _dueDayDone = '';      // YYYY-MM-DD ที่เครื่องนี้ผ่านการตรวจแล้ว
+var DUE_MAX_DAYS = 3;   // due ใหม่ต้องไม่เกินกี่วันนับจากวันนี้
+function _dueMax(){ var d=new Date(); d.setDate(d.getDate()+DUE_MAX_DAYS); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function _dueKey(id){ return String(id).replace(/[.#$\[\]\/]/g,'_'); }
+function _dueToday(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+async function loadJmDue() {
+  try {
+    var r = await fetch(ARCH_BASE + '/jm-due.json', { cache:'no-store' });
+    if (r.ok) { var d = await r.json(); jmDue = (d && typeof d==='object') ? d : {}; }
+  } catch(e){}
+  try { renderBoard(); renderOverduePanel(); } catch(e){}
+}
+function _dueLog(entries) {
+  if (!entries.length) return;
+  var body = {}, base = Date.now();
+  entries.forEach(function(e, i){ body[base+'-'+i+'-'+Math.random().toString(36).slice(2,6)] = e; });
+  fetch(ARCH_BASE + '/jm-due-log.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }).catch(function(){});
+}
+// บิลเกินกำหนดทุกลูกค้า (ไม่ปิด, คงเหลือ>0, ค้าง>7 วัน)
+function overdueAllJobs() { return withCalcIndex(_overdueAllJobsImpl); }
+function _overdueAllJobsImpl() {
+  var out = [];
+  jobItems.forEach(function(j){
+    if (j.closed) return;
+    var days = daysSince(j.date);
+    if (!(days > 7)) return;
+    var b = calcJob(j.id);
+    var kg = j.unit === 'kg';
+    var rem = kg ? b.remainKg : b.remain;
+    if (!(rem > 0.0001)) return;
+    out.push({ job:j, days:days, rem:rem, kg:kg, due:(jmDue[_dueKey(j.id)]||{}).due||'' });
+  });
+  out.sort(function(a,b){ return b.days - a.days; });
+  return out;
+}
+function _fmtRem(x){ return x.kg ? x.rem.toFixed(2)+' กก.' : x.rem.toLocaleString()+' ชิ้น'; }
+function _fmtDueTh(d){ if(!d) return '—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0].slice(2); }
+
+var _dueCb = null, _dueRows = [];
+function dueModalEl() {
+  var el = document.getElementById('dueModal');
+  if (el) return el;
+  el = document.createElement('div'); el.id = 'dueModal'; el.className = 'modal-bg';
+  el.innerHTML = '<div class="modal-box" style="max-width:860px;width:100%;max-height:92vh;display:flex;flex-direction:column;">' +
+    '<div class="modal-title" id="dueTitle">ตรวจบิลเกินกำหนดก่อนออก INV</div>' +
+    '<div id="dueBody" style="overflow-y:auto;flex:1;min-height:60px;"></div>' +
+    '<div class="modal-footer" id="dueFooter"></div></div>';
+  document.body.appendChild(el);
+  return el;
+}
+// เรียกก่อนบันทึก INV ใหม่ (โหมดขาย) — cb() = ไปต่อ
+async function dueDailyGate(cb) {
+  var today = _dueToday();
+  if (_dueDayDone === today) { cb(); return; }
+  var el = dueModalEl(); var body = document.getElementById('dueBody'), foot = document.getElementById('dueFooter');
+  document.getElementById('dueTitle').textContent = 'ตรวจบิลเกินกำหนดก่อนออก INV';
+  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);">กำลังตรวจสอบ...</div>'; foot.innerHTML = '';
+  el.classList.add('open');
+  var done = false;
+  try {
+    var r = await fetch(ARCH_BASE + '/jm-due-daily/' + today + '.json', { cache:'no-store' });
+    if (r.ok) { var d = await r.json(); if (d && d.at) done = true; }
+  } catch(e){}
+  if (done) { _dueDayDone = today; el.classList.remove('open'); cb(); return; }
+  await loadJmDue();
+  _dueCb = cb;
+  _dueRenderTable(today);
+}
+function _dueRenderTable(today) {
+  var el = dueModalEl(); var body = document.getElementById('dueBody'), foot = document.getElementById('dueFooter');
+  var all = overdueAllJobs();
+  all.sort(function(a,b){ return String(a.job.customer||'').localeCompare(String(b.job.customer||''),'th') || b.days - a.days; });
+  var need = all.filter(function(x){ return !x.due || x.due < today; });
+  var okDue = all.filter(function(x){ return x.due && x.due >= today; });
+  _dueRows = need;
+  if (!all.length) {
+    document.getElementById('dueTitle').textContent = '✅ ระบบ INV พร้อมใช้งาน';
+    body.innerHTML = '<div style="padding:24px;text-align:center;font-size:14px;">ไม่พบบิลเกินกำหนด 7 วัน</div>';
+    foot.innerHTML = '<button class="btn btn-green" onclick="dueFinish(0,false)">เริ่มออก INV</button>';
+    return;
+  }
+  document.getElementById('dueTitle').textContent = '⚠️ บิลเกินกำหนด ' + need.length + ' รายการ — กรุณาลง due ใหม่';
+  var TH = 'padding:5px 6px;white-space:nowrap;';
+  var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6;">ลง due ใหม่ของแต่ละรายการ <strong>ไม่เกิน '+DUE_MAX_DAYS+' วันนับจากวันนี้ (ภายใน '+_fmtDueTh(_dueMax())+')</strong> ระบบจะไม่ถามซ้ำจนกว่าจะถึงวันนั้น  พนักงานยังออก INV ได้ตามปกติ  ระบบบันทึก log ทุกครั้ง</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:600;">ตั้งทุกรายการเป็นวันที่</span>' +
+    '<input type="date" min="'+today+'" max="'+_dueMax()+'" id="dueAll" style="padding:3px 6px;font-size:11px;width:140px;"><button class="btn btn-outline btn-sm" onclick="dueApplyAll()">ใช้ทุกรายการ</button></div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f8fafc;text-align:left;">' +
+    '<th style="'+TH+'">ลำดับ</th><th style="'+TH+'">ลูกค้า</th><th style="'+TH+'">หมายเลขชิ้นงาน</th><th style="'+TH+'">หมายเลขบิล</th><th style="'+TH+'">วันที่รับเข้า</th>' +
+    '<th style="'+TH+'text-align:right;">จำนวนค้าง</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'">due เดิม</th><th style="'+TH+'">กำหนด due ใหม่ (ไม่เกิน '+DUE_MAX_DAYS+' วัน)</th></tr></thead><tbody>';
+  need.forEach(function(x, i){
+    var j = x.job;
+    html += '<tr style="border-bottom:1px solid #e5e7eb;">' +
+      '<td style="padding:4px 6px;">'+(i+1)+'</td>' +
+      '<td style="padding:4px 6px;font-weight:600;">'+esc((j.customer||'-').split('\n')[0])+'</td>' +
+      '<td style="padding:4px 6px;">'+esc(j.partName||'-')+'</td>' +
+      '<td style="padding:4px 6px;font-family:monospace;">'+esc(j.bill||'-')+'</td>' +
+      '<td style="padding:4px 6px;">'+fmtDate(j.date)+'</td>' +
+      '<td style="padding:4px 6px;text-align:right;font-weight:700;">'+_fmtRem(x)+'</td>' +
+      '<td style="padding:4px 6px;text-align:center;color:#b91c1c;font-weight:700;">'+x.days+'</td>' +
+      '<td style="padding:4px 6px;font-size:10px;color:var(--text-muted);">'+_fmtDueTh(x.due)+'</td>' +
+      '<td style="padding:4px 6px;"><input type="date" min="'+today+'" max="'+_dueMax()+'" id="dueR'+i+'" style="padding:3px 6px;font-size:11px;width:140px;"></td></tr>';
+  });
+  html += '</tbody></table>';
+  if (okDue.length) html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">มี due แล้วและยังไม่ถึงวัน '+okDue.length+' รายการ (ไม่ต้องลงซ้ำ)</div>';
+  body.innerHTML = html;
+  foot.innerHTML = '<button class="btn btn-green" onclick="dueSubmit()">✅ บันทึก due + log และออก INV ต่อ</button>' +
+                   '<button class="btn btn-outline" onclick="dueSkip()">ข้ามไปก่อน (บันทึก log)</button>';
+}
+function dueApplyAll() {
+  var v = document.getElementById('dueAll').value; if (!v) return;
+  if (v < _dueToday() || v > _dueMax()) { alert('วันที่ต้องไม่เกิน '+DUE_MAX_DAYS+' วันนับจากวันนี้'); return; }
+  document.querySelectorAll('#dueBody input[id^=dueR]').forEach(function(i){ i.value = v; });
+}
+async function dueSubmit() {
+  var today = _dueToday(), patch = {}, logs = [], missing = 0;
+  _dueRows.forEach(function(x, i){
+    var v = (document.getElementById('dueR'+i)||{}).value || '';
+    if (!v) { missing++; return; }
+    if (v < today || v > _dueMax()) { missing++; return; }
+    var j = x.job;
+    patch[_dueKey(j.id)] = { due:v, by:currentUserName||currentRole, at:new Date().toISOString(), prev:x.due||'', bill:j.bill||'', customer:j.customer||'' };
+    logs.push({ at:new Date().toISOString(), by:currentUserName||currentRole, action:'set', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
+      remain:x.rem, unit:x.kg?'kg':'pcs', daysOver:x.days, prevDue:x.due||'', newDue:v });
+  });
+  if (missing) { alert('ลงวันที่ไม่ครบหรือไม่ถูกต้อง '+missing+' รายการ\n(ต้องเป็นตั้งแต่วันนี้ ถึงไม่เกิน '+_fmtDueTh(_dueMax())+')\nถ้าไม่พร้อมกด "ข้ามไปก่อน"'); return; }
+  try {
+    if (Object.keys(patch).length) {
+      var r = await fetch(ARCH_BASE + '/jm-due.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      Object.keys(patch).forEach(function(k){ jmDue[k] = patch[k]; });
+    }
+  } catch(e) { alert('บันทึก due ไม่สำเร็จ ('+(e.message||e)+') — ลองใหม่อีกครั้ง'); return; }
+  _dueLog(logs);
+  dueFinish(logs.length, false);
+}
+function dueSkip() {
+  if (!confirm('ข้ามการลง due ใช่ไหม? ระบบจะบันทึก log ว่าข้าม ('+_dueRows.length+' รายการ)')) return;
+  var logs = _dueRows.map(function(x){ var j=x.job; return { at:new Date().toISOString(), by:currentUserName||currentRole, action:'skip', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
+    remain:x.rem, unit:x.kg?'kg':'pcs', daysOver:x.days, prevDue:x.due||'', newDue:'' }; });
+  _dueLog(logs);
+  dueFinish(0, true);
+}
+async function dueFinish(n, skipped) {
+  var today = _dueToday();
+  try {
+    await fetch(ARCH_BASE + '/jm-due-daily/' + today + '.json', { method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ at:new Date().toISOString(), by:currentUserName||currentRole, set:n, skipped:!!skipped, listed:_dueRows.length }) });
+  } catch(e){}
+  _dueDayDone = today;
+  dueModalEl().classList.remove('open');
+  try { renderBoard(); renderOverduePanel(); } catch(e){}
+  var cb = _dueCb; _dueCb = null; if (cb) cb();
+}
+
+// ตาราง "รายการเกินกำหนด" (admin) — รายชิ้นงาน อ้างอิงเลขบิล พร้อม due
+function renderOverduePanel() {
+  var host = document.getElementById('overduePanel');
+  if (currentRole !== 'admin') { if (host) host.style.display = 'none'; return; }
+  if (!host) {
+    var anchor = document.querySelector('.sum-row'); if (!anchor) return;
+    host = document.createElement('div'); host.id = 'overduePanel'; host.className = 'card'; host.style.cssText = 'padding:10px 12px;';
+    anchor.parentNode.insertBefore(host, anchor);
+  }
+  var all = overdueAllJobs(), today = _dueToday();
+  host.style.display = '';
+  if (!all.length) { host.innerHTML = '<div style="font-size:12px;color:#15803d;">✅ ไม่มีบิลเกินกำหนด 7 วัน</div>'; return; }
+  all.sort(function(a,b){ return String(a.job.customer||'').localeCompare(String(b.job.customer||''),'th') || b.days - a.days; });
+  var late = all.filter(function(x){ return !x.due || x.due < today; }).length;
+  var custs = {}; all.forEach(function(x){ custs[x.job.customer||'-'] = 1; });
+  var TH = 'padding:4px 6px;white-space:nowrap;';
+  var rows = all.map(function(x, i){
+    var j = x.job, isLate = !x.due || x.due < today;
+    return '<tr style="border-bottom:1px solid #e5e7eb;">' +
+      '<td style="padding:3px 6px;">'+(i+1)+'</td>' +
+      '<td style="padding:3px 6px;font-weight:600;cursor:pointer;" onclick="filterBoardByCustomer(this.dataset.c)" data-c="'+esc((j.customer||'').split('\n')[0])+'">'+esc((j.customer||'-').split('\n')[0])+'</td>' +
+      '<td style="padding:3px 6px;">'+esc(j.partName||'-')+'</td>' +
+      '<td style="padding:3px 6px;font-family:monospace;">'+esc(j.bill||'-')+'</td>' +
+      '<td style="padding:3px 6px;">'+fmtDate(j.date)+'</td>' +
+      '<td style="padding:3px 6px;text-align:right;font-weight:700;">'+_fmtRem(x)+'</td>' +
+      '<td style="padding:3px 6px;text-align:center;color:#b91c1c;font-weight:700;">'+x.days+'</td>' +
+      '<td style="padding:3px 6px;text-align:center;'+(isLate?'color:#b91c1c;font-weight:700;':'color:#15803d;')+'">'+(x.due ? _fmtDueTh(x.due)+(isLate?' (เลย)':'') : 'ยังไม่ลง')+'</td></tr>';
+  }).join('');
+  host.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+    '<strong style="font-size:13px;">⚠️ รายการเกินกำหนด '+all.length+' รายการ / '+Object.keys(custs).length+' ลูกค้า</strong>' +
+    '<span style="font-size:11px;color:'+(late?'#b91c1c':'#15803d')+';font-weight:600;">'+(late ? late+' รายการยังไม่มี due / เลย due' : 'ลง due ครบแล้ว')+'</span>' +
+    '<span style="font-size:10px;color:var(--text-muted);">(กดชื่อลูกค้าเพื่อกรองบอร์ด)</span>' +
+    '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="downloadDueLog()">📥 log due (CSV)</button></div>' +
+    '<div style="max-height:260px;overflow-y:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f8fafc;text-align:left;position:sticky;top:0;">' +
+    '<th style="'+TH+'">ลำดับ</th><th style="'+TH+'">ลูกค้า</th><th style="'+TH+'">หมายเลขชิ้นงาน</th><th style="'+TH+'">หมายเลขบิล</th><th style="'+TH+'">วันที่รับเข้า</th>' +
+    '<th style="'+TH+'text-align:right;">จำนวนค้าง</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'text-align:center;">due</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function filterBoardByCustomer(c) {
+  var s = document.getElementById('boardSearch'); if (s) { s.value = c; }
+  var st = document.getElementById('boardStatus'); if (st) st.value = 'เกินกำหนด';
+  renderBoard();
+}
+async function downloadDueLog() {
+  try {
+    var r = await fetch(ARCH_BASE + '/jm-due-log.json', { cache:'no-store' }); var d = r.ok ? await r.json() : null;
+    var arr = d ? Object.keys(d).map(function(k){ return d[k]; }) : [];
+    arr.sort(function(a,b){ return String(a.at).localeCompare(String(b.at)); });
+    var rows = [['เวลา','โดย','การกระทำ','เลขบิล','ชิ้นงาน','ลูกค้า','คงเหลือ','หน่วย','ค้าง(วัน)','due เดิม','due ใหม่']];
+    arr.forEach(function(e){ rows.push([e.at,e.by,e.action,e.bill,e.part,e.customer,e.remain,e.unit,e.daysOver,e.prevDue,e.newDue]); });
+    dlCSV(rows, 'jm_due_log_' + _dueToday() + '.csv');
+  } catch(e) { alert('ดาวน์โหลด log ไม่สำเร็จ'); }
+}
+
 function getStatus(job) {
   var b = calcJob(job.id);
   // คงเหลือ = 0 → จ่ายครบ (ACER: วันค้าง 0)
@@ -1995,6 +2214,7 @@ function _renderBoardImpl() {
   search = search.toLowerCase();
 
   buildBoardMonthOptions();
+  try { renderOverduePanel(); } catch(e){}
 
   var rows = jobItems.filter(function(job) {
     if (search && !( (job.bill||'').toLowerCase().includes(search) ||
@@ -2070,6 +2290,7 @@ function _renderBoardImpl() {
     var aDone = sa === 'จ่ายครบ', bDone = sb === 'จ่ายครบ';
     if (aDone && !bDone) return 1;
     if (!aDone && bDone) return -1;
+    if (!aDone && !bDone) return (a.date||'').localeCompare(b.date||'');   // ค้างนานสุดขึ้นก่อน
     return (b.date||'').localeCompare(a.date||'');
   });
 
@@ -2123,7 +2344,7 @@ function _renderBoardImpl() {
       '<td>'+outCell+'</td>' +
       '<td>'+remainCell+'</td>' +
       daysCell +
-      '<td>'+statusBadge(status)+'</td>' +
+      '<td>'+statusBadge(status)+((!isDone && jmDue[_dueKey(job.id)]) ? '<div style="font-size:9px;color:#475569;margin-top:2px;">due '+_fmtDueTh(jmDue[_dueKey(job.id)].due)+'</div>' : '')+'</td>' +
       '<td style="white-space:nowrap;">' +
         '<button onclick="openEditModal(\''+job.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
         '<button onclick="deleteJob(\''+job.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>' +
@@ -3535,8 +3756,8 @@ function saveInvoice(doPrint) {
   // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
   // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
   if (!isClaim && !_editingInvoiceRef) {
-    var thisDraftJobIds = invDraft.map(function(l){ return l.jobId; });
-    if (!passCustInvGuard(customer, thisDraftJobIds)) return;
+    // เฟส 1 โหมดทดลอง: ไม่ล็อกอีกแล้ว — ใบแรกของวันขึ้นตารางบิลเกินกำหนดให้ลง due (ดู dueDailyGate)
+    if (_dueDayDone !== _dueToday()) { dueDailyGate(function(){ saveInvoice(doPrint); }); return; }
   }
 
   if (isClaim) {
