@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ล้างข้อมูล Job Master — APK Plating</title>
+<style>
+:root{--navy:#0f2744;--blue:#2e75b6;--border:#d5e2ef;--red:#dc2626;--green:#047857;--amber:#b45309;}
+*{box-sizing:border-box;}
+body{margin:0;background:#eef3f8;font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:14px;color:var(--navy);}
+.wrap{max-width:820px;margin:0 auto;padding:16px;}
+h1{font-size:20px;margin:6px 0 2px;} .sub{color:#587;font-size:12px;margin-bottom:14px;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+.card h2{font-size:15px;margin:0 0 8px;}
+button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 18px;font-size:14px;cursor:pointer;font-family:inherit;}
+button:disabled{background:#9db4c9;cursor:not-allowed;} button.danger{background:var(--red);} button.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue);}
+table{border-collapse:collapse;width:100%;font-size:13px;} td,th{border:1px solid var(--border);padding:6px 8px;text-align:left;} th{background:#f3f8fc;}
+.ok{color:var(--green);font-weight:700;} .bad{color:var(--red);font-weight:700;}
+pre{background:#0f2744;color:#cfe3f5;padding:10px;border-radius:8px;font-size:12px;max-height:220px;overflow:auto;white-space:pre-wrap;}
+input[type=password],input[type=text]{font-size:18px;padding:8px;border:1px solid var(--border);border-radius:8px;}
+#login{text-align:center;padding:40px 10px;} #login input{letter-spacing:6px;text-align:center;width:200px;} .hide{display:none;}
+</style>
+</head>
+<body>
+<!-- ปุ่มลอยกลับหน้าหลัก (index.html) — คงที่มุมจอ ไม่บังส่วนอื่นของหน้า ใช้ตัวเดียวกันทุกไฟล์ -->
+<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;bottom:14px;left:14px;z-index:99999;width:42px;height:42px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.25);">🏠</a>
+<div class="wrap">
+  <h1>🗑 ล้างข้อมูล Job Master</h1>
+  <div class="sub">ล้าง "บิลรับงาน (items)" และ "รายการรับ/จ่าย (records)" ทั้งหมด — ใบ INV ที่ออกแล้ว ทะเบียนลูกค้า ทะเบียนราคา ใบวางบิล <b>ไม่ถูกลบ</b> • สำรองบน NAS ก่อนเสมอ • กู้คืนได้ • เฉพาะผู้ดูแลระบบ</div>
+
+  <div id="login" class="card">
+    <div style="margin-bottom:10px;">ใส่ PIN ผู้ดูแลระบบ</div>
+    <input type="password" id="pin" inputmode="numeric" autocomplete="off"><br><br>
+    <button onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div id="loginErr" class="bad" style="margin-top:10px;"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="card"><h2>1) สถานะตอนนี้</h2><div id="state">กำลังโหลด...</div>
+      <div style="margin-top:8px;"><button class="ghost" onclick="loadState()">🔄 โหลดใหม่</button></div></div>
+
+    <div class="card">
+      <h2>2) ล้างข้อมูล</h2>
+      <div style="margin-bottom:8px;line-height:1.7;">ก่อนกดล้าง: <b>ทุกเครื่อง</b> (tablet 1-4, pc1, pc2) ต้องปิดแท็บ Job Master เก่าทิ้ง เปิดใหม่แท็บเดียว กด Ctrl+F5 แล้ว<br>
+        หลังล้าง plating v4/v5/v6 จะไม่มีเลขบิลให้เลือกจนกว่าจะใส่ข้อมูลใหม่</div>
+      <div style="margin-bottom:8px;">พิมพ์คำว่า <b>ล้างข้อมูล</b> เพื่อยืนยัน: <input type="text" id="confirmTxt" style="width:180px;" autocomplete="off"></div>
+      <button id="btnWipe" class="danger" onclick="doWipe()">🗑 สำรอง + ล้างข้อมูล</button>
+      <div id="wipeMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>กู้คืน (ถ้าล้างผิด)</h2>
+      <div style="margin-bottom:8px;">นำ items / records กลับจากที่สำรองไว้ตอนล้างครั้งล่าสุด</div>
+      <button id="btnRestore" class="ghost" onclick="doRestore()">↩️ กู้คืนข้อมูลที่ล้าง</button>
+      <div id="restoreMsg" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card"><h2>บันทึกการทำงาน</h2><pre id="log"></pre></div>
+  </div>
+</div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+var DB = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var JM = DB + '/job-master';
+function $(id){ return document.getElementById(id); }
+function log(m){ var el = $('log'); el.textContent += '[' + new Date().toLocaleTimeString('th-TH') + '] ' + m + '\n'; el.scrollTop = el.scrollHeight; }
+function cnt(x){ if (x == null) return 0; if (Array.isArray(x)) return x.filter(function(v){ return v != null; }).length; return Object.keys(x).length; }
+function getJSON(u){ return fetch(u, { cache: 'no-store' }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
+function send(method, url, body){
+  return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'X-APK-Force': '1' }, body: JSON.stringify(body) })
+    .then(function(r){ if (!r.ok) return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 200)); }); return r.json().catch(function(){ return null; }); });
+}
+function stamp(){ var d = new Date(Date.now() + 7*3600*1000).toISOString(); return d.slice(0,10).replace(/-/g,'') + '-' + d.slice(11,16).replace(':',''); }
+
+function doLogin(){
+  var pin = $('pin').value.trim(); if (!pin) return;
+  $('loginErr').textContent = '';
+  CentralAuth.fetchUsers().then(function(r){
+    if (!r.ok) { $('loginErr').textContent = 'เชื่อมต่อระบบสิทธิ์ไม่ได้ (' + r.error + ')'; return; }
+    var u = r.users[pin], p = u ? (u.permissions || {}) : {};
+    if (!u || p.auth_admin !== 'admin') { $('loginErr').textContent = 'PIN ไม่ถูกต้อง หรือไม่ใช่ผู้ดูแลระบบ'; return; }
+    $('login').classList.add('hide'); $('app').classList.remove('hide'); loadState();
+  });
+}
+$('pin').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+
+function loadState(){
+  $('state').textContent = 'กำลังโหลด...';
+  Promise.all([getJSON(JM + '.json'), getJSON(DB + '/jm-wipe-last.json')]).then(function(a){
+    var d = a[0] || {}, last = a[1];
+    $('state').innerHTML = '<table><tr><th>ส่วน</th><th>จำนวน</th><th>ผลของการล้าง</th></tr>' +
+      '<tr><td>บิลรับงาน (items)</td><td>' + cnt(d.items) + '</td><td>ถูกล้าง</td></tr>' +
+      '<tr><td>รายการรับ/จ่าย (records)</td><td>' + cnt(d.records) + '</td><td>ถูกล้าง</td></tr>' +
+      '<tr><td>ใบ INV (invoices)</td><td>' + cnt(d.invoices) + '</td><td>คงไว้</td></tr></table>' +
+      '<div style="margin-top:8px;">การล้างครั้งล่าสุด: ' + (last ? '<b>' + last.key + '</b> (items ' + last.items + ' / records ' + last.records + ')' : 'ยังไม่เคย') + '</div>';
+    $('btnRestore').disabled = !last || !!last.restored;
+    log('โหลดสถานะแล้ว');
+  }).catch(function(e){ $('state').innerHTML = '<span class="bad">โหลดไม่สำเร็จ: ' + e.message + '</span>'; });
+}
+
+async function doWipe(){
+  if ($('confirmTxt').value.trim() !== 'ล้างข้อมูล') { $('wipeMsg').innerHTML = '<span class="bad">ต้องพิมพ์คำว่า ล้างข้อมูล ให้ตรง</span>'; return; }
+  $('btnWipe').disabled = true; $('wipeMsg').textContent = 'กำลังสำรอง...';
+  try {
+    var d = await getJSON(JM + '.json'); d = d || {};
+    var key = 'jm-wipe-' + stamp() + new Date().toISOString().slice(17,19);   // มีวินาที กันสำเนาทับกัน
+    var snap = { at: new Date().toISOString(), items: d.items == null ? null : d.items, records: d.records == null ? null : d.records, fmt: d._fmt || 0, seq: d._seq == null ? null : d._seq };
+    var txt = JSON.stringify(d), name = 'job-master-before-wipe-' + stamp() + '.json';
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    await send('PUT', DB + '/archive/' + key + '.json', snap);
+    var back = await getJSON(DB + '/archive/' + key + '.json');
+    if (cnt(back.items) !== cnt(d.items) || cnt(back.records) !== cnt(d.records)) throw new Error('ตรวจสำเนาบน NAS ไม่ตรง — ไม่ล้าง');
+    log('สำรองแล้ว /archive/' + key + ' และไฟล์ ' + name);
+    var ep = new Date().toISOString();
+    await send('PATCH', JM + '.json', { items: null, records: null, _epoch: ep, savedAt: ep });
+    await send('PUT', DB + '/jm-wipe-last.json', { key: key, at: ep, items: cnt(d.items), records: cnt(d.records), restored: false });
+    var chk = await getJSON(JM + '.json');
+    log('ล้างแล้ว items=' + cnt(chk.items) + ' records=' + cnt(chk.records) + ' invoices=' + cnt(chk.invoices));
+    $('wipeMsg').innerHTML = '<span class="ok">✅ ล้างแล้ว</span> (items ' + cnt(d.items) + ' / records ' + cnt(d.records) + ') สำรองไว้ที่ NAS: ' + key + ' และไฟล์ ' + name + ' ในโฟลเดอร์ดาวน์โหลด';
+    $('confirmTxt').value = ''; loadState();
+  } catch (e) { $('wipeMsg').innerHTML = '<span class="bad">ไม่สำเร็จ: ' + e.message + '</span>'; log('ผิดพลาด: ' + e.message); }
+  $('btnWipe').disabled = false;
+}
+
+async function doRestore(){
+  if (!confirm('กู้คืน items / records ที่ล้างไปกลับมา? (ข้อมูลใหม่ที่ใส่หลังล้างจะถูกแทนที่)')) return;
+  $('btnRestore').disabled = true; $('restoreMsg').textContent = 'กำลังกู้คืน...';
+  try {
+    var last = await getJSON(DB + '/jm-wipe-last.json'); if (!last) throw new Error('ไม่พบข้อมูลการล้าง');
+    var snap = await getJSON(DB + '/archive/' + last.key + '.json'); if (!snap) throw new Error('ไม่พบสำเนา ' + last.key);
+    var ep = new Date().toISOString();
+    await send('PATCH', JM + '.json', { items: snap.items, records: snap.records, _epoch: ep, savedAt: ep });
+    await send('PATCH', DB + '/jm-wipe-last.json', { restored: true });
+    $('restoreMsg').innerHTML = '<span class="ok">✅ กู้คืนแล้ว</span> (items ' + cnt(snap.items) + ' / records ' + cnt(snap.records) + ') — ให้ทุกเครื่องรีเฟรช';
+    log('กู้คืนจาก ' + last.key); loadState();
+  } catch (e) { $('restoreMsg').innerHTML = '<span class="bad">ไม่สำเร็จ: ' + e.message + '</span>'; $('btnRestore').disabled = false; }
+}
+</script>
+</body>
+</html>

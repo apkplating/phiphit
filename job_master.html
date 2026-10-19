@@ -223,6 +223,12 @@ if ('caches' in window) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <input type="text" id="boardSearch" placeholder="🔍 ค้นหา เลขบิล / ชื่อชิ้นงาน / ลูกค้า"
         oninput="renderBoard()" style="flex:1;min-width:160px;padding:9px 12px;">
+      <select id="boardView" onchange="renderBoard()"
+        style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;font-weight:600;">
+        <option value="">📋 ทั้งหมด</option>
+        <option value="overdue">⚠️ รายการเกินกำหนด</option>
+        <option value="recent">📥 รายการรับเข้าล่าสุด</option>
+      </select>
       <select id="boardStatus" onchange="renderBoard()"
         style="padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;">
         <option value="">— ทุกสถานะ —</option>
@@ -242,7 +248,7 @@ if ('caches' in window) {
 
   <!-- summary — สลับโหมดอัตโนมัติ: ถ้าไม่มีตัวกรอง (ค้นหา/เดือน/สถานะ) โชว์ภาพรวมทั้งหมดแบบเดิม
        ถ้ามีตัวกรองอยู่ โชว์สรุปเฉพาะรายการที่กรองได้แทน (จำนวนบิล/รับเข้า/จ่ายออก/คงเหลือ) กันต้องมานั่งบวกเลขเอง -->
-  <div class="sum-row">
+  <div class="sum-row" id="boardSumRow">
     <div class="sum-chip" style="background:#f0fdf4;border-color:#86efac;">
       <div class="sum-chip-label" id="sumLbl1">งานทั้งหมด</div>
       <div class="sum-chip-val" style="color:var(--navy);" id="sumTotal">0</div>
@@ -266,7 +272,7 @@ if ('caches' in window) {
   </div>
 
 
-  <div class="card" style="padding:0;overflow:hidden;">
+  <div class="card" id="boardTableCard" style="padding:0;overflow:hidden;">
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
       <table class="jt">
         <thead>
@@ -1364,6 +1370,7 @@ function tab(t) {
 function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
 
 // ── โครงสร้างใหม่ของ /job-master (_fmt = 2): items/records/invoices เก็บเป็นโหนดต่อ id + ฟิลด์ _seq (ใหม่=ใหญ่) ──
+var _epochSeen = null;   // _epoch ของคลาวด์ที่เครื่องนี้รู้ล่าสุด — เปลี่ยน = มีการ "ล้างข้อมูล" (wipe_jm.html) → ทิ้งข้อมูลเก่าในเครื่อง ห้ามส่งกลับขึ้นไป
 var _cloudFmt = 0;      // 0 = แบบเดิม (array ก้อนเดียว), 2 = แบบแยกโหนดต่อ id
 var _synced = null;     // { items:{id:json}, records:{id:json}, invoices:{id:json}, small:json } — สิ่งที่เซิร์ฟเวอร์มีตามที่เครื่องนี้รู้ล่าสุด
 function _idKeyOK(id) { var t = String(id); return t !== '' && !/[.$#\[\]\/]/.test(t); }
@@ -1476,6 +1483,14 @@ async function fbSave() {
     await new Promise(function(r){ setTimeout(r, 500); });
     waitCount++;
   }
+  // ★ มีการล้างข้อมูลจากเครื่องอื่นหรือไม่? ถ้าใช่ ห้ามส่งข้อมูลเก่ากลับขึ้นไปเด็ดขาด → ทิ้งของในเครื่องแล้วโหลดใหม่
+  try {
+    var _er = await fetch(FB_PATH + '/_epoch.json', { cache: 'no-store' });
+    if (_er.ok && _epochSeen !== null) {
+      var _ev = (await _er.json()) || '';
+      if (_ev !== _epochSeen) { console.warn('[Job Master] fbSave() ยกเลิก — คลาวด์ถูกล้างข้อมูลแล้ว โหลดใหม่'); _localDirty = false; setTimeout(function(){ try { fbLoad(); } catch(e){} }, 0); return false; }
+    }
+  } catch(e) {}
   if (!_cloudLoadedOnce) {
     console.warn('[Job Master] fbSave() ยกเลิก — ยังไม่เคยซิงค์กับคลาวด์สำเร็จในเซสชันนี้ (กันข้อมูลว่างเปล่าไปเขียนทับของจริง)');
     setSyncErr();
@@ -1587,7 +1602,7 @@ async function fbSave() {
     var savedAt = new Date().toISOString();
     var res = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, custInvGuard:custInvGuard, savedAt:savedAt })
+      body: JSON.stringify(Object.assign({ items:jobItems, records:jobRecords, invoices:invoices, customers:customers, billStatements:billStatements, priceList:priceList, hiddenCustomers:hiddenCustomers, custInvGuard:custInvGuard, savedAt:savedAt }, _epochSeen ? { _epoch:_epochSeen } : {}))
     });
     if (res.ok) { _fbLastSavedAt = savedAt; _localDirty = false; _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length }; setSyncOk(); return true; }
     setSyncErr();
@@ -1601,6 +1616,14 @@ async function fbLoad() {
     if (!res.ok) { setSyncErr(); return; }
     var data = await res.json();
     if (data) {
+      var _ep = data._epoch || '', _wiped = false;
+      if (_epochSeen === null) {
+        var _le = null; try { _le = localStorage.getItem('job_epoch'); } catch(e){}
+        if (_ep !== '' && _le !== _ep) _wiped = true;     // เครื่องนี้ยังไม่เคยรู้จักการล้างครั้งนี้ → แคชในเครื่องเป็นของเก่า ทิ้ง
+      } else if (_ep !== _epochSeen) _wiped = true;
+      _epochSeen = _ep;
+      try { localStorage.setItem('job_epoch', _ep); } catch(e){}
+      if (_wiped) { _localDirty = false; _fbLastSavedAt = ''; }
       _hasSuccessfulCloudSync = true; // ยืนยันแล้วว่าเคยคุยกับคลาวด์จริงอย่างน้อย 1 ครั้ง — fbSave() ปลอดภัยที่จะทำงานต่อจากนี้
 
       // ── กันข้อมูลที่เพิ่งกรอกในเครื่องแต่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ ถูกทับหายเงียบๆ (ปัญหาจริงที่เจอ:
@@ -1630,6 +1653,7 @@ async function fbLoad() {
         billStatements: billStatements, hidden: hiddenCustomers, guard: custInvGuard } : null;
       if (data.items   && typeof data.items   === 'object') jobItems   = _jmArr(data.items);
       if (data.records && typeof data.records === 'object') jobRecords = _jmArr(data.records);
+      if (_wiped || _ep) { if (!data.items) jobItems = []; if (!data.records) jobRecords = []; }   // ล้างแล้ว = ว่างจริง
       // รองรับกรณี Firebase เก็บ invoices เป็น object คีย์ตัวเลขแทน array ปกติ (เจอเป็นสาเหตุจริงของปัญหาข้อมูลหายมาแล้ว)
       if (Array.isArray(data.invoices)) { invoices = data.invoices; _realInvNoSet = null; }
       else if (data.invoices && typeof data.invoices === 'object') {
@@ -2005,6 +2029,7 @@ function dueModalEl() {
 async function dueDailyGate(cb) {
   var today = _dueToday();
   if (_dueDayDone === today) { cb(); return; }
+  if (_dueMin) { _dueCb = cb; dueRestore(); return; }   // พักไว้อยู่ → เปิดตารางเดิม (ค่าที่กรอกยังอยู่)
   var el = dueModalEl(); var body = document.getElementById('dueBody'), foot = document.getElementById('dueFooter');
   document.getElementById('dueTitle').textContent = 'ตรวจบิลเกินกำหนดก่อนออก INV';
   body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);">กำลังตรวจสอบ...</div>'; foot.innerHTML = '';
@@ -2058,7 +2083,7 @@ function _dueRenderTable(today) {
   if (okDue.length) html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">มี due แล้วและยังไม่ถึงวัน '+okDue.length+' รายการ (ไม่ต้องลงซ้ำ)</div>';
   body.innerHTML = html;
   foot.innerHTML = '<button class="btn btn-green" onclick="dueSubmit()">✅ บันทึก due + log และเริ่มออก INV</button>' +
-                   '<button class="btn btn-outline" onclick="dueCancelGate()">กลับหน้าภาพรวม (ยังออก INV ไม่ได้)</button>';
+                   '<button class="btn btn-outline" onclick="dueMinimize()">⏸ พักหน้าจอ (ไปดูข้อมูลก่อน — ยังออก INV ไม่ได้)</button>';
 }
 function dueApplyAll() {
   var v = document.getElementById('dueAll').value; if (!v) return;
@@ -2087,10 +2112,24 @@ async function dueSubmit() {
   _dueLog(logs);
   dueFinish(logs.length, false);
 }
-function dueCancelGate() {
-  dueModalEl().classList.remove('open'); _dueCb = null;
+var _dueMin = false;
+function _dueBar() {
+  var b = document.getElementById('dueMinBar');
+  if (!b) { b = document.createElement('div'); b.id = 'dueMinBar';
+    b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:99998;background:#b91c1c;color:#fff;padding:12px 18px;border-radius:999px;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.35);cursor:pointer;display:none;touch-action:manipulation;';
+    b.onclick = function(){ dueRestore(); }; document.body.appendChild(b); }
+  return b;
+}
+function dueMinimize() {
+  _dueMin = true; dueModalEl().classList.remove('open');
+  var b = _dueBar(); b.textContent = '⚠️ ยังต้องลง due ' + _dueRows.length + ' รายการ — แตะเพื่อเปิดตาราง'; b.style.display = '';
   try { tab('board'); } catch(e){}
 }
+function dueRestore() {
+  _dueMin = false; _dueBar().style.display = 'none'; dueModalEl().classList.add('open');
+  if (!_dueCb) _dueCb = function(){ tab('out'); };
+}
+function dueCancelGate() { dueMinimize(); }
 function dueSkip() {
   if (!confirm('ข้ามการลง due ใช่ไหม? ระบบจะบันทึก log ว่าข้าม ('+_dueRows.length+' รายการ)')) return;
   var logs = _dueRows.map(function(x){ var j=x.job; return { at:new Date().toISOString(), by:currentUserName||currentRole, action:'skip', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
@@ -2104,7 +2143,7 @@ async function dueFinish(n, skipped) {
     await fetch(ARCH_BASE + '/jm-due-daily/' + today + '.json', { method:'PUT', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ at:new Date().toISOString(), by:currentUserName||currentRole, set:n, skipped:!!skipped, listed:_dueRows.length }) });
   } catch(e){}
-  _dueDayDone = today;
+  _dueDayDone = today; _dueMin = false; _dueBar().style.display = 'none';
   dueModalEl().classList.remove('open');
   try { renderBoard(); renderOverduePanel(); } catch(e){}
   var cb = _dueCb; _dueCb = null; if (cb) cb();
@@ -2113,7 +2152,14 @@ async function dueFinish(n, skipped) {
 // ตาราง "รายการเกินกำหนด" (admin) — รายชิ้นงาน อ้างอิงเลขบิล พร้อม due
 function renderOverduePanel() {
   var host = document.getElementById('overduePanel');
-  if (currentRole !== 'admin') { if (host) host.style.display = 'none'; return; }
+  if (currentRole !== 'admin') {
+    if (host) host.style.display = 'none';
+    var _v = document.getElementById('boardView');
+    if (_v) { var _o = _v.querySelector('option[value=overdue]'); if (_o) _o.remove(); }
+    return;
+  }
+  var _vv = document.getElementById('boardView');
+  if (_vv && !window._viewInit) { window._viewInit = true; _vv.value = 'overdue'; }
   if (!host) {
     var anchor = document.querySelector('.sum-row'); if (!anchor) return;
     host = document.createElement('div'); host.id = 'overduePanel'; host.className = 'card'; host.style.cssText = 'padding:10px 12px;';
@@ -2121,6 +2167,18 @@ function renderOverduePanel() {
   }
   var all = overdueAllJobs(), today = _dueToday();
   host.style.display = '';
+  // มุมมอง (dropdown): ทั้งหมด / เกินกำหนด / รับเข้าล่าสุด — เกินกำหนด = โชว์ตารางเกินกำหนดอย่างเดียว
+  var vsel = document.getElementById('boardView');
+  var _srch = ((document.getElementById('boardSearch')||{}).value||'');
+  if (vsel && vsel.value === 'overdue' && _srch) { vsel.value = ''; }
+  var view = vsel ? vsel.value : '';
+  var _sr = document.getElementById('boardSumRow'), _tc = document.getElementById('boardTableCard');
+  if (_sr) _sr.style.display = (view === 'overdue') ? 'none' : '';
+  if (_tc) _tc.style.display = (view === 'overdue') ? 'none' : '';
+  if (view !== 'overdue') {
+    host.innerHTML = all.length ? '<div style="font-size:12px;color:#b91c1c;">⚠️ มีรายการเกินกำหนด '+all.length+' รายการ <span style="color:var(--text-muted);">(เลือกมุมมอง "⚠️ รายการเกินกำหนด" เพื่อดูตาราง)</span></div>' : '<div style="font-size:12px;color:#15803d;">✅ ไม่มีบิลเกินกำหนด 7 วัน</div>';
+    return;
+  }
   if (!all.length) { host.innerHTML = '<div style="font-size:12px;color:#15803d;">✅ ไม่มีบิลเกินกำหนด 7 วัน</div>'; return; }
   all.sort(function(a,b){ return String(a.job.customer||'').localeCompare(String(b.job.customer||''),'th') || b.days - a.days; });
   var late = all.filter(function(x){ return !x.due || x.due < today; }).length;
@@ -2299,6 +2357,10 @@ function _renderBoardImpl() {
   }
 
   // เรียง: งานที่ยังค้างอยู่ขึ้นก่อน (ใหม่สุดก่อน), จ่ายครบแล้วไปบันทัดสุดท้าย
+  var _bv = (document.getElementById('boardView')||{}).value || '';
+  if (_bv === 'recent') {
+    rows = rows.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); }).slice(0, 100);
+  } else
   rows = rows.slice().sort(function(a,b) {
     var sa = getStatus(a), sb = getStatus(b);
     var aDone = sa === 'จ่ายครบ', bDone = sb === 'จ่ายครบ';
