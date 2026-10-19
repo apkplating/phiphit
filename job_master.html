@@ -199,7 +199,7 @@ if ('caches' in window) {
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
-    <button onclick="refreshApp()" title="โหลดโปรแกรมและข้อมูลใหม่ทั้งหมด (แทนการกด Ctrl+F5)" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🔄 อัปเดต</button>
+    <button id="refreshBtn" onclick="refreshApp()" title="โหลดโปรแกรมและข้อมูลใหม่ทั้งหมด (แทนการกด Ctrl+F5) — เฉพาะ admin" style="display:none;background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🔄 อัปเดต</button>
     <button onclick="logoutJM()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
   </div>
 </div>
@@ -1314,6 +1314,7 @@ function applyRole() {
   }
   applyStockOverridePermission();
   var _bcb = document.getElementById('bulkCloseBtn'); if (_bcb) _bcb.style.display = (currentRole === 'admin') ? '' : 'none';
+  var _rfb = document.getElementById('refreshBtn'); if (_rfb) _rfb.style.display = (currentRole === 'admin') ? '' : 'none';
   var _pbc = document.getElementById('pdfBackfillCard'); if (_pbc) _pbc.style.display = (currentRole === 'admin') ? '' : 'none';
 }
 
@@ -1760,6 +1761,7 @@ document.addEventListener('visibilitychange', function(){
 });
 // ปุ่ม 🔄 อัปเดต — แทน Ctrl+F5: ล้างแคชข้อมูลในเครื่อง + แคชโปรแกรม แล้วโหลดหน้าใหม่จากเซิร์ฟเวอร์
 async function refreshApp() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
   if (typeof _localDirty !== 'undefined' && _localDirty && !confirm('มีข้อมูลที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์ — ถ้าอัปเดตตอนนี้ข้อมูลส่วนนั้นจะหาย\nต้องการอัปเดตต่อหรือไม่?')) return;
   try { Object.keys(localStorage).filter(function(k){ return /^job_/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); } catch(e){}
   try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function(k){ return caches.delete(k); })); } } catch(e){}
