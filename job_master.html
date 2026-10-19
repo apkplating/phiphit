@@ -313,7 +313,7 @@ if ('caches' in window) {
         <input type="date" id="inDate" onchange="onInDateChange()">
       </div>
     </div>
-    <div class="field">
+    <div class="field" style="display:none;">
       <label>กรองตามลูกค้า <span style="font-size:10px;color:var(--text-muted);">(เลือกก่อนเพื่อลดรายการ P/No ที่ต้องเลือก — ไม่บังคับ)</span></label>
       <select id="inCustomerFilter" onchange="onCustomerFilterChange()" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:13px;">
         <option value="">— ทุกลูกค้า —</option>
@@ -352,11 +352,11 @@ if ('caches' in window) {
     <div class="grid2" id="inQtyRow">
       <div class="field" style="margin:0;">
         <label id="inQtyLabel">จำนวนรับเข้า (ชิ้น) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="inQty" placeholder="0" min="0" step="1" inputmode="numeric">
+        <input type="number" id="inQty" placeholder="0" min="0" step="1" inputmode="numeric" onkeydown="if(event.key==='Enter'){event.preventDefault();addInLine();}">
       </div>
       <div class="field" id="inQtyKgWrap" style="margin:0;display:none;">
         <label>น้ำหนัก (กก.) <span style="color:var(--red);">*</span></label>
-        <input type="number" id="inQtyKg" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
+        <input type="number" id="inQtyKg" placeholder="0.00" min="0" step="0.01" inputmode="decimal" onkeydown="if(event.key==='Enter'){event.preventDefault();addInLine();}">
       </div>
     </div>
     <div class="field">
@@ -371,7 +371,9 @@ if ('caches' in window) {
       <label>หมายเหตุ</label>
       <input type="text" id="inNote" placeholder="เช่น ด่วน / ตรวจพิเศษ">
     </div>
-    <button class="btn btn-green" onclick="addJobIn()">📥 บันทึกรับงานเข้า</button>
+    <button type="button" class="btn btn-outline" onclick="addInLine()" style="width:100%;margin-bottom:10px;">➕ เพิ่มรายการนี้เข้าบิล (บิลเดียวเพิ่มได้หลายรายการ)</button>
+    <div id="inLines" style="margin-bottom:10px;"></div>
+    <button class="btn btn-green" id="inSaveBtn" onclick="addJobIn()">📥 บันทึกรับงานเข้า</button>
     <div id="toast-in" class="toast"></div>
   </div>
 </div>
@@ -1342,7 +1344,7 @@ function tab(t) {
     if (btns[i]) btns[i].classList.toggle('active', n===t);
   });
   if (t==='board')   renderBoard();
-  if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); }
+  if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); setTimeout(function(){ var b=document.getElementById('inBill'); if (b && !b.value && !inDraft.length) b.focus(); }, 80); }
   if (t==='out')     {
     // ล็อก: ต้องลง due ใหม่ให้ครบก่อนใช้หน้าออก INV
     if (_dueDayDone !== _dueToday()) {
@@ -2599,51 +2601,91 @@ function renderTmpNotes(){
 // ══════════════════════════════════════
 //  รับเข้า
 // ══════════════════════════════════════
-function addJobIn() {
-  var bill     = document.getElementById('inBill').value.trim();
-  var date     = document.getElementById('inDate').value;
+var inDraft = [];   // รายการในบิลที่กำลังคีย์ (1 บิลหลายรายการ)
+
+function _inClearLineFields() {
+  ['inPartName','inCustomer','inQty','inQtyKg','inCustLot'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  _inPartSelected = false;
+  var stEl = document.getElementById('inPartNameStatus'); if (stEl) stEl.textContent = '';
+}
+
+// เพิ่ม 1 รายการเข้าบิล (ยังไม่บันทึกขึ้นระบบ) — คืน true ถ้าเพิ่มสำเร็จ
+function addInLine() {
   var partName = document.getElementById('inPartName').value.trim();
   var customer = document.getElementById('inCustomer').value.trim();
   var unit     = document.getElementById('inUnit').value || 'pcs';
   var qty      = parseInt(document.getElementById('inQty').value)    || 0;
   var qtyKg    = parseFloat(document.getElementById('inQtyKg').value)|| 0;
-  var dueDate  = document.getElementById('inDueDate').value;
-  var note     = document.getElementById('inNote').value.trim();
   var custLot  = (document.getElementById('inCustLot')||{value:''}).value.trim();
 
-  if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
-  if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
-  if (!partName) { showToast('in','กรุณากรอกชื่อชิ้นงาน','err'); return; }
-  // ตรวจ PM — ต้องมีใน Part Master เท่านั้น
+  if (!partName) { showToast('in','กรุณากรอกชื่อชิ้นงาน','err'); return false; }
   if (!_inPartSelected || !pmLookup(partName)) {
     showToast('in','🚫 ชิ้นงาน "'+partName+'" ไม่ได้อยู่ใน Part Master — กรุณาเลือกจากรายการหรือเพิ่มใน PM ก่อน','err');
     document.getElementById('inPartName').value = '';
     document.getElementById('inPartNameStatus').innerHTML =
       '<span style="color:var(--red);">🚫 กรุณาเลือกชิ้นงานจากรายการ Part Master เท่านั้น</span>';
-    return;
+    return false;
   }
-  if (unit==='kg'  && !qtyKg) { showToast('in','กรุณากรอกน้ำหนัก (กก.)','err'); return; }
+  if (unit==='kg' ? !qtyKg : !(qty > 0)) { showToast('in', unit==='kg' ? 'กรุณากรอกน้ำหนัก (กก.)' : 'กรุณากรอกจำนวนรับเข้า','err'); return false; }
+  if (inDraft.length && (inDraft[0].customer||'') !== customer &&
+      !confirm('ลูกค้าไม่ตรงกับรายการแรกในบิล ("'+(inDraft[0].customer||'-')+'" ≠ "'+(customer||'-')+'")\nเพิ่มรายการนี้เข้าบิลเดียวกันหรือไม่?')) return false;
+  inDraft.push({ partName:partName, customer:customer, unit:unit, qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, custLot:custLot });
+  _inClearLineFields();
+  renderInLines();
+  var pi = document.getElementById('inPartName'); if (pi) pi.focus();
+  return true;
+}
 
-  var displayQty = unit==='kg' ? qtyKg : qty;
-  var jobId = 'J'+Date.now();
-  jobItems.unshift({ id:jobId, bill:bill, date:date, partName:partName, customer:customer,
-                     qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
-                     dueDate:dueDate, note:note, custLot:custLot });
-  jobRecords.unshift({ id:'R'+Date.now(), jobId:jobId, type:'in', date:date,
-                       qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0, unit:unit,
-                       inv:'', by:'', note:note });
+function removeInLine(i) { inDraft.splice(i, 1); renderInLines(); }
+
+function renderInLines() {
+  var host = document.getElementById('inLines'), btn = document.getElementById('inSaveBtn');
+  if (btn) btn.textContent = inDraft.length ? '📥 บันทึกรับงานเข้าทั้งบิล ('+inDraft.length+' รายการ)' : '📥 บันทึกรับงานเข้า';
+  if (!host) return;
+  if (!inDraft.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<div style="border:1.5px solid #86efac;background:#f0fdf4;border-radius:10px;padding:8px 10px;">' +
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">รายการในบิลนี้ ('+inDraft.length+')</div>' +
+    inDraft.map(function(l, i){
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #d1fae5;font-size:13px;">' +
+        '<div style="flex:1;"><b>'+esc(l.partName)+'</b> · '+esc(l.customer||'-')+'<br><span style="color:#475569;font-size:12px;">'+
+        (l.unit==='kg' ? l.qtyKg.toFixed(2)+' กก.' : l.qty.toLocaleString()+' ชิ้น') + (l.custLot ? ' · Lot '+esc(l.custLot) : '') + '</span></div>' +
+        '<button type="button" onclick="removeInLine('+i+')" style="border:1px solid #fca5a5;background:#fff;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;">ลบ</button></div>';
+    }).join('') + '</div>';
+}
+
+function addJobIn() {
+  var bill     = document.getElementById('inBill').value.trim();
+  var date     = document.getElementById('inDate').value;
+  var dueDate  = document.getElementById('inDueDate').value;
+  var note     = document.getElementById('inNote').value.trim();
+
+  if (!bill)     { showToast('in','กรุณากรอกเลขที่บิล','err'); return; }
+  if (!date)     { showToast('in','กรุณาระบุวันที่รับ','err'); return; }
+  // ถ้าช่องรายการปัจจุบันกรอกค้างไว้ ให้เพิ่มเข้าบิลก่อนบันทึก
+  var pendingPart = document.getElementById('inPartName').value.trim();
+  if (pendingPart || !inDraft.length) { if (!addInLine()) return; }
+  if (!inDraft.length) { showToast('in','ยังไม่มีรายการในบิล','err'); return; }
+
+  var base = Date.now(), n = 0, totalPcs = 0;
+  inDraft.slice().reverse().forEach(function(l, k){
+    var jobId = 'J' + base + '_' + k;
+    jobItems.unshift({ id:jobId, bill:bill, date:date, partName:l.partName, customer:l.customer,
+                       qty:l.qty, qtyKg:l.qtyKg, unit:l.unit, dueDate:dueDate, note:note, custLot:l.custLot });
+    jobRecords.unshift({ id:'R' + base + '_' + k, jobId:jobId, type:'in', date:date,
+                         qty:l.qty, qtyKg:l.qtyKg, unit:l.unit, inv:'', by:'', note:note });
+    n++;
+  });
   saveLocal(); fbSave();
 
-  ['inBill','inPartName','inCustomer','inQty','inQtyKg','inNote','inCustLot'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.value='';
-  });
-  _inPartSelected = false;
-  var stEl = document.getElementById('inPartNameStatus');
-  if (stEl) stEl.textContent = '';
+  ['inBill','inNote'].forEach(function(id){ var el = document.getElementById(id); if(el) el.value=''; });
+  inDraft = []; renderInLines(); _inClearLineFields();
   inDueDateManual = false;
-  onInDateChange(); // ตั้งกำหนดส่งกลับเป็นค่า default (วันที่รับเข้า + 7) สำหรับรายการถัดไป
+  onInDateChange(); // ตั้งกำหนดส่งกลับเป็นค่า default (วันที่รับเข้า + 7) สำหรับบิลถัดไป
   renderCustomerFilter();
-  showToast('in','✅ รับงานเข้าสำเร็จ — '+bill+' จำนวน '+displayQty+(unit==='kg'?' กก.':" ชิ้น"),'ok');
+  showToast('in','✅ รับงานเข้าสำเร็จ — บิล '+bill+' จำนวน '+n+' รายการ','ok');
+  var bi = document.getElementById('inBill'); if (bi) bi.focus();
 }
 
 // ══════════════════════════════════════
@@ -6022,15 +6064,14 @@ function pmAcPick(idx) {
   var partNo = p.partNo || p.name || '';
   document.getElementById('inPartName').value = partNo;
   // auto-fill ลูกค้าจาก PM
-  if (p.customer) {
-    var custEl = document.getElementById('inCustomer');
-    if (custEl && !custEl.value.trim()) custEl.value = p.customer;
-  }
+  var custEl = document.getElementById('inCustomer');
+  if (custEl) custEl.value = p.customer || '';          // ขึ้นชื่อลูกค้าจาก PM ทุกครั้งที่เลือก P/No
   _inPartSelected = true;
   list.classList.remove('open');
   document.getElementById('inPartNameStatus').innerHTML =
     '<span style="color:var(--green);">✅ เลือกจาก Part Master แล้ว</span>'
     + (p.customer ? ' · ลูกค้า: <b>'+esc(p.customer)+'</b>' : '');
+  setTimeout(function(){ var q = document.getElementById(document.getElementById('inUnit').value==='kg' ? 'inQtyKg' : 'inQty'); if (q) q.focus(); }, 50);   // เลือกแล้วข้ามไปช่องจำนวนเลย
 }
 
 function pmAcHide() {
