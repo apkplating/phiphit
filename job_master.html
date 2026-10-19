@@ -1336,7 +1336,16 @@ function tab(t) {
   });
   if (t==='board')   renderBoard();
   if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); }
-  if (t==='out')     { initInvTab(); }
+  if (t==='out')     {
+    // ล็อก: ต้องลง due ใหม่ให้ครบก่อนใช้หน้าออก INV
+    if (_dueDayDone !== _dueToday()) {
+      var _bk = document.getElementById('v-out'); if (_bk) _bk.classList.remove('active');
+      var _bb = document.querySelectorAll('.tab-btn')[2]; if (_bb) _bb.classList.remove('active');
+      dueDailyGate(function(){ tab('out'); });
+      return;
+    }
+    initInvTab();
+  }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
   if (t==='billdetail') { renderBillDetail(); }
@@ -2017,6 +2026,7 @@ function _dueRenderTable(today) {
   var need = all.filter(function(x){ return !x.due || x.due < today; });
   var okDue = all.filter(function(x){ return x.due && x.due >= today; });
   _dueRows = need;
+  if (all.length && !need.length) { dueFinish(0,false); return; }
   if (!all.length) {
     document.getElementById('dueTitle').textContent = '✅ ระบบ INV พร้อมใช้งาน';
     body.innerHTML = '<div style="padding:24px;text-align:center;font-size:14px;">ไม่พบบิลเกินกำหนด 7 วัน</div>';
@@ -2025,7 +2035,7 @@ function _dueRenderTable(today) {
   }
   document.getElementById('dueTitle').textContent = '⚠️ บิลเกินกำหนด ' + need.length + ' รายการ — กรุณาลง due ใหม่';
   var TH = 'padding:5px 6px;white-space:nowrap;';
-  var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6;">ลง due ใหม่ของแต่ละรายการ <strong>ไม่เกิน '+DUE_MAX_DAYS+' วันนับจากวันนี้ (ภายใน '+_fmtDueTh(_dueMax())+')</strong> ระบบจะไม่ถามซ้ำจนกว่าจะถึงวันนั้น  พนักงานยังออก INV ได้ตามปกติ  ระบบบันทึก log ทุกครั้ง</div>' +
+  var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6;">ลง due ใหม่ของแต่ละรายการ <strong>ไม่เกิน '+DUE_MAX_DAYS+' วันนับจากวันนี้ (ภายใน '+_fmtDueTh(_dueMax())+')</strong> <strong style="color:#b91c1c;">ต้องลงครบทุกรายการก่อนจึงจะออก INV ได้</strong>  ระบบบันทึก log ทุกครั้ง และจะไม่ถามซ้ำจนกว่าจะถึงวัน due</div>' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:600;">ตั้งทุกรายการเป็นวันที่</span>' +
     '<input type="date" min="'+today+'" max="'+_dueMax()+'" id="dueAll" style="padding:3px 6px;font-size:11px;width:140px;"><button class="btn btn-outline btn-sm" onclick="dueApplyAll()">ใช้ทุกรายการ</button></div>' +
     '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f8fafc;text-align:left;">' +
@@ -2047,8 +2057,8 @@ function _dueRenderTable(today) {
   html += '</tbody></table>';
   if (okDue.length) html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">มี due แล้วและยังไม่ถึงวัน '+okDue.length+' รายการ (ไม่ต้องลงซ้ำ)</div>';
   body.innerHTML = html;
-  foot.innerHTML = '<button class="btn btn-green" onclick="dueSubmit()">✅ บันทึก due + log และออก INV ต่อ</button>' +
-                   '<button class="btn btn-outline" onclick="dueSkip()">ข้ามไปก่อน (บันทึก log)</button>';
+  foot.innerHTML = '<button class="btn btn-green" onclick="dueSubmit()">✅ บันทึก due + log และเริ่มออก INV</button>' +
+                   '<button class="btn btn-outline" onclick="dueCancelGate()">กลับหน้าภาพรวม (ยังออก INV ไม่ได้)</button>';
 }
 function dueApplyAll() {
   var v = document.getElementById('dueAll').value; if (!v) return;
@@ -2066,7 +2076,7 @@ async function dueSubmit() {
     logs.push({ at:new Date().toISOString(), by:currentUserName||currentRole, action:'set', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
       remain:x.rem, unit:x.kg?'kg':'pcs', daysOver:x.days, prevDue:x.due||'', newDue:v });
   });
-  if (missing) { alert('ลงวันที่ไม่ครบหรือไม่ถูกต้อง '+missing+' รายการ\n(ต้องเป็นตั้งแต่วันนี้ ถึงไม่เกิน '+_fmtDueTh(_dueMax())+')\nถ้าไม่พร้อมกด "ข้ามไปก่อน"'); return; }
+  if (missing) { alert('ลงวันที่ไม่ครบหรือไม่ถูกต้อง '+missing+' รายการ\n(ต้องเป็นตั้งแต่วันนี้ ถึงไม่เกิน '+_fmtDueTh(_dueMax())+')\nต้องลงครบทุกรายการจึงจะออก INV ได้'); return; }
   try {
     if (Object.keys(patch).length) {
       var r = await fetch(ARCH_BASE + '/jm-due.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
@@ -2076,6 +2086,10 @@ async function dueSubmit() {
   } catch(e) { alert('บันทึก due ไม่สำเร็จ ('+(e.message||e)+') — ลองใหม่อีกครั้ง'); return; }
   _dueLog(logs);
   dueFinish(logs.length, false);
+}
+function dueCancelGate() {
+  dueModalEl().classList.remove('open'); _dueCb = null;
+  try { tab('board'); } catch(e){}
 }
 function dueSkip() {
   if (!confirm('ข้ามการลง due ใช่ไหม? ระบบจะบันทึก log ว่าข้าม ('+_dueRows.length+' รายการ)')) return;
