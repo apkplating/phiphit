@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ใบส่งของชั่วคราว — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --blue:#2e75b6; --blue-light:#5ba3d9;
+  --sky-pale:#eaf4fb; --border:rgba(46,117,182,0.18);
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --red:#dc2626; --green:#065f46; --amber:#b45309;
+}
+*{box-sizing:border-box;}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;margin:0;color:var(--text);}
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;}
+.login-box{background:#fff;border-radius:16px;padding:32px 28px;width:100%;max-width:340px;text-align:center;}
+.login-box h1{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:2px;}
+.login-box p{font-size:11.5px;color:var(--text-mid);margin-bottom:20px;}
+.login-box input{width:100%;text-align:center;letter-spacing:6px;font-size:20px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;box-sizing:border-box;}
+.login-box .btn-primary{width:100%;padding:11px;}
+.login-err{color:var(--red);font-size:11.5px;margin-top:10px;min-height:14px;}
+.app-header{background:var(--navy);padding:20px 20px 16px;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:19px;font-weight:800;color:#fff;}
+.who-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--text-muted);}
+.who-row a{color:var(--blue-light);text-decoration:none;}
+.btn-logout{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+.wrap{max-width:640px;margin:0 auto;padding:14px 16px 60px;}
+.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid var(--border);box-shadow:0 2px 10px rgba(15,39,68,.08);}
+.card-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.10em;text-transform:uppercase;margin-bottom:10px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select{width:100%;padding:10px 12px;font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;}
+.field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,.12);background:#fff;}
+.field input[readonly]{color:var(--text-mid);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media (max-width:480px){.grid2{grid-template-columns:1fr;}}
+.btn{padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-outline{background:#fff;border:1.5px solid var(--blue);color:var(--blue);}
+.btn-sm{width:auto;padding:7px 12px;font-size:11px;border-radius:8px;}
+.hint{font-size:10.5px;color:var(--text-muted);margin-top:4px;min-height:13px;}
+.hint.ok{color:var(--green);} .hint.err{color:var(--red);} .hint.warn{color:var(--amber);}
+.photo-row{display:flex;gap:12px;align-items:center;}
+.photo-box{width:72px;height:56px;border:1.5px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--sky-pale);}
+.photo-box img{width:100%;height:100%;object-fit:contain;}
+/* รายการ P/No ใกล้เคียง (autocomplete) */
+.ac-list{position:absolute;z-index:60;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,39,68,.18);max-height:300px;overflow-y:auto;display:none;}
+.ac-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #eef2f7;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item.active,.ac-item:hover{background:var(--sky-pale);}
+.ac-no{font-size:14px;font-weight:700;color:var(--text);}
+.ac-sub{font-size:11px;color:var(--text-mid);margin-top:1px;}
+.ac-msg{padding:10px 12px;font-size:12px;color:var(--text-mid);}
+.photo-box .ph-empty{font-size:9px;color:var(--text-muted);text-align:center;}
+.toast{margin-top:8px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;display:none;}
+.toast.ok{background:#ecfdf5;color:var(--green);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;}
+
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.tbl th{background:#f1f5f9;text-align:left;padding:6px;font-weight:700;}
+.tbl td{padding:6px;border-bottom:1px solid #e2e8f0;vertical-align:top;}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+.pill.open{background:#fef3c7;color:#92400e;} .pill.done{background:#dcfce7;color:#166534;} .pill.cancel{background:#fee2e2;color:#b91c1c;}
+.sel-list{width:100%;margin-top:6px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:8px;padding:4px;}
+.btn-x{background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+<!-- ปุ่มลอยกลับหน้าหลัก (index.html) — คงที่มุมจอ ไม่บังส่วนอื่นของหน้า ใช้ตัวเดียวกันทุกไฟล์ -->
+<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;bottom:14px;left:14px;z-index:99999;width:42px;height:42px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.25);">🏠</a>
+
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>📄 ใบส่งของชั่วคราว</h1>
+    <p>APK Plating — บันทึกของที่ส่งไปแล้วก่อนออก INV — ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+<div class="app-header">
+  <div class="hdr-badge">APK PLATING</div>
+  <div class="hdr-title">📄 ใบส่งของชั่วคราว</div>
+  <div class="who-row">
+    <a href="index.html">← หน้าแรก</a>
+    <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+    <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+  </div>
+  <div class="who-row" style="margin-top:8px;">
+    <button class="btn-logout" id="tabNewBtn" onclick="switchView('new')" style="background:rgba(255,255,255,.25);">➕ ออกใบใหม่</button>
+    <button class="btn-logout" id="tabListBtn" onclick="switchView('list')">📋 รายการ</button>
+  </div>
+</div>
+
+<div class="wrap" id="newView">
+  <div class="card">
+    <div class="card-label">📄 ออกบิลส่งของชั่วคราว (ตัดสต็อกทันที)</div>
+    <div class="hint" style="margin-bottom:10px;">ใช้บันทึกของที่ส่งออกไปแล้วด้วยใบเขียนมือ/ไม่ผ่านระบบ เพื่อให้ยอดคงเหลือและ B/L Stock ตรงกับของจริง · ฝ่ายบัญชีจะนำเลขที่ใบนี้ไปอ้างอิงตอนออก INV จริง</div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>เลขที่บิล (ออกอัตโนมัติ)</label>
+        <input type="text" id="tmpNo" readonly style="background:#f1f5f9;font-weight:700;">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>วันที่ส่งของ *</label>
+        <input type="date" id="tmpDate" onchange="refreshNo()">
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:12px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>ลูกค้า (ตามรายการแรก)</label>
+        <input type="text" id="tmpCust" readonly style="background:#f1f5f9;" placeholder="— เลือกรายการก่อน —">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>ผู้ออกบิล</label>
+        <input type="text" id="tmpIssuer" readonly style="background:#f1f5f9;">
+      </div>
+    </div>
+    <div class="card-label" style="margin-top:16px;">รายการสินค้าในบิล (1 บิลเพิ่มได้หลายรายการ)</div>
+    <div class="field">
+      <label>ค้นหาหมายเลขชิ้นงาน/บิลรับเข้า (พิมพ์ P/No, ชื่อ, ลูกค้า หรือเลขบิล อย่างน้อย 2 ตัวอักษร)</label>
+      <input type="text" id="tmpSearch" autocomplete="off" placeholder="เช่น 77208" oninput="renderJobSel()">
+      <select id="tmpJobSel" size="1" class="sel-list" style="display:none;" onchange="onJobPick()"></select>
+      <div class="hint" id="tmpJobHint"></div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0;">
+        <label>Pro Lot No.</label>
+        <input type="text" id="tmpProLot" autocomplete="off" placeholder="เช่น 17102026">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Cust. Lot No.</label>
+        <input type="text" id="tmpCustLot" autocomplete="off" placeholder="ดึงจากบิลรับเข้าอัตโนมัติ (แก้ได้)">
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:12px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>จำนวนที่ส่ง <span id="tmpUnitLbl" class="hint" style="display:inline;"></span></label>
+        <input type="number" id="tmpQty" min="0" step="any" inputmode="decimal" placeholder="0">
+      </div>
+      <div class="field" style="margin-bottom:0;display:flex;align-items:flex-end;">
+        <button type="button" class="btn btn-outline" onclick="addLine()" style="width:100%;">➕ เพิ่มรายการ</button>
+      </div>
+    </div>
+    <div id="tmpDraftBox" style="margin-top:12px;"></div>
+    <div class="field" style="margin-top:12px;">
+      <label>หมายเหตุ (ไม่บังคับ)</label>
+      <input type="text" id="tmpNote" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="tmpSaveBtn" onclick="saveNote()">💾 บันทึกใบส่งของชั่วคราว</button>
+    <div id="toast" class="toast"></div>
+  </div>
+</div>
+
+<div class="wrap" id="listView" style="display:none;">
+  <div class="card">
+    <div class="card-label">⏳ ค้างออก INV <span id="openCount"></span></div>
+    <div id="openList"></div>
+  </div>
+  <div class="card">
+    <div class="card-label">🗂️ ประวัติ 30 วันล่าสุด (ออก INV แล้ว / ยกเลิก)</div>
+    <div id="histList"></div>
+  </div>
+</div>
+</div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  ใบส่งของชั่วคราว (temp_delivery) — ให้พนักงานบันทึกของที่ส่งออกไปแล้วโดยไม่ผ่านระบบ
+//  เก็บแยกที่ /temp-notes/<id>  (หน้านี้ "ไม่เขียน" job-master.json เลย — กันเขียนทับข้อมูลหลัก)
+//  อ่านแบบอ่านอย่างเดียว: /job-master/{items,records,invoices} เพื่อคำนวณยอดคงเหลือต่อบิล (เหมือน calcJob)
+//  Job Master / B/L Stock อ่าน /temp-notes ไปนับเป็น "ส่งแล้ว" เอง ส่วนการปิดใบเมื่อออก INV จริงทำที่ Job Master
+// ═══════════════════════════════════════════════
+var SYSTEM_KEY = 'temp_delivery';
+var session = null;
+var DB = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var TMP_URL = DB + '/temp-notes';
+
+var jobItems = [], recByJob = {}, invNoSet = {}, notes = [];
+var draft = [];
+var _loaded = false;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function showToast(msg, kind){ var t=$('toast'); t.className='toast '+(kind||'ok'); t.textContent=msg; setTimeout(function(){ t.className='toast'; }, 4000); }
+function bkkToday(){ return new Date(Date.now()+7*3600*1000).toISOString().slice(0,10); }
+function fmtDate(d){ if(!d) return '-'; var p=String(d).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : d; }
+function daysSince(d){ if(!d) return 0; return Math.floor((new Date(bkkToday()+'T00:00:00') - new Date(String(d).slice(0,10)+'T00:00:00'))/86400000); }
+function toArr(d){ if(!d) return []; return Array.isArray(d) ? d.filter(Boolean) : Object.keys(d).map(function(k){ return d[k]; }).filter(Boolean); }
+
+// ── Login (เหมือนไฟล์อื่นในระบบ) ──
+function loadSession(){ try{ var r=sessionStorage.getItem('tempdel_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ sessionStorage.setItem('tempdel_session', JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem('tempdel_session'); }
+function canTab(id){ return !session.tabs || session.tabs.indexOf(id) !== -1; }
+function isAdmin(){ return session && session.role === 'admin'; }
+function myName(){ return (session.user && session.user.name) || session.pin || ''; }
+
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok) {
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ไม่มีสิทธิ์ใช้ระบบนี้', connection_error:'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง'}[result.error] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg;
+      return;
+    }
+    if (result.role === 'viewer') { $('loginErr').textContent = 'PIN นี้เป็นสิทธิ์ดูอย่างเดียว บันทึกใบไม่ได้'; return; }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = myName();
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  $('tmpDate').value = bkkToday(); $('tmpIssuer').value = myName();
+  var okNew = canTab('new'), okList = canTab('list');
+  $('tabNewBtn').style.display = okNew ? 'inline-block' : 'none';
+  $('tabListBtn').style.display = okList ? 'inline-block' : 'none';
+  if (!okNew && okList) switchView('list'); else switchView('new');
+  loadAll();
+}
+function switchView(v){
+  $('newView').style.display = v==='new' ? 'block' : 'none';
+  $('listView').style.display = v==='list' ? 'block' : 'none';
+  $('tabNewBtn').style.background = v==='new' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
+  $('tabListBtn').style.background = v==='list' ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.1)';
+  if (v==='list') { loadNotesOnly().then(renderLists); }
+}
+
+// ── โหลดข้อมูล (อ่านอย่างเดียว) ──
+function getJSON(url){
+  return fetch(url, {cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+}
+function loadNotesOnly(){
+  return getJSON(TMP_URL + '.json').then(function(d){ notes = toArr(d); }).catch(function(){});
+}
+function loadAll(){
+  $('tmpJobHint').textContent = '⏳ กำลังโหลดข้อมูลบิล...';
+  Promise.all([
+    getJSON(DB + '/job-master/items.json'),
+    getJSON(DB + '/job-master/records.json'),
+    getJSON(DB + '/job-master/invoices.json'),
+    getJSON(TMP_URL + '.json')
+  ]).then(function(res){
+    jobItems = toArr(res[0]);
+    recByJob = {};
+    toArr(res[1]).forEach(function(r){ (recByJob[r.jobId] = recByJob[r.jobId] || []).push(r); });
+    invNoSet = {};
+    toArr(res[2]).forEach(function(i){ if (i.invNo) invNoSet[i.invNo] = true; });
+    notes = toArr(res[3]);
+    _loaded = true; refreshNo();
+    $('tmpJobHint').textContent = '✅ โหลดข้อมูลแล้ว (' + jobItems.length + ' บิล)';
+    renderLists();
+  }).catch(function(e){
+    _loaded = false;
+    $('tmpJobHint').textContent = '⚠️ โหลดข้อมูลบิลไม่สำเร็จ — ตรวจว่า Tailscale เชื่อมต่ออยู่ แล้วรีเฟรชหน้านี้';
+  });
+}
+
+// ── ยอดคงเหลือของบิล (ตรรกะเดียวกับ calcJob ใน job_master.html + หักใบชั่วคราวที่ค้าง) ──
+function tmpOpenOut(jobId){
+  var pcs = 0, kg = 0;
+  notes.forEach(function(n){
+    if (n.status !== 'open') return;
+    (n.lines||[]).forEach(function(l){
+      if (l.jobId !== jobId || l.convertedTo) return;
+      if (l.unit === 'kg') kg += Number(l.qty||0); else pcs += Number(l.qty||0);
+    });
+  });
+  return { pcs: pcs, kg: kg };
+}
+function jobRemain(job){
+  if (job.closed) return 0;
+  var inQ=0, inKg=0, outQ=0, outKg=0, hasIn=false;
+  (recByJob[job.id] || []).forEach(function(r){
+    if (r.type === 'in') { hasIn = true; inQ += Number(r.qty||0); inKg += Number(r.qtyKg||0); }
+    else if (r.type === 'out') {
+      if (!r.inv || !invNoSet[r.inv]) return;   // นับเฉพาะที่ผูกเลข INV จริง (ไม่นับ Auto จากรอบชุบ)
+      if (r.voided) return;
+      outQ += Number(r.qty||0); outKg += Number(r.qtyKg||0);
+    }
+  });
+  if (!hasIn) { inQ = Number(job.qty || job.pcs || 0); inKg = Number(job.qtyKg || job.kg || 0); }
+  var t = tmpOpenOut(job.id);
+  if ((job.unit||'pcs') === 'kg') return Math.max(0, +(inKg - outKg - t.kg).toFixed(3));
+  return Math.max(0, inQ - outQ - t.pcs);
+}
+function isKgJob(j){ return (j.unit||'pcs') === 'kg'; }
+function normQ(t){ return String(t||'').toLowerCase().replace(/[\s\-]+/g, ''); }
+
+// ── ค้นหา/เลือกบิล ──
+function renderJobSel(){
+  var q = normQ($('tmpSearch').value), sel = $('tmpJobSel');
+  if (q.length < 2) { sel.innerHTML=''; sel.style.display='none'; $('tmpUnitLbl').textContent=''; return; }
+  if (!_loaded) { $('tmpJobHint').textContent = '⏳ ข้อมูลบิลยังโหลดไม่เสร็จ รอสักครู่'; return; }
+  var rows = jobItems.filter(function(j){ return normQ((j.partName||'') + ' ' + (j.customer||'') + ' ' + (j.bill||'')).indexOf(q) >= 0; })
+    .map(function(j){ return { j: j, rem: jobRemain(j) }; })
+    .filter(function(x){ return x.rem > 0.0001; });
+  rows.sort(function(a,b){ return (a.j.date||'').localeCompare(b.j.date||''); }); // เก่าสุดก่อน
+  rows = rows.slice(0, 40);
+  if (!rows.length) { sel.innerHTML='<option value="">ไม่พบบิลที่ยังมีคงเหลือ</option>'; sel.size=1; sel.style.display=''; $('tmpUnitLbl').textContent=''; return; }
+  sel.innerHTML = rows.map(function(x){
+    var j = x.j;
+    return '<option value="'+esc(j.id)+'">'+esc(j.partName)+' · บิล '+esc(j.bill||'-')+' · '+esc(j.customer||'-')+' · คงเหลือ '+(isKgJob(j) ? x.rem.toFixed(2)+' กก.' : x.rem+' ชิ้น')+'</option>';
+  }).join('');
+  sel.size = Math.min(8, rows.length) || 1;
+  if (rows.length === 1) sel.selectedIndex = 0;
+  sel.style.display = '';
+  onJobPick();
+}
+function onJobPick(){
+  var j = jobItems.find(function(x){ return x.id === $('tmpJobSel').value; });
+  $('tmpUnitLbl').textContent = j ? '(' + (isKgJob(j) ? 'กก.' : 'ชิ้น') + ')' : '';
+  if (j) $('tmpCustLot').value = j.custLot || '';
+}
+function nextNo(date){
+  var ym = String(date||bkkToday()).slice(0,7).replace('-','');
+  var mx = 0;
+  notes.forEach(function(n){ var m = /^(\d{6})\/(\d+)$/.exec(n.no||''); if (m && m[1]===ym) mx = Math.max(mx, parseInt(m[2],10)); });
+  return ym + '/' + String(mx+1).padStart(3,'0');
+}
+function refreshNo(){ $('tmpNo').value = nextNo($('tmpDate').value); }
+function addLine(){
+  var id = $('tmpJobSel').value, qty = parseFloat($('tmpQty').value) || 0;
+  var j = jobItems.find(function(x){ return x.id === id; });
+  if (!j) { showToast('กรุณาค้นหาและเลือกบิลก่อน', 'err'); return; }
+  if (!(qty > 0)) { showToast('กรุณากรอกจำนวนที่ส่ง', 'err'); return; }
+  var used = draft.filter(function(l){ return l.jobId === id; }).reduce(function(s,l){ return s + l.qty; }, 0);
+  var rem = jobRemain(j);
+  if (qty + used > rem + 0.0001) { showToast('⚠️ เกินคงเหลือของบิลนี้ (เหลือ ' + (rem - used) + (isKgJob(j) ? ' กก.' : ' ชิ้น') + ')', 'err'); return; }
+  if (draft.length && (draft[0].customer||'') !== (j.customer||'')) { showToast('⚠️ 1 บิลต้องเป็นลูกค้าเดียวกัน (' + (draft[0].customer||'-') + ') — ออกอีกบิลสำหรับลูกค้าอื่น', 'err'); return; }
+  draft.push({ jobId: id, bill: j.bill || '', partName: j.partName || '', customer: j.customer || '', qty: qty, unit: j.unit || 'pcs',
+    proLot: $('tmpProLot').value.trim(), custLot: $('tmpCustLot').value.trim() });
+  $('tmpQty').value = ''; $('tmpSearch').value = ''; $('tmpProLot').value = ''; $('tmpCustLot').value = '';
+  $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none'; $('tmpUnitLbl').textContent='';
+  renderDraft();
+}
+function delLine(i){ draft.splice(i,1); renderDraft(); }
+function lotTxt(l){ return (l.proLot ? 'Pro Lot No.: '+esc(l.proLot) : '') + (l.proLot && l.custLot ? ' · ' : '') + (l.custLot ? 'Cust. Lot: '+esc(l.custLot) : ''); }
+function renderDraft(){
+  var box = $('tmpDraftBox');
+  $('tmpCust').value = draft.length ? (draft[0].customer || '') : '';
+  if (!draft.length) { box.innerHTML=''; return; }
+  box.innerHTML = '<table class="tbl"><tr><th>#</th><th>หมายเลขชิ้นงาน</th><th>บิลรับเข้า</th><th>Lot</th><th>จำนวน</th><th></th></tr>' + draft.map(function(l,i){
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(l.partName)+'</td><td>'+esc(l.bill||'-')+'</td><td class="hint">'+(lotTxt(l)||'-')+'</td><td><b>'+l.qty+'</b> '+(l.unit==='kg'?'กก.':'ชิ้น')+'</td><td><button class="btn-x" onclick="delLine('+i+')">✕</button></td></tr>';
+  }).join('') + '</table>';
+}
+
+// ── บันทึกใบ ──
+function saveNote(){
+  var no = '';
+  var date = $('tmpDate').value, memo = $('tmpNote').value.trim();
+  if (!date) { showToast('กรุณาระบุวันที่ส่งของ', 'err'); return; }
+  if (!draft.length) { showToast('กรุณาเพิ่มรายการก่อนบันทึก', 'err'); return; }
+  var btn = $('tmpSaveBtn'); btn.disabled = true;
+  // โหลดใบล่าสุดซ้ำก่อนบันทึก — กันสองคนส่งบิลเดียวกันพร้อมกันจนเกินคงเหลือ / เลขซ้ำ
+  getJSON(TMP_URL + '.json').then(function(d){
+    notes = toArr(d);
+    no = nextNo(date);   // รันเลขใหม่จากข้อมูลล่าสุดตอนบันทึก กันสองคนได้เลขซ้ำ
+    if (notes.some(function(n){ return n.no === no; })) throw { user: '🚫 เลขซ้ำ ลองบันทึกอีกครั้ง' };
+    var sums = {};
+    draft.forEach(function(l){ sums[l.jobId] = (sums[l.jobId]||0) + l.qty; });
+    var bad = Object.keys(sums).filter(function(id){
+      var j = jobItems.find(function(x){ return x.id === id; });
+      return !j || sums[id] > jobRemain(j) + 0.0001;
+    });
+    if (bad.length) throw { user: '⚠️ มีบิลที่คงเหลือไม่พอ (มีคนบันทึกไปก่อนหน้านี้) — ตรวจรายการอีกครั้ง' };
+    var id = 'T' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+    var note = { id: id, no: no, date: date, customer: draft[0].customer || '',
+      lines: draft.map(function(l){ return { jobId:l.jobId, bill:l.bill, partName:l.partName, customer:l.customer, qty:l.qty, unit:l.unit, proLot:l.proLot||'', custLot:l.custLot||'' }; }),
+      note: memo, by: myName(), issuer: myName(), createdAt: new Date().toISOString(), status: 'open' };
+    return fetch(TMP_URL + '/' + id + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(note) })
+      .then(function(r){ if (!r.ok) throw { user: '⚠️ บันทึกไม่สำเร็จ (HTTP ' + r.status + ') — ตรวจ Tailscale แล้วลองใหม่' }; notes.push(note); return note; });
+  }).then(function(note){
+    var n = note.lines.length;
+    draft = []; ['tmpNote','tmpQty','tmpSearch','tmpProLot','tmpCustLot'].forEach(function(i){ $(i).value=''; }); refreshNo();
+    $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none';
+    renderDraft(); renderLists();
+    showToast('✅ บันทึกบิล ' + note.no + ' (' + n + ' รายการ) — ตัดสต็อกแล้ว', 'ok');
+    if (confirm('บันทึกแล้ว — พิมพ์บิล ' + note.no + ' เลยหรือไม่?')) printNote(note.id);
+  }).catch(function(e){
+    showToast((e && e.user) || '⚠️ บันทึกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่', 'err');
+  }).then(function(){ btn.disabled = false; });
+}
+
+// ── รายการ / ยกเลิก ──
+function canCancel(n){
+  if (n.status !== 'open') return false;
+  if (isAdmin()) return true;
+  // พนักงาน: ยกเลิกได้เฉพาะใบที่ตัวเองบันทึก ภายในวันเดียวกัน (ตามเวลาไทย)
+  var sameDay = n.createdAt && new Date(new Date(n.createdAt).getTime()+7*3600*1000).toISOString().slice(0,10) === bkkToday();
+  return n.by === myName() && !!sameDay && !(n.lines||[]).some(function(l){ return l.convertedTo; });
+}
+function cancelNote(id){
+  var n = notes.find(function(x){ return x.id === id; });
+  if (!n || !canCancel(n)) { alert('ยกเลิกไม่ได้ — พนักงานยกเลิกได้เฉพาะใบที่ตัวเองบันทึกภายในวันเดียวกัน (นอกนั้นต้องแจ้ง admin)'); return; }
+  if (!confirm('ยกเลิกใบ ' + n.no + ' ?\n\nสต็อกจะถูกคืนกลับตามจำนวนในใบนี้ (ใช้เมื่อบันทึกผิด/ของไม่ได้ส่งจริง)')) return;
+  var upd = JSON.parse(JSON.stringify(n));
+  upd.status = 'cancelled'; upd.cancelledBy = myName(); upd.cancelledAt = new Date().toISOString();
+  fetch(TMP_URL + '/' + encodeURIComponent(id) + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(upd) })
+    .then(function(r){ if (!r.ok) throw 0; n.status = 'cancelled'; n.cancelledBy = upd.cancelledBy; n.cancelledAt = upd.cancelledAt; renderLists(); showToast('↩️ ยกเลิกใบ ' + n.no + ' และคืนสต็อกแล้ว', 'ok'); })
+    .catch(function(){ alert('ยกเลิกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่'); });
+}
+function linesText(n){
+  return (n.lines||[]).map(function(l){ return esc(l.partName) + (lotTxt(l) ? ' <span class="hint" style="display:inline;">['+lotTxt(l)+']</span>' : '') + ' × ' + l.qty + (l.unit==='kg'?' กก.':' ชิ้น') + (l.convertedTo ? ' <span class="pill done">INV ' + esc(l.convertedTo) + '</span>' : ''); }).join('<br>');
+}
+function renderLists(){
+  var open = notes.filter(function(n){ return n.status === 'open'; }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  $('openCount').textContent = open.length ? '(' + open.length + ' ใบ)' : '';
+  $('openList').innerHTML = !open.length ? '<div class="hint">ไม่มีใบที่ค้างออก INV</div>' :
+    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>ลูกค้า / รายการ</th><th>ค้าง</th><th></th></tr>' + open.map(function(n){
+      var d = daysSince(n.date);
+      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+' · '+esc(n.by||'')+'</div></td><td>'+esc(n.customer||'')+'<div class="hint">'+linesText(n)+'</div>'+(n.note?'<div class="hint">📝 '+esc(n.note)+'</div>':'')+'</td>' +
+        '<td style="white-space:nowrap;font-weight:700;color:'+(d>7?'#dc2626':'#92400e')+';">'+d+' วัน</td><td>'+'<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin-bottom:4px;" onclick="printNote(\''+esc(n.id)+'\')">🖨️ พิมพ์</button> '+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
+    }).join('') + '</table>';
+  var cut = Date.now() - 30*86400000;
+  var hist = notes.filter(function(n){ return n.status !== 'open' && new Date(n.createdAt||n.date||0).getTime() >= cut; })
+    .sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+  $('histList').innerHTML = !hist.length ? '<div class="hint">ยังไม่มีประวัติ</div>' :
+    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>รายการ</th><th>สถานะ</th><th></th></tr>' + hist.map(function(n){
+      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+'</div></td><td>'+linesText(n)+'</td><td>'+(n.status==='cancelled'?'<span class="pill cancel">ยกเลิก</span><div class="hint">'+esc(n.cancelledBy||'')+'</div>':'<span class="pill done">ออก INV แล้ว</span>')+'</td><td><button class="btn-x" style="background:#eff6ff;color:#1d4ed8;" onclick="printNote(\''+esc(n.id)+'\')">🖨️</button></td></tr>';
+    }).join('') + '</table>';
+}
+
+function printNote(id){
+  var n = notes.find(function(x){ return x.id === id; });
+  if (!n) { alert('ไม่พบบิล'); return; }
+  var rows = (n.lines||[]).map(function(l,i){
+    return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+esc(l.partName)+'</td><td>'+esc(l.bill||'-')+'</td><td>'+esc(l.proLot||'-')+'</td><td>'+esc(l.custLot||'-')+'</td><td style="text-align:right"><b>'+l.qty+'</b></td><td style="text-align:center">'+(l.unit==='kg'?'กก.':'ชิ้น')+'</td></tr>';
+  }).join('');
+  for (var k=(n.lines||[]).length; k<8; k++) rows += '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+  var html = '<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบส่งของชั่วคราว '+esc(n.no)+'</title>'+
+   '<style>@page{size:A4;margin:14mm}body{font-family:"Sarabun","Tahoma","Noto Sans Thai",sans-serif;font-size:13px;color:#000}h1{font-size:20px;margin:0}h2{font-size:16px;margin:2px 0 10px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:5px 6px}th{background:#eee}.meta td{border:none;padding:2px 4px}.sig{display:flex;gap:20px;margin-top:40px}.sig div{flex:1;text-align:center;border-top:1px solid #000;padding-top:4px}.st{color:#b91c1c;font-weight:700;border:2px solid #b91c1c;display:inline-block;padding:2px 10px;transform:rotate(-6deg)}</style></head><body>'+
+   '<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h1>APK Plating Service Co., Ltd.</h1><h2>ใบส่งของชั่วคราว (Temporary Delivery Note)</h2></div>'+(n.status==='cancelled'?'<div class="st">ยกเลิก</div>':'')+'</div>'+
+   '<table class="meta"><tr><td style="width:15%">เลขที่บิล</td><td style="width:35%"><b>'+esc(n.no)+'</b></td><td style="width:15%">วันที่ส่งของ</td><td><b>'+fmtDate(n.date)+'</b></td></tr>'+
+   '<tr><td>ลูกค้า</td><td><b>'+esc(n.customer||'-')+'</b></td><td>ผู้ออกบิล</td><td><b>'+esc(n.issuer||n.by||'-')+'</b></td></tr></table><br>'+
+   '<table><tr><th style="width:5%">#</th><th>หมายเลขชิ้นงาน</th><th style="width:13%">บิลรับเข้า</th><th style="width:14%">Pro Lot No.</th><th style="width:16%">Cust. Lot No.</th><th style="width:10%">จำนวน</th><th style="width:7%">หน่วย</th></tr>'+rows+'</table>'+
+   (n.note?'<p>หมายเหตุ: '+esc(n.note)+'</p>':'')+
+   '<p style="font-size:11px;color:#444">เอกสารชั่วคราว — ฝ่ายบัญชีจะออก INV อ้างอิงเลขที่นี้ในภายหลัง</p>'+
+   '<div class="sig"><div>ผู้ออกบิล / ผู้ส่งของ</div><div>ผู้ตรวจสอบ</div><div>ผู้รับสินค้า</div></div>'+
+   '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>';
+  var w = window.open('', '_blank');
+  if (!w) { alert('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up แล้วลองใหม่'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  $('loginBtn').onclick = function(){ doLogin($('loginPin').value.trim()); };
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value.trim()); });
+  $('logoutBtn').onclick = function(){ clearSession(); location.reload(); };
+  var s = loadSession();
+  if (s && s.ok) { session = s; enterApp(); } else { $('loginPin').focus(); }
+});
+</script>
+</body>
+</html>
