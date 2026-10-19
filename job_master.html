@@ -199,6 +199,7 @@ if ('caches' in window) {
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-badge"><div class="sync-dot" id="syncDot"></div><span id="syncLabel">กำลังเชื่อมต่อ...</span></div>
+    <button onclick="refreshApp()" title="โหลดโปรแกรมและข้อมูลใหม่ทั้งหมด (แทนการกด Ctrl+F5)" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🔄 อัปเดต</button>
     <button onclick="logoutJM()" style="background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;">🚪 ออกจากระบบ</button>
   </div>
 </div>
@@ -1755,6 +1756,14 @@ document.addEventListener('visibilitychange', function(){
     startPoll();
   }
 });
+// ปุ่ม 🔄 อัปเดต — แทน Ctrl+F5: ล้างแคชข้อมูลในเครื่อง + แคชโปรแกรม แล้วโหลดหน้าใหม่จากเซิร์ฟเวอร์
+async function refreshApp() {
+  if (typeof _localDirty !== 'undefined' && _localDirty && !confirm('มีข้อมูลที่ยังไม่ได้ส่งขึ้นเซิร์ฟเวอร์ — ถ้าอัปเดตตอนนี้ข้อมูลส่วนนั้นจะหาย\nต้องการอัปเดตต่อหรือไม่?')) return;
+  try { Object.keys(localStorage).filter(function(k){ return /^job_/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); } catch(e){}
+  try { if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.map(function(k){ return caches.delete(k); })); } } catch(e){}
+  try { if (navigator.serviceWorker) { var rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(function(r){ return r.unregister(); })); } } catch(e){}
+  location.replace(location.pathname + '?v=' + Date.now());
+}
 function setSyncOk(){ document.getElementById('syncDot').className='sync-dot ok'; document.getElementById('syncLabel').textContent='Sync แล้ว'; }
 function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; document.getElementById('syncLabel').textContent='ออฟไลน์'; }
 
