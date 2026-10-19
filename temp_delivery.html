@@ -127,7 +127,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="field">
       <label>ค้นหาหมายเลขชิ้นงาน/บิลรับเข้า (พิมพ์ P/No, ชื่อ, ลูกค้า หรือเลขบิล อย่างน้อย 2 ตัวอักษร)</label>
       <input type="text" id="tmpSearch" autocomplete="off" placeholder="เช่น 77208" oninput="renderJobSel()">
-      <select id="tmpJobSel" size="1" class="sel-list" style="display:none;" onchange="onJobPick()"></select>
+      <select id="tmpJobSel" size="1" style="display:none;" onchange="onJobPick()"></select>
+      <div id="tmpJobList" style="display:none;margin-top:6px;"></div>
       <div class="hint" id="tmpJobHint"></div>
     </div>
     <div class="grid2">
@@ -301,22 +302,34 @@ function normQ(t){ return String(t||'').toLowerCase().replace(/[\s\-]+/g, ''); }
 // ── ค้นหา/เลือกบิล ──
 function renderJobSel(){
   var q = normQ($('tmpSearch').value), sel = $('tmpJobSel');
-  if (q.length < 2) { sel.innerHTML=''; sel.style.display='none'; $('tmpUnitLbl').textContent=''; return; }
+  if (q.length < 2) { sel.innerHTML=''; sel.style.display='none'; $('tmpJobList').style.display='none'; $('tmpUnitLbl').textContent=''; return; }
   if (!_loaded) { $('tmpJobHint').textContent = '⏳ ข้อมูลบิลยังโหลดไม่เสร็จ รอสักครู่'; return; }
   var rows = jobItems.filter(function(j){ return normQ((j.partName||'') + ' ' + (j.customer||'') + ' ' + (j.bill||'')).indexOf(q) >= 0; })
     .map(function(j){ return { j: j, rem: jobRemain(j) }; })
     .filter(function(x){ return x.rem > 0.0001; });
   rows.sort(function(a,b){ return (a.j.date||'').localeCompare(b.j.date||''); }); // เก่าสุดก่อน
   rows = rows.slice(0, 40);
-  if (!rows.length) { sel.innerHTML='<option value="">ไม่พบบิลที่ยังมีคงเหลือ</option>'; sel.size=1; sel.style.display=''; $('tmpUnitLbl').textContent=''; return; }
-  sel.innerHTML = rows.map(function(x){
+  if (!rows.length) { sel.innerHTML=''; var L0=$('tmpJobList'); L0.style.display=''; L0.innerHTML='<div style="padding:12px;color:#64748b;">ไม่พบบิลที่ยังมีคงเหลือ</div>'; $('tmpUnitLbl').textContent=''; return; }
+  sel.innerHTML=''; sel.style.display='none';
+  var L=$('tmpJobList'); L.style.display='';
+  L.innerHTML = '<div style="max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;background:#fff;">' + rows.map(function(x){
     var j = x.j;
-    return '<option value="'+esc(j.id)+'">'+esc(j.partName)+' · บิล '+esc(j.bill||'-')+' · '+esc(j.customer||'-')+' · คงเหลือ '+(isKgJob(j) ? x.rem.toFixed(2)+' กก.' : x.rem+' ชิ้น')+'</option>';
-  }).join('');
-  sel.size = Math.min(8, rows.length) || 1;
-  if (rows.length === 1) sel.selectedIndex = 0;
-  sel.style.display = '';
+    return '<div onclick="pickJob(\''+esc(j.id)+'\')" style="padding:12px;border-bottom:1px solid #e5e7eb;font-size:14px;line-height:1.5;cursor:pointer;touch-action:manipulation;">'+
+      '<b>'+esc(j.partName)+'</b> · '+esc(j.customer||'-')+'<br><span style="color:#64748b;">บิล '+esc(j.bill||'-')+' · รับ '+_dmy(j.date)+' · </span><b style="color:#1d4ed8;">คงเหลือ '+(isKgJob(j) ? x.rem.toFixed(2)+' กก.' : x.rem+' ชิ้น')+'</b></div>';
+  }).join('') + '</div>';
+  $('tmpUnitLbl').textContent='';
+  if (rows.length === 1) pickJob(rows[0].j.id);
+}
+function _dmy(d){ if(!d) return '-'; var p=String(d).slice(0,10).split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : d; }
+function pickJob(id){
+  var sel=$('tmpJobSel'); sel.innerHTML='<option value="'+esc(id)+'" selected>x</option>'; sel.value=id;
   onJobPick();
+  var j=jobItems.find(function(x){return x.id===id;}); if(!j) return;
+  var rem=jobRemain(j);
+  $('tmpJobList').innerHTML='<div style="display:flex;align-items:center;gap:8px;padding:12px;border:2px solid #16a34a;background:#f0fdf4;border-radius:10px;font-size:14px;line-height:1.5;">'+
+    '<div style="flex:1;"><b>✅ เลือกแล้ว: '+esc(j.partName)+'</b><br>บิล '+esc(j.bill||'-')+' · '+esc(j.customer||'-')+' · รับ '+_dmy(j.date)+' · คงเหลือ '+(isKgJob(j)?rem.toFixed(2)+' กก.':rem+' ชิ้น')+'</div>'+
+    '<button type="button" onclick="renderJobSel()" style="padding:10px 14px;border:1px solid #94a3b8;border-radius:8px;background:#fff;font-size:13px;">เปลี่ยน</button></div>';
+  $('tmpQty').focus();
 }
 function onJobPick(){
   var j = jobItems.find(function(x){ return x.id === $('tmpJobSel').value; });
@@ -342,7 +355,7 @@ function addLine(){
   draft.push({ jobId: id, bill: j.bill || '', partName: j.partName || '', customer: j.customer || '', qty: qty, unit: j.unit || 'pcs',
     proLot: $('tmpProLot').value.trim(), custLot: $('tmpCustLot').value.trim() });
   $('tmpQty').value = ''; $('tmpSearch').value = ''; $('tmpProLot').value = ''; $('tmpCustLot').value = '';
-  $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none'; $('tmpUnitLbl').textContent='';
+  $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none'; $('tmpJobList').style.display='none'; $('tmpJobList').innerHTML=''; $('tmpUnitLbl').textContent='';
   renderDraft();
 }
 function delLine(i){ draft.splice(i,1); renderDraft(); }
@@ -385,6 +398,7 @@ function saveNote(){
     var n = note.lines.length;
     draft = []; ['tmpNote','tmpQty','tmpSearch','tmpProLot','tmpCustLot'].forEach(function(i){ $(i).value=''; }); refreshNo();
     $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none';
+    $('tmpJobList').style.display='none'; $('tmpJobList').innerHTML='';
     renderDraft(); renderLists();
     showToast('✅ บันทึกบิล ' + note.no + ' (' + n + ' รายการ) — ตัดสต็อกแล้ว', 'ok');
     if (confirm('บันทึกแล้ว — พิมพ์บิล ' + note.no + ' เลยหรือไม่?')) printNote(note.id);
