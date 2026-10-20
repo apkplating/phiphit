@@ -601,13 +601,10 @@ if ('caches' in window) {
     </div>
     <div class="field" style="margin-bottom:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <label style="margin:0;">Lot No / Data <span style="color:#c0392b;">*</span></label>
-        <button onclick="autoFillBLotNo()" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">⚡ ดึงจาก LOT หลัก</button>
+        <label style="margin:0;">Cust. Lot No <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(ดึงจากบิลรับเข้าให้อัตโนมัติ · แก้ได้ · เว้นว่างได้)</span></label>
       </div>
-      <input type="text" id="bLotNo" placeholder="⚠️ ต้องกรอก — ใช้จับคู่กับรับงานเข้า" autocomplete="off"
-        style="font-size:13px;border-color:#f59e0b;background:#fffbeb;"
-        oninput="this.style.borderColor=this.value?'var(--border)':'#f59e0b';this.style.background=this.value?'':'#fffbeb';">
-      <div style="font-size:10px;color:#b45309;margin-top:3px;">💡 ต้องตรงกับ LOT ที่กรอกในหน้า "รับงานเข้า" ถึงจะตัดสต็อคได้</div>
+      <input type="text" id="bLotNo" placeholder="Cust. Lot ของลูกค้า (ถ้าไม่มีเว้นว่าง)" autocomplete="off" style="font-size:13px;">
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">💡 เลือกบิลแล้วระบบใส่ Cust. Lot ที่คีตอนรับเข้าให้ · Pro Lot No (ของ APK) ใช้ค่าอัตโนมัติจากวันที่แยกต่างหาก</div>
     </div>
 
     <!-- สีที่ชุบ B / C / K -->
@@ -1611,8 +1608,6 @@ function init() {
   var todayLot = todayDDMMYYYY();
   document.getElementById('lotNo').value = todayLot;
   document.getElementById('hdrLot').textContent = todayLot;
-  var _blInit = document.getElementById('bLotNo');
-  if (_blInit && !_blInit.value) { _blInit.value = todayLot; _blInit.style.borderColor='var(--border)'; _blInit.style.background=''; }
 
   renderBarrels();
   renderSummary();
@@ -1816,19 +1811,7 @@ function addBarrel() {
   var lotEl  = document.getElementById('bLotNo');
   var lotNo  = lotEl ? lotEl.value.trim() : '';
 
-  // ถ้า bLotNo ว่าง → auto-fill จาก LOT หลักของวัน
-  if (!lotNo) {
-    var mainLot = (document.getElementById('lotNo')||{}).value.trim() || '';
-    if (mainLot) {
-      lotNo = mainLot;
-      if (lotEl) { lotEl.value = mainLot; lotEl.style.borderColor='var(--border)'; lotEl.style.background=''; }
-      showToast('entry',tEntry('⚡ ดึง LOT "'+mainLot+'" จากวันนี้อัตโนมัติ','⚡ ယနေ့ LOT "'+mainLot+'" ကို အလိုအလျောက် ယူထားသည်'),'ok');
-    } else {
-      showToast('entry',tEntry('⚠️ กรุณากรอก LOT NO เพื่อให้ตัดสต็อคได้','⚠️ ကုန်ချောင်ခြင်းအတွက် LOT နံပါတ် ဖြည့်ပါ'),'err');
-      if (lotEl) { lotEl.focus(); lotEl.style.borderColor='#e74c3c'; }
-      // ยังให้เพิ่มได้ แต่แจ้งเตือน
-    }
-  }
+  // Cust. Lot No: ปล่อยว่างได้ (ไม่ดึง Pro Lot No ของ APK มาใส่แทน)
   // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
   var bps = document.getElementById('bPartSearch');
   if (!_barrelPartSelected && (!bps || !bps.value.trim())) {
@@ -1995,7 +1978,7 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   // เคลียร์เหตุผล rework ที่เพิ่งบันทึกไป — บังคับเลือกใหม่ทุกรอบ กันพลาดเอาเหตุผลรอบก่อนมาปนกับรอบใหม่
   var rrSelReset = document.getElementById('reworkReasonSelect'); if (rrSelReset) rrSelReset.value = '';
   var rrDetailReset = document.getElementById('reworkReasonDetail'); if (rrDetailReset) { rrDetailReset.value=''; rrDetailReset.style.display='none'; }
-  // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
+  var _blReset = document.getElementById('bLotNo'); if (_blReset) _blReset.value = '';
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
 
@@ -7186,6 +7169,7 @@ function onBarrelJobPick() {
   if (!job) return;
   document.getElementById('bPartName').value = job.partName || '';
   if (job.customer) document.getElementById('bCustomer').value = job.customer;
+  var _blCl = document.getElementById('bLotNo'); if (_blCl) _blCl.value = job.custLot || '';
   if (infoEl) {
     var rr  = calcJobRemainToPlate(jobId);
     var isKgUnit = job.unit==='kg';

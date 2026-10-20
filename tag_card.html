@@ -187,7 +187,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <!-- ── ส่วน ICS (Inspection Check Sheet) — โชว์เฉพาะตอน P/No นี้มีทะเบียน Standard ลงไว้แล้ว
     กรอกผลตรวจจริงตรงนี้ แล้วระบบจะพิมพ์ ICS ต่อท้ายเป็นหน้าสุดท้ายให้อัตโนมัติพร้อม Tag ── -->
     <div id="icsEntryWrap" style="margin-top:14px;padding-top:14px;border-top:1.5px dashed var(--border);">
-      <div class="card-label" style="margin-bottom:6px;">📐 ผลตรวจ ICS (ไม่บังคับ)</div>
+      <div class="card-label" style="margin-bottom:6px;">📐 ผลตรวจ ICS (บังคับ — ต้องวัดความหนา 5 จุด + Lot Size ก่อนพิมพ์ Tag)</div>
       <div class="hint" id="icsStdStatus" style="margin-bottom:10px;">พิมพ์ P/No ก่อน เพื่อเช็คว่ามีทะเบียน Standard ไหม</div>
       <button type="button" id="goRegisterIcsBtn" onclick="goRegisterIcs()" style="display:none;font-size:11px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;margin-bottom:10px;">+ ลงทะเบียน Standard สำหรับ P/No นี้เลย</button>
       <div class="field" style="margin-bottom:0;">
@@ -480,7 +480,7 @@ function loadPartList() {
   _partListState = 'loading';
   return fetchJsonWithTimeout(PM_URL, 20000).then(function(data){
     if (data && Array.isArray(data.parts)) {
-      partList = data.parts.map(function(p){ return { partNo:p.partNo||'', partName:p.name||p.partName||'', customer:p.customer||'', platingType:p.platingType||'' }; });
+      partList = data.parts.map(function(p){ return { partNo:p.partNo||'', partName:p.name||p.partName||'', customer:p.customer||'', platingType:p.platingType||'', weightG:p.weightPerPc||p.weightG||0 }; });
     }
     _partListState = 'ok';
   }).catch(function(e){
@@ -1182,6 +1182,7 @@ function publishIcs(id, ctx, pageHtml, password) {
 //  ป้องกันเลือก Lot ที่สะกดผิด/ยังไม่เคยตรวจได้ตั้งแต่ต้น ไม่ต้องพึ่งจับคู่ string ที่พิมพ์เองอีกต่อไป
 // ══════════════════════════════════════
 var _qcRecordsForPartNo = []; // record ทั้งหมดของ P/No ปัจจุบัน ที่โหลดมาครั้งเดียว ใช้เลือก Insp.By ต่อได้ทันทีไม่ fetch ซ้ำ
+var _tagLogOk = true, _tagLogForPart = [], _lotRemain = {}, _lotMeta = {};
 var _lotLoadSeq = 0;          // เลขรอบการโหลด — ผลของรอบเก่า (P/No เดิม/เน็ตช้า) ที่มาถึงทีหลังจะถูกทิ้ง ไม่ทับของใหม่
 
 // ── โหมด "พิมพ์เอง" — กรณีเน็ตไม่เสถียร โหลดรายการ Lot จาก QC 100% ไม่ได้ ให้พิมพ์ Pro Lot No. และ Insp. By เองได้
@@ -1242,11 +1243,15 @@ function loadLotOptionsForPartNo(partNo) {
   resetLotDropdown('⏳ กำลังค้นหาใน QC 100%...');
   var seq = _lotLoadSeq;
   var lines = ['B1','B2','R1'];
+  var logP = fetchJsonWithTimeout(FB_LINES.B1 + '/tag-print-log.json', 10000).then(function(d){ return { ok:true, d:d }; }).catch(function(){ return { ok:false, d:null }; });
   Promise.all(lines.map(function(line){
     return fetchJsonWithTimeout(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json', 10000)
       .then(function(d){ return { ok: true, recs: (d && Array.isArray(d.records)) ? d.records : [] }; })
       .catch(function(){ return { ok: false, recs: [] }; });
-  })).then(function(results){
+  }).concat([logP])).then(function(results){
+    var logRes = results.pop();
+    _tagLogOk = logRes.ok;
+    _tagLogForPart = logRes.d ? Object.keys(logRes.d).map(function(k){ return logRes.d[k]; }).filter(function(x){ return x && String(x.partNo||'').trim().toLowerCase() === partNo.toLowerCase(); }) : [];
     if (seq !== _lotLoadSeq || isLotManual()) return; // P/No เปลี่ยนไปแล้ว หรือผู้ใช้สลับเป็นพิมพ์เองระหว่างรอ
     var failed = results.filter(function(x){ return !x.ok; }).length;
     var all = [].concat.apply([], results.map(function(x){ return x.recs; }));
@@ -1268,23 +1273,41 @@ function loadLotOptionsForPartNo(partNo) {
       $('tgLotHint').className = 'hint err';
       return;
     }
-    var seenLots = {};
-    var options = ['<option value="">— เลือก Lot —</option>'];
+    // ยอดต่อ Lot = จำนวนที่ผ่านตรวจ (OK) ทุกรายการของ Lot นั้น − จำนวนที่พิมพ์ Tag ไปแล้ว → แสดงเฉพาะ Lot ที่ยังเหลือ
+    var lotInfo = {}, lotOrder = [];
     _qcRecordsForPartNo.forEach(function(r){
       var lot = String(r.lotNo).trim();
-      if (seenLots[lot]) return; // เก็บตัวแรกที่เจอ (ใหม่สุด เพราะ sort ไว้แล้ว) ต่อ 1 lot
-      seenLots[lot] = true;
-      options.push('<option value="'+esc(lot)+'">'+esc(lot)+' ('+esc(r.line||'')+' '+esc(r.date||'')+')</option>');
+      var ok = (r.qtyOK != null) ? Number(r.qtyOK) : Number(r.qtyInspect || 0);
+      if (!lotInfo[lot]) { lotInfo[lot] = { ok:0, used:0, line:r.line||'', date:r.date||'', pd:(r.platingDate||r.date||'') }; lotOrder.push(lot); }
+      lotInfo[lot].ok += ok || 0;
     });
+    _tagLogForPart.forEach(function(x){ var l = String(x.lot||'').trim(); if (lotInfo[l]) lotInfo[l].used += Number(x.qtyPcs||0); });
+    lotOrder.sort(function(x,y){ return (lotInfo[x].pd||'').localeCompare(lotInfo[y].pd||'') || x.localeCompare(y); }); // เก่าสุดก่อน (FIFO)
+    _lotRemain = {}; _lotMeta = {};
+    var seenLots = {}, totalRemain = 0, usedUp = 0;
+    var options = ['<option value="">— เลือก Lot —</option>'];
+    lotOrder.forEach(function(lot){
+      var e = lotInfo[lot], rem = e.ok - e.used;
+      if (rem <= 0) { usedUp++; return; } // พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้ว → เอาออกจากรายการ
+      seenLots[lot] = true; _lotRemain[lot] = rem; _lotMeta[lot] = { rem: rem, date: e.pd || e.date || '' }; totalRemain += rem;
+      options.push('<option value="'+esc(lot)+'">'+esc(lot)+' ('+esc(e.line)+' '+esc(e.date)+') · คงเหลือ '+rem.toLocaleString()+' ชิ้น</option>');
+    });
+    var n = Object.keys(seenLots).length;
+    if (!n) {
+      sel.innerHTML = '<option value="">— ไม่มี Lot คงเหลือ —</option>';
+      sel.disabled = true;
+      $('tgLotHint').textContent = '🚫 Lot ของ P/No นี้พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้วทั้งหมด — ต้องตรวจ QC 100% Lot ใหม่ก่อน (กรณีจำเป็นติ๊ก "พิมพ์เอง" ได้)';
+      $('tgLotHint').className = 'hint err';
+      return;
+    }
     sel.innerHTML = options.join('');
     sel.disabled = false;
-    var n = Object.keys(seenLots).length;
     if (failed > 0) {
       $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
       $('tgLotHint').className = 'hint warn';
     } else {
-      $('tgLotHint').textContent = '✅ เจอ '+n+' Lot ที่ผ่าน QC 100% แล้ว';
-      $('tgLotHint').className = 'hint ok';
+      $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
+      $('tgLotHint').className = 'hint ' + (_tagLogOk ? 'ok' : 'warn');
     }
   });
 }
@@ -1327,7 +1350,7 @@ function lookupCustLot() {
     var plats = res[0], jm = res[1];
     if (!jm) { _clSet(null, '⚠️ โหลดใบรับเข้าไม่ได้ — พิมพ์ Cust. Lot เอง หรือเว้นว่างได้', 'warn'); return; }
     var items = Array.isArray(jm.items) ? jm.items : (jm.items ? Object.keys(jm.items).map(function(k){ return jm.items[k]; }) : []);
-    var jobIds = {};
+    var jobIds = {}, directCust = {}, directVals = [];
     plats.forEach(function(d){
       if (!d) return;
       var days = Array.isArray(d.dayRecords) ? d.dayRecords.slice() : [];
@@ -1336,14 +1359,16 @@ function lookupCustLot() {
         if (!day) return;
         var rows = Array.isArray(day.rows) ? day.rows : (Array.isArray(day.barrels) ? day.barrels : []);
         rows.forEach(function(b){
-          if (!b || !b.jobId) return;
-          if (String(b.lotNo || day.lotNo || '').trim() !== lot) return;
+          if (!b) return;
+          var _dayLot = String(day.lotNo || '').trim(), _rowLot = String(b.lotNo || '').trim();
+          if (_dayLot !== lot && !(_dayLot === '' && _rowLot === lot)) return; // Pro Lot = lot ของวัน (ช่อง lotNo ของถังเป็น Cust. Lot แล้ว)
           if (String(b.partName || '').trim().split(' ')[0].toUpperCase() !== partNo) return;
-          jobIds[b.jobId] = true;
+          if (_rowLot && _rowLot !== lot && !directCust[_rowLot]) { directCust[_rowLot] = true; directVals.push(_rowLot); } // Cust. Lot ที่พนักงานคีที่หน้าชุบ
+          if (b.jobId) jobIds[b.jobId] = true;
         });
       });
     });
-    var vals = [], seen = {};
+    var vals = directVals.slice(), seen = {}; directVals.forEach(function(v){ seen[v] = true; });
     items.forEach(function(j){
       if (j && jobIds[j.id] && j.custLot) { var v = String(j.custLot).trim(); if (v && !seen[v]) { seen[v] = true; vals.push(v); } }
     });
@@ -1359,7 +1384,7 @@ function onLotSelected() {
   var rec = _qcRecordsForPartNo.find(function(r){ return String(r.lotNo).trim() === lot; });
   if (rec) {
     $('tgInspBy').value = rec.inspector || '';
-    $('tgInspHint').textContent = '✅ ดึงจาก QC 100% ('+rec.line+', '+rec.date+')';
+    $('tgInspHint').textContent = '✅ ดึงจาก QC 100% ('+rec.line+', '+rec.date+')' + (_lotRemain[lot] != null ? ' · คงเหลือพิมพ์ Tag ได้ '+_lotRemain[lot].toLocaleString()+' ชิ้น' : '');
     $('tgInspHint').className = 'hint ok';
   }
   lookupCustLot();
@@ -1644,7 +1669,7 @@ function buildIcsPageHtml(ctx) {
 
 var _printBusy = false; // กันกดพิมพ์ซ้ำระหว่างที่กำลังบันทึกใบ ICS ขึ้นระบบ
 
-function printTags() {
+function _printTags(preGroups) {
   var d = {
     cust: $('tgCust').value.trim(),
     partNo: $('tgPartNo').value.trim(),
@@ -1663,6 +1688,14 @@ function printTags() {
   var count = parseInt($('tgCount').value, 10) || 1;
   if (count < 1) count = 1;
 
+  // ── ยอดที่จะพิมพ์ (ชิ้น) = Q'TY ต่อใบ × จำนวนใบ — ห้ามเกินยอดคงเหลือของ Lot ที่เลือก ──
+  d.printPcs = tagQtyToPcs(d.qty, count, d.partNo);
+  if (preGroups) { d.groups = preGroups; d.lotLabel = preGroups.map(function(g){ return g.lot; }).join(', '); }
+  else if (!isLotManual() && _lotRemain[d.lot] != null && d.printPcs != null && d.printPcs > _lotRemain[d.lot]) {
+    showToast('🚫 พิมพ์เกินยอดคงเหลือของ Lot '+d.lot+' — จะพิมพ์ '+d.printPcs.toLocaleString()+' ชิ้น แต่เหลือ '+_lotRemain[d.lot].toLocaleString()+' ชิ้น', 'err');
+    return;
+  }
+
   savePhotoIfNeeded(d.partNo);
 
   // ── ICS (Inspection Check Sheet) — ไม่บังคับ: สร้างต่อท้ายให้อัตโนมัติก็ต่อเมื่อ P/No นี้มีทะเบียน Standard
@@ -1670,8 +1703,17 @@ function printTags() {
   // บล็อกการพิมพ์ Tag เลย (Tag พิมพ์ได้เสมอไม่ว่าจะมีข้อมูล ICS ครบหรือไม่) ──
   var icsStd = findIcsStandard(d.partNo);
   var ics = null;
+  // ── บังคับวัดความหนา: ต้องมีทะเบียน Standard + กรอกความหนา 5 จุด + Lot Size ครบ ถึงจะพิมพ์ Tag ได้ ──
+  if (!icsStd) { showToast('🚫 P/No นี้ยังไม่มีทะเบียน Standard (ICS) — ต้องลงทะเบียนก่อนถึงจะพิมพ์ Tag ได้', 'err'); return; }
+  var _s0 = [$('icsT1').value,$('icsT2').value,$('icsT3').value,$('icsT4').value,$('icsT5').value];
+  if (_s0.some(function(x){ return String(x).trim()===''; }) || !String($('icsLotSize').value).trim()) {
+    showToast('🚫 ต้องวัดความหนาให้ครบ 5 จุด และกรอก Lot Size ก่อนพิมพ์ Tag', 'err');
+    var _first = ['icsT1','icsT2','icsT3','icsT4','icsT5'].find(function(id){ return String($(id).value).trim()===''; }) || 'icsLotSize';
+    try { $(_first).focus(); $(_first).scrollIntoView({behavior:'smooth',block:'center'}); } catch(e){}
+    return;
+  }
   if (icsStd) {
-    var samples = [$('icsT1').value,$('icsT2').value,$('icsT3').value,$('icsT4').value,$('icsT5').value];
+    var samples = _s0;
     var lotSize = $('icsLotSize').value;
     if (!(samples.some(function(s){ return s===''; }) || !lotSize)) {
       var xr = computeXbarR(samples);
@@ -1683,7 +1725,7 @@ function printTags() {
         docNo: computeDocNo(icsStd.customer, icsStd.partNo),
         issueDate: fmtDateTH(icsStd.issueDate),
         custName: d.cust, inspDate: fmtDateTH(isoToday()), lotSize: lotSize, lotUnit: getLotUnit(),
-        partNo: d.partNo, deliveryDate: d.delDate, proLotNo: d.lot,
+        partNo: d.partNo, deliveryDate: d.delDate, proLotNo: d.lotLabel || d.lot,
         partName: d.partName, model: icsStd.model, samplingSize: 5,
         platingTypeStd: (match && match.platingType) || '-',
         thicknessLabel: icsStd.thicknessLabel, samples: samples, xbar: xr.xbar, r: xr.r, thicknessResult: thicknessResult,
@@ -1742,15 +1784,105 @@ function printTags() {
 }
 
 // สร้างหน้าพิมพ์ (Tag + ICS ต่อท้ายถ้ามี) แล้วสั่ง print — win คือหน้าต่างที่เปิดรอไว้แล้ว (ถ้าไม่มีจะเปิดใหม่ตรงนี้)
+// ── พิมพ์ Tag ข้ามหลาย Pro Lot No. อัตโนมัติ (FIFO) ──
+// 1 ใบ Tag ผูกกับ Lot เดียว: ถ้ายอดที่จะพิมพ์ (Q'TY × จำนวนใบ) เกินคงเหลือของ Lot ที่เลือก ระบบแบ่งจำนวนใบให้ Lot ที่เลือกก่อน
+// ที่เหลือไล่ Lot ถัดไปตามวันที่เก่าสุดก่อน (นับเฉพาะใบเต็ม — เศษที่ไม่ครบใบยังคงค้างใน Lot นั้น)
+function resolveCustLot(partNo, lot) {
+  partNo = String(partNo).trim().toUpperCase();
+  var recL = _qcRecordsForPartNo.find(function(r){ return String(r.lotNo).trim() === lot; });
+  var lines = (recL && recL.line && FB_LINES[recL.line]) ? [recL.line] : ['B1','B2','R1'];
+  var platP = lines.map(function(line){ return _clGet(FB_LINES[line] + '/plating-' + line.toLowerCase() + '.json', 'p' + line).catch(function(){ return null; }); });
+  return Promise.all([Promise.all(platP), _clGet(FB_LINES.B1 + '/job-master.json', 'jm').catch(function(){ return null; })]).then(function(res){
+    var plats = res[0], jm = res[1], jobIds = {}, vals = [], seen = {};
+    var items = jm ? (Array.isArray(jm.items) ? jm.items : (jm.items ? Object.keys(jm.items).map(function(k){ return jm.items[k]; }) : [])) : [];
+    plats.forEach(function(d){
+      if (!d) return;
+      var days = Array.isArray(d.dayRecords) ? d.dayRecords.slice() : [];
+      days.forEach(function(day){
+        var rows = day && (Array.isArray(day.rows) ? day.rows : (Array.isArray(day.barrels) ? day.barrels : [])) || [];
+        rows.forEach(function(b){
+          if (!b) return;
+          var dl = String(day.lotNo || '').trim(), rl = String(b.lotNo || '').trim();
+          if (dl !== lot && !(dl === '' && rl === lot)) return;
+          if (String(b.partName || '').trim().split(' ')[0].toUpperCase() !== partNo) return;
+          if (rl && rl !== lot && !seen[rl]) { seen[rl] = true; vals.push(rl); }
+          if (b.jobId) jobIds[b.jobId] = true;
+        });
+      });
+    });
+    items.forEach(function(j){ if (j && jobIds[j.id] && j.custLot) { var v = String(j.custLot).trim(); if (v && !seen[v]) { seen[v] = true; vals.push(v); } } });
+    return vals.join(', ');
+  });
+}
+function printTags() {
+  var qtyNum = parseFloat($('tgQty').value) || 0;
+  var count = Math.max(1, parseInt($('tgCount').value, 10) || 1);
+  var lot = getLotValue(), partNo = $('tgPartNo').value.trim();
+  var printPcs = tagQtyToPcs($('tgQty').value || '0', count, partNo);
+  if (isLotManual() || !lot || _lotRemain[lot] == null || printPcs == null || !qtyNum || printPcs <= _lotRemain[lot]) { _printTags(null); return; }
+  // ต้องข้าม Lot: คำนวณแผนแบ่งใบ
+  var perTag = printPcs / count;
+  var order = [lot].concat(Object.keys(_lotMeta).filter(function(l){ return l !== lot; })
+    .sort(function(a,b){ return (_lotMeta[a].date||'').localeCompare(_lotMeta[b].date||'') || a.localeCompare(b); }));
+  var left = count, plan = [];
+  order.forEach(function(l){
+    if (left <= 0) return;
+    var n = Math.min(left, Math.floor(_lotMeta[l].rem / perTag));
+    if (n > 0) { plan.push({ lot:l, count:n }); left -= n; }
+  });
+  if (left > 0) {
+    var tot = Object.keys(_lotMeta).reduce(function(s,l){ return s + _lotMeta[l].rem; }, 0);
+    showToast('🚫 พิมพ์ไม่ได้ — ยอดคงเหลือรวมทุก Lot '+tot.toLocaleString()+' ชิ้น พิมพ์ได้อีกไม่เกิน '+(count-left)+' ใบ (ใบละ '+perTag.toLocaleString()+' ชิ้น) ลดจำนวนใบหรือ Q\'TY', 'err');
+    return;
+  }
+  var msg = 'ยอดเกิน Lot ที่เลือก — ระบบจะแยกพิมพ์ตาม Pro Lot No. (เก่าสุดก่อน):\n\n' +
+    plan.map(function(g){ return '• ' + g.lot + ' : ' + g.count + ' ใบ (' + (g.count*perTag).toLocaleString() + ' ชิ้น)'; }).join('\n') + '\n\nกด OK เพื่อพิมพ์';
+  if (!confirm(msg)) return;
+  Promise.all(plan.map(function(g){ return (g.lot === lot ? Promise.resolve($('tgCustLot') ? $('tgCustLot').value.trim() : '') : resolveCustLot(partNo, g.lot).catch(function(){ return ''; })).then(function(c){ g.custLot = c; }); }))
+    .then(function(){ _printTags(plan); });
+}
+// แปลง Q'TY × จำนวนใบ เป็นชิ้น: หน่วย pcs/... นับตรง, kg/... แปลงด้วยน้ำหนักต่อชิ้นใน Part Master, หน่วยอื่น = null (ไม่หักยอด)
+function tagQtyToPcs(qty, count, partNo) {
+  var q = parseFloat(qty) || 0; if (!q) return null;
+  var u = getLotUnit().toLowerCase();
+  if (u === 'pcs') return Math.round(q * count);
+  if (u === 'kg') {
+    var p = partList.find(function(x){ return x.partNo.toLowerCase() === String(partNo).toLowerCase(); });
+    var w = p && (p.weightPerPc || p.weightG || 0);
+    return w ? Math.round(q * count * 1000 / w) : null;
+  }
+  return null;
+}
+function logTagPrint(d, count) {
+  if (d.printPcs == null) return;
+  if (d.groups) {
+    var per = d.printPcs / count;
+    d.groups.forEach(function(g){ logTagPrint({ partNo:d.partNo, lot:g.lot, printPcs:Math.round(per*g.count), qty:d.qty, unit:d.unit, custLot:g.custLot }, g.count); });
+    return;
+  }
+  var id = 'TG' + Date.now() + Math.random().toString(36).slice(2,5);
+  var rec = { id:id, ts:Date.now(), date:isoToday(), partNo:d.partNo, lot:d.lot, qtyPcs:d.printPcs, qtyPerTag:d.qty, unit:d.unit, tags:count, custLot:d.custLot||'', by:(session&&session.user&&session.user.name)||'' };
+  fetch(FB_LINES.B1 + '/tag-print-log/' + id + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rec) })
+    .then(function(){ if (!isLotManual()) setTimeout(function(){ loadLotOptionsForPartNo($('tgPartNo').value.trim()); }, 400); })
+    .catch(function(e){ console.warn('tag log:', e); showToast('⚠️ บันทึกประวัติพิมพ์ Tag ไม่สำเร็จ — ยอดคงเหลือของ Lot อาจไม่ถูกหัก', 'err'); });
+}
 function renderAndPrint(d, count, icsPageHtml, win, info) {
   info = info || {};
-  var oneTag = buildTagHtml(d);
+  logTagPrint(d, count);
+  var oneTag = d.groups ? null : buildTagHtml(d);
   // จัดกลุ่มทีละ 8 ใบต่อหน้า (2 คอลัมน์ x 4 แถว) ขึ้นหน้าใหม่อัตโนมัติถ้าเกิน — ใช้ CSS Grid ขนาด mm ตายตัว
   // (เดิมใช้ flexbox + height:100vh ซึ่งวัดความสูง "หน้าต่างเบราว์เซอร์" ไม่ใช่ความสูงหน้ากระดาษจริงตอนพิมพ์ จึง
   // ล้นออกนอกขอบพิมพ์ได้ โดยเฉพาะถ้าตั้งค่าเครื่องพิมพ์เป็นแนวนอนค้างจากงานพิมพ์ก่อนหน้า) บังคับแนวตั้ง (portrait)
   // ไว้ใน @page ไม่ให้สลับเป็นแนวนอนเองด้วย
   var cells = [];
-  for (var i = 0; i < count; i++) cells.push(oneTag);
+  if (d.groups) {
+    d.groups.forEach(function(g){
+      var gt = buildTagHtml(Object.assign({}, d, { lot: g.lot, custLot: g.custLot || '' }));
+      for (var k = 0; k < g.count; k++) cells.push(gt);
+    });
+  } else {
+    for (var i = 0; i < count; i++) cells.push(oneTag);
+  }
   var pages = [];
   for (var i = 0; i < cells.length; i += 8) pages.push(cells.slice(i, i+8));
   var pagesHtml = pages.map(function(pageCells){
