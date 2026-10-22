@@ -357,8 +357,7 @@ if ('caches' in window) {
         <select id="addLineBackup" onchange="onAddLineChange()">
           <option value="">— ไม่มี —</option>
           <option value="B1">B1</option>
-          <option value="B2">B2</option>
-          <option value="R1">R1</option>
+          <option value="B2">B2</option>          <option value="R1">R1</option>
         </select>
       </div>
       <div class="field" style="margin:0;">
@@ -717,40 +716,76 @@ function setSyncErr() {
 }
 
 var _fbLastSavedAt = '';
-
+var _fbBusy = false;// รายการที่ลบ (tombstone) — กันเครื่องอื่นที่ยังมีของเก่าส่งกลับมาชุบชีวิตรายการที่ลบไปแล้ว
+function getDeleted() { try { return JSON.parse(localStorage.getItem('pm_deleted')||'{}') || {}; } catch(e){ return {}; } }
+function markDeleted(id) { var d=getDeleted(); d[id]=new Date().toISOString(); try{ localStorage.setItem('pm_deleted', JSON.stringify(d)); }catch(e){} }
+function _ts(x){ return (x && (x.updatedAt||x.createdAt)) || ''; }
+// รวมข้อมูลเครื่องนี้กับ cloud ทีละรายการ (id เดียวกัน → เอาอันที่แก้ล่าสุด) — ไม่ให้เครื่องใดเขียนทับงานของอีกเครื่อง
+function mergeById(local, cloud, deleted) {
+  var map = {}, order = [];
+  (cloud||[]).forEach(function(x){ if(x && x.id && !deleted[x.id]){ map[x.id]=x; order.push(x.id); } });
+  (local||[]).forEach(function(x){
+    if (!x || !x.id || deleted[x.id]) return;
+    if (!map[x.id]) { map[x.id]=x; order.unshift(x.id); }
+    else if (_ts(x) > _ts(map[x.id])) map[x.id]=x;
+  });
+  return order.map(function(id){ return map[id]; });
+}
+async function fbPull() {
+  var res = await fetch(PM_PATH+'.json?_='+Date.now(), {cache:'no-store'});
+  if (!res.ok) throw new Error('http '+res.status);
+  return await res.json();
+}
+function _setDirty(v){ try{ if(v) localStorage.setItem('pm_dirty','1'); else localStorage.removeItem('pm_dirty'); }catch(e){} }
 async function fbSave() {
+  if (_fbBusy) { await new Promise(function(r){ setTimeout(r,600); }); }
+  _fbBusy = true;
   try {
+    var cloud = null;
+    try { cloud = await fbPull(); } catch(e) { setSyncErr(); _setDirty(true); return false; }
+    var del = Object.assign({}, (cloud && cloud.deleted) || {}, getDeleted());
+    parts = mergeById(parts, cloud && cloud.parts, del);
+    jigs  = mergeById(jigs,  cloud && cloud.jigs,  del);
     var savedAt = new Date().toISOString();
     var res = await fetch(PM_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ parts: parts, jigs: jigs, savedAt: savedAt })
+      body: JSON.stringify({ parts: parts, jigs: jigs, deleted: del, savedAt: savedAt })
     });
-    if (res.ok) { _fbLastSavedAt = savedAt; setSyncOk(); return true; }
-    setSyncErr();
-    return false;
-  } catch(e) { setSyncErr(); return false; }
+    if (res.ok) { _fbLastSavedAt = savedAt; saveLocal(); _setDirty(false); setSyncOk(); return true; }
+    _setDirty(true); setSyncErr(); return false;
+  } catch(e) { _setDirty(true); setSyncErr(); return false; }
+  finally { _fbBusy = false; }
 }
 
 async function fbLoad() {
+  if (_fbBusy) return;
   try {
-    var res = await fetch(PM_PATH+'.json');
-    if (!res.ok) { setSyncErr(); return; }
-    var data = await res.json();
-    if (data && Array.isArray(data.parts)) {
-      // ถ้า cloud ไม่ใหม่กว่าที่เราเพิ่งบันทึกขึ้นไปเอง ห้ามทับ local (กันแก้ไขล่าสุดหายเงียบๆ)
-      var cloudSavedAt = data.savedAt || '';
-      if (cloudSavedAt && _fbLastSavedAt && cloudSavedAt <= _fbLastSavedAt) { setSyncOk(); return; }
-      if (cloudSavedAt) _fbLastSavedAt = cloudSavedAt;
-      parts = data.parts;
-      jigs = Array.isArray(data.jigs) ? data.jigs : [];
-      saveLocal();
-      setSyncOk();
-      renderAll();
-    } else {
-      setSyncOk(); // Firebase ยังไม่มีข้อมูล = ปกติ
+    var data = await fbPull();
+    if (!data || !Array.isArray(data.parts)) { setSyncOk(); return; } // Firebase ยังไม่มีข้อมูล = ปกติ
+    var del = Object.assign({}, data.deleted || {}, getDeleted());
+    var before = JSON.stringify([parts, jigs]);
+    parts = mergeById(parts, data.parts, del);
+    jigs  = mergeById(jigs, Array.isArray(data.jigs) ? data.jigs : [], del);
+    saveLocal();
+    if (JSON.stringify([parts, jigs]) !== before) renderAll();
+    // เครื่องนี้มีของใหม่กว่า cloud (เช่นเคยบันทึกตอนออฟไลน์) → ดันขึ้น cloud ให้
+    var cloudStr = JSON.stringify([data.parts, Array.isArray(data.jigs) ? data.jigs : []]);
+    if (localStorage.getItem('pm_dirty') === '1' || JSON.stringify([parts, jigs]) !== cloudStr) {
+      if (await fbSave()) return;
+      return;
     }
+    setSyncOk();
   } catch(e) { setSyncErr(); }
 }
+// อัปเดตอัตโนมัติ: ทุก 30 วินาที และทุกครั้งที่กลับมาเปิดหน้านี้ (ไม่ดึงตอนกำลังเปิดฟอร์มแก้ไข)
+function _pmAutoPull() {
+  if (!currentRole) return;
+  var open = document.querySelector('.modal-bg.open');
+  if (open) return;
+  fbLoad();
+}
+setInterval(_pmAutoPull, 30000);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) _pmAutoPull(); });
 
 // ══════════════════════════════════════
 //  HELPERS
@@ -1030,8 +1065,7 @@ async function savePart() {
 
   // clear form
   ['addPartNo','addName','addCustomer','addWeight','addNote','addDrumWeight','addPlatingType','addAreaDm2'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.value='';
-  });
+    var el = document.getElementById(id); if(el) el.value='';  });
   document.getElementById('addLineMain').value = '';
   document.getElementById('addLineBackup').value = '';
   document.getElementById('addJigRow').style.display = 'none';
@@ -1049,6 +1083,7 @@ async function deletePart(id) {
   if(currentRole==='viewer'){ return; }
   var p = parts.find(function(x){ return x.id===id; });
   if (!p || !confirm('ลบ "'+p.partNo+'" ออกจาก Part Master?')) return;
+  markDeleted(id);
   parts = parts.filter(function(x){ return x.id!==id; });
   saveLocal(); renderAll();
   var synced = await fbSave();
@@ -1173,6 +1208,7 @@ async function deleteJig(id) {
   var usedBy = getPartNosUsingJig(j.jigCode);
   var warnText = usedBy.length ? ('\n\n⚠️ จิ๊กนี้ถูกใช้อยู่กับ P/No: '+usedBy.join(', ')+' — ลบแล้วแถวจิ๊กใน P/No เหล่านั้นจะเหลือรหัสจิ๊กที่หาไม่เจอในทะเบียนแล้ว') : '';
   if (!confirm('ลบจิ๊ก "'+j.jigCode+'" ออกจากทะเบียน?'+warnText)) return;
+  markDeleted(id);
   jigs = jigs.filter(function(x){ return x.id!==id; });
   saveLocal(); renderAll();
   var synced = await fbSave();
@@ -1346,7 +1382,7 @@ function exportCSV() {
   });
   var csv = rows.map(function(r){ return r.map(function(c){ return '"'+(c+'').replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.href = 'data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
   a.download = 'part_master_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
 }
