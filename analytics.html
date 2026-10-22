@@ -276,8 +276,7 @@ if ('caches' in window) {
         <thead><tr><th style="text-align:left;">เดือน</th></tr></thead>
         <tbody><tr><td class="loading">กำลังโหลด...</td></tr></tbody>
       </table></div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">เฉลี่ย 3 เดือน = ต้นทุน 3 เดือนรวม ÷ ยอดขาย 3 เดือนรวม (แสดงเมื่อทั้ง 3 เดือนมียอดขาย) ช่วยลดการแกว่งจากการซื้อเป็นก้อนตามรอบ</div>
-    </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">เฉลี่ย 3 เดือน = ต้นทุน 3 เดือนรวม ÷ ยอดขาย 3 เดือนรวม (แสดงเมื่อทั้ง 3 เดือนมียอดขาย) ช่วยลดการแกว่งจากการซื้อเป็นก้อนตามรอบ</div>    </div>
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -396,6 +395,7 @@ if ('caches' in window) {
           </select>
         </div>
         <div class="chart-wrap-lg"><canvas id="chartCostZn"></canvas></div>
+        <div id="znSummary"></div>
         <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
           สูตร OPS-QA-002: Zn(g) = พื้นที่ dm² × ความหนา µm × 0.0713 · ความหนาอ่านจากสเปคใน Part Master (เช่น MFZn8 = 8 µm) · ราคาซิงค์ 150 บาท/กก · ชิ้นงานที่ยังไม่มี dm² ใช้ค่าประมาณ 20 dm²/กก (ไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ)
         </div>
@@ -554,8 +554,7 @@ if ('caches' in window) {
 if (window.ChartDataLabels) { Chart.register(ChartDataLabels); Chart.defaults.set('plugins.datalabels', {display:false}); }
 
 var FB = {
-  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
-  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
   R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
 var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
@@ -833,8 +832,7 @@ function costSalesByMonth(validInv, basis) {
     var amt = (basis === 'INC') ? Math.max(g, n) : Math.min(g, n);
     var ym = String(inv.date).slice(0,7);
     by[ym] = (by[ym]||0) + amt;
-  });
-  return by;
+  });  return by;
 }
 
 // ยอดซื้อ PO รายเดือนตามฐาน — เกณฑ์เดียวกับหน้า "สรุปยอดซื้อ" ของ po_master (ไม่รวม PO ที่ยกเลิก) ก่อน VAT ใช้ subtotal
@@ -1112,8 +1110,7 @@ function qcBuildPareto(records) {
     var ng = Number(r.qtyNG||0);
     if (ng <= 0) return;
     totalNg += ng;
-    var sum = 0;
-    if (Array.isArray(r.defects)) {
+    var sum = 0;    if (Array.isArray(r.defects)) {
       r.defects.forEach(function(x){
         if (!x || typeof x !== 'object') return;          // แบบเก่า (ชื่ออย่างเดียว ไม่มีจำนวน) ไม่นับที่นี่
         var q = Number(x.qty||0), n = String(x.name||'').trim();
@@ -1391,9 +1388,7 @@ async function renderVolumeSection(lineSel){
   // รวมชั่วโมงทำงานของสายที่เลือกทั้งหมด เป็นเส้นเดียวต่อเดือน
   var hoursTotal = months.map(function(m){
     return lines.reduce(function(sum,ln){ return sum + hoursMonthLine[m][ln]; }, 0);
-  });
-
-  // Chart: Volume by month (แท่ง) + ชั่วโมงทำงานเครื่องจักร (เส้น, แกนขวา)
+  });  // Chart: Volume by month (แท่ง) + ชั่วโมงทำงานเครื่องจักร (เส้น, แกนขวา)
   destroyChart('chartVolDaily');
   _charts['chartVolDaily'] = new Chart(document.getElementById('chartVolDaily'), {
     data:{
@@ -1522,20 +1517,6 @@ async function loadPartMasterMap(){
 // ความหนาซิงค์ (µm) จากสเปค เช่น MFZn8-C → 8 ; ไม่มีเลขให้ใช้ค่ามาตรฐาน
 function znThicknessUm(pm){ var m = pm && /Zn\s*(\d+(?:\.\d+)?)/i.exec(pm.platingType||''); return m ? parseFloat(m[1]) : ZN_THICKNESS_UM; }
 
-var _pmCache = null;
-function _normKey(x){ return String(x||'').toUpperCase().replace(/[\s\-]/g,''); }
-async function loadPartMasterMap(){
-  if (_pmCache) return _pmCache;
-  var map = {};
-  try {
-    var r = await fetch(FB.B1 + '/part-master.json');
-    if (r.ok) { var d = await r.json(); (d && Array.isArray(d.parts) ? d.parts : []).forEach(function(p){ if (p && p.partNo) map[_normKey(p.partNo)] = p; }); }
-  } catch(e) { console.error('[analytics] part-master', e); }
-  _pmCache = map; return map;
-}
-// ความหนาซิงค์ (µm) จากสเปค เช่น MFZn8-C → 8 ; ไม่มีเลขให้ใช้ค่ามาตรฐาน
-function znThicknessUm(pm){ var m = pm && /Zn\s*(\d+(?:\.\d+)?)/i.exec(pm.platingType||''); return m ? parseFloat(m[1]) : ZN_THICKNESS_UM; }
-
 async function renderCostSection(lineSel){
   lineSel = lineSel || (document.getElementById('costLineFilter')||{}).value || 'ALL';
   var months = lastNMonths(12);
@@ -1611,119 +1592,6 @@ async function renderCostSection(lineSel){
     '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted);text-align:right"><th style="text-align:left">ไลน์</th><th>Zn เดือนนี้ (กก)</th><th>Zn 12 เดือน (กก)</th><th>ค่าซิงค์ 12 เดือน (บาท)</th><th>คำนวณจาก dm² จริง</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
     (missing.length ? '<div style="margin-top:6px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master (ใช้ค่าประมาณ 20 dm²/กก): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …อีก '+(Object.keys(noArea).length-8)+' รายการ':'')+'</div>' : '<div style="margin-top:6px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
 }
-async function renderCostSectionOld(lineSel){
-  lineSel = lineSel || (document.getElementById('costLineFilter')||{}).value || 'ALL';
-  var months = lastNMonths(12);
-  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
-  var allLines = ['B1','B2','R1'];
-  var lines = lineSel === 'ALL' ? allLines : [lineSel];
-  var pmMap = await loadPartMasterMap();
-
-  // สูตร OPS-QA-002: Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713   (100 cm²/dm² x 1e-4 cm/µm x 7.13 g/cm³)
-  var znG = {}, kgReal = {}, kgEst = {}, noArea = {};
-  months.forEach(function(m){ znG[m]={B1:0,B2:0,R1:0}; });
-  lines.forEach(function(l){ kgReal[l]=0; kgEst[l]=0; });
-
-  for (var i=0; i<lines.length; i++){
-    var line = lines[i];
-    var data = await fetchLineData(line);
-    (Array.isArray(data.dayRecords) ? data.dayRecords : []).forEach(function(day){
-      if (!day || !day.date) return;
-      var ym = String(day.date).slice(0,7);
-      if (!monthSet[ym]) return;
-      var rows = Array.isArray(day.rows) ? day.rows : [];
-      var rowKgSum = 0;
-      rows.forEach(function(row){
-        var kg = Number(row.kg||0); rowKgSum += kg;
-        if (kg <= 0 && !Number(row.pcs||0)) return;
-        var pm = pmMap[_normKey(row.partName)];
-        var wG = pm ? Number(pm.weightPerPc||0) : 0;
-        var pcs = Number(row.pcs||0);
-        if (!pcs && kg > 0 && wG > 0) pcs = (kg*1000)/wG;
-        if (!kg && pcs > 0 && wG > 0) kg = pcs*wG/1000;
-        if (pm && Number(pm.areaDm2) > 0 && pcs > 0) {
-          znG[ym][line] += pcs * Number(pm.areaDm2) * znThicknessUm(pm) * 0.0713;
-          kgReal[line] += kg;
-        } else {
-          znG[ym][line] += kg * ZN_G_PER_KG_PRODUCT;   // ยังไม่มี dm² ใน Part Master → ประมาณ 20 dm²/กก
-          kgEst[line] += kg;
-          var k = String(row.partName||'').trim(); if (k) noArea[k] = (noArea[k]||0) + kg;
-        }
-      });
-      // วันที่ไม่มี rows แต่มี totalKg → ประมาณ
-      if (!rows.length && Number(day.totalKg||0) > 0) { znG[ym][line] += Number(day.totalKg) * ZN_G_PER_KG_PRODUCT; kgEst[line] += Number(day.totalKg); }
-    });
-  }
-
-  var LCOL = {B1:'#3b82f6', B2:'#8b5cf6', R1:'#f97316'};
-  destroyChart('chartCostZn');
-  _charts['chartCostZn'] = new Chart(document.getElementById('chartCostZn'), {
-    type:'bar',
-    data:{
-      labels: months.map(monthLabelTH),
-      datasets: lines.map(function(l){
-        return {label:l, backgroundColor:LCOL[l], data:months.map(function(m){ return Math.round(znG[m][l]/1000*ZN_PRICE_PER_KG); })};
-      })
-    },
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{font:{size:11}}},
-        tooltip:{callbacks:{label:function(c){ var m=months[c.dataIndex]; return c.dataset.label+': '+fmt(c.parsed.y,0)+' บาท · Zn '+fmt(znG[m][c.dataset.label]/1000,2)+' กก'; }}},
-        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},color:'#fff',font:{size:8},formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
-      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท',font:{size:10}}}}
-    }
-  });
-
-  // สรุปการใช้ซิงค์ต่อไลน์ (12 เดือนล่าสุด) + สัดส่วนที่คำนวณจาก dm² จริง
-  var rowsHtml = lines.map(function(l){
-    var tot = months.reduce(function(s,m){ return s + znG[m][l]; }, 0);
-    var cur = znG[months[months.length-1]][l];
-    var kgT = kgReal[l] + kgEst[l], cov = kgT > 0 ? kgReal[l]/kgT*100 : 0;
-    return '<tr><td><b style="color:'+LCOL[l]+'">'+l+'</b></td><td style="text-align:right">'+fmt(cur/1000,2)+'</td><td style="text-align:right">'+fmt(tot/1000,2)+'</td><td style="text-align:right">'+fmt(tot/1000*ZN_PRICE_PER_KG,0)+'</td><td style="text-align:right">'+(kgT>0?fmt(cov,0)+'%':'—')+'</td></tr>';
-  }).join('');
-  var missing = Object.keys(noArea).sort(function(a,b){return noArea[b]-noArea[a];}).slice(0,8);
-  var box = document.getElementById('znSummary');
-  if (box) box.innerHTML =
-    '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted);text-align:right"><th style="text-align:left">ไลน์</th><th>Zn เดือนนี้ (กก)</th><th>Zn 12 เดือน (กก)</th><th>ค่าซิงค์ 12 เดือน (บาท)</th><th>คำนวณจาก dm² จริง</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
-    (missing.length ? '<div style="margin-top:6px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master (ใช้ค่าประมาณ 20 dm²/กก): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …อีก '+(Object.keys(noArea).length-8)+' รายการ':'')+'</div>' : '<div style="margin-top:6px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
-}
-async function renderCostSectionOld(lineSel){
-  lineSel = lineSel || (document.getElementById('costLineFilter')||{}).value || 'ALL';
-  var months = lastNMonths(12);
-  var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
-  var lines = lineSel === 'ALL' ? ['B1','B2','R1'] : [lineSel];
-
-  var znCostByMonth = {}; months.forEach(function(m){ znCostByMonth[m] = 0; });
-
-  for (var i=0; i<lines.length; i++){
-    var line = lines[i];
-    var data = await fetchLineData(line); // cache เดียวกับ section ปริมาณงาน ไม่ fetch ซ้ำ
-    var dayRecords = Array.isArray(data.dayRecords) ? data.dayRecords : [];
-    dayRecords.forEach(function(day){
-      if (!day || !day.date) return;
-      var ym = day.date.slice(0,7);
-      if (!monthSet[ym]) return;
-      var totalKg = Number(day.totalKg||0);
-      znCostByMonth[ym] += totalKg * ZN_BAHT_PER_KG_PRODUCT;
-    });
-  }
-
-  destroyChart('chartCostZn');
-  _charts['chartCostZn'] = new Chart(document.getElementById('chartCostZn'), {
-    type:'bar',
-    data:{
-      labels: months.map(monthLabelTH),
-      datasets:[
-        {label:'ต้นทุนซิงค์ (Zn)', data:months.map(function(m){return Math.round(znCostByMonth[m]);}), backgroundColor:'#0ea5e9'}
-        // TODO: เพิ่ม dataset ค่าเคมีสี / ค่าแรง / ค่าไฟ ที่นี่ในอนาคต (stacked ต่อจากนี้)
-      ]
-    },
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{font:{size:11}}},
-        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},anchor:'end',align:'top',rotation:270,font:{size:8},color:'#374151',formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
-      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท',font:{size:10}}}}
-    }
-  });
-}
 
 // ══════════════════════════════════════════════
 //  SECTION 2d: ต้นทุนแรงงาน (Labor Cost) — ใช้ "เอนจิน" คำนวณจริงจาก apk_hr.html
@@ -1797,9 +1665,7 @@ async function renderLaborCostSection(){
     + 'return JSON.stringify(out);'
     + '})()';
   var resultRaw = hrEval(hrWin, evalScript);
-  var result = resultRaw ? JSON.parse(resultRaw) : {};
-
-  var rpByMonth = {}, opByMonth = {}, dedByMonth = {}, netByMonth = {};
+  var result = resultRaw ? JSON.parse(resultRaw) : {};  var rpByMonth = {}, opByMonth = {}, dedByMonth = {}, netByMonth = {};
   months.forEach(function(ym, idx){
     var r = result[idx] || {rp:0,op:0,ded:0,net:0};
     rpByMonth[ym]=r.rp; opByMonth[ym]=r.op; dedByMonth[ym]=r.ded; netByMonth[ym]=r.net;
@@ -2076,8 +1942,7 @@ function renderTime(records, dateFrom, dateTo) {
     type:'bar',
     data:{
       labels:Array.from({length:24},function(_,i){return String(i).padStart(2,'0')+':00';}),
-      datasets:[{label:'จำนวนรอบ',data:hourBuckets,backgroundColor:hourBuckets.map(function(v){var mx=Math.max.apply(null,hourBuckets)||1;var a=0.2+0.75*(v/mx);return 'rgba(59,130,246,'+a+')';})}]
-    },
+      datasets:[{label:'จำนวนรอบ',data:hourBuckets,backgroundColor:hourBuckets.map(function(v){var mx=Math.max.apply(null,hourBuckets)||1;var a=0.2+0.75*(v/mx);return 'rgba(59,130,246,'+a+')';})}]    },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}
   });
 
@@ -2340,7 +2205,7 @@ function exportExcel() {
       rows.push([r.date, r.line, r.totalKg.toFixed(1), r.newKg.toFixed(1), r.reworkKg.toFixed(1), r.ratio.toFixed(2)+'%', r.barrels, r.ah.toFixed(1), ahKg]);
     });
     var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-    var bom = '\uFEFF';
+    var bom = '﻿';
     var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
