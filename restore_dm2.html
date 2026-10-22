@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>กู้ค่า dm² — Part Master</title>
+<style>
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f1f5f9;color:#0f172a;margin:0;padding:16px;font-size:14px;}
+.box{max-width:760px;margin:0 auto;background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.08);}
+h1{font-size:18px;margin:0 0 6px;} .sub{color:#475569;font-size:12px;margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0;} th{background:#0f2044;color:#fff;padding:6px;text-align:left;}
+td{padding:6px;border-bottom:1px solid #e2e8f0;} .ok{color:#16a34a;font-weight:700;} .skip{color:#94a3b8;} .miss{color:#dc2626;}
+button{padding:11px 18px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+button:disabled{background:#94a3b8;} #msg{margin-top:10px;font-weight:700;}
+</style></head><body>
+<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;bottom:14px;left:14px;z-index:99999;width:42px;height:42px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.25);">🏠</a>
+<div class="box">
+<h1>กู้ค่าพื้นที่ผิว (dm²) ที่ถูกเขียนทับ</h1>
+<div class="sub">ค่าด้านล่างอ่านจากไฟล์สำรองของเซิร์ฟเวอร์รอบ 10:00 น. วันที่ 22 ต.ค. กดปุ่มเพื่อใส่กลับ Part Master เฉพาะช่อง dm² ที่ตอนนี้ว่างหรือเป็น 0 (ไม่ทับค่าที่คีใหม่ไปแล้ว และไม่แตะข้อมูลอื่น)</div>
+<table><thead><tr><th>P/No</th><th>dm² ที่กู้</th><th>ตอนนี้ในระบบ</th><th>ผล</th></tr></thead><tbody id="rows"><tr><td colspan="4">กำลังโหลดข้อมูลจากเซิร์ฟเวอร์...</td></tr></tbody></table>
+<button id="go" disabled onclick="apply()">กู้ค่า dm² กลับ Part Master</button>
+<div id="msg"></div>
+</div>
+<script src="fb-auth.js"></script>
+<script>
+var PM_PATH='https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/part-master';
+var RESTORE=[{"partNo": "VS1002", "areaDm2": 0.597, "platingType": ""}, {"partNo": "FS3255-10", "areaDm2": 0.259, "platingType": "MFZn 5-B (White Cr3+)"}, {"partNo": "SU02C126H25", "areaDm2": 1.2, "platingType": ""}, {"partNo": "SU02C126H06", "areaDm2": 2.61, "platingType": ""}, {"partNo": "FS3254-10", "areaDm2": 0.259, "platingType": "MFZn5-B (White Cr3+)"}, {"partNo": "12938000003034@MD", "areaDm2": 0.139, "platingType": "MFZn8-B (White Cr3+)"}, {"partNo": "SU02C126H17", "areaDm2": 2.97, "platingType": "MFZn5-B (White Cr3+)"}, {"partNo": "RSA941D001D", "areaDm2": 1.16, "platingType": "MFZn5-B (White Cr3+)"}, {"partNo": "H078271700", "areaDm2": 0.524, "platingType": ""}, {"partNo": "MLZ-43506-2000-D", "areaDm2": 0.0096, "platingType": ""}, {"partNo": "SU02C126H30", "areaDm2": 3.88, "platingType": ""}, {"partNo": "SU02C126H16", "areaDm2": 3.74, "platingType": "MFZn5-B (White Cr3+)"}, {"partNo": "KR5N07612012E", "areaDm2": 1.675, "platingType": "MFZn8-B"}, {"partNo": "KR5N07607512E", "areaDm2": 1.375, "platingType": "MFZn8-B"}, {"partNo": "KL3C07003002C", "areaDm2": 0.76, "platingType": "MFZn8-C"}, {"partNo": "SU02C126H28", "areaDm2": 3.49, "platingType": "MFZn5-B (White Cr3+)"}, {"partNo": "SU02C126H18", "areaDm2": 2.55, "platingType": ""}, {"partNo": "RSA941D001B", "areaDm2": 1.84, "platingType": ""}, {"partNo": "SU02C126H22", "areaDm2": 3.48, "platingType": ""}, {"partNo": "SU02C126H21", "areaDm2": 3.69, "platingType": ""}, {"partNo": "SU02C126H14", "areaDm2": 0.875, "platingType": "MFZn5-B (White Cr3+)"}];
+var cloud=null;
+function norm(s){return String(s||'').toUpperCase().replace(/[\s\-]/g,'');}
+function arr(x){ if(Array.isArray(x)) return x.filter(Boolean); if(x&&typeof x==='object') return Object.keys(x).map(function(k){return x[k];}).filter(Boolean); return []; }
+async function load(){
+  try{
+    var r=await fetch(PM_PATH+'.json?_='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error('http '+r.status);
+    cloud=await r.json(); var parts=arr(cloud&&cloud.parts); var map={}; parts.forEach(function(p){map[norm(p.partNo)]=p;});
+    var n=0;
+    document.getElementById('rows').innerHTML=RESTORE.map(function(x){
+      var p=map[norm(x.partNo)]; var cur=p?(Number(p.areaDm2)||0):null;
+      var st=!p?'<span class="miss">ไม่พบ P/No นี้</span>':(cur>0?'<span class="skip">มีค่าแล้ว ข้าม</span>':'<span class="ok">จะใส่กลับ</span>'); if(p&&!(cur>0)) n++;
+      return '<tr><td>'+x.partNo+'</td><td>'+x.areaDm2+'</td><td>'+(p?(cur>0?cur:'ว่าง'):'-')+'</td><td>'+st+'</td></tr>';
+    }).join('');
+    document.getElementById('go').disabled=(n===0);
+    document.getElementById('msg').textContent=n? 'พร้อมกู้ '+n+' รายการ' : 'ไม่มีรายการที่ต้องกู้';
+  }catch(e){ document.getElementById('rows').innerHTML='<tr><td colspan="4" class="miss">โหลดไม่สำเร็จ: '+e.message+'</td></tr>'; }
+}
+async function apply(){
+  var btn=document.getElementById('go'); btn.disabled=true; var msg=document.getElementById('msg');
+  try{
+    var r=await fetch(PM_PATH+'.json?_='+Date.now(),{cache:'no-store'}); cloud=await r.json();
+    var parts=arr(cloud.parts), jigs=arr(cloud.jigs), n=0, now=new Date().toISOString();
+    var map={}; parts.forEach(function(p){map[norm(p.partNo)]=p;});
+    RESTORE.forEach(function(x){ var p=map[norm(x.partNo)]; if(!p||Number(p.areaDm2)>0) return;
+      p.areaDm2=x.areaDm2; if(!p.platingType&&x.platingType) p.platingType=x.platingType; p.updatedAt=now; n++; });
+    var body={parts:parts,jigs:jigs,savedAt:now}; if(cloud.deleted) body.deleted=cloud.deleted;
+    var w=await fetch(PM_PATH+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!w.ok) throw new Error('บันทึกไม่สำเร็จ http '+w.status);
+    msg.style.color='#16a34a'; msg.textContent='กู้สำเร็จ '+n+' รายการ — เปิด Part Master แล้วรีเฟรชเพื่อดูค่า';
+    load();
+  }catch(e){ msg.style.color='#dc2626'; msg.textContent='ผิดพลาด: '+e.message; btn.disabled=false; }
+}
+load();
+</script></body></html>
