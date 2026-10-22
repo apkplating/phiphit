@@ -1515,6 +1515,10 @@ async function loadPartMasterMap(){
   _pmCache = map; return map;
 }
 // ความหนาซิงค์ (µm) จากสเปค เช่น MFZn8-C → 8 ; ไม่มีเลขให้ใช้ค่ามาตรฐาน
+  function pmFind(map, name){
+  var s = String(name||'').trim();
+  return map[_normKey(s)] || map[_normKey(s.split(/\s+/)[0])] || null;
+}
 function znThicknessUm(pm){ var m = pm && /Zn\s*(\d+(?:\.\d+)?)/i.exec(pm.platingType||''); return m ? parseFloat(m[1]) : ZN_THICKNESS_UM; }
 
 async function renderCostSection(lineSel){
@@ -1542,7 +1546,7 @@ async function renderCostSection(lineSel){
       rows.forEach(function(row){
         var kg = Number(row.kg||0); rowKgSum += kg;
         if (kg <= 0 && !Number(row.pcs||0)) return;
-        var pm = pmMap[_normKey(row.partName)];
+        var pm = pmFind(pmMap, row.partName);
         var wG = pm ? Number(pm.weightPerPc||0) : 0;
         var pcs = Number(row.pcs||0);
         if (!pcs && kg > 0 && wG > 0) pcs = (kg*1000)/wG;
