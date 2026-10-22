@@ -120,3 +120,45 @@
     health: function () { return origFetch(resolveBase() + '/__health', { cache: 'no-store' }).then(function (r) { return r.json(); }); }
   };
 })(typeof window !== 'undefined' ? window : this);
+
+/* อัปเดตหน้าเว็บอัตโนมัติ — เมื่อเลขใน version.json เปลี่ยน หน้าที่เปิดค้างจะโหลดตัวใหม่เอง (เฉพาะตอนว่าง) */
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+  var LS_KEY = 'apk_seen_version';
+  var lastAct = Date.now(), typed = false, busy = false;
+  function act() { lastAct = Date.now(); }
+  ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(function (e) { document.addEventListener(e, act, { passive: true, capture: true }); });
+  document.addEventListener('input', function () { typed = true; act(); }, true);
+
+  function isSafe() {
+    var idleMs = Date.now() - lastAct;
+    if (idleMs < (typed ? 15 * 60000 : 60000)) return false;
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+    if (document.querySelector('.modal-bg.open, .modal.open, .modal.show, [role=dialog]:not([hidden])')) return false;
+    return true;
+  }
+  function check() {
+    if (busy) return;
+    busy = true;
+    fetch('version.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.version) return;
+        var seen = null;
+        try { seen = localStorage.getItem(LS_KEY); } catch (e) {}
+        if (seen === null) { try { localStorage.setItem(LS_KEY, d.version); } catch (e) {} return; }
+        if (seen === d.version) return;
+        if (!isSafe()) return;
+        try { localStorage.setItem(LS_KEY, d.version); } catch (e) {}
+        var u = new URL(location.href); u.searchParams.set('v', Date.now());
+        location.replace(u.toString());
+      })
+      .catch(function () {})
+      .then(function () { busy = false; });
+  }
+  setInterval(check, 60000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(check, 1500); });
+  if (document.readyState === 'complete') setTimeout(check, 5000); else window.addEventListener('load', function () { setTimeout(check, 5000); });
+})();
