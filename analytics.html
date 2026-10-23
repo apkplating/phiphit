@@ -276,7 +276,8 @@ if ('caches' in window) {
         <thead><tr><th style="text-align:left;">เดือน</th></tr></thead>
         <tbody><tr><td class="loading">กำลังโหลด...</td></tr></tbody>
       </table></div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">เฉลี่ย 3 เดือน = ต้นทุน 3 เดือนรวม ÷ ยอดขาย 3 เดือนรวม (แสดงเมื่อทั้ง 3 เดือนมียอดขาย) ช่วยลดการแกว่งจากการซื้อเป็นก้อนตามรอบ</div>    </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">เฉลี่ย 3 เดือน = ต้นทุน 3 เดือนรวม ÷ ยอดขาย 3 เดือนรวม (แสดงเมื่อทั้ง 3 เดือนมียอดขาย) ช่วยลดการแกว่งจากการซื้อเป็นก้อนตามรอบ</div>
+    </div>
 
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -554,7 +555,8 @@ if ('caches' in window) {
 if (window.ChartDataLabels) { Chart.register(ChartDataLabels); Chart.defaults.set('plugins.datalabels', {display:false}); }
 
 var FB = {
-  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B1: 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app',
+  B2: 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app',
   R1: 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app',
 };
 var DAY_PATHS = { B1:'/plating-b1.json', B2:'/plating-b2.json', R1:'/plating-r1.json' };
@@ -832,7 +834,8 @@ function costSalesByMonth(validInv, basis) {
     var amt = (basis === 'INC') ? Math.max(g, n) : Math.min(g, n);
     var ym = String(inv.date).slice(0,7);
     by[ym] = (by[ym]||0) + amt;
-  });  return by;
+  });
+  return by;
 }
 
 // ยอดซื้อ PO รายเดือนตามฐาน — เกณฑ์เดียวกับหน้า "สรุปยอดซื้อ" ของ po_master (ไม่รวม PO ที่ยกเลิก) ก่อน VAT ใช้ subtotal
@@ -1110,7 +1113,8 @@ function qcBuildPareto(records) {
     var ng = Number(r.qtyNG||0);
     if (ng <= 0) return;
     totalNg += ng;
-    var sum = 0;    if (Array.isArray(r.defects)) {
+    var sum = 0;
+    if (Array.isArray(r.defects)) {
       r.defects.forEach(function(x){
         if (!x || typeof x !== 'object') return;          // แบบเก่า (ชื่ออย่างเดียว ไม่มีจำนวน) ไม่นับที่นี่
         var q = Number(x.qty||0), n = String(x.name||'').trim();
@@ -1388,7 +1392,9 @@ async function renderVolumeSection(lineSel){
   // รวมชั่วโมงทำงานของสายที่เลือกทั้งหมด เป็นเส้นเดียวต่อเดือน
   var hoursTotal = months.map(function(m){
     return lines.reduce(function(sum,ln){ return sum + hoursMonthLine[m][ln]; }, 0);
-  });  // Chart: Volume by month (แท่ง) + ชั่วโมงทำงานเครื่องจักร (เส้น, แกนขวา)
+  });
+
+  // Chart: Volume by month (แท่ง) + ชั่วโมงทำงานเครื่องจักร (เส้น, แกนขวา)
   destroyChart('chartVolDaily');
   _charts['chartVolDaily'] = new Chart(document.getElementById('chartVolDaily'), {
     data:{
@@ -1515,7 +1521,7 @@ async function loadPartMasterMap(){
   _pmCache = map; return map;
 }
 // ความหนาซิงค์ (µm) จากสเปค เช่น MFZn8-C → 8 ; ไม่มีเลขให้ใช้ค่ามาตรฐาน
-  function pmFind(map, name){
+function pmFind(map, name){
   var s = String(name||'').trim();
   return map[_normKey(s)] || map[_normKey(s.split(/\s+/)[0])] || null;
 }
@@ -1669,7 +1675,9 @@ async function renderLaborCostSection(){
     + 'return JSON.stringify(out);'
     + '})()';
   var resultRaw = hrEval(hrWin, evalScript);
-  var result = resultRaw ? JSON.parse(resultRaw) : {};  var rpByMonth = {}, opByMonth = {}, dedByMonth = {}, netByMonth = {};
+  var result = resultRaw ? JSON.parse(resultRaw) : {};
+
+  var rpByMonth = {}, opByMonth = {}, dedByMonth = {}, netByMonth = {};
   months.forEach(function(ym, idx){
     var r = result[idx] || {rp:0,op:0,ded:0,net:0};
     rpByMonth[ym]=r.rp; opByMonth[ym]=r.op; dedByMonth[ym]=r.ded; netByMonth[ym]=r.net;
@@ -1946,7 +1954,8 @@ function renderTime(records, dateFrom, dateTo) {
     type:'bar',
     data:{
       labels:Array.from({length:24},function(_,i){return String(i).padStart(2,'0')+':00';}),
-      datasets:[{label:'จำนวนรอบ',data:hourBuckets,backgroundColor:hourBuckets.map(function(v){var mx=Math.max.apply(null,hourBuckets)||1;var a=0.2+0.75*(v/mx);return 'rgba(59,130,246,'+a+')';})}]    },
+      datasets:[{label:'จำนวนรอบ',data:hourBuckets,backgroundColor:hourBuckets.map(function(v){var mx=Math.max.apply(null,hourBuckets)||1;var a=0.2+0.75*(v/mx);return 'rgba(59,130,246,'+a+')';})}]
+    },
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}
   });
 
@@ -2209,7 +2218,7 @@ function exportExcel() {
       rows.push([r.date, r.line, r.totalKg.toFixed(1), r.newKg.toFixed(1), r.reworkKg.toFixed(1), r.ratio.toFixed(2)+'%', r.barrels, r.ah.toFixed(1), ahKg]);
     });
     var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-    var bom = '﻿';
+    var bom = '\uFEFF';
     var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
