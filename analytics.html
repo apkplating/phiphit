@@ -398,7 +398,7 @@ if ('caches' in window) {
         <div class="chart-wrap-lg"><canvas id="chartCostZn"></canvas></div>
         <div id="znSummary"></div>
         <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
-          สูตร OPS-QA-002: Zn(g) = พื้นที่ dm² × ความหนา µm × 0.0713 · ความหนาอ่านจากสเปคใน Part Master (เช่น MFZn8 = 8 µm) · ราคาซิงค์ 150 บาท/กก · ชิ้นงานที่ยังไม่มี dm² ใช้ค่าประมาณ 20 dm²/กก (ไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ)
+          สูตร OPS-QA-002: Zn(g) = พื้นที่ dm² × ความหนา µm × 0.0713 · ความหนาอ่านจากสเปคใน Part Master (เช่น MFZn8 = 8 µm) · ราคาซิงค์ 150 บาท/กก · คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ) · ไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ
         </div>
       </div>
       <div class="card">
@@ -1535,10 +1535,10 @@ async function renderCostSection(lineSel){
   var lines = lineSel === 'ALL' ? allLines : [lineSel];
   var pmMap = await loadPartMasterMap();
 
-  // สูตร OPS-QA-002: Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713   (100 cm²/dm² x 1e-4 cm/µm x 7.13 g/cm³)
-  var znG = {}, kgReal = {}, kgEst = {}, noArea = {};
-  months.forEach(function(m){ znG[m]={B1:0,B2:0,R1:0}; });
-  lines.forEach(function(l){ kgReal[l]=0; kgEst[l]=0; });
+  // สูตร OPS-QA-002: Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713 — คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ)
+  var znG = {}, dm2 = {}, kgReal = {}, kgMiss = {}, noArea = {};
+  months.forEach(function(m){ znG[m]={B1:0,B2:0,R1:0}; dm2[m]={B1:0,B2:0,R1:0}; });
+  allLines.forEach(function(l){ kgReal[l]=0; kgMiss[l]=0; });
 
   for (var i=0; i<lines.length; i++){
     var line = lines[i];
@@ -1548,9 +1548,8 @@ async function renderCostSection(lineSel){
       var ym = String(day.date).slice(0,7);
       if (!monthSet[ym]) return;
       var rows = Array.isArray(day.rows) ? day.rows : [];
-      var rowKgSum = 0;
       rows.forEach(function(row){
-        var kg = Number(row.kg||0); rowKgSum += kg;
+        var kg = Number(row.kg||0);
         if (kg <= 0 && !Number(row.pcs||0)) return;
         var pm = pmFind(pmMap, row.partName);
         var wG = pm ? Number(pm.weightPerPc||0) : 0;
@@ -1558,16 +1557,16 @@ async function renderCostSection(lineSel){
         if (!pcs && kg > 0 && wG > 0) pcs = (kg*1000)/wG;
         if (!kg && pcs > 0 && wG > 0) kg = pcs*wG/1000;
         if (pm && Number(pm.areaDm2) > 0 && pcs > 0) {
-          znG[ym][line] += pcs * Number(pm.areaDm2) * znThicknessUm(pm) * 0.0713;
+          var a = pcs * Number(pm.areaDm2);
+          dm2[ym][line] += a;
+          znG[ym][line] += a * znThicknessUm(pm) * 0.0713;
           kgReal[line] += kg;
         } else {
-          znG[ym][line] += kg * ZN_G_PER_KG_PRODUCT;   // ยังไม่มี dm² ใน Part Master → ประมาณ 20 dm²/กก
-          kgEst[line] += kg;
+          kgMiss[line] += kg;
           var k = String(row.partName||'').trim(); if (k) noArea[k] = (noArea[k]||0) + kg;
         }
       });
-      // วันที่ไม่มี rows แต่มี totalKg → ประมาณ
-      if (!rows.length && Number(day.totalKg||0) > 0) { znG[ym][line] += Number(day.totalKg) * ZN_G_PER_KG_PRODUCT; kgEst[line] += Number(day.totalKg); }
+      if (!rows.length && Number(day.totalKg||0) > 0) kgMiss[line] += Number(day.totalKg);
     });
   }
 
@@ -1583,24 +1582,40 @@ async function renderCostSection(lineSel){
     },
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top',labels:{font:{size:11}}},
-        tooltip:{callbacks:{label:function(c){ var m=months[c.dataIndex]; return c.dataset.label+': '+fmt(c.parsed.y,0)+' บาท · Zn '+fmt(znG[m][c.dataset.label]/1000,2)+' กก'; }}},
+        tooltip:{callbacks:{label:function(c){ var m=months[c.dataIndex]; return c.dataset.label+': '+fmt(c.parsed.y,0)+' บาท · Zn '+fmt(znG[m][c.dataset.label]/1000,2)+' กก · '+fmt(dm2[m][c.dataset.label],0)+' dm²'; }}},
         datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},color:'#fff',font:{size:8},formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
-      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท',font:{size:10}}}}
+      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท (เฉพาะชิ้นงานที่มี dm²)',font:{size:10}}}}
     }
   });
 
-  // สรุปการใช้ซิงค์ต่อไลน์ (12 เดือนล่าสุด) + สัดส่วนที่คำนวณจาก dm² จริง
-  var rowsHtml = lines.map(function(l){
-    var tot = months.reduce(function(s,m){ return s + znG[m][l]; }, 0);
-    var cur = znG[months[months.length-1]][l];
-    var kgT = kgReal[l] + kgEst[l], cov = kgT > 0 ? kgReal[l]/kgT*100 : 0;
-    return '<tr><td><b style="color:'+LCOL[l]+'">'+l+'</b></td><td style="text-align:right">'+fmt(cur/1000,2)+'</td><td style="text-align:right">'+fmt(tot/1000,2)+'</td><td style="text-align:right">'+fmt(tot/1000*ZN_PRICE_PER_KG,0)+'</td><td style="text-align:right">'+(kgT>0?fmt(cov,0)+'%':'—')+'</td></tr>';
+  // ตารางเดือน x ไลน์ : dm² และ Zn (กก) — เดือนล่าสุดอยู่บน
+  var th = 'padding:4px 6px;text-align:right;white-space:nowrap';
+  var head1 = '<th style="'+th+';text-align:left" rowspan="2">เดือน</th>' + lines.map(function(l){ return '<th style="'+th+';text-align:center;color:'+LCOL[l]+'" colspan="2">'+l+'</th>'; }).join('') + '<th style="'+th+'" rowspan="2">รวม Zn (กก)</th>';
+  var head2 = lines.map(function(){ return '<th style="'+th+'">dm²</th><th style="'+th+'">Zn (กก)</th>'; }).join('');
+  var tot = {}; lines.forEach(function(l){ tot[l]={d:0,z:0}; });
+  var body = months.slice().reverse().map(function(m){
+    var rowZ = 0;
+    var cells = lines.map(function(l){
+      var d = dm2[m][l], z = znG[m][l]/1000; tot[l].d += d; tot[l].z += z; rowZ += z;
+      return '<td style="'+th+'">'+(d>0?fmt(d,0):'–')+'</td><td style="'+th+'">'+(z>0?fmt(z,2):'–')+'</td>';
+    }).join('');
+    return '<tr style="border-top:1px solid var(--border,#e5e7eb)"><td style="'+th+';text-align:left">'+monthLabelTH(m)+'</td>'+cells+'<td style="'+th+';font-weight:700">'+(rowZ>0?fmt(rowZ,2):'–')+'</td></tr>';
   }).join('');
+  var grand = 0;
+  var totCells = lines.map(function(l){ grand += tot[l].z; return '<td style="'+th+'">'+fmt(tot[l].d,0)+'</td><td style="'+th+'">'+fmt(tot[l].z,2)+'</td>'; }).join('');
+  body += '<tr style="border-top:2px solid #94a3b8;font-weight:800;background:#f1f5f9"><td style="'+th+';text-align:left">รวม 12 เดือน</td>'+totCells+'<td style="'+th+'">'+fmt(grand,2)+'</td></tr>'
+        + '<tr style="font-weight:700"><td style="'+th+';text-align:left">ค่าซิงค์ (บาท)</td>' + lines.map(function(l){ return '<td style="'+th+'" colspan="2">'+fmt(tot[l].z*ZN_PRICE_PER_KG,0)+'</td>'; }).join('') + '<td style="'+th+'">'+fmt(grand*ZN_PRICE_PER_KG,0)+'</td></tr>';
+
+  var covHtml = lines.map(function(l){
+    var kgT = kgReal[l] + kgMiss[l], cov = kgT > 0 ? kgReal[l]/kgT*100 : 0;
+    return '<b style="color:'+LCOL[l]+'">'+l+'</b> '+(kgT>0?fmt(cov,0)+'%':'—');
+  }).join(' · ');
   var missing = Object.keys(noArea).sort(function(a,b){return noArea[b]-noArea[a];}).slice(0,8);
   var box = document.getElementById('znSummary');
   if (box) box.innerHTML =
-    '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted);text-align:right"><th style="text-align:left">ไลน์</th><th>Zn เดือนนี้ (กก)</th><th>Zn 12 เดือน (กก)</th><th>ค่าซิงค์ 12 เดือน (บาท)</th><th>คำนวณจาก dm² จริง</th></tr></thead><tbody>'+rowsHtml+'</tbody></table>'+
-    (missing.length ? '<div style="margin-top:6px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master (ใช้ค่าประมาณ 20 dm²/กก): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …อีก '+(Object.keys(noArea).length-8)+' รายการ':'')+'</div>' : '<div style="margin-top:6px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
+    '<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted)">'+head1+'</tr><tr style="color:var(--text-muted)">'+head2+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div style="margin-top:6px;font-size:10.5px;color:var(--text-muted)">ความครอบคลุม (น้ำหนักงานที่มี dm² ÷ น้ำหนักงานทั้งหมด): '+covHtml+' — ตัวเลขข้างบนนับเฉพาะชิ้นงานที่มี dm² จึงต่ำกว่าการใช้จริงจนกว่าจะใส่ครบ</div>'+
+    (missing.length ? '<div style="margin-top:4px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master ('+Object.keys(noArea).length+' รายการ เรียงตามน้ำหนักงาน): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …':'')+'</div>' : '<div style="margin-top:4px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
 }
 
 // ══════════════════════════════════════════════
