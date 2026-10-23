@@ -383,22 +383,28 @@ if ('caches' in window) {
 
     <!-- ── Section 2c: ต้นทุนการผลิต ── -->
     <div class="section-sep"></div>
-    <div class="section-title">💰 ต้นทุนการผลิต (Production Cost) · ประมาณการ</div>
+    <div class="section-title">💰 การใช้ซิงค์ (Zinc Usage)</div>
     <div class="grid2">
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">ต้นทุนซิงค์ (Zn) รายเดือน (บาท) · 12 เดือนล่าสุด</div>
-          <select id="costLineFilter" onchange="renderCostSection(this.value)" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-mid);">การใช้ซิงค์ (Zn) รายเดือน (กก) · 12 เดือนล่าสุด</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          <select id="costLineFilter" onchange="renderCostSection()" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;">
             <option value="ALL">ทุกสาย</option>
             <option value="B1">B1</option>
             <option value="B2">B2</option>
             <option value="R1">R1</option>
           </select>
+          <select id="costCustFilter" onchange="renderCostSection()" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;max-width:180px;">
+            <option value="">ทุกลูกค้า</option>
+          </select>
+          <input id="costPartSearch" oninput="clearTimeout(window._cpT);window._cpT=setTimeout(function(){renderCostSection();},300)" placeholder="ค้นหาหมายเลขชิ้นงาน" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;width:170px;">
         </div>
         <div class="chart-wrap-lg"><canvas id="chartCostZn"></canvas></div>
         <div id="znSummary"></div>
         <div style="margin-top:8px;font-size:10.5px;color:var(--text-muted);">
-          สูตร OPS-QA-002: Zn(g) = พื้นที่ dm² × ความหนา µm × 0.0713 · ความหนาอ่านจากสเปคใน Part Master (เช่น MFZn8 = 8 µm) · ราคาซิงค์ 150 บาท/กก · คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ) · ไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ
+          สูตร OPS-QA-002: Zn(g) = พื้นที่ dm² × ความหนา µm × 0.0713 · ความหนาอ่านจากสเปคใน Part Master (เช่น MFZn8 = 8 µm) · คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ) · ไม่รวมค่าเคมีสี/ค่าแรง/ค่าไฟ
         </div>
       </div>
       <div class="card">
@@ -1527,8 +1533,9 @@ function pmFind(map, name){
 }
 function znThicknessUm(pm){ var m = pm && /Zn\s*(\d+(?:\.\d+)?)/i.exec(pm.platingType||''); return m ? parseFloat(m[1]) : ZN_THICKNESS_UM; }
 
-async function renderCostSection(lineSel){
-  lineSel = lineSel || (document.getElementById('costLineFilter')||{}).value || 'ALL';
+async function renderCostSection(){
+  var gv = function(id){ var e=document.getElementById(id); return e ? e.value : ''; };
+  var lineSel = gv('costLineFilter') || 'ALL', custSel = gv('costCustFilter'), partQ = _normKey(gv('costPartSearch'));
   var months = lastNMonths(12);
   var monthSet = {}; months.forEach(function(m){ monthSet[m]=true; });
   var allLines = ['B1','B2','R1'];
@@ -1536,7 +1543,7 @@ async function renderCostSection(lineSel){
   var pmMap = await loadPartMasterMap();
 
   // สูตร OPS-QA-002: Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713 — คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ)
-  var znG = {}, dm2 = {}, kgReal = {}, kgMiss = {}, noArea = {};
+  var znG = {}, dm2 = {}, kgReal = {}, kgMiss = {}, noArea = {}, parts = {}, custSet = {};
   months.forEach(function(m){ znG[m]={B1:0,B2:0,R1:0}; dm2[m]={B1:0,B2:0,R1:0}; });
   allLines.forEach(function(l){ kgReal[l]=0; kgMiss[l]=0; });
 
@@ -1547,27 +1554,38 @@ async function renderCostSection(lineSel){
       if (!day || !day.date) return;
       var ym = String(day.date).slice(0,7);
       if (!monthSet[ym]) return;
-      var rows = Array.isArray(day.rows) ? day.rows : [];
-      rows.forEach(function(row){
+      (Array.isArray(day.rows) ? day.rows : []).forEach(function(row){
         var kg = Number(row.kg||0);
         if (kg <= 0 && !Number(row.pcs||0)) return;
         var pm = pmFind(pmMap, row.partName);
+        var cust = String(row.customer || (pm && pm.customer) || '—').trim() || '—';
+        custSet[cust] = true;
+        if (custSel && cust !== custSel) return;
+        var pname = String(row.partName||'').trim();
+        if (partQ && _normKey(pname).indexOf(partQ) < 0) return;
         var wG = pm ? Number(pm.weightPerPc||0) : 0;
         var pcs = Number(row.pcs||0);
         if (!pcs && kg > 0 && wG > 0) pcs = (kg*1000)/wG;
         if (!kg && pcs > 0 && wG > 0) kg = pcs*wG/1000;
+        var P = parts[pname] || (parts[pname] = {cust:cust, kg:0, kgReal:0, dm2:0, zn:0});
+        P.kg += kg;
         if (pm && Number(pm.areaDm2) > 0 && pcs > 0) {
-          var a = pcs * Number(pm.areaDm2);
-          dm2[ym][line] += a;
-          znG[ym][line] += a * znThicknessUm(pm) * 0.0713;
-          kgReal[line] += kg;
+          var a = pcs * Number(pm.areaDm2), z = a * znThicknessUm(pm) * 0.0713;
+          dm2[ym][line] += a; znG[ym][line] += z; kgReal[line] += kg;
+          P.kgReal += kg; P.dm2 += a; P.zn += z;
         } else {
-          kgMiss[line] += kg;
-          var k = String(row.partName||'').trim(); if (k) noArea[k] = (noArea[k]||0) + kg;
+          kgMiss[line] += kg; noArea[pname] = (noArea[pname]||0) + kg;
         }
       });
-      if (!rows.length && Number(day.totalKg||0) > 0) kgMiss[line] += Number(day.totalKg);
     });
+  }
+
+  // รายชื่อลูกค้าใน dropdown (คงค่าที่เลือกไว้)
+  var cs = document.getElementById('costCustFilter');
+  if (cs) {
+    var names = Object.keys(custSet).sort(function(a,b){ return a.localeCompare(b); });
+    if (custSel && names.indexOf(custSel) < 0) names.push(custSel);
+    cs.innerHTML = '<option value="">ทุกลูกค้า</option>' + names.map(function(n){ return '<option value="'+esc(n)+'"'+(n===custSel?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
   }
 
   var LCOL = {B1:'#3b82f6', B2:'#8b5cf6', R1:'#f97316'};
@@ -1577,18 +1595,17 @@ async function renderCostSection(lineSel){
     data:{
       labels: months.map(monthLabelTH),
       datasets: lines.map(function(l){
-        return {label:l, backgroundColor:LCOL[l], data:months.map(function(m){ return Math.round(znG[m][l]/1000*ZN_PRICE_PER_KG); })};
+        return {label:l, backgroundColor:LCOL[l], data:months.map(function(m){ return Math.round(znG[m][l]/10)/100; })};
       })
     },
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top',labels:{font:{size:11}}},
-        tooltip:{callbacks:{label:function(c){ var m=months[c.dataIndex]; return c.dataset.label+': '+fmt(c.parsed.y,0)+' บาท · Zn '+fmt(znG[m][c.dataset.label]/1000,2)+' กก · '+fmt(dm2[m][c.dataset.label],0)+' dm²'; }}},
-        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},color:'#fff',font:{size:8},formatter:function(v){return v>=1000?fmt(v/1000,1)+'k':fmt(v,0);}}},
-      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'บาท (เฉพาะชิ้นงานที่มี dm²)',font:{size:10}}}}
+        tooltip:{callbacks:{label:function(c){ var m=months[c.dataIndex]; return c.dataset.label+': Zn '+fmt(znG[m][c.dataset.label]/1000,2)+' กก · '+fmt(dm2[m][c.dataset.label],0)+' dm²'; }}},
+        datalabels:{display:function(ctx){return ctx.dataset.data[ctx.dataIndex]>0;},color:'#fff',font:{size:8},formatter:function(v){return fmt(v,0);}}},
+      scales:{x:{stacked:true,ticks:{font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}},title:{display:true,text:'Zn (กก) เฉพาะชิ้นงานที่มี dm²',font:{size:10}}}}
     }
   });
 
-  // ตารางเดือน x ไลน์ : dm² และ Zn (กก) — เดือนล่าสุดอยู่บน
   var th = 'padding:4px 6px;text-align:right;white-space:nowrap';
   var head1 = '<th style="'+th+';text-align:left" rowspan="2">เดือน</th>' + lines.map(function(l){ return '<th style="'+th+';text-align:center;color:'+LCOL[l]+'" colspan="2">'+l+'</th>'; }).join('') + '<th style="'+th+'" rowspan="2">รวม Zn (กก)</th>';
   var head2 = lines.map(function(){ return '<th style="'+th+'">dm²</th><th style="'+th+'">Zn (กก)</th>'; }).join('');
@@ -1603,19 +1620,25 @@ async function renderCostSection(lineSel){
   }).join('');
   var grand = 0;
   var totCells = lines.map(function(l){ grand += tot[l].z; return '<td style="'+th+'">'+fmt(tot[l].d,0)+'</td><td style="'+th+'">'+fmt(tot[l].z,2)+'</td>'; }).join('');
-  body += '<tr style="border-top:2px solid #94a3b8;font-weight:800;background:#f1f5f9"><td style="'+th+';text-align:left">รวม 12 เดือน</td>'+totCells+'<td style="'+th+'">'+fmt(grand,2)+'</td></tr>'
-        + '<tr style="font-weight:700"><td style="'+th+';text-align:left">ค่าซิงค์ (บาท)</td>' + lines.map(function(l){ return '<td style="'+th+'" colspan="2">'+fmt(tot[l].z*ZN_PRICE_PER_KG,0)+'</td>'; }).join('') + '<td style="'+th+'">'+fmt(grand*ZN_PRICE_PER_KG,0)+'</td></tr>';
+  body += '<tr style="border-top:2px solid #94a3b8;font-weight:800;background:#f1f5f9"><td style="'+th+';text-align:left">รวม 12 เดือน</td>'+totCells+'<td style="'+th+'">'+fmt(grand,2)+'</td></tr>';
 
   var covHtml = lines.map(function(l){
     var kgT = kgReal[l] + kgMiss[l], cov = kgT > 0 ? kgReal[l]/kgT*100 : 0;
     return '<b style="color:'+LCOL[l]+'">'+l+'</b> '+(kgT>0?fmt(cov,0)+'%':'—');
   }).join(' · ');
+
+  // จัดอันดับชิ้นงาน (Zn มากสุด) — เฉพาะที่มี dm²
+  var rank = Object.keys(parts).filter(function(k){ return parts[k].zn > 0; }).sort(function(a,b){ return parts[b].zn - parts[a].zn; }).slice(0,15);
+  var rankHtml = rank.length ? '<div style="margin-top:10px;font-weight:700;font-size:11px;color:var(--text-mid)">ชิ้นงานที่ใช้ซิงค์มากสุด (12 เดือน)</div><div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px"><thead><tr style="color:var(--text-muted)"><th style="'+th+';text-align:left">ชิ้นงาน</th><th style="'+th+';text-align:left">ลูกค้า</th><th style="'+th+'">น้ำหนักงาน (กก)</th><th style="'+th+'">dm²</th><th style="'+th+'">Zn (กก)</th><th style="'+th+'">Zn (g/กก งาน)</th></tr></thead><tbody>' +
+    rank.map(function(k){ var P=parts[k]; return '<tr style="border-top:1px solid var(--border,#e5e7eb)"><td style="'+th+';text-align:left;font-family:monospace">'+esc(k)+'</td><td style="'+th+';text-align:left">'+esc(P.cust)+'</td><td style="'+th+'">'+fmt(P.kgReal,0)+'</td><td style="'+th+'">'+fmt(P.dm2,0)+'</td><td style="'+th+';font-weight:700">'+fmt(P.zn/1000,2)+'</td><td style="'+th+'">'+(P.kgReal>0?fmt(P.zn/P.kgReal,1):'–')+'</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+
   var missing = Object.keys(noArea).sort(function(a,b){return noArea[b]-noArea[a];}).slice(0,8);
   var box = document.getElementById('znSummary');
   if (box) box.innerHTML =
     '<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted)">'+head1+'</tr><tr style="color:var(--text-muted)">'+head2+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
-    '<div style="margin-top:6px;font-size:10.5px;color:var(--text-muted)">ความครอบคลุม (น้ำหนักงานที่มี dm² ÷ น้ำหนักงานทั้งหมด): '+covHtml+' — ตัวเลขข้างบนนับเฉพาะชิ้นงานที่มี dm² จึงต่ำกว่าการใช้จริงจนกว่าจะใส่ครบ</div>'+
-    (missing.length ? '<div style="margin-top:4px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master ('+Object.keys(noArea).length+' รายการ เรียงตามน้ำหนักงาน): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …':'')+'</div>' : '<div style="margin-top:4px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
+    '<div style="margin-top:6px;font-size:10.5px;color:var(--text-muted)">ความครอบคลุม (น้ำหนักงานที่มี dm² ÷ น้ำหนักงานทั้งหมด ตามตัวกรอง): '+covHtml+' — ตัวเลขนับเฉพาะชิ้นงานที่มี dm² จึงต่ำกว่าการใช้จริงจนกว่าจะใส่ครบ</div>'+
+    rankHtml+
+    (missing.length ? '<div style="margin-top:6px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master ('+Object.keys(noArea).length+' รายการ เรียงตามน้ำหนักงาน): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …':'')+'</div>' : '<div style="margin-top:6px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
 }
 
 // ══════════════════════════════════════════════
