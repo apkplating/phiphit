@@ -1545,7 +1545,8 @@ async function renderCostSection(){
   // สูตร OPS-QA-002: Zn(g) = พื้นที่(dm²) x ความหนา(µm) x 0.0713 — คิดเฉพาะชิ้นงานที่มี dm² ใน Part Master (ไม่ประมาณ)
   var znG = {}, dm2 = {}, kgReal = {}, kgMiss = {}, noArea = {}, parts = {}, custSet = {};
   months.forEach(function(m){ znG[m]={B1:0,B2:0,R1:0}; dm2[m]={B1:0,B2:0,R1:0}; });
-  allLines.forEach(function(l){ kgReal[l]=0; kgMiss[l]=0; });
+  var pnAll = {}, pnHave = {};
+  allLines.forEach(function(l){ kgReal[l]=0; kgMiss[l]=0; pnAll[l]={}; pnHave[l]={}; });
 
   for (var i=0; i<lines.length; i++){
     var line = lines[i];
@@ -1567,6 +1568,7 @@ async function renderCostSection(){
         var pcs = Number(row.pcs||0);
         if (!pcs && kg > 0 && wG > 0) pcs = (kg*1000)/wG;
         if (!kg && pcs > 0 && wG > 0) kg = pcs*wG/1000;
+        if (pname) { pnAll[line][_normKey(pname)] = 1; if (pm && Number(pm.areaDm2) > 0) pnHave[line][_normKey(pname)] = 1; }
         var P = parts[pname] || (parts[pname] = {cust:cust, kg:0, kgReal:0, dm2:0, zn:0});
         P.kg += kg;
         if (pm && Number(pm.areaDm2) > 0 && pcs > 0) {
@@ -1624,8 +1626,9 @@ async function renderCostSection(){
 
   var covHtml = lines.map(function(l){
     var kgT = kgReal[l] + kgMiss[l], cov = kgT > 0 ? kgReal[l]/kgT*100 : 0;
-    return '<b style="color:'+LCOL[l]+'">'+l+'</b> '+(kgT>0?fmt(cov,0)+'%':'—');
-  }).join(' · ');
+    var nA = Object.keys(pnAll[l]).length, nH = Object.keys(pnHave[l]).length;
+    return '<div><b style="color:'+LCOL[l]+'">'+l+'</b> มี dm² <b>'+nH+'/'+nA+'</b> หมายเลข'+(nA>0?' ('+fmt(nH/nA*100,0)+'%)':'')+' · ครอบคลุมตามน้ำหนักงาน <b>'+(kgT>0?fmt(cov,0)+'%':'—')+'</b></div>';
+  }).join('');
 
   // จัดอันดับชิ้นงาน (Zn มากสุด) — เฉพาะที่มี dm²
   var rank = Object.keys(parts).filter(function(k){ return parts[k].zn > 0; }).sort(function(a,b){ return parts[b].zn - parts[a].zn; }).slice(0,15);
@@ -1636,7 +1639,7 @@ async function renderCostSection(){
   var box = document.getElementById('znSummary');
   if (box) box.innerHTML =
     '<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px"><thead><tr style="color:var(--text-muted)">'+head1+'</tr><tr style="color:var(--text-muted)">'+head2+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
-    '<div style="margin-top:6px;font-size:10.5px;color:var(--text-muted)">ความครอบคลุม (น้ำหนักงานที่มี dm² ÷ น้ำหนักงานทั้งหมด ตามตัวกรอง): '+covHtml+' — ตัวเลขนับเฉพาะชิ้นงานที่มี dm² จึงต่ำกว่าการใช้จริงจนกว่าจะใส่ครบ</div>'+
+    '<div style="margin-top:6px;font-size:10.5px;color:var(--text-muted)">ความสมบูรณ์ของข้อมูล dm² (ตามตัวกรอง) — <i>ความคืบหน้า</i> = หมายเลขชิ้นงานที่มี dm² ÷ หมายเลขที่ชุบ (ไม่นับรอบ) · <i>ความแม่น</i> = น้ำหนักงานที่มี dm² ÷ น้ำหนักงานทั้งหมด'+covHtml+'<div>ตัวเลขซิงค์นับเฉพาะชิ้นงานที่มี dm² จึงต่ำกว่าการใช้จริงจนกว่าจะใส่ครบ</div></div>'+
     rankHtml+
     (missing.length ? '<div style="margin-top:6px;font-size:10.5px;color:#b45309">ยังไม่มี dm² ใน Part Master ('+Object.keys(noArea).length+' รายการ เรียงตามน้ำหนักงาน): '+missing.map(esc).join(', ')+(Object.keys(noArea).length>8?' …':'')+'</div>' : '<div style="margin-top:6px;font-size:10.5px;color:#15803d">ทุกชิ้นงานมี dm² ครบ</div>');
 }
