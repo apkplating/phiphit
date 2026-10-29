@@ -1381,8 +1381,13 @@ function _idKeyOK(id) { var t = String(id); return t !== '' && !/[.$#\[\]\/]/.te
 function _snapSection(arr) { var m = {}; (arr || []).forEach(function(o){ if (o && o.id != null) m[String(o.id)] = JSON.stringify(o); }); return m; }
 function _smallJson() { return JSON.stringify([customers, billStatements, priceList, hiddenCustomers, custInvGuard]); }
 function _snapAll() { _synced = { items: _snapSection(jobItems), records: _snapSection(jobRecords), invoices: _snapSection(invoices), small: _smallJson() }; }
+// ★ กัน INV หาย (21 ต.ค. 2569 หาย 101 ใบ): ใบ INV "ห้ามถูกลบออกจากเซิร์ฟเวอร์โดยการบันทึกทั่วไป" — ลบได้เฉพาะ id ที่ลงทะเบียนไว้ตรงนี้
+// (กรณีเดียวคือ "แก้ไข INV" ที่สร้างใบใหม่แทนใบเดิม) ส่วนการยกเลิกใช้ voided:true ไม่ได้ลบ
+var _invDeleted = {};
+var _delSkipped = 0;   // จำนวน INV ที่เครื่องนี้ "ไม่มี" แต่เซิร์ฟเวอร์มี → ไม่ลบ แล้วโหลดใหม่หลังบันทึก
 function _buildDelta() {
   var body = {}, n = 0, base = Date.now();
+  _delSkipped = 0;
   [['items', jobItems], ['records', jobRecords], ['invoices', invoices]].forEach(function(p){
     var sec = p[0], arr = p[1], old = _synced[sec], seen = {};
     // รายการใหม่ (ยังไม่มี _seq): array เรียงใหม่สุดก่อน → ตัวแรกได้ _seq สูงสุด
@@ -1395,7 +1400,11 @@ function _buildDelta() {
       seen[k] = 1;
       if (old[k] !== JSON.stringify(o)) { body[sec + '/' + k] = o; n++; }
     });
-    Object.keys(old).forEach(function(k){ if (!seen[k]) { body[sec + '/' + k] = null; n++; } });
+    Object.keys(old).forEach(function(k){
+      if (seen[k]) return;
+      if (sec === 'invoices' && !_invDeleted[k]) { _delSkipped++; console.warn('[Job Master] ไม่ลบ INV ' + k + ' ออกจากเซิร์ฟเวอร์ (ไม่ได้สั่งลบ/แก้ไข)'); return; }
+      body[sec + '/' + k] = null; n++;
+    });
   });
   if (_smallJson() !== _synced.small) {
     body.customers = customers; body.billStatements = billStatements; body.priceList = priceList;
@@ -1419,7 +1428,7 @@ function saveLocal() {
   _localDirty = true; // มีการแก้ไขในเครื่อง — ถือว่า "รอยืนยันซิงค์" จนกว่า fbSave() จะสำเร็จ (เคลียร์ธงนี้)
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
   try { localStorage.setItem('job_records', JSON.stringify(pruneByDateForLS(jobRecords, 'date'))); } catch(e){}
-  try { localStorage.setItem('job_invoices', JSON.stringify(pruneByDateForLS(invoices, 'date'))); } catch(e){}
+  try { localStorage.setItem('job_invoices', JSON.stringify(invoices)); } catch(e){}   // ไม่ตัดอายุ INV ในแคชอีก (ต้นเหตุหนึ่งของ INV หาย)
   try { localStorage.setItem('job_customers', JSON.stringify(customers)); } catch(e){}
   try { localStorage.setItem('job_bill_statements', JSON.stringify(billStatements)); } catch(e){}
   try { localStorage.setItem('job_price_list', JSON.stringify(priceList)); } catch(e){}
@@ -1512,6 +1521,21 @@ async function fbSave() {
       }
     } catch(e) {}
   }
+  // ★ กัน INV หาย (แบบเดิม PUT ทั้งก้อน): รวมใบ INV ที่อยู่บนเซิร์ฟเวอร์เข้ามาเสมอก่อนเขียน (ใบที่เครื่องนี้แก้ไขแทนใบเดิม = เลข INV เดียวกันแต่ id ใหม่ จึงไม่ดึงใบเดิมกลับ)
+  if (!(_cloudFmt === 2 && _synced)) {
+    try {
+      var _sr = await fetch(FB_PATH + '/invoices.json', { cache: 'no-store' });
+      if (!_sr.ok) throw new Error('HTTP ' + _sr.status);
+      var _sv = await _sr.json(); _sv = Array.isArray(_sv) ? _sv : (_sv && typeof _sv === 'object' ? Object.keys(_sv).map(function(k){ return _sv[k]; }) : []);
+      var _ids = {}, _nos = {}; invoices.forEach(function(i){ if (i && i.id) _ids[i.id] = 1; if (i && i.invNo) _nos[i.invNo] = 1; });
+      var _add = _sv.filter(function(i){ return i && i.id && !_ids[i.id] && !(i.invNo && _nos[i.invNo]) && !_invDeleted[i.id]; });
+      if (_add.length) {
+        console.warn('[Job Master] เติม INV ที่มีบนเซิร์ฟเวอร์แต่เครื่องนี้ไม่มี ' + _add.length + ' ใบ ก่อนบันทึก');
+        invoices = invoices.concat(_add).map(function(v, idx){ return { v: v, idx: idx }; }).sort(function(a, b){ var da = a.v.date || '', db = b.v.date || ''; if (da !== db) return da < db ? 1 : -1; return a.idx - b.idx; }).map(function(o){ return o.v; });
+        _realInvNoSet = null; saveLocal();
+      }
+    } catch (e) { console.warn('[Job Master] fbSave() ยกเลิก — อ่านใบ INV จากเซิร์ฟเวอร์ไม่ได้ (กันเขียนทับ)', e); setSyncErr(); return false; }
+  }
   // ★ ด่านกันข้อมูลหดผิดปกติ: จำนวนที่จะบันทึกต้องไม่น้อยกว่าที่เพิ่งรู้ว่าอยู่บนเซิร์ฟเวอร์เกิน 20% (ถ้าหด ถามยืนยันก่อน)
   var _shr = [];
   [['ใบ INV', invoices.length, _cloudCounts.invoices], ['รายการรับ/จ่าย', jobRecords.length, _cloudCounts.records], ['บิลรับงาน', jobItems.length, _cloudCounts.items]].forEach(function(c){
@@ -1527,16 +1551,17 @@ async function fbSave() {
   if (_cloudFmt === 2 && _synced) {
     try {
       var _d = _buildDelta();
-      if (!_d.n) { _localDirty = false; setSyncOk(); return true; }
+      if (!_d.n) { _localDirty = false; setSyncOk(); if (_delSkipped > 0) { _fbLastSavedAt = ''; setTimeout(function(){ try { fbLoad(); } catch(e){} }, 300); } return true; }
       var _prevLast = _fbLastSavedAt, _cloudNow = null;
       try { var _cr = await fetch(FB_PATH + '/savedAt.json', { cache: 'no-store' }); if (_cr.ok) _cloudNow = await _cr.json(); } catch(e) {}
       var _sa = new Date().toISOString();
       _d.body.savedAt = _sa;
       var _pr = await fetch(FB_PATH + '.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(_d.body) });
       if (_pr.ok) {
-        _snapAll(); _fbLastSavedAt = _sa; _localDirty = false;
+        _snapAll(); _fbLastSavedAt = _sa; _localDirty = false; _invDeleted = {};
         _cloudCounts = { invoices: invoices.length, records: jobRecords.length, items: jobItems.length };
         setSyncOk();
+        if (_delSkipped > 0) { _fbLastSavedAt = ''; setTimeout(function(){ try { fbLoad(); } catch(e){} }, 300); }   // เครื่องนี้ขาด INV บางใบ → ดึงจากเซิร์ฟเวอร์มาเติม
         // มีเครื่องอื่นบันทึกไประหว่างที่เครื่องนี้เปิดอยู่ → ดึงของล่าสุดมารวม (ไม่งั้น poll จะคิดว่าไม่มีอะไรเปลี่ยน)
         if (_cloudNow && _prevLast && _cloudNow !== _prevLast) { _fbLastSavedAt = ''; setTimeout(function(){ try { fbLoad(); } catch(e){} }, 300); }
         return true;
@@ -3898,6 +3923,7 @@ function saveInvoice(doPrint) {
   // เพื่อให้ "ลบของเก่า" กับ "สร้างของใหม่" เกิดขึ้นพร้อมกันในจังหวะบันทึกเดียว ปลอดภัยกว่ามาก
   if (_editingInvoiceRef) {
     jobRecords = jobRecords.filter(function(r){ return !(r.type==='out' && r.inv===_editingInvoiceRef.invNo); });
+    _invDeleted[_editingInvoiceRef.invId] = 1;
     invoices = invoices.filter(function(i){ return i.id !== _editingInvoiceRef.invId; });
     _realInvNoSet = null;
   }
