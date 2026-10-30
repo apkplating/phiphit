@@ -2891,9 +2891,19 @@ function selectInvPart(partNo, hasStock, fromPM) {
     var effRemain = getEffectiveRemain(j);
     var rem = j.unit==='kg' ? effRemain.toFixed(2)+' กก.' : effRemain.toLocaleString()+' ชิ้น';
     var blocker = getFifoBlocker(j);
+    // บิลที่มีใบส่งของชั่วคราวค้าง = ของส่งไปแล้ว ต้องออก INV อ้างอิงใบนั้นได้เสมอ → ไม่บล็อกด้วย FIFO และแสดงเลขใบชั่วคราวให้เห็นก่อนเลือก
+    var tmpO = (typeof _tmpByJob !== 'undefined') ? _tmpByJob[j.id] : null;
+    var tmpTxt = '';
+    if (tmpO && tmpO.items && tmpO.items.length) {
+      blocker = null;
+      var tg = {};
+      tmpO.items.forEach(function(it){ tg[it.no] = (tg[it.no]||0) + it.qty; });
+      tmpTxt = ' · 📄 ใบชั่วคราว ' + Object.keys(tg).map(function(no){ return esc(no)+' ('+tg[no].toLocaleString()+')'; }).join(', ');
+    }
     var label = (blocker ? '🔴 ' : (active.length>1 ? '🟢 ' : ''))
       + '['+esc(j.bill||'?')+'] เหลือ '+rem
       +(j.customer ? ' · '+esc(j.customer) : '')
+      + tmpTxt
       + (blocker ? ' — รอบิล ['+esc(blocker.bill||'?')+'] ('+esc(blocker.date||'')+') ออก INV ให้หมดก่อน' : '');
     optHtml += '<option value="'+j.id+'"'+(blocker ? ' disabled style="color:#dc2626;"' : '')+'>'+label+'</option>';
   });
