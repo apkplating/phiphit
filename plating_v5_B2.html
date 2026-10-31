@@ -2088,6 +2088,7 @@ function renderBarrels() {
     var j = r.jobId ? (jobMasterItems||[]).find(function(x){ return x.id===r.jobId; }) : null;
     var bn = (j && j.bill) || r.manualBill || '';
     if (bn) return bn;
+    if (r.jobId && !(jobMasterItems||[]).length) return '<span style="color:#94a3b8;">กำลังโหลด…</span>';
     return r.type==='R' ? '–' : '<span style="color:#c0392b;">ไม่มีบิล</span>';
   }
   tbody.innerHTML = todayBarrels.map(function(r) {
@@ -6870,6 +6871,7 @@ async function jobMasterLoad() {
     // โชว์ "เพิ่มบิล" ผิดๆ ทั้งที่ b.jobId มีค่าอยู่จริง (ไม่ใช่ข้อมูลหาย แค่ยังไม่มีตัวเทียบตอน render ครั้งแรก)
     // ต้อง render ซ้ำที่นี่ทุกครั้งที่ jobMasterItems อัปเดตเสร็จ เพื่อให้ป้ายบิลในประวัติ resolve ถูกต้อง
     if (typeof renderHistory === 'function') renderHistory();
+    if (typeof renderBarrels === 'function') renderBarrels(); // วาดตารางรอบวันนี้ใหม่ — คอลัมน์ บิล/Customer Lot No ต้องใช้ Job Master
   } catch(e) {
     document.getElementById('jobSyncLabel').textContent = '❌ ออฟไลน์';
   }
