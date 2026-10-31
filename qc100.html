@@ -235,6 +235,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 </div>
 
 <script src="auth-central.js"></script>
+<script src="nas-sync.js"></script>
 <script src="fb-auth.js"></script>
 <script>
 // ═══════════════════════════════════════════════
@@ -258,7 +259,9 @@ function doLogin(pin){
       $('loginErr').textContent = msg;
       return;
     }
-    session = result; saveSession(result); enterApp();
+    session = result; saveSession(result);
+    if (result.role==='admin') { try{ NasSync.rememberAdmin(pin); }catch(e){} }
+    enterApp();
   });
 }
 function canEdit(){ return session && (session.role==='admin' || session.role==='operator'); }
@@ -419,6 +422,7 @@ function qcSelectPart(i) {
   document.getElementById('qcAcList').style.display = 'none';
   qcUpdateConvertHint();
   qcRenderLots();
+  qcLoadPlating(true);   // เลือกชิ้นงานแล้วดึงรอบชุบล่าสุด (รวม live ของวันนี้) ทันที
 }
 
 // ═══════════════════════════════════════
@@ -560,9 +564,9 @@ var qcAllocOver = 0;
 
 function qcKey(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9฀-๿]/g,''); }
 
-async function qcLoadPlating() {
+async function qcLoadPlating(silent) {
   var line = currentLine;
-  qcDayRecords = null; qcPlatingErr = '';
+  if (!silent) { qcDayRecords = null; } qcPlatingErr = '';
   try {
     var base = FB_LINES[line].replace(/\/+$/,'');
     var res = await fetch(base + '/plating-' + line.toLowerCase() + '.json', { cache:'no-store' });
@@ -570,15 +574,24 @@ async function qcLoadPlating() {
     var data = await res.json();
     var dr = (data && data.dayRecords) || [];
     if (!Array.isArray(dr)) dr = Object.values(dr);
-    // รอบชุบที่ยังเปิดอยู่ (live) ก็นับด้วย — ไม่งั้น Lot ของวันนี้จะหายจาก QC จนกว่าจะปิดวัน
-    if (data && data.live && Array.isArray(data.live.rows) && data.live.rows.length) {
-      var lv = data.live, lvDate = lv.date || new Date().toISOString().slice(0,10), lvLot = String(lv.lotNo||'').trim();
+    // รอบชุบของวันนี้ที่ "ยังไม่กดบันทึกวัน" อยู่ที่โหนด /live ของไลน์ (หน้าชุบ push ทุกครั้งที่เพิ่มรอบ) — QC ตรวจทันทีหลังชุบจึงต้องอ่านจากตรงนี้ด้วย
+    // (รุ่นก่อนอ่านผิดที่: plating-xx.json ช่อง live ซึ่งไม่มีอยู่จริง จึงไม่เห็น Pro Lot ของวันนี้)
+    var lv = null;
+    try {
+      var lres = await fetch(base + '/live.json', { cache:'no-store' });
+      if (lres.ok) lv = await lres.json();
+    } catch(e) {}
+    if (!lv && data && data.live) lv = data.live;   // เผื่อโครงเก่า
+    if (lv && Array.isArray(lv.rows) && lv.rows.length) {
+      var lvDate = lv.date || new Date().toISOString().slice(0,10);
+      var lvLot = String(lv.lotNo||'').trim();
+      if (!/^\d{8}$/.test(lvLot)) { var p8 = lvDate.split('-'); lvLot = p8[2] + p8[1] + p8[0]; }   // Pro Lot = DDMMYYYY ของวันนั้น (auto, 1 วัน 1 เลข)
       var dup = dr.some(function(x){ return x && x.date === lvDate && String(x.lotNo||'').trim() === lvLot; });
       if (!dup) dr = dr.concat([{ date: lvDate, lotNo: lvLot, rows: lv.rows, _live: true }]);
     }
     if (line !== currentLine) return; // สลับไลน์ระหว่างโหลด
     qcDayRecords = dr;
-  } catch(e) { qcPlatingErr = e.message || String(e); }
+  } catch(e) { qcPlatingErr = e.message || String(e); if (silent && qcDayRecords) { qcPlatingErr = ''; } }
   try {
     var jr = await fetch(FB_LINES.B1.replace(/\/+$/,'') + '/job-master.json', { cache:'no-store' });
     if (jr.ok) {
@@ -653,6 +666,7 @@ window.addEventListener('focus', qcClosedRefreshSoon);
 setInterval(function(){ if (!document.hidden) qcFbLoadClosed(); }, 30000);
 
 async function qcCloseLot(key){
+  if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!confirm('ปิด Lot นี้ (ซ่อนจากรายการตรวจ) ใช่ไหม?\n— ไม่ลบข้อมูล เปิดคืนได้ทีหลัง')) return;
   var v = { at:new Date().toISOString(), by:qcWho() };
@@ -660,6 +674,7 @@ async function qcCloseLot(key){
   qcClosed[qcCK(key)] = v; qcLocalSaveClosed(); qcRenderLots();
 }
 async function qcCloseBill(jobKey){
+  if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   var ls = qcCurLots.filter(function(e){ return e.jobKey === jobKey && !e.closed; });
   if (!ls.length || !confirm('ปิดบิลนี้ทั้งบิล ('+ls.length+' Lot) ซ่อนจากรายการตรวจ ใช่ไหม?\n— ไม่ลบข้อมูล เปิดคืนได้ทีหลัง')) return;
@@ -670,11 +685,13 @@ async function qcCloseBill(jobKey){
   qcLocalSaveClosed(); qcRenderLots();
 }
 async function qcReopenLot(key){
+  if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!(await qcClosedWrite('DELETE', 'closed/' + qcCK(key)))) return;
   delete qcClosed[qcCK(key)]; qcLocalSaveClosed(); qcRenderLots();
 }
 async function qcCloseBefore(){
+  if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   var d = (document.getElementById('qcClrDate')||{}).value || '';
   if (!d) { alert('เลือกวันที่ก่อน'); return; }
@@ -683,6 +700,7 @@ async function qcCloseBefore(){
   qcClosedBefore = d; qcLocalSaveClosed(); qcRenderLots();
 }
 async function qcClearBefore(){
+  if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!(await qcClosedWrite('DELETE', 'before'))) return;
   qcClosedBefore = ''; qcLocalSaveClosed(); qcRenderLots();
@@ -720,7 +738,7 @@ function qcBuildLots() {
       var bill = job ? job.bill : (b.manualBill || '');
       var jobKey = b.jobId ? String(b.jobId) : (bill ? 'M:' + bill : 'NOBILL');
       var key = jobKey + '|' + lot;
-      var e = map[key] || (map[key] = { key:key, jobKey:jobKey, jobId:b.jobId||'', lot:lot, date:rec.date||'', plated:0, used:0, bill:bill,
+      var e = map[key] || (map[key] = { key:key, jobKey:jobKey, jobId:b.jobId||'', lot:lot, date:rec.date||'', plated:0, used:0, bill:bill, live:!!rec._live,
         customer: (job && job.customer) || b.customer || '', billDate: (job && job.date) || rec.date || '', custLots:[] });
       if (rec.date && (!e.date || rec.date < e.date)) e.date = rec.date;
       e.plated += pcs;
@@ -794,7 +812,7 @@ function qcRenderLots() {
     }
     html += '<label style="display:flex;gap:8px;align-items:flex-start;padding:5px 0 5px 10px;border-bottom:1px dashed var(--border);cursor:pointer;color:var(--navy);">'
       + '<input type="checkbox"'+chk+' data-k="'+esc(e.key)+'" onchange="qcLotToggle(this.dataset.k,this.checked)" style="width:auto;margin-top:3px;">'
-      + '<span style="flex:1;">Pro Lot <b style="font-family:\'IBM Plex Mono\',monospace;">'+esc(e.lot)+'</b> <span style="color:var(--text-muted);">('+esc(e.date||'–')+')</span>'
+      + '<span style="flex:1;">Pro Lot <b style="font-family:\'IBM Plex Mono\',monospace;">'+esc(e.lot)+'</b> <span style="color:var(--text-muted);">('+esc(e.date||'–')+')</span>'+(e.live?' <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:10.5px;">วันนี้ · ยังไม่บันทึกวัน</span>':'')
       + '<br><span style="font-size:11px;">ชุบ '+e.plated.toLocaleString()+' · ตรวจแล้ว '+e.used.toLocaleString()+' · <b style="color:#15803d;">คงเหลือ '+e.remain.toLocaleString()+'</b> ชิ้น'+extra+'</span>'
       + '<br><span id="qcAl-'+e.idx+'" style="font-size:11px;color:var(--blue);"></span></span>'+closeBtn+'</label>';
   });
@@ -827,19 +845,55 @@ function qcUpdateAlloc() {
   else prev.innerHTML = '';
 }
 
-function qcRecordsKey() { return 'qc100_records_' + currentLine.toLowerCase(); }
-function qcLoadRecords() {
-  try { return JSON.parse(localStorage.getItem(qcRecordsKey()) || '[]'); } catch(e) { return []; }
+function qcRecordsKey(line) { return 'qc100_records_' + (line||currentLine).toLowerCase(); }
+function qcTombKey(line) { return 'qc100_tomb_' + (line||currentLine).toLowerCase(); }
+function qcLoadTomb(line) { try { return JSON.parse(localStorage.getItem(qcTombKey(line))||'{}')||{}; } catch(e){ return {}; } }
+function qcSaveTomb(line,t) { try{ localStorage.setItem(qcTombKey(line), JSON.stringify(t)); }catch(e){} }
+function qcLoadRecords(line) {
+  try { return JSON.parse(localStorage.getItem(qcRecordsKey(line)) || '[]'); } catch(e) { return []; }
 }
-function qcSaveRecordsLocal(arr) { localStorage.setItem(qcRecordsKey(), JSON.stringify(arr)); }
+function qcSaveRecordsLocal(arr, line) { localStorage.setItem(qcRecordsKey(line), JSON.stringify(arr)); }
 
-async function qcFbSaveRecords() {
-  try {
-    await fetch(FB_LINES[currentLine].replace(/\/+$/,'') + '/plating-'+currentLine.toLowerCase()+'-qc100.json', {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ records: qcLoadRecords(), defects: qcLoadDefectNames(), savedAt: new Date().toISOString() })
-    });
-  } catch(e) { console.warn('qcFbSaveRecords:', e.message); }
+// ── ส่งขึ้น NAS: อ่านของบน NAS (ETag) → รวมกับของเครื่องนี้ → เขียนกลับด้วย If-Match (ชนกัน 412 = อ่านใหม่แล้วรวมซ้ำ) ──
+// รายการที่ลบ = tombstone (deleted:{id:ts}) กันรายการที่ลบแล้วถูกเครื่องอื่นส่งกลับมา
+async function qcPushLine(line) {
+  var url = FB_LINES[line].replace(/\/+$/,'') + '/plating-'+line.toLowerCase()+'-qc100.json';
+  for (var attempt=0; attempt<4; attempt++) {
+    var res = await fetch(url, { headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'} });
+    if (!res.ok) return false;
+    var etag = res.headers.get('ETag');
+    var remote = await res.json() || {};
+    var deleted = Object.assign({}, remote.deleted||{}, qcLoadTomb(line));
+    var byId = {};
+    (Array.isArray(remote.records)?remote.records:[]).forEach(function(r){ if(r && r.id && !deleted[r.id]) byId[r.id]=r; });
+    qcLoadRecords(line).forEach(function(r){ if(r && r.id && !deleted[r.id]) byId[r.id]=r; });
+    var recs = Object.keys(byId).map(function(k){return byId[k];}).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+    var defects = (Array.isArray(remote.defects)?remote.defects:[]).slice();
+    qcLoadDefectNames().forEach(function(d){ if (defects.indexOf(d)===-1) defects.push(d); });
+    var h = {'Content-Type':'application/json'}; if (etag) h['If-Match'] = etag;
+    var put = await fetch(url, { method:'PUT', headers:h,
+      body: JSON.stringify({ records: recs, defects: defects, deleted: deleted, savedAt: new Date().toISOString() }) });
+    if (put.ok) {
+      if (line===currentLine) { qcSaveRecordsLocal(recs, line); }
+      qcSaveTomb(line, deleted);
+      return true;
+    }
+    if (put.status!==412) return false;
+  }
+  return false;
+}
+NasSync.init({
+  name: 'qc100',
+  push: function(line){ return qcPushLine(line); },
+  isAdmin: function(){ return !!(session && session.role==='admin'); },
+  who: function(){ return (session && session.user && session.user.name) || 'admin'; },
+  base: function(){ return FB_LINES.B1; },
+  snapshot: function(){ var o={}; ['B1','B2','R1'].forEach(function(l){ o[l]={records:qcLoadRecords(l),tomb:qcLoadTomb(l)}; }); o.defects=qcLoadDefectNames(); return o; }
+});
+// เปลี่ยนข้อมูลแล้วเรียกอันนี้: จำว่ายังไม่ถึง NAS + ส่ง (ช้า/ไม่ได้ = หน้าจอบล็อกจนสำเร็จ)
+async function qcFbSaveRecords(n) {
+  NasSync.markDirty(currentLine, n||1);
+  return await NasSync.commit({kind:'append'});
 }
 async function qcFbLoadRecords() {
   try {
@@ -848,10 +902,11 @@ async function qcFbLoadRecords() {
     var data = await res.json();
     if (!data) return;
     if (Array.isArray(data.records) && data.records.length) {
-      var local = qcLoadRecords();
+      var tomb = Object.assign({}, qcLoadTomb(), data.deleted||{}); qcSaveTomb(currentLine, tomb);
+      var local = qcLoadRecords().filter(function(r){ return !tomb[r.id]; });
       var localIds = {}; local.forEach(function(r){ localIds[r.id]=true; });
       var merged = local.slice();
-      data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
+      data.records.forEach(function(r){ if (!localIds[r.id] && !tomb[r.id]) merged.push(r); });
       merged.sort(function(a,b){ return b.ts-a.ts; });
       qcSaveRecordsLocal(merged);
     }
@@ -939,22 +994,25 @@ function qcSaveRecord() {
   var recs = qcLoadRecords();
   newRecs.slice().reverse().forEach(function(r){ recs.unshift(r); });
   qcSaveRecordsLocal(recs);
-  qcFbSaveRecords();
-
-  toast.className = 'toast ok';
-  toast.textContent = '✅ บันทึกผลตรวจสอบแล้ว ('+currentLine+') '+(newRecs.length>1 ? '— แยก '+newRecs.length+' รายการ (บิล/Pro. Lot No.)' : '');
-  setTimeout(function(){ toast.className='toast'; }, 2200);
-
   qcClearForm();
   qcPopulateDateFilter();
   qcRenderHistory();
+  var saveBtn = document.getElementById('qcSaveBtn'); saveBtn.disabled = true;
+  qcFbSaveRecords(newRecs.length).then(function(r){
+    saveBtn.disabled = false;
+    toast.className = 'toast ok';
+    toast.textContent = (r==='queued' ? '🚨 เก็บคิวในเครื่อง (โหมดฉุกเฉิน) ' : '✅ บันทึกขึ้น NAS สำเร็จ ')+'('+currentLine+') '+(newRecs.length>1 ? '— แยก '+newRecs.length+' รายการ (บิล/Pro. Lot No.)' : '');
+    setTimeout(function(){ toast.className='toast'; }, 2200);
+  });
 }
 
 function qcDeleteRecord(id) {
   if (!canEdit()) return;
+  if (!NasSync.canEdit()) return;
   if (!confirm('ลบรายการตรวจสอบนี้?')) return;
   var recs = qcLoadRecords().filter(function(r){ return r.id !== id; });
   qcSaveRecordsLocal(recs);
+  var tomb = qcLoadTomb(); tomb[id] = Date.now(); qcSaveTomb(currentLine, tomb);
   qcFbSaveRecords();
   qcPopulateDateFilter();
   qcRenderHistory();
@@ -1020,6 +1078,13 @@ function qcExportCSV() {
 }
 
 // ── Init (เรียกหลังล็อกอินสำเร็จเท่านั้น) ──
+// รีเฟรชรอบชุบ (รวม live ของวันนี้) แบบเงียบ — ไม่ล้างรายการที่แสดงอยู่ระหว่างโหลด
+var _qcPlatTick = 0;
+function qcRefreshPlatingSoon(){ var t = Date.now(); if (t - _qcPlatTick < 4000) return; _qcPlatTick = t; if (session && qcSelectedPart) qcLoadPlating(true); }
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) qcRefreshPlatingSoon(); });
+window.addEventListener('focus', qcRefreshPlatingSoon);
+setInterval(function(){ if (!document.hidden && session && qcSelectedPart) qcLoadPlating(true); }, 30000);
+
 function qcInitAfterLogin() {
   var today = new Date().toISOString().split('T')[0];
   document.getElementById('qcDate').value = today;
@@ -1027,6 +1092,7 @@ function qcInitAfterLogin() {
     document.getElementById('lineBtn-'+l).className = 'line-btn' + (l===currentLine?' active':'');
   });
   document.getElementById('lblHistoryLine').textContent = currentLine;
+  NasSync.startup();
   applyLang();
   loadPartList();
   qcRenderDefectRows();
