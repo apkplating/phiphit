@@ -1566,6 +1566,27 @@ function init() {
   document.getElementById('hdrLot').textContent = todayLot;
   var _blInit = document.getElementById('bLotNo');
   if (_blInit && !_blInit.value) { _blInit.value = todayLot; _blInit.style.borderColor='var(--border)'; _blInit.style.background=''; }
+  // ── ข้ามเที่ยงคืนโดยไม่รีโหลดหน้า (แท็บเล็ตเปิดค้างข้ามวัน): ขึ้นวันที่/Pro Lot ใหม่ให้อัตโนมัติ ไม่งั้นรอบของวันใหม่ถูกบันทึกเป็น Pro Lot ของเมื่อวาน ──
+  (function(){
+    var _rollDay = isoDate(new Date());
+    setInterval(function(){
+      var nd = isoDate(new Date());
+      if (nd === _rollDay) return;
+      if (todayBarrels.length) {
+        if (!window._rollWarned) { window._rollWarned = true; showToast('entry','⚠️ ข้ามวันแล้ว แต่ยังมีรอบของเมื่อวานที่ยังไม่บันทึกวัน — บันทึกวันก่อน ระบบจะขึ้นวัน/Pro Lot ใหม่ให้เอง','err'); }
+        return;
+      }
+      _rollDay = nd; window._rollWarned = false;
+      var d2 = new Date(), lot2 = todayDDMMYYYY(), el = document.getElementById('lotNo'), old = el ? el.value : '';
+      if (el) el.value = lot2;
+      var hl = document.getElementById('hdrLot'); if (hl) hl.textContent = lot2;
+      var hd = document.getElementById('hdrDate'); if (hd) hd.textContent = d2.toLocaleDateString('th-TH', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+      var rd = document.getElementById('repDate'); if (rd) rd.value = nd;
+      var bl = document.getElementById('bLotNo'); if (bl && (!bl.value || bl.value === old)) bl.value = lot2;
+      showToast('entry','📅 ขึ้นวันใหม่ — เปลี่ยน Pro Lot เป็น '+lot2+' ให้อัตโนมัติ','ok');
+      try { livePush(); } catch(e){}
+    }, 30000);
+  })();
 
   renderBarrels();
   renderSummary();
@@ -1733,6 +1754,18 @@ function autoFillBLotNo() {
   }
 }
 
+// ── งาน N ต้องอ้างเลขบิลทุกรอบ ไม่มีข้อยกเว้น — ข้อความแจ้งให้ชัดเจน ──
+function _needBillMsg(detail) {
+  var msg = '🚫 เพิ่มรอบงาน N ไม่ได้ — ต้องมีเลขบิลก่อน\n\n' + (detail ? detail + '\n\n' : '') +
+    'งานใหม่ (N) ต้องอ้างเลขบิลรับเข้าทุกรอบ ไม่มีข้อยกเว้น\n' +
+    '• เลือกบิลจากรายการ "บิล" ใต้ช่อง P/No\n' +
+    '• ถ้าไม่มีบิลในรายการ: ไปรับเข้า/สร้างบิลใน Job Master ก่อน แล้วกลับมาเพิ่มรอบ\n' +
+    '• ถ้าเป็นงานซ่อม ให้เปลี่ยนประเภทเป็น R';
+  try { showToast('entry', '🚫 เพิ่มรอบ N ไม่ได้ — ต้องเลือกเลขบิลก่อน', 'err'); } catch(e){}
+  try { var l = document.getElementById('bBillList'); if (l) { l.style.outline = '3px solid #dc2626'; l.style.borderRadius = '8px'; l.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(function(){ l.style.outline = ''; }, 5000); } } catch(e){}
+  alert(msg);
+}
+
 function addBarrel() {
   var time   = document.getElementById('bTime').value;
   var barrel = document.getElementById('bBarrel').value;
@@ -1764,6 +1797,7 @@ function addBarrel() {
   if (!kg && !pcs) { showToast('entry',tEntry('กรุณากรอก Kgs หรือ Pcs','Kgs သို့မဟုတ် Pcs ကို ဖြည့်ပါ'),'err'); return; }
 
   var _billJobId = document.getElementById('bJobPick').value || '';
+  if (selTypeVal !== 'R' && (!_billJobId || _billJobId === 'NOBILL')) { _needBillMsg(''); return; }
 
   // ── งานซ่อม (R) ไม่ต้องผูกบิล — แต่ต้องเลือกเหตุผล rework ก่อนเสมอ ──
   if (selTypeVal === 'R') {
@@ -1847,6 +1881,17 @@ function addBarrel() {
         ), 'err');
         return;
       }
+    }
+    // ── บิลที่เลือกต้องมีอยู่จริงใน Job Master ที่โหลดมา — ถ้าหาไม่เจอ (โหลด Job Master ไม่ได้/บิลถูกลบ) จะเช็คยอดคงเหลือและ FIFO ไม่ได้
+    // และรอบที่บันทึกจะอ้างบิลไม่ได้ (ไปโผล่เป็น "ไม่ระบุบิล" ใน QC/Tag) จึงบล็อกไว้ ──
+    if (_billJob && !String(_billJob.bill||'').trim()) { _needBillMsg('บิลที่เลือกไม่มีเลขบิลใน Job Master — ไปแก้ไขใบรับเข้าให้มีเลขบิลก่อน'); return; }
+    if (!_billJob) {
+      _needBillMsg('ไม่พบบิลที่เลือกใน Job Master (โหลดข้อมูลบิลไม่ได้ หรือบิลถูกลบ) — กดรีเฟรชแล้วเลือกบิลใหม่');
+      showToast('entry', tEntry(
+        '🚫 บันทึกไม่ได้ — ไม่พบบิลที่เลือกใน Job Master (โหลดข้อมูลบิลไม่ได้ หรือบิลถูกลบ) กรุณากดรีเฟรชแล้วเลือกบิลใหม่',
+        '🚫 မှတ်တမ်းတင်၍မရပါ — ရွေးထားသော ဘီလ်ကို Job Master တွင် မတွေ့ပါ ပြန်လည်ဖွင့်ပြီး ဘီလ်ကို ပြန်ရွေးပါ'
+      ), 'err');
+      return;
     }
     _commitBarrelRow(time, barrel, kg, pcs, lotNo, _billJobId, null);
     return;
@@ -8748,6 +8793,12 @@ function saveHistRound(dayId) {
     }
     if (matches.length) { jobId = matches[0].id; }
     else { manualBill = billText; }
+  }
+
+  // ── งาน N ต้องอ้างเลขบิลที่มีอยู่จริงใน Job Master เสมอ (ไม่มีข้อยกเว้น แม้เป็นการเพิ่มย้อนหลัง) ──
+  if (type !== 'R' && !jobId) {
+    _needBillMsg(billText ? 'ไม่พบเลขบิล "'+billText+'" ใน Job Master — พิมพ์ผิด หรือยังไม่ได้รับเข้า/สร้างบิล' : 'ยังไม่ได้ใส่เลขบิล');
+    return;
   }
 
   // ── ตรวจสอบยอดคงเหลือของบิลก่อนบันทึก (เหมือนหน้ากรอกสด) — เดิมฟีเจอร์นี้ไม่มีการเช็คนี้เลย
