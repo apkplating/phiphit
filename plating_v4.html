@@ -1990,6 +1990,7 @@ function delBarrel(id) {
   todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
   try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
+  setTimeout(_refreshWipAfterChange, 300);
   renderBarrels();
 }
 
@@ -2531,6 +2532,7 @@ function delDay(id) {
   try { localStorage.setItem('b1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   renderHistory();
   if (fbIsConfigured()) fbSave();
+  setTimeout(_refreshWipAfterChange, 800);
 }
 
 // ═══════════════════════════════════════
@@ -6863,7 +6865,7 @@ async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
   // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
   // jobMasterRecords "out" record ซึ่งมีบั๊กสะสมหลายชั้น (ดูคอมเมนต์ในไฟล์ wip-calc.js)
-  if (typeof WipCalc !== 'undefined') WipCalc.load();
+  if (typeof WipCalc !== 'undefined') { try { await WipCalc.load(); } catch(e) {} }
   try {
     var res = await fetch(FB_JOB_PATH + '.json');
     if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
@@ -6990,9 +6992,20 @@ function barrelPmAcShow() {
   list.style.display = 'block';
 }
 
+// ลบรอบ/ประวัติแล้ว: รอให้ข้อมูลขึ้น NAS → โหลดยอดชุบรวมใหม่ (WipCalc) → วาดรายการบิลคงเหลือใหม่ (ไม่งั้นสต๊อกค้างค่าเดิมจนกว่าจะรีเฟรชหน้า)
+async function _refreshWipAfterChange() {
+  try { await NasSync.commit({kind:'append'}); } catch(e) {}
+  try { if (typeof WipCalc !== 'undefined') await WipCalc.load(); } catch(e) {}
+  try { populateBarrelJobPick(); } catch(e) {}
+  try {
+    var inp = document.getElementById('bPartSearch'), p = window._lastPickedPm;
+    if (inp && p && inp.value === (p.partNo || p.name || '')) { _barrelPmMatches = [p]; barrelPmAcPick(0); }
+  } catch(e) {}
+}
 function barrelPmAcPick(idx) {
   var p = _barrelPmMatches[idx];
   if (!p) return;
+  window._lastPickedPm = p;
   var partNo = p.partNo || p.name || '';
   var nm     = p.partName || p.name || '';
   var cust   = p.customer || '';
