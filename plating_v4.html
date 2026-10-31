@@ -7103,7 +7103,7 @@ function _jobIsEarlier(j, job) {
 }
 function _jobKeyedLabel(j) {
   var t = _jobTs(j), d = (j.date||'').split('-').reverse().join('/');
-  if (!t) return 'รับเข้า ' + d + ' · ไม่ทราบเวลาคีย์ (จัดลำดับตามวันรับเท่านั้น)';
+  if (!t) return 'รับเข้า ' + d + ' · ไม่ทราบเวลาคีย์ (จัดลำดับตามวันรับเท่านั้น) · id: ' + String(j.id||'-');
   var dt = new Date(t), p = function(n){ return (n<10?'0':'')+n; };
   return 'รับเข้า ' + d + ' · คีย์ ' + p(dt.getDate()) + '/' + p(dt.getMonth()+1) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
 }

@@ -2507,6 +2507,13 @@ function statusBadge(status) {
   return '<span class="'+(cls[status]||'st-ok')+'">'+status+'</span>';
 }
 
+// เวลาที่คีย์บันทึกบิล (จาก id = 'J'+timestamp) — ใช้ดูลำดับ FIFO ของบิลที่รับวันเดียวกัน
+function _jobKeyedTime(j) {
+  var m = /^J(\d{10,})$/.exec(String((j && j.id) || ''));
+  if (!m) return '<div style="font-size:9px;color:#cbd5e1;">ไม่ทราบเวลาคีย์</div>';
+  var d = new Date(parseInt(m[1], 10)), p = function(n){ return (n<10?'0':'')+n; };
+  return '<div style="font-size:9px;color:#64748b;">คีย์ ' + p(d.getHours()) + ':' + p(d.getMinutes()) + (p(d.getDate()) + '/' + p(d.getMonth()+1)) .replace(/^/, ' · ') + '</div>';
+}
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
@@ -2675,7 +2682,7 @@ function _renderBoardImpl() {
 
     return '<tr>' +
       '<td class="td-l" style="font-weight:600;font-size:11px;">'+( job.bill||'—') +'</td>' +
-      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+'</td>' +
+      '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+fmtDate(job.date)+_jobKeyedTime(job)+'</td>' +
       '<td class="td-l" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">'+( job.partName||'—') +'</td>' +
       '<td class="td-l" style="font-size:10px;color:var(--text-muted);">'+( job.customer||'—') +'</td>' +
       '<td>'+unitBadge+'</td>' +
