@@ -1347,14 +1347,7 @@ function tab(t) {
   if (t==='board')   renderBoard();
   if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); setTimeout(function(){ var b=document.getElementById('inBill'); if (b && !b.value && !inDraft.length) b.focus(); }, 80); }
   if (t==='out')     {
-    // ล็อก: ต้องลง due ใหม่ให้ครบก่อนใช้หน้าออก INV
-    if (_dueDayDone !== _dueToday()) {
-      var _bk = document.getElementById('v-out'); if (_bk) _bk.classList.remove('active');
-      var _bb = document.querySelectorAll('.tab-btn')[2]; if (_bb) _bb.classList.remove('active');
-      dueDailyGate(function(){ tab('out'); });
-      return;
-    }
-    initInvTab();
+    initInvTab(); // ล็อกออก INV ทำตอนกดบันทึก ต่อลูกค้า (custLockRows) — ปลดล็อกโดย admin เท่านั้น
   }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
@@ -2166,6 +2159,87 @@ function dueMinimize() {
 function dueRestore() {
   _dueMin = false; _dueBar().style.display = 'none'; dueModalEl().classList.add('open');
   if (!_dueCb) _dueCb = function(){ tab('out'); };
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ล็อกออก INV ต่อลูกค้า — ลูกค้าที่มีบิลเกินกำหนด (ค้าง>7 วัน คงเหลือ>0) โดยไม่มี due หรือ due หมดอายุ
+//  • ลูกค้าที่ไม่มีบิลเกินกำหนด → ออก INV ได้ปกติ
+//  • บิลที่กำลังออก INV ในใบนี้ไม่นับเป็นตัวล็อก (ออก INV ให้บิลเก่า = ทางเคลียร์)
+//  • ปลดล็อก = admin เท่านั้น: ลง due ของแต่ละบิล (ไม่จำกัดจำนวนวัน, ห้ามย้อนหลัง) พร้อม log
+// ══════════════════════════════════════════════════════════════
+var _lkFresh = false, _lkRows = [], _lkCb = null;
+function custLockRows() {
+  var today = _dueToday(), custSet = {}, excl = {};
+  invDraft.forEach(function(l){
+    excl[l.jobId] = true;
+    var j = jobItems.find(function(x){ return x.id === l.jobId; });
+    if (j) custSet[(j.customer||'').trim()] = true;
+  });
+  return overdueAllJobs().filter(function(x){
+    return custSet[(x.job.customer||'').trim()] && !excl[x.job.id] && (!x.due || x.due < today);
+  });
+}
+function custLockShow(rows, doPrint) {
+  _lkRows = rows; _lkCb = function(){ saveInvoice(doPrint); };
+  var today = _dueToday(), isAdmin = (currentRole === 'admin');
+  var el = dueModalEl(); var body = document.getElementById('dueBody'), foot = document.getElementById('dueFooter');
+  var custs = {}; rows.forEach(function(x){ custs[(x.job.customer||'-').split('\n')[0]] = 1; });
+  document.getElementById('dueTitle').textContent = '🔒 ล็อกออก INV — ลูกค้า ' + Object.keys(custs).join(', ') + ' มีบิลเกินกำหนด';
+  var TH = 'padding:5px 6px;white-space:nowrap;';
+  var html = '<div style="font-size:12px;line-height:1.6;margin-bottom:8px;color:#b91c1c;font-weight:600;">' +
+    (isAdmin ? 'ลงวันที่ due ของแต่ละบิลด้านล่าง (ไม่จำกัดจำนวนวัน) เพื่อปลดล็อกให้ออก INV ได้ ระบบบันทึก log ว่าใครปลดล็อก'
+             : 'ออก INV ไม่ได้ — ลูกค้ารายนี้มีบิลอื่นเกินกำหนดค้างอยู่ ต้องให้ admin ปลดล็อก (ลง due) หรือออก INV ให้บิลเก่าก่อน') + '</div>';
+  if (isAdmin) html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:600;">ตั้งทุกรายการเป็นวันที่</span>' +
+    '<input type="date" min="'+today+'" id="lkAll" style="padding:3px 6px;font-size:11px;width:140px;"><button class="btn btn-outline btn-sm" onclick="lkApplyAll()">ใช้ทุกรายการ</button></div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f8fafc;text-align:left;">' +
+    '<th style="'+TH+'">ลูกค้า</th><th style="'+TH+'">หมายเลขชิ้นงาน</th><th style="'+TH+'">หมายเลขบิล</th><th style="'+TH+'">วันที่รับเข้า</th>' +
+    '<th style="'+TH+'text-align:right;">จำนวนค้าง</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'">due เดิม</th>' +
+    (isAdmin ? '<th style="'+TH+'">กำหนด due ใหม่</th>' : '') + '</tr></thead><tbody>';
+  rows.forEach(function(x, i){
+    var j = x.job;
+    html += '<tr style="border-bottom:1px solid #e5e7eb;">' +
+      '<td style="padding:4px 6px;font-weight:600;">'+esc((j.customer||'-').split('\n')[0])+'</td>' +
+      '<td style="padding:4px 6px;">'+esc(j.partName||'-')+'</td>' +
+      '<td style="padding:4px 6px;font-family:monospace;">'+esc(j.bill||'-')+'</td>' +
+      '<td style="padding:4px 6px;">'+fmtDate(j.date)+'</td>' +
+      '<td style="padding:4px 6px;text-align:right;font-weight:700;">'+_fmtRem(x)+'</td>' +
+      '<td style="padding:4px 6px;text-align:center;color:#b91c1c;font-weight:700;">'+x.days+'</td>' +
+      '<td style="padding:4px 6px;font-size:10px;color:var(--text-muted);">'+(x.due ? _fmtDueTh(x.due)+' (เลย)' : 'ยังไม่ลง')+'</td>' +
+      (isAdmin ? '<td style="padding:4px 6px;"><input type="date" min="'+today+'" id="lkR'+i+'" style="padding:3px 6px;font-size:11px;width:140px;"></td>' : '') + '</tr>';
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+  foot.innerHTML = (isAdmin ? '<button class="btn btn-green" onclick="lkSubmit()">🔓 ปลดล็อก (บันทึก due + log) และออก INV</button>' : '') +
+                   '<button class="btn btn-outline" onclick="lkClose()">ปิด</button>';
+  el.classList.add('open');
+}
+function lkClose() { dueModalEl().classList.remove('open'); _lkCb = null; }
+function lkApplyAll() {
+  var v = document.getElementById('lkAll').value; if (!v) return;
+  if (v < _dueToday()) { alert('ห้ามเลือกวันที่ย้อนหลัง'); return; }
+  document.querySelectorAll('#dueBody input[id^=lkR]').forEach(function(i){ i.value = v; });
+}
+async function lkSubmit() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var today = _dueToday(), patch = {}, logs = [], missing = 0;
+  _lkRows.forEach(function(x, i){
+    var v = (document.getElementById('lkR'+i)||{}).value || '';
+    if (!v || v < today) { missing++; return; }
+    var j = x.job;
+    patch[_dueKey(j.id)] = { due:v, by:currentUserName||currentRole, at:new Date().toISOString(), prev:x.due||'', bill:j.bill||'', customer:j.customer||'', unlock:true };
+    logs.push({ at:new Date().toISOString(), by:currentUserName||currentRole, action:'admin_unlock', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
+      remain:x.rem, unit:x.kg?'kg':'pcs', daysOver:x.days, prevDue:x.due||'', newDue:v });
+  });
+  if (missing) { alert('ลงวันที่ไม่ครบหรือย้อนหลัง '+missing+' รายการ — ต้องลงครบทุกบิลของลูกค้าที่ล็อกอยู่'); return; }
+  try {
+    var r = await fetch(ARCH_BASE + '/jm-due.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    Object.keys(patch).forEach(function(k){ jmDue[k] = patch[k]; });
+  } catch(e) { alert('บันทึก due ไม่สำเร็จ ('+(e.message||e)+') — ลองใหม่อีกครั้ง'); return; }
+  _dueLog(logs);
+  var cb = _lkCb; lkClose();
+  try { renderBoard(); renderOverduePanel(); } catch(e){}
+  if (cb) cb();
 }
 function dueCancelGate() { dueMinimize(); }
 function dueSkip() {
@@ -3920,8 +3994,15 @@ function saveInvoice(doPrint) {
   // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
   // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
   if (!isClaim && !_editingInvoiceRef) {
-    // เฟส 1 โหมดทดลอง: ไม่ล็อกอีกแล้ว — ใบแรกของวันขึ้นตารางบิลเกินกำหนดให้ลง due (ดู dueDailyGate)
-    if (_dueDayDone !== _dueToday()) { dueDailyGate(function(){ saveInvoice(doPrint); }); return; }
+    // ล็อกต่อลูกค้า: ลูกค้ารายนี้มีบิลอื่นเกินกำหนด (>7 วัน) ที่ยังไม่มี due / due หมดอายุ → ห้ามออก INV จน admin ลง due ให้
+    var _lk = custLockRows();
+    if (_lk.length) {
+      if (!_lkFresh) { _lkFresh = true; loadJmDue().then(function(){ saveInvoice(doPrint); }); return; }
+      _lkFresh = false;
+      custLockShow(_lk, doPrint);
+      return;
+    }
+    _lkFresh = false;
   }
 
   if (isClaim) {
