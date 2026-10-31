@@ -585,14 +585,13 @@ if ('caches' in window) {
       <div id="acCustomer" style="display:none;"></div>
     </div>
     <div class="field" style="margin-bottom:8px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <label style="margin:0;">Lot No / Data <span style="color:#c0392b;">*</span></label>
-        <button onclick="autoFillBLotNo()" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">⚡ ดึงจาก LOT หลัก</button>
-      </div>
-      <input type="text" id="bLotNo" placeholder="⚠️ ต้องกรอก — ใช้จับคู่กับรับงานเข้า" autocomplete="off"
+      <label>Customer Lot No <span style="font-weight:400;color:var(--text-muted);font-size:10px;">— ดึงจากหน้า "รับงานเข้า" ตามบิลที่เลือก (ไม่ต้องพิมพ์)</span></label>
+      <input type="text" id="bCustLot" readonly placeholder="–" autocomplete="off" style="font-size:13px;background:#f1f5f9;color:#334155;">
+      <div style="display:none;">
+      <input type="hidden" id="bLotNo" placeholder="⚠️ ต้องกรอก — Pro Lot No (DDMMYYYY)" autocomplete="off"
         style="font-size:13px;border-color:#f59e0b;background:#fffbeb;"
         oninput="this.style.borderColor=this.value?'var(--border)':'#f59e0b';this.style.background=this.value?'':'#fffbeb';">
-      <div style="font-size:10px;color:#b45309;margin-top:3px;">💡 ต้องตรงกับ LOT ที่กรอกในหน้า "รับงานเข้า" ถึงจะตัดสต็อคได้</div>
+      </div>
     </div>
 
     <!-- สีที่ชุบ B / C / K -->
@@ -638,14 +637,16 @@ if ('caches' in window) {
           <th>โม่</th>
           <th style="text-align:left;">ชื่อชิ้นงาน</th>
           <th style="text-align:left;">ลูกค้า</th>
-          <th>Lot No</th>
+          <th>บิล</th>
+          <th>Pro Lot No</th>
+          <th>Customer Lot No</th>
           <th>ประเภท</th>
           <th>สี</th>
           <th>Kgs</th>
           <th>Pcs</th>
           <th></th>
         </tr></thead>
-        <tbody id="barrelBody"><tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted);font-family:'IBM Plex Sans Thai',sans-serif;">ยังไม่มีรายรอบ</td></tr></tbody>
+        <tbody id="barrelBody"><tr><td colspan="12" style="text-align:center;padding:16px;color:var(--text-muted);font-family:'IBM Plex Sans Thai',sans-serif;">ยังไม่มีรายรอบ</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -1912,7 +1913,8 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
               jobId: jobId,
-              lotNo: lotNo };
+              lotNo: lotNo,
+              custLot: (selTypeVal==='R' ? '' : _custLotOf(jobId)) };
   if (selTypeVal === 'R') {
     var rrSel = document.getElementById('reworkReasonSelect');
     var rrCode = rrSel ? rrSel.value : '';
@@ -1964,7 +1966,8 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   // เคลียร์เหตุผล rework ที่เพิ่งบันทึกไป — บังคับเลือกใหม่ทุกรอบ กันพลาดเอาเหตุผลรอบก่อนมาปนกับรอบใหม่
   var rrSelReset = document.getElementById('reworkReasonSelect'); if (rrSelReset) rrSelReset.value = '';
   var rrDetailReset = document.getElementById('reworkReasonDetail'); if (rrDetailReset) { rrDetailReset.value=''; rrDetailReset.style.display='none'; }
-  // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
+  // ไม่ reset bLotNo (Pro Lot No) — ใช้เลขเดิมต่อ ; เคลียร์ Customer Lot No ตามบิลที่เลือก
+  var _bcl=document.getElementById('bCustLot'); if(_bcl) _bcl.value='';
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
 
@@ -1993,8 +1996,19 @@ function renderBarrels() {
 
   var tbody = document.getElementById('barrelBody');
   if (!todayBarrels.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted);font-family:\'IBM Plex Sans Thai\',sans-serif;">ยังไม่มีรายรอบ</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:16px;color:var(--text-muted);font-family:\'IBM Plex Sans Thai\',sans-serif;">ยังไม่มีรายรอบ</td></tr>';
     return;
+  }
+  function _rowCustLot(r){
+    if (r.custLot) return r.custLot;
+    var j = r.jobId ? (jobMasterItems||[]).find(function(x){ return x.id===r.jobId; }) : null;
+    return (j && j.custLot) ? j.custLot : '–';
+  }
+  function _rowBill(r){
+    var j = r.jobId ? (jobMasterItems||[]).find(function(x){ return x.id===r.jobId; }) : null;
+    var bn = (j && j.bill) || r.manualBill || '';
+    if (bn) return bn;
+    return r.type==='R' ? '–' : '<span style="color:#c0392b;">ไม่มีบิล</span>';
   }
   tbody.innerHTML = todayBarrels.map(function(r) {
     return '<tr>' +
@@ -2002,7 +2016,9 @@ function renderBarrels() {
       '<td>' + r.barrel + '</td>' +
       '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + pmDisplayName(r.partName) + '</td>' +
       '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
+      '<td style="font-size:10px;font-weight:600;color:#1e40af;">' + _rowBill(r) + '</td>' +
       '<td style="font-size:10px;color:var(--text-muted);">' + (r.lotNo||'–') + '</td>' +
+      '<td style="font-size:10px;color:var(--text-mid);">' + _rowCustLot(r) + '</td>' +
       '<td><span class="badge-'+r.type+'">'+r.type+'</span></td>' +
       '<td><span class="badge-'+r.color+'">'+r.color+'</span></td>' +
       '<td>' + (r.kg||0) + '</td>' +
@@ -2468,6 +2484,7 @@ function renderHistory() {
         '<td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;color:var(--text-mid);">' + (b.customer||'–') + '</td>' +
         '<td>' + billCell + '</td>' +
         '<td style="font-size:10px;color:var(--text-muted);">' + (b.lotNo||'–') + '</td>' +
+        '<td style="font-size:10px;color:var(--text-mid);">' + (function(){ var _j=b.jobId?(jobMasterItems||[]).find(function(x){return x.id===b.jobId;}):null; return b.custLot?b.custLot:((_j&&_j.custLot)?_j.custLot:'–'); })() + '</td>' +
         '<td><span class="badge-'+b.type+'">'+b.type+'</span></td>' +
         '<td><span class="badge-'+b.color+'">'+b.color+'</span></td>' +
         '<td>' + (b.kg||0) + '</td>' +
@@ -2480,7 +2497,7 @@ function renderHistory() {
         '<table class="detail-table"><thead><tr>' +
           '<th style="text-align:left;">เวลา</th><th>โม่</th>' +
           '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th>' +
-          '<th>บิล</th><th>Lot No</th>' +
+          '<th>บิล</th><th>Pro Lot No</th><th>Customer Lot No</th>' +
           '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>' +
         '</tr></thead><tbody>' +
         (detRows || '<tr><td colspan="10" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
@@ -7284,9 +7301,14 @@ function populateBarrelJobPick() {
 }
 
 // ── เลือก P/No จาก dropdown → เติมชื่อชิ้นงาน + ลูกค้า ──
+function _custLotOf(jobId) {
+  var j = jobId ? (jobMasterItems||[]).find(function(x){ return x.id===jobId; }) : null;
+  return (j && j.custLot) ? String(j.custLot) : '';
+}
 function onBarrelJobPick() {
   var sel = document.getElementById('bJobPick');
   var jobId = sel ? sel.value : '';
+  try { var _cl=document.getElementById('bCustLot'); if (_cl) _cl.value = _custLotOf(jobId); } catch(e) {}
   var infoEl = document.getElementById('bBillInfo');
   if (!jobId) { if(infoEl) infoEl.textContent=''; return; }
   var job = (jobMasterItems || []).find(function(j){ return j.id === jobId; });
