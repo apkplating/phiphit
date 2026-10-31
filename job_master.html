@@ -2509,7 +2509,7 @@ function statusBadge(status) {
 
 // เวลาที่คีย์บันทึกบิล (จาก id = 'J'+timestamp) — ใช้ดูลำดับ FIFO ของบิลที่รับวันเดียวกัน
 function _jobKeyedTime(j) {
-  var m = /^J(\d{10,})$/.exec(String((j && j.id) || ''));
+  var m = /^J(\d{10,})(?:_\d+)?$/.exec(String((j && j.id) || ''));
   if (!m) return '<div style="font-size:9px;color:#cbd5e1;">ไม่ทราบเวลาคีย์</div>';
   var d = new Date(parseInt(m[1], 10)), p = function(n){ return (n<10?'0':'')+n; };
   return '<div style="font-size:9px;color:#64748b;">คีย์ ' + p(d.getHours()) + ':' + p(d.getMinutes()) + (p(d.getDate()) + '/' + p(d.getMonth()+1)) .replace(/^/, ' · ') + '</div>';
