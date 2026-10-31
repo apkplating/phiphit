@@ -628,12 +628,24 @@ async function qcFbLoadClosed(){
     if (!r.ok || ln !== currentLine) return;
     var d = await r.json();
     if (ln !== currentLine) return;
+    // ย้ายค่า "ซ่อนก่อนวันที่" จากรุ่นก่อน (.105 เก็บไว้ในก้อนรายการ QC) มาที่ก้อนใหม่ — ทำครั้งเดียวเมื่อก้อนใหม่ยังว่าง
+    if (d === null && isAdminQc()) {
+      try {
+        var rr = await fetch(FB_LINES[ln].replace(/\/+$/,'') + '/plating-'+ln.toLowerCase()+'-qc100.json', { cache:'no-store' });
+        var rd = rr.ok ? await rr.json() : null;
+        var ob = rd && rd.closedState && rd.closedState.before;
+        if (ob && ln === currentLine && await qcClosedWrite('PUT', 'before', ob)) d = { before: ob };
+      } catch(e){}
+    }
     var nc = (d && d.closed) || {}, nb = (d && d.before) || '';
+    qcSyncAt = new Date(); var st = document.getElementById('qcSyncStat'); if (st) st.textContent = qcSyncText();
     var changed = JSON.stringify(nc) !== JSON.stringify(qcClosed) || nb !== qcClosedBefore;
     qcClosed = nc; qcClosedBefore = nb; qcLocalSaveClosed();
     if (changed && qcDayRecords !== null) qcRenderLots();
-  } catch(e){}
+  } catch(e){ qcSyncAt = null; var st2 = document.getElementById('qcSyncStat'); if (st2) st2.textContent = qcSyncText(); }
 }
+var qcSyncAt = null;
+function qcSyncText(){ return qcSyncAt ? '☁️ ซิงก์ล่าสุด ' + qcSyncAt.toTimeString().slice(0,8) : '⚠️ ซิงก์กับ NAS ไม่ได้'; }
 var _qcClosedTick = 0;
 function qcClosedRefreshSoon(){ var t = Date.now(); if (t - _qcClosedTick < 5000) return; _qcClosedTick = t; qcFbLoadClosed(); }
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) qcClosedRefreshSoon(); });
@@ -685,7 +697,7 @@ function qcClearBar(){
     + '<button type="button" class="btn btn-outline btn-sm" onclick="qcCloseBefore()">ปิดรายการเก่า</button>'
     + (qcClosedBefore ? ' <span>ซ่อนก่อน <b>'+esc(qcClosedBefore)+'</b> <a href="#" onclick="qcClearBefore();return false;">ยกเลิกการซ่อน</a></span>' : '')
     + (qcHiddenCount ? ' · <a href="#" onclick="qcToggleShowClosed();return false;">'+(qcShowClosed?'ซ่อน':'แสดง')+'ที่ปิดแล้ว ('+qcHiddenCount+')</a>' : '')
-    + '</div>';
+    + ' <span id="qcSyncStat" style="float:right;color:var(--text-muted);">'+qcSyncText()+'</span></div>';
 }
 
 // รายการ Lot ที่เหลือ แยกตาม "บิล" (กุญแจหลัก) แล้วตามด้วย Pro Lot — เรียงบิลเก่าสุดก่อน
