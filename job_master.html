@@ -1284,6 +1284,8 @@ function checkPin() {
     try { sessionStorage.setItem('job_master_pin', pin); } catch(e){}
     applyRole();
     loadLocal();
+    var _hadPending = _localDirty;   // รอบก่อนปิดหน้าไปทั้งที่ยังมีของค้างส่ง → ส่งให้เสร็จก่อนให้คีย์ใหม่
+    if (_hadPending) { try { flushGateStart(); } catch(e){} }
     try { pmParts = JSON.parse(localStorage.getItem('jm_pmParts')||'[]'); } catch(e){ pmParts=[]; }
     startPoll();
     setTimeout(flushPdfQueue, 3000);
@@ -1347,7 +1349,7 @@ function tab(t) {
   if (t==='board')   renderBoard();
   if (t==='in')      { updatePmStatusHint(); renderCustomerFilter(); setTimeout(function(){ var b=document.getElementById('inBill'); if (b && !b.value && !inDraft.length) b.focus(); }, 80); }
   if (t==='out')     {
-    initInvTab(); // ล็อกออก INV ทำตอนกดบันทึก ต่อลูกค้า (custLockRows) — ปลดล็อกโดย admin เท่านั้น
+    initInvTab(); invEnter(); // ล็อกออก INV ทำตอนกดบันทึก ต่อลูกค้า (custLockRows) — ปลดล็อกโดย admin เท่านั้น
   }
   if (t==='history') { renderHistFilter(); renderHistory(); }
   if (t==='sales')   { renderSales(); }
@@ -1416,9 +1418,11 @@ function loadLocal() {
   try { priceList = JSON.parse(localStorage.getItem('job_price_list') || '[]'); } catch(e){ priceList=[]; }
   try { hiddenCustomers = JSON.parse(localStorage.getItem('job_hidden_customers') || '[]'); } catch(e){ hiddenCustomers=[]; }
   try { custInvGuard = JSON.parse(localStorage.getItem('job_cust_inv_guard') || '{}'); } catch(e){ custInvGuard={}; }
+  try { if (localStorage.getItem('job_dirty') === '1') _localDirty = true; } catch(e){}   // เปิดหน้าใหม่แล้วยังมีของค้างส่งจากรอบก่อน → fbLoad รอบแรกจะรวมของค้างเข้ากับ NAS แล้วส่งขึ้นไป ไม่ทับทิ้ง
 }
 function saveLocal() {
   _localDirty = true; // มีการแก้ไขในเครื่อง — ถือว่า "รอยืนยันซิงค์" จนกว่า fbSave() จะสำเร็จ (เคลียร์ธงนี้)
+  try { localStorage.setItem('job_dirty', '1'); } catch(e){}   // จำธง 'ค้างส่ง' ข้ามการปิด/เปิดหน้า (เดิมอยู่ในหน่วยความจำอย่างเดียว → เปิดหน้าใหม่แล้วของที่ยังไม่ส่งถูกทับด้วยข้อมูลจาก NAS)
   try { localStorage.setItem('job_items',   JSON.stringify(jobItems));   } catch(e){}
   try { localStorage.setItem('job_records', JSON.stringify(pruneByDateForLS(jobRecords, 'date'))); } catch(e){}
   try { localStorage.setItem('job_invoices', JSON.stringify(invoices)); } catch(e){}   // ไม่ตัดอายุ INV ในแคชอีก (ต้นเหตุหนึ่งของ INV หาย)
@@ -1479,7 +1483,8 @@ function mergeObjectKeys(localObj, cloudObj) {
   return merged;
 }
 
-async function fbSave() {
+async function _fbSaveInner() {
+  _guardBlocked = false;
   // ห้ามบันทึกก่อนที่จะเคยโหลดข้อมูลจริงจากคลาวด์สำเร็จอย่างน้อย 1 ครั้งในเซสชันนี้ —
   // กันไม่ให้ข้อมูลที่ยังไม่สมบูรณ์ (เช่น invoices ว่างเปล่าตอนเพิ่งเข้าระบบ) ไปเขียนทับของจริงบนเซิร์ฟเวอร์
   // รอสูงสุด ~5 วินาที (10 ครั้ง x 500ms) ให้ fbLoad() รอบแรกโหลดเสร็จก่อน ถ้ายังไม่เสร็จก็ยกเลิกการบันทึกรอบนี้ไปเลย
@@ -1509,7 +1514,7 @@ async function fbSave() {
       var backupInv = JSON.parse(localStorage.getItem('job_invoices') || '[]');
       if (backupInv.length > 0) {
         console.warn('[Job Master] fbSave() ยกเลิก — invoices ว่างเปล่าผิดปกติ ทั้งที่ backup ในเครื่องมี ' + backupInv.length + ' รายการ (กันเขียนทับข้อมูลจริงหาย)');
-        setSyncErr();
+        _guardBlocked = true; setSyncErr();
         return false;
       }
     } catch(e) {}
@@ -1536,7 +1541,7 @@ async function fbSave() {
   });
   if (_shr.length && !_shrinkConfirmed(_shr)) {
     console.warn('[Job Master] fbSave() ยกเลิก — ข้อมูลหดผิดปกติ', _shr);
-    setSyncErr();
+    _guardBlocked = true; setSyncErr();
     return false;
   }
   // ★ โครงสร้างใหม่ (_fmt = 2): ส่ง "เฉพาะรายการที่เปลี่ยน/ถูกลบ" ของ items/records/invoices (โหนดละ 1 id) แทนส่งทั้งก้อน
@@ -1712,7 +1717,7 @@ async function fbLoad() {
       if (!_loc) _localDirty = _dirtyBefore;
       if (_loc) {
         var _added = (invoices.length + jobRecords.length + jobItems.length) - _cloudTotal;
-        if (_added > 0) { fbSave(); } else { _localDirty = false; }
+        if (_added > 0) { _lastAddedCount = _added; fbSave(); } else { _localDirty = false; }
       }
       setSyncOk();
       if (!_wasLoaded) setTimeout(function(){ try { pullFromLines(); } catch(e){} }, 300); // ดึงรอบชุบจากไลน์ได้ก็ต่อเมื่อโหลดข้อมูลจริงแล้ว
@@ -1739,6 +1744,152 @@ function uiRefreshSafe() {
   var active = document.querySelector('.view.active');
   if (active) tab(active.id.replace('v-',''));
 }
+
+// ══════════════════════════════════════
+//  INV ใช้ข้อมูลสดจาก NAS เสมอ + ป้ายเตือน "ค้างส่ง" (ใช้กับ tablet WiFi ที่สัญญาณหลุดบ่อย)
+//  ปัญหาหลัก: บิลที่ tablet บันทึกแล้วยังค้างส่ง → PC ที่ออก INV มองไม่เห็นบิลนั้น
+// ══════════════════════════════════════
+var _invFreshOk = false, _nasSyncAt = null;
+async function invNasSync() {
+  try {
+    if (_localDirty) { await fbSave(); if (_localDirty) return false; }   // เครื่องนี้ยังมีของค้างส่ง → ส่งให้เสร็จก่อน
+    var r = await fetch(FB_PATH + '/savedAt.json', { cache:'no-store' });
+    if (!r.ok) return false;
+    var sa = await r.json();
+    if (sa && sa !== _fbLastSavedAt) { _fbLastSavedAt = ''; await fbLoad(); }
+    _nasSyncAt = new Date();
+    return true;
+  } catch(e) { return false; }
+}
+function setInvBanner(state) {
+  var host = document.getElementById('v-out'); if (!host) return;
+  var b = document.getElementById('invNasBanner');
+  if (!b) { b = document.createElement('div'); b.id = 'invNasBanner'; b.style.cssText = 'font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;margin-bottom:8px;'; host.insertBefore(b, host.firstChild); }
+  if (state === 'ok') { b.style.background = '#dcfce7'; b.style.color = '#166534'; b.textContent = '☁️ ข้อมูลล่าสุดจาก NAS ' + (_nasSyncAt ? _nasSyncAt.toTimeString().slice(0,8) : ''); }
+  else if (state === 'fail') { b.style.background = '#fee2e2'; b.style.color = '#991b1b'; b.textContent = '🚫 ติดต่อ NAS ไม่ได้ — ออก INV ไม่ได้จนกว่าจะเชื่อมต่อได้'; }
+  else { b.style.background = '#fef3c7'; b.style.color = '#92400e'; b.textContent = '⏳ กำลังดึงข้อมูลล่าสุดจาก NAS...'; }
+}
+function invEnter() {
+  setInvBanner('checking');
+  invNasSync().then(function(ok){
+    if (ok && !invDraft.length) { try { initInvTab(); } catch(e){} }   // ข้อมูลอาจเพิ่งเปลี่ยน → วาดรายการบิลใหม่ (ไม่ทำถ้ากำลังมีรายการค้างในฟอร์ม)
+    setInvBanner(ok ? 'ok' : 'fail');
+  });
+}
+var _dirtySince = 0;
+function updatePendingBar() {
+  var bar = document.getElementById('jmPendingBar');
+  if (_localDirty) {
+    if (!_dirtySince) _dirtySince = Date.now();
+    if (!bar) {
+      bar = document.createElement('div'); bar.id = 'jmPendingBar';
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99997;background:#b91c1c;color:#fff;text-align:center;padding:10px 12px;font-size:14px;font-weight:700;box-shadow:0 -3px 12px rgba(0,0,0,.3);';
+      document.body.appendChild(bar);
+    }
+    var mins = Math.floor((Date.now() - _dirtySince) / 60000);
+    bar.textContent = '⚠️ ข้อมูลยังไม่ถูกส่งขึ้น NAS' + (mins >= 1 ? ' (ค้าง ' + mins + ' นาที)' : '') + ' — ห้ามปิดหน้านี้ และอย่าแจ้งว่าบันทึกแล้ว จนกว่าจะขึ้น "บันทึกขึ้น NAS สำเร็จ"';
+    bar.style.display = '';
+  } else {
+    _dirtySince = 0;
+    if (bar) bar.style.display = 'none';
+  }
+}
+function persistDirtyFlag() { try { localStorage.setItem('job_dirty', _localDirty ? '1' : '0'); } catch(e){} }
+setInterval(function(){ updatePendingBar(); persistDirtyFlag(); }, 1000);
+window.addEventListener('pagehide', persistDirtyFlag);
+document.addEventListener('visibilitychange', function(){ if (document.hidden) persistDirtyFlag(); });
+
+// ══════════════════════════════════════
+//  ด่านตอนเปิดระบบ: ถ้ารอบก่อนมีข้อมูลค้างส่งอยู่ในเครื่อง → ส่งขึ้น NAS ให้เสร็จก่อน แล้วค่อยให้คีย์ใหม่
+//  (ป้องกันข้อมูลจากรอบก่อนหายหรือสับสนกับของใหม่) ส่งไม่ได้ → รอต่อและลองส่งเอง ไม่มีปุ่มข้าม (กันพนักงานกดข้ามโดยไม่อ่าน)
+// ══════════════════════════════════════
+var _lastAddedCount = 0, _gateTimer = null, _gateStart = 0;
+function _gateEl() {
+  var g = document.getElementById('jmFlushGate');
+  if (g) return g;
+  g = document.createElement('div'); g.id = 'jmFlushGate';
+  g.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.92);display:flex;align-items:center;justify-content:center;padding:20px;';
+  g.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:22px;text-align:center;"><div id="jmGateMsg" style="font-size:15px;font-weight:700;line-height:1.6;"></div><div id="jmGateBtns" style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div></div>';
+  document.body.appendChild(g);
+  return g;
+}
+var _gateKind = 'prev';
+function gateShow(kind) {   // บล็อกหน้าจอจนกว่าจะบันทึกขึ้น NAS สำเร็จ (ใช้หลังกดบันทึกแล้วส่งไม่สำเร็จ)
+  var g = document.getElementById('jmFlushGate');
+  if (g && g.style.display !== 'none' && _gateTimer) return;   // กำลังบล็อกอยู่แล้ว
+  flushGateStart(kind);
+}
+function flushGateStart(kind) {
+  _gateKind = kind || 'prev';
+  var g = _gateEl(); g.style.display = 'flex'; _gateStart = Date.now();
+  document.getElementById('jmGateMsg').textContent = _gateKind === 'now'
+    ? '⏳ กำลังบันทึกขึ้น NAS... กรุณารอจนกว่าจะสำเร็จ ห้ามปิดหน้านี้'
+    : '⏳ กำลังส่งข้อมูลที่ค้างจากรอบก่อนขึ้น NAS... กรุณารอสักครู่ก่อนคีย์ข้อมูลใหม่';
+  document.getElementById('jmGateBtns').innerHTML = '';
+  if (_gateTimer) clearInterval(_gateTimer);
+  _gateTimer = setInterval(function(){
+    if (_cloudLoadedOnce && !_localDirty) {
+      clearInterval(_gateTimer); _gateTimer = null;
+      document.getElementById('jmGateMsg').textContent = _gateKind === 'now' ? '✅ บันทึกขึ้น NAS สำเร็จ — ทำงานต่อได้' : ('✅ ส่งข้อมูลที่ค้างจากรอบก่อนขึ้น NAS สำเร็จ' + (_lastAddedCount ? ' (' + _lastAddedCount + ' รายการ)' : '') + ' — คีย์ข้อมูลใหม่ได้เลย');
+      document.getElementById('jmGateBtns').innerHTML = '';
+      setTimeout(function(){ g.style.display = 'none'; }, 1200);
+    } else if (Date.now() - _gateStart > 20000) {
+      // ไม่ปิดด่าน ไม่มีทางข้าม — รอจนกว่าจะส่งสำเร็จ (ระบบลองส่งเองต่อเนื่อง) ส่งสำเร็จเมื่อไหร่ด่านเปิดเอง
+      var sec = Math.floor((Date.now() - _gateStart) / 1000);
+      document.getElementById('jmGateMsg').textContent = '⚠️ ยังส่งข้อมูลที่ค้างขึ้น NAS ไม่ได้ (' + sec + ' วินาที) — ตรวจ WiFi/เครือข่าย ระบบกำลังลองส่งต่อเอง ห้ามทำงานต่อหรือปิดหน้านี้จนกว่าจะส่งสำเร็จ';
+      var bt = document.getElementById('jmGateBtns');
+      if (!bt.firstChild) bt.innerHTML = '<button class="btn btn-primary" onclick="flushGateRetry()">🔄 ลองใหม่ตอนนี้</button>';
+      if (sec % 5 === 0) { try { fbLoad(); } catch(e){} }
+    }
+  }, 500);
+}
+function flushGateRetry() { try { fbLoad(); } catch(e){} }
+
+// ── ตัวห่อ fbSave: แจ้งผลชัดเจน + ลองส่งใหม่ทุก 3 วินาทีเมื่อส่งขึ้น NAS ไม่ได้ ──
+// ข้อมูลที่กรอกจะเก็บใน localStorage ของเครื่องนี้ทันที (saveLocal) แล้วส่งขึ้น NAS ต่อทันที
+// ถ้าส่งไม่ได้ (เน็ตหลุด/NAS ไม่ตอบ) ข้อมูลยังอยู่ในเครื่อง และระบบลองส่งซ้ำเองทุก 3 วินาทีจนสำเร็จ
+// ข้อยกเว้น: ถ้าถูกด่านป้องกันข้อมูลหาย (_guardBlocked) บล็อกไว้ จะไม่วนส่งซ้ำ (กันถามยืนยันซ้ำๆ)
+var _guardBlocked = false, _syncToastTimer = null, _syncFailShown = false;
+function syncToast(msg, kind) {
+  var el = document.getElementById('jmSyncToast');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'jmSyncToast';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:99999;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.3);pointer-events:none;transition:opacity .3s;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = kind === 'ok' ? '#15803d' : '#b45309'; el.style.color = '#fff'; el.style.opacity = '1';
+  if (_syncToastTimer) clearTimeout(_syncToastTimer);
+  _syncToastTimer = setTimeout(function(){ el.style.opacity = '0'; }, kind === 'ok' ? 2500 : 5000);
+}
+async function fbSave() {
+  var wasDirty = _localDirty;
+  var ok = false;
+  // บันทึกช้าเกิน 4 วินาที หรือส่งไม่สำเร็จ → บล็อกหน้าจอจนกว่าจะบันทึกขึ้น NAS สำเร็จ (ไม่ให้คีย์ต่อทั้งที่ข้อมูลยังไม่ถึง NAS)
+  var _slow = setTimeout(function(){ if (_localDirty && !_guardBlocked && _cloudLoadedOnce) { try { gateShow('now'); } catch(e){} } }, 4000);
+  try { ok = await _fbSaveInner(); } catch(e) { ok = false; }
+  clearTimeout(_slow);
+  try { if (ok !== true && _localDirty && !_guardBlocked && _cloudLoadedOnce) gateShow('now'); } catch(e){}
+  try {
+    if (ok === true && !_localDirty) {
+      if (wasDirty) syncToast('✅ บันทึกขึ้น NAS สำเร็จ', 'ok');
+      _syncFailShown = false;
+    } else if (ok !== true && _localDirty) {
+      var lbl = document.getElementById('syncLabel');
+      if (lbl) lbl.textContent = _guardBlocked ? 'ถูกระงับ' : 'ออฟไลน์ — รอส่ง';
+      if (!_syncFailShown) { _syncFailShown = true; syncToast(_guardBlocked ? '⚠️ ระบบระงับการบันทึกขึ้น NAS เพื่อป้องกันข้อมูลหาย — แจ้ง admin' : '⚠️ เก็บในเครื่องแล้ว ยังส่งขึ้น NAS ไม่ได้ — ระบบจะลองส่งใหม่ทุก 3 วินาที', 'warn'); }
+    }
+  } catch(e) {}
+  return ok;
+}
+setInterval(function(){
+  if (!_localDirty || _guardBlocked || _saveInFlight || !_cloudLoadedOnce) return;
+  _saveInFlight = true;
+  fbSave().finally(function(){ _saveInFlight = false; });
+}, 3000);
+window.addEventListener('beforeunload', function(e){
+  if (_localDirty) { e.preventDefault(); e.returnValue = 'ยังมีข้อมูลที่ไม่ได้ส่งขึ้น NAS — ปิดหน้านี้ข้อมูลอาจหาย'; return e.returnValue; }
+});
 
 // เช็คแบบเบา: อ่านแค่ savedAt (ไม่กี่ไบต์) ถ้าไม่เปลี่ยนก็ไม่ต้องโหลดข้อมูลทั้งก้อน
 async function fbCheck() {
@@ -3965,6 +4116,15 @@ function onInvDateChange() {
 
 // บันทึก INV — สร้าง jobRecords (type:out) ทุกรายการ + เก็บ invoice + เลือกพิมพ์
 function saveInvoice(doPrint) {
+  // ก่อนบันทึก INV ทุกครั้ง: ดึงข้อมูลล่าสุดจาก NAS (เห็นบิลที่เครื่องอื่นเพิ่งส่งขึ้น) — ติดต่อ NAS ไม่ได้ = ห้ามออก INV
+  if (!_invFreshOk) {
+    invNasSync().then(function(ok){
+      if (ok) { _invFreshOk = true; saveInvoice(doPrint); }
+      else { setInvBanner('fail'); showToast('out','🚫 ติดต่อ NAS ไม่ได้ — ยังออก INV ไม่ได้ (กันตัดสต็อกจากข้อมูลเก่า) ตรวจเครือข่ายแล้วกดบันทึกใหม่','err'); }
+    });
+    return;
+  }
+  _invFreshOk = false;
   var invNo   = document.getElementById('invNo').value.trim();
   var date    = document.getElementById('invDate').value;
   var customer= document.getElementById('invCustomer').value.trim();
