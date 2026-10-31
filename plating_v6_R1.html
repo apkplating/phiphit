@@ -7084,14 +7084,28 @@ function barrelPmAcPick(idx) {
 // เกิดจริง: บิล 080826 รับ 500 แต่ชุบย้อนหลังสะสมได้ถึง 640 (4 รอบ) ทั้งที่แต่ละรอบเช็ค "ผ่าน" แยกกัน
 var _histSessionAdded = {};
 
+// ลำดับ FIFO: วันรับเข้าก่อน → ถ้าวันเดียวกัน ดูเวลาที่คีย์บันทึกในหน้า "รับงานเข้า" (id = 'J'+timestamp) บิลที่คีย์ก่อนต้องชุบก่อน
+function _jobTs(j) { var m = /^J(\d{10,})$/.exec(String((j && j.id) || '')); return m ? parseInt(m[1], 10) : 0; }
+function _jobFifoCmp(a, b) {
+  var d = (a.date||'').localeCompare(b.date||'');
+  if (d !== 0) return d;
+  var ta = _jobTs(a), tb = _jobTs(b);
+  return (ta && tb) ? (ta - tb) : 0;
+}
+function _jobIsEarlier(j, job) {
+  if (j.date < job.date) return true;
+  if (j.date > job.date) return false;
+  var tj = _jobTs(j), tk = _jobTs(job);
+  return !!(tj && tk && tj < tk);
+}
 function findFifoBlocker(job) {
   if (!job) return null;
   var selPartKey = normalizePartKey(job.partName || job.partNo || '');
   if (!selPartKey || !job.date) return null;
   var earlier = (jobMasterItems||[]).filter(function(j){
-    return j.id !== job.id && !j.closed && j.date && j.date < job.date
+    return j.id !== job.id && !j.closed && j.date && _jobIsEarlier(j, job)
       && normalizePartKey(j.partName || j.partNo || '') === selPartKey;
-  }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  }).sort(_jobFifoCmp);
   for (var i=0; i<earlier.length; i++) {
     var ej = earlier[i];
     var ejR = calcJobRemainToPlate(ej.id);
@@ -7109,7 +7123,7 @@ function renderBillList(active, selectedJobId) {
   var pn = document.getElementById('bPartSearch') ? document.getElementById('bPartSearch').value.trim() : '';
 
   // เรียงตาม FIFO (วันรับเก่าสุดก่อน) เสมอ ให้เห็นลำดับคิวชัดเจนตั้งแต่รายการ ไม่ใช่แค่ตอนกดบันทึกแล้วโดนเตือน
-  active = active.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  active = active.slice().sort(_jobFifoCmp);
 
   // อัปเดต hidden select
   sel.innerHTML = '<option value="">—</option>' +
