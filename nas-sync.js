@@ -188,6 +188,7 @@
       var wasDirty = hasDirty();
       var slow = setTimeout(function () { if (hasDirty() && !emergency) showGate('now'); }, 4000);
       var ok = await flush();
+      for (var g2 = 0; ok && hasDirty() && g2 < 3; g2++) ok = await flush(); // มีการเปลี่ยนซ้อนระหว่างส่ง → ส่งรอบต่อไปทันที
       clearTimeout(slow);
       if (ok && !hasDirty()) {
         if (emergency) { onClean(true); return 'ok'; }

@@ -539,7 +539,7 @@ function qcCommitCustomDefect(i, val) {
   qcDefectRows[i]._customMode = false;
   if (val) {
     var names = qcLoadDefectNames();
-    if (names.indexOf(val) === -1) { names.push(val); qcSaveDefectNames(names); qcFbSaveRecords(); }
+    if (names.indexOf(val) === -1) { names.push(val); qcSaveDefectNames(names); qcFbSaveRecords().then(function(){ qcClosedToast('✅ เพิ่มประเภทงานเสีย "'+val+'" และบันทึกขึ้น NAS แล้ว'); }); qcAudit('เพิ่มประเภทงานเสีย', val); }
   }
   qcRenderDefectRows();
 }
@@ -631,6 +631,13 @@ async function qcClosedWrite(method, path, val){
     if (val !== undefined) opt.body = JSON.stringify(val);
     var r = await fetch(qcClosedUrl(path), opt);
     if (!r.ok) throw new Error('HTTP '+r.status);
+    // อ่านกลับจาก NAS จริง ๆ เพื่อยืนยันว่าค่าถูกเก็บแล้ว (ไม่เชื่อแค่สถานะ 200)
+    if (method !== 'DELETE' && path.indexOf('closed') === 0) {
+      var vr = await fetch(qcClosedUrl('closed'), { cache:'no-store' }); var vd = vr.ok ? await vr.json() : null;
+      var want = path === 'closed' ? Object.keys(val) : [path.split('/')[1]];
+      var miss = want.filter(function(k){ return !vd || !vd[k]; });
+      if (miss.length) throw new Error('อ่านกลับไม่พบ '+miss.length+' รายการ');
+    }
     return true;
   } catch(e) { alert('บันทึกขึ้น NAS ไม่สำเร็จ ('+(e.message||e)+')\nยังไม่ได้เปลี่ยนแปลง — ตรวจอินเทอร์เน็ตแล้วลองใหม่'); return false; }
 }
@@ -658,20 +665,53 @@ async function qcFbLoadClosed(){
   } catch(e){ qcSyncAt = null; var st2 = document.getElementById('qcSyncStat'); if (st2) st2.textContent = qcSyncText(); }
 }
 var qcSyncAt = null;
-function qcSyncText(){ return qcSyncAt ? '☁️ ซิงก์ล่าสุด ' + qcSyncAt.toTimeString().slice(0,8) : '⚠️ ซิงก์กับ NAS ไม่ได้'; }
+function qcSyncText(){ return qcSyncAt ? '☁️ ซิงก์ล่าสุด ' + qcSyncAt.toTimeString().slice(0,8) + ' · ปิดไว้บน NAS ทั้งไลน์ ' + Object.keys(qcClosed).length + ' รายการ' : '⚠️ ซิงก์กับ NAS ไม่ได้'; }
 var _qcClosedTick = 0;
 function qcClosedRefreshSoon(){ var t = Date.now(); if (t - _qcClosedTick < 5000) return; _qcClosedTick = t; qcFbLoadClosed(); }
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) qcClosedRefreshSoon(); });
 window.addEventListener('focus', qcClosedRefreshSoon);
 setInterval(function(){ if (!document.hidden) qcFbLoadClosed(); }, 30000);
 
+// ── ประวัติการเปลี่ยนแปลง (ใคร/ทำอะไร/เมื่อไหร่) เก็บบน NAS — ไว้ไล่สาเหตุเมื่อข้อมูลกลับมา/หาย ──
+function qcAuditUrl(){ return FB_LINES[currentLine].replace(/\/+$/,'') + '/qc100-audit-' + currentLine.toLowerCase() + '.json'; }
+function qcAudit(action, detail){
+  try { fetch(qcAuditUrl(), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ at:new Date().toISOString(), by:qcWho(), action:action, detail:String(detail||'').slice(0,300) }) }).catch(function(){}); } catch(e){}
+}
+async function qcShowAudit(){
+  var d = document.getElementById('qcAuditBox');
+  if (!d) { d = document.createElement('div'); d.id = 'qcAuditBox';
+    d.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+    d.onclick = function(ev){ if (ev.target === d) d.remove(); }; document.body.appendChild(d); }
+  d.innerHTML = '<div style="background:#fff;color:#111;border-radius:12px;max-width:640px;width:100%;max-height:80vh;overflow:auto;padding:16px;font-size:13px;">⏳ กำลังโหลดประวัติ...</div>';
+  var html;
+  try {
+    var r = await fetch(qcAuditUrl() + '?orderBy=%22%24key%22&limitToLast=60', { cache:'no-store' });
+    var o = r.ok ? await r.json() : null; var ks = o ? Object.keys(o).sort().reverse() : [];
+    html = ks.length ? ks.map(function(k){ var e = o[k]; var t = new Date(e.at);
+      return '<div style="padding:5px 0;border-bottom:1px solid #eee;"><b>'+esc(t.toLocaleDateString('th-TH')+' '+t.toTimeString().slice(0,8))+'</b> · '+esc(e.by||'-')+' · <span style="color:#b45309;">'+esc(e.action)+'</span><br><span style="color:#555;">'+esc(e.detail||'')+'</span></div>'; }).join('')
+      : 'ยังไม่มีประวัติ';
+  } catch(err) { html = '⚠️ โหลดประวัติไม่ได้: '+esc(err.message||err); }
+  d.innerHTML = '<div style="background:#fff;color:#111;border-radius:12px;max-width:640px;width:100%;max-height:80vh;overflow:auto;padding:16px;font-size:13px;"><div style="font-weight:800;margin-bottom:8px;">📜 ประวัติการเปลี่ยนแปลง QC100 ไลน์ '+esc(currentLine)+' (ล่าสุด 60 รายการ) <a href="#" style="float:right" onclick="document.getElementById(\'qcAuditBox\').remove();return false;">ปิด</a></div>'+html+'</div>';
+}
+function qcClosedToast(msg){ var t = document.getElementById('qcToast'); if(!t) return; t.className='toast ok'; t.textContent=msg; setTimeout(function(){ t.className='toast'; },2500); }
+async function qcCloseAllShown(){
+  if (!NasSync.canEdit()) return;
+  if (!isAdminQc()) return;
+  var ls = qcCurLots.filter(function(e){ return !e.closed; });
+  if (!ls.length || !confirm('ปิดทุก Lot ที่แสดงอยู่ของชิ้นงานนี้ ('+ls.length+' รายการ) ซ่อนถาวรจากรายการตรวจ ใช่ไหม?\n— ไม่ลบประวัติ QC (เปิดคืนได้ที่ "แสดงที่ปิดแล้ว")')) return;
+  var patch = {}, now = new Date().toISOString();
+  ls.forEach(function(e){ patch[qcCK(e.key)] = { at:now, by:qcWho() }; });
+  if (!(await qcClosedWrite('PATCH', 'closed', patch))) return;
+  Object.keys(patch).forEach(function(k){ qcClosed[k] = patch[k]; });
+  qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ ปิด '+ls.length+' รายการ และยืนยันบน NAS แล้ว'); qcAudit('ปิดทุก Lot ของชิ้นงาน', qcPartKey1()+' · '+ls.length+' รายการ');
+}
 async function qcCloseLot(key){
   if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!confirm('ปิด Lot นี้ (ซ่อนจากรายการตรวจ) ใช่ไหม?\n— ไม่ลบข้อมูล เปิดคืนได้ทีหลัง')) return;
   var v = { at:new Date().toISOString(), by:qcWho() };
   if (!(await qcClosedWrite('PUT', 'closed/' + qcCK(key), v))) return;
-  qcClosed[qcCK(key)] = v; qcLocalSaveClosed(); qcRenderLots();
+  qcClosed[qcCK(key)] = v; qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ ปิดแล้ว และยืนยันบน NAS แล้ว'); qcAudit('ปิด Lot', qcPartKey1()+' · '+key);
 }
 async function qcCloseBill(jobKey){
   if (!NasSync.canEdit()) return;
@@ -682,13 +722,13 @@ async function qcCloseBill(jobKey){
   ls.forEach(function(e){ patch[qcCK(e.key)] = { at:now, by:qcWho() }; });
   if (!(await qcClosedWrite('PATCH', 'closed', patch))) return;
   Object.keys(patch).forEach(function(k){ qcClosed[k] = patch[k]; });
-  qcLocalSaveClosed(); qcRenderLots();
+  qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ ปิดบิลแล้ว และยืนยันบน NAS แล้ว'); qcAudit('ปิดบิล', qcPartKey1()+' · '+jobKey+' ('+ls.length+' Lot)');
 }
 async function qcReopenLot(key){
   if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!(await qcClosedWrite('DELETE', 'closed/' + qcCK(key)))) return;
-  delete qcClosed[qcCK(key)]; qcLocalSaveClosed(); qcRenderLots();
+  delete qcClosed[qcCK(key)]; qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ เปิดคืนแล้ว และบันทึกบน NAS แล้ว'); qcAudit('เปิดคืน Lot', qcPartKey1()+' · '+key);
 }
 async function qcCloseBefore(){
   if (!NasSync.canEdit()) return;
@@ -697,13 +737,13 @@ async function qcCloseBefore(){
   if (!d) { alert('เลือกวันที่ก่อน'); return; }
   if (!confirm('ปิดทุก Lot ของ "ทุกชิ้นงาน" ในไลน์ '+currentLine+' ที่ชุบก่อนวันที่ '+d+' ?\n— ไม่ลบข้อมูล ไม่กระทบประวัติ QC เปิดคืนได้โดยกด "ยกเลิกการซ่อน"')) return;
   if (!(await qcClosedWrite('PUT', 'before', d))) return;
-  qcClosedBefore = d; qcLocalSaveClosed(); qcRenderLots();
+  qcClosedBefore = d; qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ ปิดรายการก่อน '+d+' และบันทึกบน NAS แล้ว'); qcAudit('ปิดรายการเก่า (ทุกชิ้นงาน)', 'ก่อนวันที่ '+d);
 }
 async function qcClearBefore(){
   if (!NasSync.canEdit()) return;
   if (!isAdminQc()) return;
   if (!(await qcClosedWrite('DELETE', 'before'))) return;
-  qcClosedBefore = ''; qcLocalSaveClosed(); qcRenderLots();
+  qcClosedBefore = ''; qcLocalSaveClosed(); qcRenderLots(); qcClosedToast('✅ ยกเลิกการซ่อนรายการเก่าแล้ว (บันทึกบน NAS แล้ว)'); qcAudit('ยกเลิกการซ่อนรายการเก่า', '');
 }
 function qcToggleShowClosed(){ qcShowClosed = !qcShowClosed; qcRenderLots(); }
 function isAdminQc(){ return !!(session && session.role === 'admin'); }
@@ -713,6 +753,8 @@ function qcClearBar(){
   return '<div style="font-size:11px;margin-bottom:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;">'
     + '🧹 <b>ล้างรายการเก่า</b> (ทั้งไลน์ '+currentLine+'): ปิดทุก Lot ที่ชุบก่อน <input type="date" id="qcClrDate" value="'+(qcClosedBefore||dv)+'" style="width:auto;padding:2px 4px;font-size:11px;"> '
     + '<button type="button" class="btn btn-outline btn-sm" onclick="qcCloseBefore()">ปิดรายการเก่า</button>'
+    + ' <button type="button" class="btn btn-outline btn-sm" onclick="qcCloseAllShown()">ปิดทุก Lot ของชิ้นงานนี้</button>'
+    + ' <a href="#" onclick="qcShowAudit();return false;">📜 ประวัติการเปลี่ยนแปลง</a>'
     + (qcClosedBefore ? ' <span>ซ่อนก่อน <b>'+esc(qcClosedBefore)+'</b> <a href="#" onclick="qcClearBefore();return false;">ยกเลิกการซ่อน</a></span>' : '')
     + (qcHiddenCount ? ' · <a href="#" onclick="qcToggleShowClosed();return false;">'+(qcShowClosed?'ซ่อน':'แสดง')+'ที่ปิดแล้ว ('+qcHiddenCount+')</a>' : '')
     + ' <span id="qcSyncStat" style="float:right;color:var(--text-muted);">'+qcSyncText()+'</span></div>';
@@ -1001,6 +1043,7 @@ function qcSaveRecord() {
   qcFbSaveRecords(newRecs.length).then(function(r){
     saveBtn.disabled = false;
     toast.className = 'toast ok';
+    qcAudit('บันทึกผลตรวจ', currentLine+' · '+partNo+' · '+newRecs.length+' รายการ · ตรวจ '+qty+' ชิ้น');
     toast.textContent = (r==='queued' ? '🚨 เก็บคิวในเครื่อง (โหมดฉุกเฉิน) ' : '✅ บันทึกขึ้น NAS สำเร็จ ')+'('+currentLine+') '+(newRecs.length>1 ? '— แยก '+newRecs.length+' รายการ (บิล/Pro. Lot No.)' : '');
     setTimeout(function(){ toast.className='toast'; }, 2200);
   });
@@ -1013,7 +1056,8 @@ function qcDeleteRecord(id) {
   var recs = qcLoadRecords().filter(function(r){ return r.id !== id; });
   qcSaveRecordsLocal(recs);
   var tomb = qcLoadTomb(); tomb[id] = Date.now(); qcSaveTomb(currentLine, tomb);
-  qcFbSaveRecords();
+  qcFbSaveRecords().then(function(){ qcClosedToast('✅ ลบรายการตรวจและบันทึกขึ้น NAS แล้ว'); });
+  qcAudit('ลบรายการตรวจ', id);
   qcPopulateDateFilter();
   qcRenderHistory();
   qcRenderLots();

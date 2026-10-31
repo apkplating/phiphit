@@ -586,10 +586,13 @@ if ('caches' in window) {
     </div>
     <div class="field" style="margin-bottom:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <label style="margin:0;">Cust. Lot No <span style="font-size:10px;color:var(--text-muted);font-weight:400;">(ดึงจากบิลรับเข้าให้อัตโนมัติ · แก้ได้ · เว้นว่างได้)</span></label>
+        <label style="margin:0;">Lot No / Data <span style="color:#c0392b;">*</span></label>
+        <button onclick="autoFillBLotNo()" style="font-size:10px;color:var(--blue);background:none;border:1px solid var(--blue);border-radius:6px;padding:2px 7px;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">⚡ ดึงจาก LOT หลัก</button>
       </div>
-      <input type="text" id="bLotNo" placeholder="Cust. Lot ของลูกค้า (ถ้าไม่มีเว้นว่าง)" autocomplete="off" style="font-size:13px;">
-      <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">💡 เลือกบิลแล้วระบบใส่ Cust. Lot ที่คีตอนรับเข้าให้ · Pro Lot No (ของ APK) ใช้ค่าอัตโนมัติจากวันที่แยกต่างหาก</div>
+      <input type="text" id="bLotNo" placeholder="⚠️ ต้องกรอก — ใช้จับคู่กับรับงานเข้า" autocomplete="off"
+        style="font-size:13px;border-color:#f59e0b;background:#fffbeb;"
+        oninput="this.style.borderColor=this.value?'var(--border)':'#f59e0b';this.style.background=this.value?'':'#fffbeb';">
+      <div style="font-size:10px;color:#b45309;margin-top:3px;">💡 ต้องตรงกับ LOT ที่กรอกในหน้า "รับงานเข้า" ถึงจะตัดสต็อคได้</div>
     </div>
 
     <!-- สีที่ชุบ B / C / K -->
@@ -1498,6 +1501,7 @@ if ('caches' in window) {
 </div><!-- end appContent -->
 
 <script src="auth-central.js"></script>
+<script src="nas-sync.js"></script>
 <script src="fb-auth.js"></script>
 <script src="unit-convert.js"></script>
 <script src="wip-calc.js"></script>
@@ -1560,6 +1564,8 @@ function init() {
   var todayLot = todayDDMMYYYY();
   document.getElementById('lotNo').value = todayLot;
   document.getElementById('hdrLot').textContent = todayLot;
+  var _blInit = document.getElementById('bLotNo');
+  if (_blInit && !_blInit.value) { _blInit.value = todayLot; _blInit.style.borderColor='var(--border)'; _blInit.style.background=''; }
 
   renderBarrels();
   renderSummary();
@@ -1735,7 +1741,19 @@ function addBarrel() {
   var lotEl  = document.getElementById('bLotNo');
   var lotNo  = lotEl ? lotEl.value.trim() : '';
 
-  // Cust. Lot No: ปล่อยว่างได้ (ไม่ดึง Pro Lot No ของ APK มาใส่แทน)
+  // ถ้า bLotNo ว่าง → auto-fill จาก LOT หลักของวัน
+  if (!lotNo) {
+    var mainLot = (document.getElementById('lotNo')||{}).value.trim() || '';
+    if (mainLot) {
+      lotNo = mainLot;
+      if (lotEl) { lotEl.value = mainLot; lotEl.style.borderColor='var(--border)'; lotEl.style.background=''; }
+      showToast('entry',tEntry('⚡ ดึง LOT "'+mainLot+'" จากวันนี้อัตโนมัติ','⚡ ယနေ့ LOT "'+mainLot+'" ကို အလိုအလျောက် ယူထားသည်'),'ok');
+    } else {
+      showToast('entry',tEntry('⚠️ กรุณากรอก LOT NO เพื่อให้ตัดสต็อคได้','⚠️ ကုန်ချောင်ခြင်းအတွက် LOT နံပါတ် ဖြည့်ပါ'),'err');
+      if (lotEl) { lotEl.focus(); lotEl.style.borderColor='#e74c3c'; }
+      // ยังให้เพิ่มได้ แต่แจ้งเตือน
+    }
+  }
   // ── ต้องเลือก P/No จาก PM ก่อน (บิลไม่บังคับ) ──
   var bps = document.getElementById('bPartSearch');
   if (!_barrelPartSelected && (!bps || !bps.value.trim())) {
@@ -1901,7 +1919,7 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   // เคลียร์เหตุผล rework ที่เพิ่งบันทึกไป — บังคับเลือกใหม่ทุกรอบ กันพลาดเอาเหตุผลรอบก่อนมาปนกับรอบใหม่
   var rrSelReset = document.getElementById('reworkReasonSelect'); if (rrSelReset) rrSelReset.value = '';
   var rrDetailReset = document.getElementById('reworkReasonDetail'); if (rrDetailReset) { rrDetailReset.value=''; rrDetailReset.style.display='none'; }
-  var _blReset = document.getElementById('bLotNo'); if (_blReset) _blReset.value = '';
+  // ไม่ reset bLotNo — ให้ใช้ LOT เดิมต่อ
   _barrelPartWeightG = 0;
   var bh = document.getElementById('barrelWeightHint'); if(bh) bh.textContent='';
 
@@ -1914,6 +1932,7 @@ function delBarrel(id) {
   if (role !== 'admin' && role !== 'operator') {
     alert('ไม่มีสิทธิ์ลบรายรอบ'); return;
   }
+  if (!NasSync.canEdit()) return;
   // คืนสต็อค Job Master ก่อนลบ
   var deleted = todayBarrels.find(function(r){ return r.id === id; });
   todayBarrels = todayBarrels.filter(function(r){ return r.id !== id; });
@@ -2146,7 +2165,7 @@ async function autoJobOut(rec) {
     await fetch(FB_JOB_PATH + '.json', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(await jmPatchBody(newOuts))
+      body: JSON.stringify({ items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() })
     });
     showToast('entry', '📦 ตัดยอด Job ' + newOuts.length + ' รายการอัตโนมัติ', 'ok');
     if (typeof renderJobBoard === 'function') renderJobBoard();
@@ -2440,7 +2459,9 @@ function toggleDetail(id) {
 }
 
 function delDay(id) {
+  if (!NasSync.canEdit()) return;
   if (!confirm('ลบรายการนี้?')) return;
+  var _dd = _ddLoad(); _dd[id] = Date.now(); _ddSave(_dd);
   dayRecords = dayRecords.filter(function(r){ return r.id !== id; });
   try { localStorage.setItem('b1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
   renderHistory();
@@ -2501,6 +2522,7 @@ function exportCSVDetail() {
 }
 
 function deleteAllHistory() {
+  if (!NasSync.canEdit()) return;
   if (!dayRecords.length) { showToast('entry','ไม่มีประวัติให้ลบ','err'); return; }
   if (!confirm('⚠️ ลบประวัติทั้งหมด ' + dayRecords.length + ' รายการ?\n\nแนะนำให้ Export CSV ก่อน')) return;
   if (!confirm('🔴 ยืนยันอีกครั้ง — ข้อมูลจะหายถาวรทุกเครื่อง')) return;
@@ -3546,46 +3568,63 @@ function fbSetBadge(ok) {
   b.style.color      = ok ? 'var(--success)'    : '#9b2c2c';
 }
 
-// บันทึกขึ้น Realtime Database
-async function fbSave() {
-  if (!fbIsConfigured()) return;
-  var savedAt = new Date().toISOString();
-  var body = { dayRecords: dayRecords, todayBarrels: todayBarrels, savedAt: savedAt };
-  // settings
-  try { body.chemSettings  = chemSettings; } catch(e){}
-  // ── เพิ่ม chemItems และ chemRecords ──
-  try { body.chemItems     = chemItems;    } catch(e){}
-  try { body.chemRecords   = chemRecords;  } catch(e){}
-  try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
-  try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]');   } catch(e){}
-  try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
-  try { body.discordWH     = discordWH || ''; } catch(e){}
-  try {
-    var res = await fetch(fbDataUrl(), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (res.ok) {
-      _fbLastSavedAt = savedAt;
-      _localDirty = false; // ยืนยันซิงค์สำเร็จแล้ว
-      showToast('entry','☁️ Sync ขึ้น Firebase แล้ว','ok');
-      return true;
-    } else {
-      if (res.status === 401 || res.status === 403) {
-        console.warn('Firebase auth expired ('+res.status+'). Re-configure in settings.');
-        updateLiveIndicator(false);
-        // แจ้งผู้ใช้ตรง ๆ — ก่อนหน้านี้เงียบแค่ log console ทำให้ดูเหมือนบันทึกสำเร็จทั้งที่จริงไม่ขึ้น Firebase เลย
-        showToast('entry','⚠️ Sync ไป Firebase ไม่สำเร็จ (หมดสิทธิ์เข้าถึง) — บันทึกไว้ในเครื่องนี้เท่านั้น ลองรีเฟรชหน้าหรือแจ้งแอดมิน','err');
-      } else {
-        showToast('entry','Firebase Error: ' + res.status,'err');
+// ═══ ส่งขึ้น NAS (ผ่าน nas-sync.js: ต้องสำเร็จก่อนทำต่อ) ═══
+var _nodeLoadedOnce = false; // เคยโหลด node จาก NAS สำเร็จในเซสชันนี้แล้วหรือยัง
+function _ddLoad() { try { return JSON.parse(localStorage.getItem('b1_deletedDays')||'{}')||{}; } catch(e){ return {}; } }
+function _ddSave(o) { try { localStorage.setItem('b1_deletedDays', JSON.stringify(o)); } catch(e){} }
+function _mergeById(remoteArr, localArr) {
+  if (_nodeLoadedOnce) return localArr;            // โหลดมาแล้ว = ของเครื่องนี้เป็นปัจจุบัน (รวมที่ลบ)
+  var by = {}, out = [];                             // ยังไม่เคยโหลด (เครื่องใหม่/ข้อมูลว่าง) = ห้ามทับของบน NAS ด้วยของว่าง
+  (Array.isArray(remoteArr)?remoteArr:[]).forEach(function(r){ if(r && r.id!=null) by[r.id]=r; });
+  (localArr||[]).forEach(function(r){ if(r && r.id!=null) by[r.id]=r; });
+  Object.keys(by).forEach(function(k){ out.push(by[k]); });
+  return out;
+}
+// อ่านของบน NAS (ETag) → รวมกับของเครื่องนี้ (dayRecords รวมตาม id, รายการที่ลบ = tombstone) → เขียนกลับด้วย If-Match; ชน 412 = อ่านใหม่แล้วรวมซ้ำ
+async function fbPushNode() {
+  if (!fbIsConfigured()) return false;
+  for (var attempt=0; attempt<4; attempt++) {
+    var res = await fetch(fbDataUrl(), { headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'} });
+    if (!res.ok) return false;
+    var etag = res.headers.get('ETag');
+    var remote = (await res.json()) || {};
+    var dd = Object.assign({}, remote.deletedDays||{}, _ddLoad());
+    var by = {};
+    (Array.isArray(remote.dayRecords)?remote.dayRecords:[]).forEach(function(r){ if(r && r.id!=null && !dd[r.id]) by[r.id]=r; });
+    dayRecords.forEach(function(r){ if(r && r.id!=null && !dd[r.id]) by[r.id]=r; });
+    var mergedDays = Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){ return b.id - a.id; });
+    var savedAt = new Date().toISOString();
+    var body = { dayRecords: mergedDays, todayBarrels: todayBarrels, savedAt: savedAt, deletedDays: dd };
+    if (remote.clearedAt) body.clearedAt = remote.clearedAt;
+    try { body.chemSettings  = chemSettings; } catch(e){}
+    try { body.chemItems     = _mergeById(remote.chemItems, chemItems);   } catch(e){}
+    try { body.chemRecords   = _mergeById(remote.chemRecords, chemRecords); } catch(e){}
+    try { body.partPresets   = JSON.parse(localStorage.getItem('b1_partPresets')||'[]'); } catch(e){}
+    try { body.partNames     = JSON.parse(localStorage.getItem('b1_partNames')||'[]');   } catch(e){}
+    try { body.customerNames = JSON.parse(localStorage.getItem('b1_customerNames')||'[]'); } catch(e){}
+    try { body.discordWH     = discordWH || ''; } catch(e){}
+    var h = {'Content-Type':'application/json'}; if (etag) h['If-Match'] = etag;
+    var put = await fetch(fbDataUrl(), { method:'PUT', headers:h, body: JSON.stringify(body) });
+    if (put.ok) {
+      _fbLastSavedAt = savedAt; _localDirty = false; _ddSave(dd);
+      if (mergedDays.length !== dayRecords.length || mergedDays.some(function(r,i){ return dayRecords[i] !== r && !dayRecords.includes(r); })) {
+        dayRecords = mergedDays;
+        try { localStorage.setItem('b1_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
+        try { renderHistory(); } catch(e){}
       }
-      return false;
+      return true;
     }
-  } catch(e) {
-    showToast('entry','Firebase: ' + e.message,'err');
-    return false;
+    if (put.status !== 412) return false;
   }
+  return false;
+}
+// เรียกจากทุกที่ที่เคยเรียก fbSave(): จำว่ายังไม่ถึง NAS + ส่ง (ช้า/ไม่ได้ = หน้าจอบล็อกจนสำเร็จ) → true เมื่อขึ้น NAS แล้ว
+async function fbSave() {
+  if (!fbIsConfigured()) return false;
+  _localDirty = true;
+  NasSync.markDirty('node');
+  var r = await NasSync.commit({kind:'append'});
+  return r === 'ok' || r === 'queued-then-ok';
 }
 
 // โหลดจาก Realtime Database
@@ -3595,15 +3634,16 @@ async function fbLoad(silent) {
     var res = await fetch(fbDataUrl());
     if (!res.ok) return;
     var data = await res.json();
+    _nodeLoadedOnce = true;
     if (!data) return;
 
     // ── กันข้อมูลที่เพิ่งกรอกในเครื่องแต่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ ถูกทับหายเงียบๆ (ปัญหาจริงที่เจอ:
     // เน็ตไม่เสถียร บันทึกไม่ผ่าน แล้ว poll พื้นหลัง/กลับมาเปิดแท็บ ดึงข้อมูลเก่าจากเซิร์ฟเวอร์มาทับข้อมูลในเครื่อง
     // ที่เพิ่งกรอกไปทันทีที่เน็ตกลับมา — การเช็ค cloudSavedAt<=_fbLastSavedAt ด้านล่างป้องกันไม่ได้เลยถ้า
     // _fbLastSavedAt ยังว่างอยู่ (ไม่เคยบันทึกสำเร็จเลยในเซสชันนี้) จึงต้องเช็คธง _localDirty แยกต่างหากก่อนเสมอ ──
-    if (_localDirty) {
+    if (_localDirty || NasSync.hasPending()) {
       console.warn('[plating_v4] fbLoad() พบข้อมูลในเครื่องที่ยังไม่ยืนยันว่าขึ้น Firebase สำเร็จ — ข้ามการดึงข้อมูลรอบนี้ และลองบันทึกซ้ำแทน');
-      fbSave(); // เน็ตกลับมาแล้ว (fbLoad() เพิ่งสำเร็จ) ลองส่งข้อมูลในเครื่องขึ้นไปแทนที่จะดึงของเก่าลงมาทับ
+      NasSync.retryNow(); // เน็ตกลับมาแล้ว ให้ nas-sync ส่งของที่ค้างขึ้นไป แทนที่จะดึงของเก่าลงมาทับ
       return;
     }
 
@@ -3634,7 +3674,13 @@ async function fbLoad(silent) {
       return;
     }
 
-    var cloudDayRecords   = data.dayRecords   || [];
+    // รายการวันที่ถูกลบจากเครื่องอื่น (tombstone)
+    var _ddCloud = data.deletedDays || {};
+    if (Object.keys(_ddCloud).length) {
+      var _ddAll = Object.assign({}, _ddCloud, _ddLoad()); _ddSave(_ddAll);
+      dayRecords = dayRecords.filter(function(r){ return !_ddAll[r.id]; });
+    }
+    var cloudDayRecords   = (data.dayRecords   || []).filter(function(r){ return !_ddCloud[r.id]; });
     var cloudTodayBarrels = data.todayBarrels || [];
 
     // merge dayRecords — ถึงตรงนี้ยืนยันแล้วว่า cloud ใหม่กว่า (เช็ค savedAt ด้านบนแล้ว)
@@ -3795,11 +3841,13 @@ document.addEventListener('visibilitychange', function(){
 // Poll เฉพาะ todayBarrels (เบากว่า fbLoad เต็ม)
 async function fbLivePoll() {
   if (!fbIsConfigured()) return;
+  if (NasSync.hasPending()) return; // มีรอบที่ยังไม่ถึง NAS ห้ามดึงของบน NAS มาทับ
   try {
     var liveUrl = getStoredFbUrl().replace(/\/+$/, '') + '/live.json';
     var res = await fetch(liveUrl);
     if (!res.ok) return;
     var data = await res.json();
+    if (NasSync.hasPending()) return;
     if (!data || !data.updatedAt) return;
 
     // ══ เช็ควันที่ก่อน — ถ้าข้อมูล cloud เป็นของเมื่อวานให้ข้าม ══
@@ -3887,11 +3935,13 @@ function updateLiveBanner(data) {
 var _livePushTimer = null;
 
 function livePush() {
+  NasSync.markDirty('live'); // จำทันทีว่ายังไม่ถึง NAS (ปิดหน้าตอนนี้ = เปิดใหม่จะส่งต่อให้ก่อนคีย์)
   if (_livePushTimer) clearTimeout(_livePushTimer);
   _livePushTimer = setTimeout(livePushNow, 300);
 }
 
-async function livePushNow() {
+// ส่งรอบสดขึ้น NAS — คืน true เมื่อทั้ง /live และ /data/todayBarrels สำเร็จ (ข้อมูลสร้าง ณ ตอนส่งจริง = ล่าสุดเสมอ)
+async function fbPushLive() {
   var s = calcSummary();
   var now = new Date();
   var recorder = (document.getElementById('recorder')||{}).value || '–';
@@ -3909,28 +3959,32 @@ async function livePushNow() {
     status: 'live'
   };
 
-  // ── Firebase: push /live + update /data todayBarrels ──
-  if (fbIsConfigured()) {
-    try {
-      var base = getStoredFbUrl().replace(/\/+$/, '');
-      // push /live สำหรับ poll จากเครื่องอื่น
-      await fetch(base + '/live.json', {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(liveData)
-      });
-      // update /data/todayBarrels ให้เครื่อง Viewer เห็น
-      await fetch(base + '/data/todayBarrels.json', {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(todayBarrels)
-      });
-      _fbLiveUpdatedAt = liveData.updatedAt;
-      updateLiveIndicator(true);
-    } catch(e) { updateLiveIndicator(false); }
-  }
-
-  // หมายเหตุ: ยกเลิก Auto Discord (ส่งอัตโนมัติทุกรอบ) แล้ว — เหลือแค่ live sync เงียบๆ ด้านบน
-  // ถ้าอยากแจ้ง Discord ใช้ปุ่ม "📣 ส่งตอนนี้" (sendLiveDiscord) หรือ "บันทึก + ส่ง Discord" ท้ายวันแทน
+  if (!fbIsConfigured()) return true;
+  try {
+    var base = getStoredFbUrl().replace(/\/+$/, '');
+    var r1 = await fetch(base + '/live.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(liveData) });
+    if (!r1.ok) { updateLiveIndicator(false); return false; }
+    var r2 = await fetch(base + '/data/todayBarrels.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(todayBarrels) });
+    if (!r2.ok) { updateLiveIndicator(false); return false; }
+    _fbLiveUpdatedAt = liveData.updatedAt;
+    updateLiveIndicator(true, liveData);
+    return true;
+  } catch(e) { updateLiveIndicator(false); return false; }
 }
+async function livePushNow() {
+  NasSync.markDirty('live');
+  return await NasSync.commit({kind:'append'});
+}
+
+NasSync.init({
+  name: 'plating_b1',
+  push: function(key){ return key==='live' ? fbPushLive() : fbPushNode(); },
+  isAdmin: function(){ return window._currentRole === 'admin'; },
+  who: function(){ return (typeof currentUserName!=='undefined' && currentUserName) || 'admin'; },
+  base: function(){ return getStoredFbUrl() || FB_DB_URL; },
+  snapshot: function(){ return { dayRecords: dayRecords, todayBarrels: todayBarrels, chemItems: chemItems, chemRecords: chemRecords }; }
+});
+if (NasSync.hasPending()) { _localDirty = true; }
 
 function updateLiveIndicator(ok) {
   var el = document.getElementById('liveIndicator');
@@ -6182,6 +6236,7 @@ function checkPin() {
       return;
     }
     currentRole = result.role;
+    if (result.role === 'admin') { try { NasSync.rememberAdmin(input); } catch(e){} }
     currentTabs = result.tabs;
     currentUserName = (result.user && result.user.name) || '';
     currentNobillApprove = !!result.nobillApprove;
@@ -6272,6 +6327,7 @@ function showApp(role) {
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('userBar').style.display = 'flex';
   init();
+  try { NasSync.startup(); } catch(e){}
   // ใส่ delay เล็กน้อยให้ DOM render ก่อน
   setTimeout(function(){ applyRoleUI(role); }, 300);
 }
@@ -6738,22 +6794,6 @@ var FB_JOB_PATH = FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') + '/job-master'
 var jobMasterItems   = [];
 var jobMasterRecords = [];
 
-// รองรับทั้ง array เดิม และ object ที่ใช้ id เป็นคีย์ (โครงสร้างใหม่ของ /job-master)
-function _jmArr(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }).sort(function(a,b){ return ((b&&b._seq)||0)-((a&&a._seq)||0); }); return []; }
-// ── เขียนรายการตัดยอดใหม่ขึ้น /job-master ──
-// โครงสร้างใหม่ (_fmt = 2): ส่งเฉพาะ record ใหม่ที่ records/<id> (ไม่ส่งทั้งอาร์เรย์ → เร็ว และไม่ไปทับรายการที่เครื่องอื่นเพิ่งเพิ่ม)
-// โครงสร้างเดิม: ส่ง items+records ทั้งอาร์เรย์เหมือนเดิม — เช็ค _fmt ที่เซิร์ฟเวอร์ทุกครั้ง (ไม่กี่ไบต์) กันหน้าที่เปิดค้างข้ามการย้ายข้อมูล
-async function jmPatchBody(newRecs) {
-  var fmt = 0;
-  try { var fr = await fetch(FB_JOB_PATH + '/_fmt.json', { cache: 'no-store' }); if (fr.ok) fmt = (await fr.json()) === 2 ? 2 : 0; } catch(e) {}
-  if (fmt === 2) {
-    var b = {}, t = Date.now();
-    newRecs.forEach(function(r, i){ if (r._seq == null) r._seq = t + (newRecs.length - i); b['records/' + r.id] = r; });
-    b.savedAt = new Date().toISOString();
-    return b;
-  }
-  return { items: jobMasterItems, records: jobMasterRecords, savedAt: new Date().toISOString() };
-}
 async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
   // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
@@ -6764,8 +6804,8 @@ async function jobMasterLoad() {
     if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
     var data = await res.json();
     if (data) {
-      jobMasterItems   = _jmArr(data.items);
-      jobMasterRecords = _jmArr(data.records);
+      jobMasterItems   = Array.isArray(data.items)   ? data.items   : [];
+      jobMasterRecords = Array.isArray(data.records) ? data.records : [];
     }
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
@@ -7208,7 +7248,6 @@ function onBarrelJobPick() {
   if (!job) return;
   document.getElementById('bPartName').value = job.partName || '';
   if (job.customer) document.getElementById('bCustomer').value = job.customer;
-  var _blCl = document.getElementById('bLotNo'); if (_blCl) _blCl.value = job.custLot || '';
   if (infoEl) {
     var rr  = calcJobRemainToPlate(jobId);
     var isKgUnit = job.unit==='kg';
@@ -7409,7 +7448,7 @@ async function confirmJobOut() {
     // ⚠️ ใช้ PATCH ไม่ใช่ PUT — เหตุผลเดียวกับใน autoJobOut() (กันเขียนทับ invoices/customers/ฯลฯ ทิ้ง)
     await fetch(FB_JOB_PATH + '.json', {
       method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(await jmPatchBody([rec]))
+      body: JSON.stringify({ items:jobMasterItems, records:jobMasterRecords, savedAt:new Date().toISOString() })
     });
     showToast('job','✅ เบิกสำเร็จ — '+qty+' ชิ้น','ok');
     setTimeout(function(){ closeJobOutModal(); renderJobBoard(); }, 1200);
