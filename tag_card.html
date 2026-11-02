@@ -142,6 +142,10 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <label style="margin-top:8px;">Pro Lot No. (ดึงจาก QC 100%)</label>
         <input type="text" id="tgProLotShow" readonly placeholder="เลือกบิลก่อน">
         <div class="hint" id="tgLotHint"></div>
+        <div id="tgLotAdmin" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgCloseSelectedLot()">🔒 ปิดรายการที่เลือก (ซ่อนจากรายการ)</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgShowClosedLots()">📂 รายการที่ปิดไว้ / เปิดคืน (<span id="tgClosedN">0</span>)</button>
+        </div>
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>Del. Date</label>
@@ -3487,6 +3491,38 @@ function publishIcs(id, ctx, pageHtml, password) {
 //  ป้องกันเลือก Lot ที่สะกดผิด/ยังไม่เคยตรวจได้ตั้งแต่ต้น ไม่ต้องพึ่งจับคู่ string ที่พิมพ์เองอีกต่อไป
 // ══════════════════════════════════════
 var _qcRecordsForPartNo = []; // record ทั้งหมดของ P/No ปัจจุบัน ที่โหลดมาครั้งเดียว ใช้เลือก Insp.By ต่อได้ทันทีไม่ fetch ซ้ำ
+var _tagClosed = {}, _tagClosedList = [];
+function tgCloseKey(ek){ return (String($('tgPartNo').value||'').trim().toLowerCase() + '__' + ek).replace(/[^A-Za-z0-9_\-]/g,'_'); }
+function tgIsAdmin(){ return !!(session && session.role === 'admin'); }
+function tgReloadLots(){ loadLotOptionsForPartNo($('tgPartNo').value.trim()); }
+async function tgCloseSelectedLot(){
+  if (!tgIsAdmin()) return;
+  var ek = $('tgLot').value, m = _lotMeta[ek];
+  if (!ek || !m) { alert('เลือกบิลที่จะปิดก่อน'); return; }
+  if (!confirm('ปิดรายการ '+(m.bill?'บิล '+m.bill:'ไม่ระบุบิล')+' · Pro Lot '+m.lot+' (คงเหลือ '+m.rem.toLocaleString()+' ชิ้น)\nซ่อนจากรายการพิมพ์ Tag — ไม่ลบข้อมูล เปิดคืนได้')) return;
+  var v = { at:new Date().toISOString(), by:(session.user&&session.user.name)||'admin', partNo:$('tgPartNo').value.trim(), label:(m.bill?'บิล '+m.bill:'ไม่ระบุบิล')+' · Pro Lot '+m.lot+' ('+m.line+') เหลือ '+m.rem };
+  try { var r = await fetch(FB_LINES.B1 + '/tag-lot-closed/' + tgCloseKey(ek) + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(v) }); if (!r.ok) throw new Error('HTTP '+r.status); }
+  catch(e){ alert('บันทึกขึ้น NAS ไม่สำเร็จ ('+(e.message||e)+') — ยังไม่ได้ปิด'); return; }
+  _tagClosed[tgCloseKey(ek)] = v; $('tgLot').value = ''; onLotSelected(); tgReloadLots();
+}
+function tgShowClosedLots(){
+  if (!tgIsAdmin()) return;
+  var pn = String($('tgPartNo').value||'').trim().toLowerCase();
+  var rows = Object.keys(_tagClosed).filter(function(k){ var x=_tagClosed[k]; return x && String(x.partNo||'').trim().toLowerCase()===pn; });
+  var d = $('tgClosedBox'); if (d) d.remove();
+  d = document.createElement('div'); d.id = 'tgClosedBox';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML = '<div style="background:#fff;border-radius:10px;padding:16px;max-width:620px;width:100%;max-height:80vh;overflow:auto;"><div style="font-weight:700;margin-bottom:8px;">รายการที่ปิดไว้ — '+esc($('tgPartNo').value)+'</div>' +
+    (rows.length ? rows.map(function(k){ var x=_tagClosed[k]; return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;"><span>'+esc(x.label||k)+'<br><small style="color:#888;">ปิดโดย '+esc(x.by||'')+' · '+esc(String(x.at||'').slice(0,10))+'</small></span><button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" data-k="'+esc(k)+'" onclick="tgReopenLot(this.dataset.k)">🔓 เปิดคืน</button></div>'; }).join('') : '<div style="color:#888;">ไม่มีรายการที่ปิดไว้</div>') +
+    '<div style="text-align:right;margin-top:10px;"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'tgClosedBox\').remove()">ปิดหน้าต่าง</button></div></div>';
+  document.body.appendChild(d);
+}
+async function tgReopenLot(k){
+  if (!tgIsAdmin()) return;
+  try { var r = await fetch(FB_LINES.B1 + '/tag-lot-closed/' + k + '.json', { method:'DELETE' }); if (!r.ok) throw new Error('HTTP '+r.status); }
+  catch(e){ alert('เปิดคืนไม่สำเร็จ ('+(e.message||e)+')'); return; }
+  delete _tagClosed[k]; var b = $('tgClosedBox'); if (b) b.remove(); tgReloadLots();
+}
 var _tagLogOk = true, _tagLogForPart = [], _lotRemain = {}, _lotMeta = {};
 var _tagLogIds = [];
 var _lotLoadSeq = 0;          // เลขรอบการโหลด — ผลของรอบเก่า (P/No เดิม/เน็ตช้า) ที่มาถึงทีหลังจะถูกทิ้ง ไม่ทับของใหม่
@@ -3551,12 +3587,14 @@ function loadLotOptionsForPartNo(partNo) {
   var seq = _lotLoadSeq;
   var lines = ['B1','B2','R1'];
   var logP = fetchJsonWithTimeout(FB_LINES.B1 + '/tag-print-log.json', 10000).then(function(d){ return { ok:true, d:d }; }).catch(function(){ return { ok:false, d:null }; });
+  var closedP = fetchJsonWithTimeout(FB_LINES.B1 + '/tag-lot-closed.json', 10000).then(function(d){ return d || {}; }).catch(function(){ return {}; });
   Promise.all(lines.map(function(line){
     return fetchJsonWithTimeout(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json', 10000)
       .then(function(d){ return { ok: true, recs: (d && Array.isArray(d.records)) ? d.records : [] }; })
       .catch(function(){ return { ok: false, recs: [] }; });
-  }).concat([logP])).then(function(results){
+  }).concat([closedP, logP])).then(function(results){
     var logRes = results.pop();
+    _tagClosed = results.pop() || {};
     _tagLogOk = logRes.ok;
     _tagLogIds = logRes.d ? Object.keys(logRes.d) : [];
     _tagLogForPart = logRes.d ? Object.keys(logRes.d).map(function(k){ return logRes.d[k]; }).filter(function(x){ return x && String(x.partNo||'').trim().toLowerCase() === partNo.toLowerCase(); }) : [];
@@ -3606,10 +3644,13 @@ function loadLotOptionsForPartNo(partNo) {
     });
     legacy.forEach(function(g){ var left = g.n; lotOrder.forEach(function(k){ var e = lotInfo[k]; if (e.lot !== g.lot || left <= 0) return; var t = Math.min(left, Math.max(0, e.ok - e.used)); e.used += t; left -= t; }); });
     _lotRemain = {}; _lotMeta = {};
-    var seenLots = {}, totalRemain = 0, usedUp = 0;
+    var seenLots = {}, totalRemain = 0, usedUp = 0, closedN = 0;
+    var _cn = $('tgClosedN'); if (_cn) _cn.textContent = Object.keys(_tagClosed).filter(function(k){ var x=_tagClosed[k]; return x && String(x.partNo||'').trim().toLowerCase()===partNo.toLowerCase(); }).length;
+    $('tgLotAdmin').style.display = tgIsAdmin() ? 'flex' : 'none';
     var options = ['<option value="">— เลือกบิล —</option>'];
     lotOrder.forEach(function(ek){
       var e = lotInfo[ek], rem = e.ok - e.used;
+      if (_tagClosed[tgCloseKey(ek)]) { closedN++; return; } // แอดมินปิดรายการแล้ว
       if (rem <= 0) { usedUp++; return; } // พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้ว → เอาออกจากรายการ
       seenLots[ek] = true; _lotRemain[ek] = rem; totalRemain += rem;
       _lotMeta[ek] = { rem: rem, date: e.pd || e.date || '', lot: e.lot, line: e.line, jobKey: e.jobKey, bill: e.bill, customer: e.customer, custLots: e.custLots, insp: e.insp };
@@ -3629,7 +3670,7 @@ function loadLotOptionsForPartNo(partNo) {
       $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
       $('tgLotHint').className = 'hint warn';
     } else {
-      $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
+      $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+(closedN ? ' · ปิดแล้ว '+closedN+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
       $('tgLotHint').className = 'hint ' + (_tagLogOk ? 'ok' : 'warn');
     }
   });
