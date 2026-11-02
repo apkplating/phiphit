@@ -905,11 +905,18 @@ function qcSaveRecordsLocal(arr, line) { localStorage.setItem(qcRecordsKey(line)
 
 // ── ส่งขึ้น NAS: อ่านของบน NAS (ETag) → รวมกับของเครื่องนี้ → เขียนกลับด้วย If-Match (ชนกัน 412 = อ่านใหม่แล้วรวมซ้ำ) ──
 // รายการที่ลบ = tombstone (deleted:{id:ts}) กันรายการที่ลบแล้วถูกเครื่องอื่นส่งกลับมา
+function qcFetchT(url, opts, ms) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var t = setTimeout(function(){ if (ctl) ctl.abort(); }, ms || 12000);
+  opts = Object.assign({}, opts || {}); if (ctl) opts.signal = ctl.signal;
+  return fetch(url, opts).then(function(r){ clearTimeout(t); return r; }, function(e){ clearTimeout(t); throw e; });
+}
 async function qcPushLine(line) {
   var url = FB_LINES[line].replace(/\/+$/,'') + '/plating-'+line.toLowerCase()+'-qc100.json';
   for (var attempt=0; attempt<4; attempt++) {
-    var res = await fetch(url, { headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'} });
-    if (!res.ok) return false;
+    var res;
+    try { res = await qcFetchT(url, { headers:{'X-Firebase-ETag':'true','Cache-Control':'no-cache'} }); } catch(e) { NasSync.setError(line+': ต่อ NAS ไม่ได้ ('+(e && e.name==='AbortError'?'หมดเวลา':(e&&e.message)||e)+')'); return false; }
+    if (!res.ok) { NasSync.setError(line+': อ่านจาก NAS ไม่ได้ HTTP '+res.status); return false; }
     var etag = res.headers.get('ETag');
     var remote = await res.json() || {};
     var deleted = Object.assign({}, remote.deleted||{}, qcLoadTomb(line));
@@ -920,14 +927,15 @@ async function qcPushLine(line) {
     var defects = (Array.isArray(remote.defects)?remote.defects:[]).slice();
     qcLoadDefectNames().forEach(function(d){ if (defects.indexOf(d)===-1) defects.push(d); });
     var h = {'Content-Type':'application/json'}; if (etag) h['If-Match'] = etag;
-    var put = await fetch(url, { method:'PUT', headers:h,
-      body: JSON.stringify({ records: recs, defects: defects, deleted: deleted, savedAt: new Date().toISOString() }) });
+    var put;
+    try { put = await qcFetchT(url, { method:'PUT', headers:h,
+      body: JSON.stringify({ records: recs, defects: defects, deleted: deleted, savedAt: new Date().toISOString() }) }); } catch(e) { NasSync.setError(line+': ส่งขึ้น NAS ไม่ได้ ('+(e && e.name==='AbortError'?'หมดเวลา':(e&&e.message)||e)+')'); return false; }
     if (put.ok) {
       if (line===currentLine) { qcSaveRecordsLocal(recs, line); }
       qcSaveTomb(line, deleted);
       return true;
     }
-    if (put.status!==412) return false;
+    if (put.status!==412) { var _pt=''; try { _pt = (await put.text()).slice(0,120); } catch(e){} NasSync.setError(line+': NAS ปฏิเสธการบันทึก HTTP '+put.status+(_pt?' '+_pt:'')); return false; }
   }
   return false;
 }

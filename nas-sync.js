@@ -21,7 +21,7 @@
    ══════════════════════════════════════════════════════════ */
 (function (g) {
   'use strict';
-  var cfg = null, dirty = {}, emergency = null, inflight = null;
+  var cfg = null, dirty = {}, emergency = null, inflight = null, lastErr = '';
   var gateEl = null, gateKind = 'prev', gateStart = 0, gateTimer = null, waiters = [];
   var toastTimer = null, ver = 0;
 
@@ -106,7 +106,7 @@
   function gateTick() {
     var sec = Math.floor((Date.now() - gateStart) / 1000);
     if (sec >= 20) {
-      gateMsg('⚠️ ยังส่งขึ้น NAS ไม่ได้ (' + sec + ' วินาที) — ตรวจ WiFi/ซิม/เครือข่าย ระบบกำลังลองส่งต่อเอง ห้ามทำงานต่อหรือปิดหน้านี้จนกว่าจะส่งสำเร็จ');
+      gateMsg('⚠️ ยังส่งขึ้น NAS ไม่ได้ (' + sec + ' วินาที) — ตรวจ WiFi/ซิม/เครือข่าย ระบบกำลังลองส่งต่อเอง ห้ามทำงานต่อหรือปิดหน้านี้จนกว่าจะส่งสำเร็จ' + (lastErr ? ' [สาเหตุล่าสุด: ' + lastErr + ']' : ''));
       var btns = '<button onclick="NasSync.retryNow()" style="padding:8px 14px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;">🔄 ลองใหม่ตอนนี้</button>';
       if (sec >= 60) btns += '<button onclick="NasSync.enableEmergency()" style="padding:8px 14px;border-radius:10px;border:1px solid #b91c1c;background:#fff;color:#b91c1c;font-weight:700;cursor:pointer;">🚨 เปิดโหมดฉุกเฉิน (admin)</button>';
       var nb = document.getElementById('nasGateBtns');
@@ -126,7 +126,7 @@
     for (var i = 0; i < keys.length; i++) {
       var k = keys[i], snap = dirty[k]; if (!snap) continue;
       var ok = false;
-      try { ok = await cfg.push(k); } catch (e) { ok = false; }
+      try { ok = await cfg.push(k); } catch (e) { ok = false; lastErr = String((e && e.message) || e); }
       if (ok === true) {
         var cur = dirty[k];
         if (cur && cur.v === snap.v) delete dirty[k];                       // ไม่มีการเปลี่ยนซ้อนระหว่างส่ง → เคลียร์
@@ -138,7 +138,11 @@
   }
   function flush() {
     if (inflight) return inflight;
-    inflight = flushOnce().then(function (ok) { inflight = null; return ok; }, function () { inflight = null; return false; });
+    // กันค้าง: ถ้าส่งไม่จบใน 25 วินาที (เน็ต/NAS ตอบช้า) ถือว่าล้มเหลวรอบนี้ แล้วปล่อยให้ลองใหม่ได้ (ปุ่ม "ลองใหม่ตอนนี้" เดิมกดแล้วเงียบ เพราะรอบเก่ายังค้างอยู่)
+    var _cur;
+    var timeout = new Promise(function (res) { setTimeout(function () { if (inflight === _cur) { lastErr = lastErr || 'หมดเวลา (25 วินาที) — NAS ไม่ตอบ'; } res(false); }, 25000); });
+    _cur = Promise.race([flushOnce(), timeout]).then(function (ok) { if (inflight === _cur) inflight = null; return ok; }, function (e) { if (inflight === _cur) inflight = null; lastErr = String((e && e.message) || e); return false; });
+    inflight = _cur;
     return inflight;
   }
   function onClean(wasEmergency) {
@@ -209,7 +213,9 @@
     },
     isEmergency: emergencyActive,
     hasPending: hasDirty,
-    retryNow: function () { tick(); },
+    retryNow: function () { lastErr = ''; tick(); },
+    setError: function (m) { lastErr = String(m || ''); },
+    lastError: function () { return lastErr; },
     enableEmergency: async function () {
       if (!cfg || emergency) return;
       var okAdmin = false, who = '';
