@@ -2436,6 +2436,11 @@ async function odSave(pairs) {
   try { renderBoard(); renderOverduePanel(); } catch(e){}
   showToast('bulkclose','✅ บันทึก due '+pairs.length+' บิลขึ้น NAS สำเร็จ — เครื่องผู้ใช้ออก INV ได้แล้ว','ok');
 }
+function odPickCust(v) {
+  var d = (document.getElementById('odAll')||{}).value || '';
+  window._odCust = v; renderOverduePanel();
+  var e = document.getElementById('odAll'); if (e && d) e.value = d;
+}
 function odApplyAll() {
   var v = (document.getElementById('odAll')||{}).value || '', c = (document.getElementById('odCust')||{}).value || '';
   if (!v) { alert('เลือกวันที่ due ก่อน'); return; }
@@ -2491,6 +2496,8 @@ function renderOverduePanel() {
   all.sort(function(a,b){ return String(a.job.customer||'').localeCompare(String(b.job.customer||''),'th') || b.days - a.days; });
   var late = all.filter(function(x){ return !x.due || x.due < today; }).length;
   var custs = {}; all.forEach(function(x){ custs[x.job.customer||'-'] = 1; });
+  var _oc = window._odCust || ''; if (_oc && !custs[_oc]) { _oc = window._odCust = ''; }
+  if (_oc) { all = all.filter(function(x){ return (x.job.customer||'-') === _oc; }); late = all.filter(function(x){ return !x.due || x.due < today; }).length; }
   var TH = 'padding:4px 6px;white-space:nowrap;';
   var rows = all.map(function(x, i){
     var j = x.job, isLate = !x.due || x.due < today;
@@ -2513,7 +2520,7 @@ function renderOverduePanel() {
     '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="downloadDueLog()">📥 log due (CSV)</button></div>' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 8px;">' +
     '<span style="font-size:12px;font-weight:700;">🔓 ปลดล็อก / ลง due จากเครื่อง admin:</span>' +
-    '<select id="odCust" style="padding:3px 6px;font-size:11px;"><option value="">ทุกลูกค้า</option>'+Object.keys(custs).sort().map(function(c){ return '<option value="'+esc(c)+'">'+esc(c.split('\n')[0])+'</option>'; }).join('')+'</select>' +
+    '<select id="odCust" onchange="odPickCust(this.value)" style="padding:3px 6px;font-size:11px;"><option value="">ทุกลูกค้า</option>'+Object.keys(custs).sort().map(function(c){ return '<option value="'+esc(c)+'"'+(c===_oc?' selected':'')+'>'+esc(c.split('\n')[0])+'</option>'; }).join('')+'</select>' +
     '<input type="date" min="'+today+'" id="odAll" style="padding:3px 6px;font-size:11px;width:135px;">' +
     '<button class="btn btn-green btn-sm" onclick="odApplyAll()">ลง due ให้ทุกบิลของลูกค้าที่เลือก</button>' +
     '<button class="btn btn-outline btn-sm" onclick="odSaveTyped()">💾 บันทึก due ที่กรอกในตาราง</button>' +
