@@ -207,6 +207,8 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
       <div class="card-label" style="margin:0;" id="lblHistory">🗂 ประวัติการตรวจสอบ — <span id="lblHistoryLine">B1</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <input type="search" id="qcFilterText" oninput="qcRenderHistory()" placeholder="🔍 ค้นหา P/No, ชื่อ, เลขบิล, Pro Lot No."
+          style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);width:200px;">
         <select id="qcFilterDate" onchange="qcRenderHistory()"
           style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--navy);">
           <option value="">— ทุกวัน —</option>
@@ -1225,7 +1227,9 @@ function qcPopulateDateFilter() {
 // ส่วนข้อมูลใหม่เป็น [{name, qty}] — ต้องรองรับทั้ง 2 แบบ ไม่งั้นข้อมูลเก่าจะแสดงเป็น "undefined (undefined)"
 function qcRenderHistory() {
   var filterDate = (document.getElementById('qcFilterDate')||{}).value || '';
+  var _q = qcKey((document.getElementById('qcFilterText')||{}).value || '');
   var recs = qcLoadRecords().filter(function(r){ return !filterDate || r.date===filterDate; })
+    .filter(function(r){ return !_q || qcKey([r.partNo, r.partName, r.bill, r.lotNo, (r.bills||[]).join(' '), r.inspector].join(' ')).indexOf(_q) >= 0; })
     .sort(function(a,b){ return b.ts-a.ts; });
   var tbody = document.getElementById('qcHistBody');
   if (!recs.length) {
