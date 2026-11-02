@@ -1121,6 +1121,66 @@ function qcDeleteRecord(id) {
   qcRenderLots();
 }
 
+
+// ✏️ แก้เลขบิลของรายการ QC ที่บันทึกไปแล้ว — เลือกบิลจาก Job Master ของ P/No เดียวกัน (ตรวจยอดคงเหลือของบิลใหม่) แล้วบันทึกขึ้น NAS
+async function qcEditBill(id) {
+  if (!canEdit() || !NasSync.canEdit()) return;
+  var rec = qcLoadRecords().filter(function(r){ return r.id === id; })[0]; if (!rec) return;
+  var box = document.getElementById('qcEditBillBox'); if (box) box.remove();
+  box = document.createElement('div'); box.id = 'qcEditBillBox';
+  box.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px;';
+  box.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px;width:380px;max-width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);font-size:13px;">⏳ กำลังโหลดบิลจาก Job Master...</div>';
+  document.body.appendChild(box);
+  box.onclick = function(e){ if (e.target === box) box.remove(); };
+  var jobs = [];
+  try {
+    var jr = await fetch(FB_LINES.B1.replace(/\/+$/,'') + '/job-master.json', { cache:'no-store' });
+    if (!jr.ok) throw new Error('HTTP '+jr.status);
+    var jd = await jr.json(); var items = (jd && jd.items) || []; if (!Array.isArray(items)) items = Object.values(items);
+    jobs = items;
+  } catch(e) { box.firstChild.innerHTML = '🚫 โหลด Job Master ไม่ได้ ('+esc(e.message||e)+') — แก้บิลไม่ได้ ลองใหม่ภายหลัง<br><br><button onclick="document.getElementById(\'qcEditBillBox\').remove()">ปิด</button>'; return; }
+  var k1 = qcKey(rec.partNo || ''), k2 = qcKey(rec.partName || '');
+  var cands = jobs.filter(function(j){
+    if (!String(j.bill||'').trim()) return false;
+    var a = qcKey(j.partNo || ''), b = qcKey(j.partName || '');
+    return (a && a === k1) || (b && (b === k1 || b === k2 || b.indexOf(k1) === 0));
+  }).sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  var used = {}; qcLoadRecords().forEach(function(r){ if (r.id === id || !r.jobId) return; used[r.jobId] = (used[r.jobId]||0) + Number(r.qtyOK||0) + Number(r.scrap||0); });
+  var need = Number(rec.qtyOK||0) + Number(rec.scrap||0);
+  window._qcEditBill = { id:id, cands:cands, used:used, need:need };
+  var opts = cands.map(function(j){
+    var rcv = (j.unit === 'kg') ? null : Number(j.qty||0);
+    var rem = rcv == null ? 'หน่วย กก.' : 'เหลือตรวจ '+(rcv - (used[j.id]||0)).toLocaleString()+' ชิ้น';
+    return '<option value="'+esc(j.id)+'"'+(j.id===rec.jobId?' selected':'')+'>['+esc(j.bill)+'] '+esc(j.date||'')+' · '+rem+'</option>';
+  }).join('');
+  box.firstChild.innerHTML = '<div style="font-weight:700;font-size:14px;margin-bottom:6px;">✏️ แก้เลขบิลของรายการตรวจ</div>' +
+    '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">'+esc(rec.date)+' · <b>'+esc(rec.partNo)+'</b> · Pro Lot No. '+esc(rec.lotNo||'–')+' · ตัดบิล '+need.toLocaleString()+' ชิ้น<br>บิลปัจจุบัน: <b>'+esc(rec.bill||'ไม่ระบุ')+'</b></div>' +
+    '<select id="qcEditBillSel" style="width:100%;padding:8px;border:1.5px solid #86efac;border-radius:8px;margin-bottom:8px;"><option value="">— เลือกบิล —</option>'+opts+'</select>' +
+    (cands.length ? '' : '<div style="color:#d97706;font-size:11px;margin-bottom:8px;">⚠️ ไม่พบบิลของ P/No นี้ใน Job Master</div>') +
+    '<div style="display:flex;gap:8px;"><button onclick="qcEditBillSave()" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;cursor:pointer;">💾 บันทึก</button>' +
+    '<button onclick="document.getElementById(\'qcEditBillBox\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;cursor:pointer;">ยกเลิก</button></div>';
+}
+function qcEditBillSave() {
+  var st = window._qcEditBill; if (!st) return;
+  var jid = (document.getElementById('qcEditBillSel')||{}).value || '';
+  if (!jid) { alert('กรุณาเลือกบิล'); return; }
+  var j = st.cands.filter(function(x){ return x.id === jid; })[0]; if (!j) return;
+  var recs = qcLoadRecords(), rec = recs.filter(function(r){ return r.id === st.id; })[0]; if (!rec) return;
+  if (j.unit !== 'kg') {
+    var left = Number(j.qty||0) - (st.used[jid]||0);
+    if (st.need > left) { alert('🚫 บิล '+j.bill+' เหลือตรวจ '+left.toLocaleString()+' ชิ้น ไม่พอสำหรับรายการนี้ ('+st.need.toLocaleString()+' ชิ้น)'); return; }
+  }
+  var oldBill = rec.bill || '';
+  rec.jobId = j.id; rec.jobKey = j.id; rec.bill = String(j.bill).trim(); rec.bills = [rec.bill];
+  rec.customer = j.customer || rec.customer || ''; rec.custLots = j.custLot ? [j.custLot] : [];
+  rec.billEdited = { at:new Date().toISOString(), by:qcWho(), from:oldBill };
+  qcSaveRecordsLocal(recs);
+  qcFbSaveRecords().then(function(){ qcClosedToast('✅ แก้เลขบิลและบันทึกขึ้น NAS แล้ว'); });
+  qcAudit('แก้เลขบิล', st.id+' · '+(oldBill||'ไม่ระบุ')+' → '+rec.bill);
+  var b = document.getElementById('qcEditBillBox'); if (b) b.remove();
+  qcRenderHistory(); qcRenderLots();
+}
+
 function qcPopulateDateFilter() {
   var recs = qcLoadRecords();
   var dates = Array.from(new Set(recs.map(function(r){return r.date;}))).sort().reverse();
@@ -1158,7 +1218,7 @@ function qcRenderHistory() {
       +'<td style="font-weight:800;color:'+pctColor+';">'+r.percentNG.toFixed(2)+'%</td>'
       +'<td class="td-l" style="font-size:10px;">'+defectStr+'</td>'
       +'<td class="td-l">'+esc(r.inspector||'–')+'</td>'
-      +'<td>'+(canEdit() ? '<button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button>' : '')+'</td>'
+      +'<td style="white-space:nowrap;">'+(canEdit() ? '<button class="del-btn" title="แก้เลขบิล" onclick="qcEditBill(\''+r.id+'\')" style="margin-right:4px;">✏️</button><button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button>' : '')+'</td>'
       +'</tr>';
   }).join('');
 }
