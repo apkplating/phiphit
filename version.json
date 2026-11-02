@@ -1,5 +1,5 @@
 {
- "version": "2026-10-31.157",
- "updatedAt": "2026-11-02T15:40:00+07:00",
- "note": "Tag Card: โหมดทดสอบเปิดหน้าตัวอย่าง (preview) ไม่ค้าง ไม่บันทึก ICS"
+ "version": "2026-10-31.159",
+ "updatedAt": "2026-11-02T15:50:00+07:00",
+ "note": "หน้าชุบ: อ่าน Job Master แบบโหนดต่อ id ได้ (items/records/invoices เป็น object)"
 }

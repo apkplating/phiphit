@@ -6905,9 +6905,19 @@ function doMasterOut() {
 var FB_JOB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/job-master'; // job-master อยู่ใน DB หลัก B1
 var jobMasterItems   = [];
 var jobMasterRecords = [];
+var jobTmpOut = {};   // ใบส่งของชั่วคราวที่ค้าง (/temp-notes) — Job Master นับเป็นจ่ายออกแล้ว ต้องนับเหมือนกัน
+var _jmLastLoad = 0;
+// กลับมาที่หน้านี้ (สลับแท็บ/โฟกัส) → โหลด Job Master ใหม่ (ห่างกันอย่างน้อย 30 วินาที) กันหน้าที่เปิดค้างไว้ยังเห็นบิลที่ปิด/จ่ายครบไปแล้ว
+function _jmAutoRefresh(){
+  if (document.hidden || Date.now() - _jmLastLoad < 30000) return;
+  jobMasterLoad().then(function(){ try { if (typeof _barrelPartSelected !== 'undefined' && _barrelPartSelected) barrelRefreshPM(); } catch(e){} });
+}
+document.addEventListener('visibilitychange', _jmAutoRefresh);
+window.addEventListener('focus', _jmAutoRefresh);
 var jobMasterInvoiceNos = null;   // Set ของเลข INV จริง (จาก Job Master) — ใช้ตัดสินว่าบิลจ่ายครบแล้วหรือยัง
 
 async function jobMasterLoad() {
+  _jmLastLoad = Date.now();
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
   // โหลดยอดชุบจริงจากทั้ง 3 สาย (wip-calc.js) พร้อมกัน — ใช้คำนวณ "เหลือให้ชุบ" แทนการพึ่ง
   // jobMasterRecords "out" record ซึ่งมีบั๊กสะสมหลายชั้น (ดูคอมเมนต์ในไฟล์ wip-calc.js)
@@ -6917,11 +6927,21 @@ async function jobMasterLoad() {
     if (!res.ok) { document.getElementById('jobSyncLabel').textContent = '❌ โหลดไม่สำเร็จ'; return; }
     var data = await res.json();
     if (data) {
-      jobMasterItems   = Array.isArray(data.items)   ? data.items   : [];
-      jobMasterRecords = Array.isArray(data.records) ? data.records : [];
+      var _jmA = function(x){ if (Array.isArray(x)) return x; if (x && typeof x === 'object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v != null; }); return []; };  // Job Master รุ่นใหม่เก็บเป็นโหนดต่อ id (object) ได้
+      jobMasterItems   = _jmA(data.items);
+      jobMasterRecords = _jmA(data.records);
       jobMasterInvoiceNos = null;
-      if (Array.isArray(data.invoices) && data.invoices.length) { jobMasterInvoiceNos = {}; data.invoices.forEach(function(v){ if (v && v.invNo) jobMasterInvoiceNos[v.invNo] = true; }); }
+      var _jmInv = _jmA(data.invoices);
+      if (_jmInv.length) { jobMasterInvoiceNos = {}; _jmInv.forEach(function(v){ if (v && v.invNo) jobMasterInvoiceNos[v.invNo] = true; }); }
     }
+    try {
+      var _tr = await fetch(FB_JOB_PATH.replace(/job-master$/, 'temp-notes') + '.json', { cache:'no-store' });
+      if (_tr.ok) {
+        var _td = await _tr.json(), _arr = !_td ? [] : (Array.isArray(_td) ? _td.filter(Boolean) : Object.keys(_td).map(function(k){ return _td[k]; }).filter(Boolean));
+        jobTmpOut = {};
+        _arr.forEach(function(n){ if (n.status !== 'open') return; (n.lines||[]).forEach(function(l){ if (l.convertedTo) return; var o = jobTmpOut[l.jobId] || (jobTmpOut[l.jobId] = { pcs:0, kg:0 }); if (l.unit === 'kg') o.kg += Number(l.qty||0); else o.pcs += Number(l.qty||0); }); });
+      }
+    } catch(e){}
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
     populateBarrelJobPick();
@@ -7433,6 +7453,7 @@ function _jobDeliveredDone(job) {
     if (r.type === 'in') { hasIn = true; inQ += Number(r.qty||0); inKg += Number(r.qtyKg||0); }
     else if (r.type === 'out' && r.inv && jobMasterInvoiceNos[r.inv] && !r.voided) { outQ += Number(r.qty||0); outKg += Number(r.qtyKg||0); }
   });
+  var _t = jobTmpOut[job.id]; if (_t) { outQ += _t.pcs; outKg += _t.kg; }
   if (!hasIn) { inQ = Number(job.qty || job.pcs || 0); inKg = Number(job.qtyKg || job.kg || 0); }
   if (job.unit === 'kg') return inKg > 0 && outKg >= inKg - 0.0005;
   return inQ > 0 && outQ >= inQ;
