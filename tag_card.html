@@ -4117,6 +4117,7 @@ function _printTags(preGroups) {
   if (!d.lot) { showToast('🚫 กรุณาเลือกบิลจากรายการ — ต้องมีข้อมูล QC 100% (บิล + Pro Lot No. + ผู้ตรวจ) ก่อนถึงจะพิมพ์ Tag ได้ ถ้าไม่มีให้แจ้ง QC ดำเนินการ', 'err'); return; }
   if (!d.inspBy) { showToast('🚫 ไม่มีชื่อผู้ตรวจสอบจาก QC 100% — พิมพ์ Tag ไม่ได้ แจ้ง QC บันทึกให้ครบก่อน', 'err'); return; }
   if (!d.cust) { showToast('⚠️ กรุณากรอกชื่อลูกค้า', 'err'); return; }
+  d.test = !!($('tgTestMode') && $('tgTestMode').checked && tgIsAdmin());   // โหมดทดสอบ: แสดงตัวอย่าง ไม่ตัดยอด ไม่บันทึกประวัติ ไม่บันทึก ICS ขึ้นระบบ
   var count = parseInt($('tgCount').value, 10) || 1;
   if (count < 1) count = 1;
 
@@ -4172,6 +4173,7 @@ function _printTags(preGroups) {
 
   // ไม่มี ICS: พิมพ์ทันทีเหมือนเดิมทุกอย่าง (ไม่มีขั้นตอนรอ)
   if (!ics) { renderAndPrint(d, count, '', null, {}); return; }
+  if (d.test) { renderAndPrint(d, count, ics.pageHtml, null, { qr:false, snapOk:true }); return; }   // ทดสอบ: ไม่ publish ICS ขึ้น NAS (ไม่มี QR)
 
   // มี ICS: ต้องบันทึกขึ้นระบบให้สำเร็จก่อนค่อยพิมพ์ QR — กัน QR บน Tag ที่สแกนแล้วเจอหน้าว่างเพราะตอนพิมพ์เน็ตหลุด
   // เปิดหน้าต่างพิมพ์ตั้งแต่ตอนกดปุ่มเลย (ถ้ารอบันทึกเสร็จก่อนค่อยเปิด เบราว์เซอร์จะมองว่าเป็น pop-up แล้วบล็อก)
@@ -4354,7 +4356,7 @@ function _buildLogRecs(d, count) {
 }
 function logTagPrint(d, count) {
   var _tm = $('tgTestMode');
-  if (_tm && _tm.checked && tgIsAdmin()) { _tm.checked = false; showToast('🧪 พิมพ์ทดสอบ — ไม่ตัดยอดบิล และไม่บันทึกประวัติ', 'ok'); return Promise.resolve('ok'); }
+  if ((d && d.test) || (_tm && _tm.checked && tgIsAdmin())) { if (_tm) _tm.checked = false; return Promise.resolve('ok'); }
   var recs = _buildLogRecs(d, count);
   if (!recs.length) return Promise.resolve('ok');
   var p = _tagPendLoad(); recs.forEach(function(r){ p.push(r); }); _tagPendSave(p);
@@ -4414,9 +4416,14 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
 
   if (!win) win = window.open('', '_blank');
   if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
+  if (d.test) {
+    html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;}.pv-bar button{font-size:14px;padding:6px 14px;cursor:pointer;}@media print{.pv-bar{display:none;}}</style>')
+      .replace('<body>', '<body><div class="pv-bar"><b>🧪 ตัวอย่าง (ทดสอบ — ไม่ตัดยอดบิล ไม่บันทึกประวัติ ไม่มี QR)</b><button onclick="window.print()">🖨️ พิมพ์</button><button onclick="window.close()">✖ ปิด</button></div>');
+  }
   win.document.open();
   win.document.write(html);
   win.document.close();
+  if (d.test) { showToast('🧪 เปิดตัวอย่างแล้ว (' + count + ' ใบ) — ไม่ตัดยอด ไม่บันทึกประวัติ กด "พิมพ์" ในหน้าตัวอย่างได้ถ้าต้องการ', 'ok'); return; }
   // รอให้รูปทั้งหมดในหน้าพิมพ์โหลดเสร็จก่อนสั่ง print (QR โหลดจากอินเทอร์เน็ต อาจช้ากว่า 300ms เดิม ทำให้ QR
   // ว่างในใบพิมพ์ได้) มีเพดาน 5 วินาที กันค้างถ้าเน็ตมีปัญหา
   setTimeout(function(){
