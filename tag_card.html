@@ -169,7 +169,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     <div class="grid2" style="margin-top:12px;">
       <div class="field" style="margin-bottom:0;">
         <label>Q'TY (จำนวน)</label>
-        <input type="number" id="tgQty" min="0" placeholder="0">
+        <input type="number" id="tgQty" min="0" placeholder="0" oninput="autoTagCount()">
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>หน่วย</label>
@@ -185,8 +185,14 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <div class="field" style="margin-top:12px;">
-      <label>จำนวน Tag ที่จะพิมพ์ (ใบ)</label>
+      <label>Lot Size (<span id="icsLotUnitLbl">pcs</span>) — ยอดรวมที่จะพิมพ์/ตรวจ (ใช้คำนวณจำนวน Tag และลงใน ICS)</label>
+      <input type="text" inputmode="decimal" id="icsLotSize" placeholder="0" oninput="autoTagCount()">
+    </div>
+
+    <div class="field" style="margin-top:12px;">
+      <label>จำนวน Tag ที่จะพิมพ์ (ใบ) — คำนวณอัตโนมัติจาก Lot Size ÷ Q'TY (แก้เองได้)</label>
       <input type="number" id="tgCount" min="1" value="1">
+      <div class="hint" id="tgCountHint"></div>
     </div>
     <div class="field" id="tgTestRow" style="margin-top:8px;display:none;">
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;color:#b45309;"><input type="checkbox" id="tgTestMode" style="width:auto;"> 🧪 พิมพ์ทดสอบ (ไม่ตัดยอดบิล — ไม่บันทึกประวัติพิมพ์) · เฉพาะแอดมิน</label>
@@ -207,10 +213,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
           <input type="text" inputmode="decimal" id="icsT4" placeholder="4">
           <input type="text" inputmode="decimal" id="icsT5" placeholder="5">
         </div>
-      </div>
-      <div class="field" style="margin-top:12px;margin-bottom:0;">
-        <label>Lot Size (<span id="icsLotUnitLbl">pcs</span>)</label>
-        <input type="text" inputmode="decimal" id="icsLotSize" placeholder="0">
       </div>
     </div>
 
@@ -3809,6 +3811,23 @@ function getLotUnit() {
   var u = getUnitValue().split('/')[0].trim();
   return u || 'pcs';
 }
+// ใบเศษ: Lot Size ไม่หารลงตัว → ใบสุดท้าย 1 ใบ ใส่เศษที่เหลือ (เช่น 1020 ÷ 100 = 10 ใบเต็ม + 1 ใบ 20 ชิ้น = 11 ใบ)
+function tgRestQty(count) {
+  var q = parseFloat($('tgQty').value) || 0, L = parseFloat(String($('icsLotSize').value).replace(/,/g,'')) || 0;
+  if (!q || !L) return 0;
+  var full = Math.floor(L / q), rest = Math.round((L - q * full) * 100) / 100;
+  return (rest > 0 && count === full + 1) ? rest : 0;   // แก้จำนวนใบเองให้ต่างจากที่คำนวณ = ไม่มีใบเศษ (ใบละ Q'TY เท่ากันหมด)
+}
+function autoTagCount() {
+  var q = parseFloat($('tgQty').value) || 0, L = parseFloat(String($('icsLotSize').value).replace(/,/g,'')) || 0, h = $('tgCountHint');
+  if (!q || !L) { if (h) { h.textContent = ''; } return; }
+  var full = Math.floor(L / q), rest = Math.round((L - q * full) * 100) / 100, n = full + (rest > 0 ? 1 : 0), u = getLotUnit();
+  $('tgCount').value = n;
+  if (!h) return;
+  if (full === 0) { h.textContent = '🧮 Lot Size น้อยกว่า Q\'TY ต่อใบ → 1 ใบ ใส่ ' + rest.toLocaleString() + ' ' + u; h.className = 'hint warn'; }
+  else if (rest > 0) { h.textContent = '🧮 ' + L.toLocaleString() + ' ' + u + ' = ' + full + ' ใบ × ' + q.toLocaleString() + ' + 1 ใบเศษ × ' + rest.toLocaleString() + ' = ' + n + ' ใบ'; h.className = 'hint ok'; }
+  else { h.textContent = '🧮 ' + L.toLocaleString() + ' ÷ ' + q.toLocaleString() + ' = ' + n + ' ใบ พอดี'; h.className = 'hint ok'; }
+}
 function updateLotUnitLabel() {
   var el = $('icsLotUnitLbl'); if (el) el.textContent = getLotUnit();
 }
@@ -4104,7 +4123,8 @@ function _printTags(preGroups) {
   // ── ยอดที่จะพิมพ์ (ชิ้น) = Q'TY ต่อใบ × จำนวนใบ — ห้ามเกินยอดคงเหลือของ Lot ที่เลือก ──
   var _mm = _lotMeta[getLotKey()] || {}; d.line = _mm.line || ''; d.jobKey = _mm.jobKey || ''; d.bill = _mm.bill || '';
   d.printPcs = tagQtyToPcs(d.qty, count, d.partNo);
-  if (preGroups) { d.groups = preGroups; d.lotLabel = preGroups.map(function(g){ return g.lot; }).join(', '); }
+  if (preGroups) { d.groups = preGroups; d.lotLabel = preGroups.filter(function(g,i,a){ return a.findIndex(function(x){ return x.lot === g.lot; }) === i; }).map(function(g){ return g.lot; }).join(', ');
+    d.printPcs = preGroups.every(function(g){ return g.pcs > 0; }) ? preGroups.reduce(function(s,g){ return s + g.pcs; }, 0) : null; }
   else if (!isLotManual() && _lotRemain[getLotKey()] != null && d.printPcs != null && d.printPcs > _lotRemain[getLotKey()]) {
     showToast('🚫 พิมพ์เกินยอดคงเหลือของ Lot '+d.lot+' — จะพิมพ์ '+d.printPcs.toLocaleString()+' ชิ้น แต่เหลือ '+_lotRemain[getLotKey()].toLocaleString()+' ชิ้น', 'err');
     return;
@@ -4254,25 +4274,38 @@ function _printTagsCore() {
   var qtyNum = parseFloat($('tgQty').value) || 0;
   var count = Math.max(1, parseInt($('tgCount').value, 10) || 1);
   var lot = getLotValue(), ek = getLotKey(), partNo = $('tgPartNo').value.trim();
+  var rest = tgRestQty(count);
   var printPcs = tagQtyToPcs($('tgQty').value || '0', count, partNo);
-  if (isLotManual() || !lot || _lotRemain[ek] == null || printPcs == null || !qtyNum || printPcs <= _lotRemain[ek]) { _printTags(null); return; }
-  // ต้องข้าม Lot: คำนวณแผนแบ่งใบ
-  var perTag = printPcs / count;
+  if (!rest && (isLotManual() || !lot || _lotRemain[ek] == null || printPcs == null || !qtyNum || printPcs <= _lotRemain[ek])) { _printTags(null); return; }
+  if (isLotManual() || !lot || _lotRemain[ek] == null || !qtyNum) { _printTags(null); return; }
+  // แผนแบ่งใบ: ไล่ทีละใบ (ใบเต็มก่อน ใบเศษท้ายสุด) ลงบิลที่เลือกก่อน ที่เหลือบิลอื่นเก่าสุดก่อน — 1 ใบผูกบิลเดียว
   var order = [ek].concat(Object.keys(_lotMeta).filter(function(l){ return l !== ek; })
     .sort(function(a,b){ return (_lotMeta[a].date||'').localeCompare(_lotMeta[b].date||'') || a.localeCompare(b); }));
-  var left = count, plan = [];
-  order.forEach(function(l){
-    if (left <= 0) return;
-    var n = Math.min(left, Math.floor(_lotMeta[l].rem / perTag));
-    if (n > 0) { var mm = _lotMeta[l]; plan.push({ ek:l, lot:mm.lot, line:mm.line, jobKey:mm.jobKey, bill:mm.bill, custLots:mm.custLots, count:n }); left -= n; }
+  var remC = {}; order.forEach(function(l){ remC[l] = _lotMeta[l].rem; });
+  var items = [{ qty: qtyNum, n: rest ? count - 1 : count }]; if (rest) items.push({ qty: rest, n: 1 });
+  var plan = [], byKey = {}, short = 0, totalPcs = 0, noPcs = false;
+  items.forEach(function(it){
+    var pcs = tagQtyToPcs(String(it.qty), 1, partNo);
+    if (pcs == null) { noPcs = true; pcs = 0; }
+    for (var k = 0; k < it.n; k++) {
+      var tgt = null;
+      for (var j = 0; j < order.length; j++) { if (noPcs || remC[order[j]] >= pcs) { tgt = order[j]; break; } }
+      if (!tgt) { short++; continue; }
+      if (!noPcs) remC[tgt] -= pcs;
+      totalPcs += pcs;
+      var gk = tgt + '#' + it.qty, g = byKey[gk];
+      if (!g) { var mm = _lotMeta[tgt]; g = byKey[gk] = { ek:tgt, lot:mm.lot, line:mm.line, jobKey:mm.jobKey, bill:mm.bill, custLots:mm.custLots, count:0, qty:it.qty, pcs:0 }; plan.push(g); }
+      g.count++; g.pcs += pcs;
+    }
   });
-  if (left > 0) {
+  if (short > 0) {
     var tot = Object.keys(_lotMeta).reduce(function(s,l){ return s + _lotMeta[l].rem; }, 0);
-    showToast('🚫 พิมพ์ไม่ได้ — ยอดคงเหลือรวมทุก Lot '+tot.toLocaleString()+' ชิ้น พิมพ์ได้อีกไม่เกิน '+(count-left)+' ใบ (ใบละ '+perTag.toLocaleString()+' ชิ้น) ลดจำนวนใบหรือ Q\'TY', 'err');
+    showToast('🚫 พิมพ์ไม่ได้ — ยอดคงเหลือรวมทุกบิล '+tot.toLocaleString()+' ชิ้น ไม่พอสำหรับอีก '+short+' ใบ ลดจำนวนใบหรือ Q\'TY', 'err');
     return;
   }
-  var msg = 'ยอดเกิน Lot ที่เลือก — ระบบจะแยกพิมพ์ตาม Pro Lot No. (เก่าสุดก่อน):\n\n' +
-    plan.map(function(g){ return '• ' + (g.bill ? 'บิล '+g.bill+' · ' : '') + g.lot + ' : ' + g.count + ' ใบ (' + (g.count*perTag).toLocaleString() + ' ชิ้น)'; }).join('\n') + '\n\nกด OK เพื่อพิมพ์';
+  var multi = plan.some(function(g){ return g.ek !== ek; });
+  var msg = (multi ? 'ยอดเกินบิลที่เลือก — ระบบจะแยกพิมพ์ตามบิล/Pro Lot No. (เก่าสุดก่อน)' : 'พิมพ์ Tag รวม ' + count + ' ใบ' + (rest ? ' (รวมใบเศษ 1 ใบ)' : '')) + ':\n\n' +
+    plan.map(function(g){ return '• ' + (g.bill ? 'บิล '+g.bill+' · ' : '') + g.lot + ' : ' + g.count + ' ใบ × ' + g.qty + (noPcs ? '' : ' (' + g.pcs.toLocaleString() + ' ชิ้น)'); }).join('\n') + '\n\nกด OK เพื่อพิมพ์';
   if (!confirm(msg)) return;
   Promise.all(plan.map(function(g){ return (g.ek === ek ? Promise.resolve($('tgCustLot') ? $('tgCustLot').value.trim() : '') : ((g.custLots && g.custLots.length) ? Promise.resolve(g.custLots.join(', ')) : resolveCustLot(partNo, g.lot).catch(function(){ return ''; }))).then(function(c){ g.custLot = c; }); }))
     .then(function(){ _printTags(plan); });
@@ -4314,9 +4347,9 @@ function _buildLogRecs(d, count) {
   if (d.printPcs == null) return [];
   var mk = function(o, n, pcs) {
     var id = 'TG' + Date.now() + Math.random().toString(36).slice(2,6);
-    return { id:id, ts:Date.now(), date:isoToday(), partNo:d.partNo, lot:o.lot, line:o.line||'', jobKey:o.jobKey||'', bill:o.bill||'', qtyPcs:pcs, qtyPerTag:d.qty, unit:d.unit, tags:n, custLot:o.custLot||'', by:(session&&session.user&&session.user.name)||'' };
+    return { id:id, ts:Date.now(), date:isoToday(), partNo:d.partNo, lot:o.lot, line:o.line||'', jobKey:o.jobKey||'', bill:o.bill||'', qtyPcs:pcs, qtyPerTag:(o.qty != null ? o.qty : d.qty), unit:d.unit, tags:n, custLot:o.custLot||'', by:(session&&session.user&&session.user.name)||'' };
   };
-  if (d.groups) { var per = d.printPcs / count; return d.groups.map(function(g){ return mk(g, g.count, Math.round(per*g.count)); }); }
+  if (d.groups) { return d.groups.map(function(g){ return mk(g, g.count, Math.round(g.pcs)); }); }
   return [mk({ lot:d.lot, line:d.line, jobKey:d.jobKey, bill:d.bill, custLot:d.custLot }, count, d.printPcs)];
 }
 function logTagPrint(d, count) {
@@ -4350,7 +4383,7 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
   var cells = [];
   if (d.groups) {
     d.groups.forEach(function(g){
-      var gt = buildTagHtml(Object.assign({}, d, { lot: g.lot, custLot: g.custLot || '' }));
+      var gt = buildTagHtml(Object.assign({}, d, { lot: g.lot, custLot: g.custLot || '', qty: (g.qty != null ? g.qty : d.qty) }));
       for (var k = 0; k < g.count; k++) cells.push(gt);
     });
   } else {
