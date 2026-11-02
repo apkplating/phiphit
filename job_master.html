@@ -2412,6 +2412,51 @@ async function dueFinish(n, skipped) {
   var cb = _dueCb; _dueCb = null; if (cb) cb();
 }
 
+
+// ลง due จากเครื่อง admin (ตาราง "รายการเกินกำหนด") — เครื่องผู้ใช้ดึง /jm-due ก่อนตรวจล็อกทุกครั้ง จึงปลดล็อกได้ทันทีโดยไม่ต้องใส่ PIN admin ที่เครื่องนั้น
+async function odSave(pairs) {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var today = _dueToday(), patch = {}, logs = [];
+  pairs.forEach(function(p){
+    var x = p.x, j = x.job;
+    patch[_dueKey(j.id)] = { due:p.v, by:currentUserName||currentRole, at:new Date().toISOString(), prev:x.due||'', bill:j.bill||'', customer:j.customer||'', unlock:true };
+    logs.push({ at:new Date().toISOString(), by:currentUserName||currentRole, action:'admin_unlock', jobId:j.id, bill:j.bill||'', part:j.partName||'', customer:j.customer||'',
+      remain:x.rem, unit:x.kg?'kg':'pcs', daysOver:x.days, prevDue:x.due||'', newDue:p.v });
+  });
+  if (!pairs.length) { alert('ยังไม่ได้ใส่วันที่'); return; }
+  try {
+    var r = await fetch(ARCH_BASE + '/jm-due.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    var chk = await (await fetch(ARCH_BASE + '/jm-due.json', { cache:'no-store' })).json();
+    var bad = Object.keys(patch).filter(function(k){ return !chk || !chk[k] || chk[k].due !== patch[k].due; });
+    if (bad.length) throw new Error('อ่านกลับจาก NAS ไม่ตรง '+bad.length+' รายการ');
+    Object.keys(patch).forEach(function(k){ jmDue[k] = patch[k]; });
+  } catch(e) { alert('บันทึก due ไม่สำเร็จ ('+(e.message||e)+') — ลองใหม่อีกครั้ง'); return; }
+  _dueLog(logs);
+  try { renderBoard(); renderOverduePanel(); } catch(e){}
+  showToast('bulkclose','✅ บันทึก due '+pairs.length+' บิลขึ้น NAS สำเร็จ — เครื่องผู้ใช้ออก INV ได้แล้ว','ok');
+}
+function odApplyAll() {
+  var v = (document.getElementById('odAll')||{}).value || '', c = (document.getElementById('odCust')||{}).value || '';
+  if (!v) { alert('เลือกวันที่ due ก่อน'); return; }
+  if (v < _dueToday()) { alert('ห้ามเลือกวันที่ย้อนหลัง'); return; }
+  var pairs = (window._odAll||[]).filter(function(x){ return !c || (x.job.customer||'') === c; }).map(function(x){ return { x:x, v:v }; });
+  if (!pairs.length) { alert('ไม่มีรายการ'); return; }
+  if (!confirm('ลง due '+v+' ให้ '+pairs.length+' บิล'+(c?' ของลูกค้า '+c.split('\n')[0]:' (ทุกลูกค้า)')+' ใช่ไหม?')) return;
+  odSave(pairs);
+}
+function odSaveTyped() {
+  var today = _dueToday(), pairs = [], bad = 0;
+  (window._odAll||[]).forEach(function(x, i){
+    var v = (document.getElementById('odR'+i)||{}).value || '';
+    if (!v) return;
+    if (v < today) { bad++; return; }
+    pairs.push({ x:x, v:v });
+  });
+  if (bad) { alert('มี '+bad+' รายการเป็นวันที่ย้อนหลัง — แก้ก่อน'); return; }
+  odSave(pairs);
+}
+
 // ตาราง "รายการเกินกำหนด" (admin) — รายชิ้นงาน อ้างอิงเลขบิล พร้อม due
 function renderOverduePanel() {
   var host = document.getElementById('overduePanel');
@@ -2457,16 +2502,25 @@ function renderOverduePanel() {
       '<td style="padding:3px 6px;">'+fmtDate(j.date)+'</td>' +
       '<td style="padding:3px 6px;text-align:right;font-weight:700;">'+_fmtRem(x)+'</td>' +
       '<td style="padding:3px 6px;text-align:center;color:#b91c1c;font-weight:700;">'+x.days+'</td>' +
-      '<td style="padding:3px 6px;text-align:center;'+(isLate?'color:#b91c1c;font-weight:700;':'color:#15803d;')+'">'+(x.due ? _fmtDueTh(x.due)+(isLate?' (เลย)':'') : 'ยังไม่ลง')+'</td></tr>';
+      '<td style="padding:3px 6px;text-align:center;'+(isLate?'color:#b91c1c;font-weight:700;':'color:#15803d;')+'">'+(x.due ? _fmtDueTh(x.due)+(isLate?' (เลย)':'') : 'ยังไม่ลง')+'</td>' +
+      '<td style="padding:3px 6px;"><input type="date" min="'+today+'" id="odR'+i+'" style="padding:2px 4px;font-size:11px;width:130px;"></td></tr>';
   }).join('');
+  window._odAll = all;
   host.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
     '<strong style="font-size:13px;">⚠️ รายการเกินกำหนด '+all.length+' รายการ / '+Object.keys(custs).length+' ลูกค้า</strong>' +
     '<span style="font-size:11px;color:'+(late?'#b91c1c':'#15803d')+';font-weight:600;">'+(late ? late+' รายการยังไม่มี due / เลย due' : 'ลง due ครบแล้ว')+'</span>' +
     '<span style="font-size:10px;color:var(--text-muted);">(กดชื่อลูกค้าเพื่อกรองบอร์ด)</span>' +
     '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="downloadDueLog()">📥 log due (CSV)</button></div>' +
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 8px;">' +
+    '<span style="font-size:12px;font-weight:700;">🔓 ปลดล็อก / ลง due จากเครื่อง admin:</span>' +
+    '<select id="odCust" style="padding:3px 6px;font-size:11px;"><option value="">ทุกลูกค้า</option>'+Object.keys(custs).sort().map(function(c){ return '<option value="'+esc(c)+'">'+esc(c.split('\n')[0])+'</option>'; }).join('')+'</select>' +
+    '<input type="date" min="'+today+'" id="odAll" style="padding:3px 6px;font-size:11px;width:135px;">' +
+    '<button class="btn btn-green btn-sm" onclick="odApplyAll()">ลง due ให้ทุกบิลของลูกค้าที่เลือก</button>' +
+    '<button class="btn btn-outline btn-sm" onclick="odSaveTyped()">💾 บันทึก due ที่กรอกในตาราง</button>' +
+    '<span style="font-size:10px;color:var(--text-muted);">เครื่องผู้ใช้จะเห็นทันทีที่กดบันทึก INV (ไม่ต้องใส่ PIN admin ที่เครื่องนั้น)</span></div>' +
     '<div style="max-height:260px;overflow-y:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:#f8fafc;text-align:left;position:sticky;top:0;">' +
     '<th style="'+TH+'">ลำดับ</th><th style="'+TH+'">ลูกค้า</th><th style="'+TH+'">หมายเลขชิ้นงาน</th><th style="'+TH+'">หมายเลขบิล</th><th style="'+TH+'">วันที่รับเข้า</th>' +
-    '<th style="'+TH+'text-align:right;">จำนวนค้าง</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'text-align:center;">due</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    '<th style="'+TH+'text-align:right;">จำนวนค้าง</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'text-align:center;">due</th><th style="'+TH+'">ลง due ใหม่</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function filterBoardByCustomer(c) {
   var s = document.getElementById('boardSearch'); if (s) { s.value = c; }
@@ -2693,6 +2747,7 @@ function _renderBoardImpl() {
       '<td>'+statusBadge(status)+((!isDone && jmDue[_dueKey(job.id)]) ? '<div style="font-size:9px;color:#475569;margin-top:2px;">due '+_fmtDueTh(jmDue[_dueKey(job.id)].due)+'</div>' : '')+'</td>' +
       '<td style="white-space:nowrap;">' +
         '<button onclick="openEditModal(\''+job.id+'\')" style="background:#eff6ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">✏️</button>' +
+        ((currentRole==='admin' && !job.closed && (isKg ? b.remainKg : b.remain) > 0.0001) ? '<button title="ปิดบิลนี้ (ตัดคงเหลือเป็น 0)" onclick="closeOneBill(\''+job.id+'\')" style="background:#fff7ed;color:#9a3412;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:3px;">🔒 ปิดบิล</button>' : '') +
         '<button onclick="deleteJob(\''+job.id+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 8px;font-size:10px;cursor:pointer;">✕</button>' +
       '</td>' +
     '</tr>';
@@ -2711,6 +2766,27 @@ function viewJobHistory(jobId) {
   }, 100);
 }
 
+
+// ปิดบิลรายบิล (admin) — ใช้ตรรกะเดียวกับ "ปิดบิลเก่าเป็นชุด": ตัดรับเข้าให้เท่ายอดที่ออก INV จริง คงเหลือ=0
+// เก็บสำเนาก่อนปิดที่ NAS (/archive/closeone-<ts>) ถ้าเก็บไม่ได้ ไม่ปิด; เปิดคืนได้ที่ ✏️ แก้ไขข้อมูลบิล → ปลดล็อก
+async function closeOneBill(id) {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var j = jobItems.find(function(x){ return x.id===id; }); if (!j) return;
+  var b = calcJob(id), isKg = j.unit==='kg';
+  var remain = isKg ? b.remainKg : b.remain;
+  if (remain <= 0.0001) { alert('บิลนี้ไม่มียอดคงเหลือ'); return; }
+  var remStr = isKg ? remain.toFixed(2)+' กก.' : remain.toLocaleString()+' ชิ้น';
+  if (!confirm('ปิดบิล '+j.bill+' ('+(j.partName||'')+')\nคงเหลือ '+remStr+' จะถูกตัดเป็น 0\nไม่กระทบ INV ที่ออกไปแล้ว — เปิดคืนได้ที่ ✏️ แก้ไขข้อมูลบิล → ปลดล็อก')) return;
+  try {
+    var ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    var r = await fetch(ARCH_BASE + '/archive/closeone-' + ts + '-' + id + '.json', { method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ at:new Date().toISOString(), by:currentUserName||'', item:j, records:jobRecords.filter(function(x){ return x.jobId===id; }) }) });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+  } catch (e) { alert('เก็บสำเนาไม่สำเร็จ ('+(e&&e.message||e)+') — ไม่ปิดบิล ตรวจการเชื่อมต่อ NAS แล้วลองใหม่'); return; }
+  bulkCloseBill(id);
+  saveLocal(); fbSave(); renderBoard();
+  showToast('bulkclose','✅ ปิดบิล '+j.bill+' แล้ว','ok');
+}
 function deleteJob(id) {
   var job = jobItems.find(function(j){ return j.id===id; });
   if (!job || !confirm('ลบ "'+job.bill+'" และประวัติทั้งหมด?')) return;
