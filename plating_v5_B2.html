@@ -6850,6 +6850,7 @@ function doMasterOut() {
 var FB_JOB_PATH = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app/job-master'; // job-master อยู่ใน DB หลัก B1
 var jobMasterItems   = [];
 var jobMasterRecords = [];
+var jobMasterInvoiceNos = null;   // Set ของเลข INV จริง (จาก Job Master) — ใช้ตัดสินว่าบิลจ่ายครบแล้วหรือยัง
 
 async function jobMasterLoad() {
   document.getElementById('jobSyncLabel').textContent = 'กำลังโหลด...';
@@ -6863,6 +6864,8 @@ async function jobMasterLoad() {
     if (data) {
       jobMasterItems   = Array.isArray(data.items)   ? data.items   : [];
       jobMasterRecords = Array.isArray(data.records) ? data.records : [];
+      jobMasterInvoiceNos = null;
+      if (Array.isArray(data.invoices) && data.invoices.length) { jobMasterInvoiceNos = {}; data.invoices.forEach(function(v){ if (v && v.invNo) jobMasterInvoiceNos[v.invNo] = true; }); }
     }
     document.getElementById('jobSyncLabel').textContent = '✅ อัปเดต ' + new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
     renderJobBoard();
@@ -7364,9 +7367,25 @@ function calcJobBal(jobId) {
 // ตามเดิม ไม่ได้ลบทิ้ง เผื่อจุดอื่นในระบบยังอ้างอิงอยู่)
 // ถ้า wip-calc.js ยังโหลดไม่เสร็จ (isLoaded()===false) → fallback ไปใช้ calcJobBal() แบบเดิมไปก่อน
 // กันเคสหน้าเพิ่งเปิด ยังโหลดไม่ทัน แล้วขึ้น "ไม่มีสต็อก" หลอกๆ ทั้งที่จริงมีของ
+// บิลที่ Job Master ขึ้น "จ่ายครบ" (ออก INV ครบยอดรับเข้า หรือถูกปิดบิล) = งานส่งลูกค้าหมดแล้ว → ไม่ให้เลือกชุดอีก
+function _jobDeliveredDone(job) {
+  if (!job) return false;
+  if (job.closed) return true;
+  if (!jobMasterInvoiceNos) return false;   // ไม่มีข้อมูล INV → ไม่ตัดสิน (ยังแสดงตามเดิม)
+  var inQ = 0, inKg = 0, outQ = 0, outKg = 0, hasIn = false;
+  (jobMasterRecords||[]).forEach(function(r){
+    if (r.jobId !== job.id) return;
+    if (r.type === 'in') { hasIn = true; inQ += Number(r.qty||0); inKg += Number(r.qtyKg||0); }
+    else if (r.type === 'out' && r.inv && jobMasterInvoiceNos[r.inv] && !r.voided) { outQ += Number(r.qty||0); outKg += Number(r.qtyKg||0); }
+  });
+  if (!hasIn) { inQ = Number(job.qty || job.pcs || 0); inKg = Number(job.qtyKg || job.kg || 0); }
+  if (job.unit === 'kg') return inKg > 0 && outKg >= inKg - 0.0005;
+  return inQ > 0 && outQ >= inQ;
+}
 function calcJobRemainToPlate(jobId) {
   var job = (jobMasterItems||[]).find(function(j){ return j.id===jobId; });
   if (!job) return { remainPcs: 0, remainKg: 0, unit: 'pcs' };
+  if (_jobDeliveredDone(job)) return { remainPcs: 0, remainKg: 0, unit: job.unit || 'pcs' };
   if (typeof WipCalc === 'undefined' || !WipCalc.isLoaded()) {
     var fb = calcJobBal(jobId);
     return { remainPcs: fb.remain, remainKg: fb.remainKg, unit: fb.unit };
