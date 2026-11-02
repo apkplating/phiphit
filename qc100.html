@@ -500,7 +500,7 @@ function qcLoadDefectNames() {
 }
 function qcSaveDefectNames(arr) {
   var key = 'qc100_defects_' + currentLine.toLowerCase();
-  localStorage.setItem(key, JSON.stringify(arr));
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e){}
 }
 function qcAddDefectRow() {
   qcDefectRows.push({ name:'', qty:0 });
@@ -899,9 +899,23 @@ function qcTombKey(line) { return 'qc100_tomb_' + (line||currentLine).toLowerCas
 function qcLoadTomb(line) { try { return JSON.parse(localStorage.getItem(qcTombKey(line))||'{}')||{}; } catch(e){ return {}; } }
 function qcSaveTomb(line,t) { try{ localStorage.setItem(qcTombKey(line), JSON.stringify(t)); }catch(e){} }
 function qcLoadRecords(line) {
-  try { return JSON.parse(localStorage.getItem(qcRecordsKey(line)) || '[]'); } catch(e) { return []; }
+  var _k = qcRecordsKey(line);
+  if (_qcMem[_k]) return JSON.parse(JSON.stringify(_qcMem[_k]));
+  try { return JSON.parse(localStorage.getItem(_k) || '[]'); } catch(e) { return []; }
 }
-function qcSaveRecordsLocal(arr, line) { localStorage.setItem(qcRecordsKey(line), JSON.stringify(arr)); }
+// localStorage ของ apkplating.github.io ใช้ร่วมกันทุกหน้า (รูป Tag Card/แคชอื่น) เต็มได้ (quota) — ถ้าเขียนไม่ได้ ให้เก็บไว้ในหน่วยความจำของหน้านี้แทน
+// (NAS คือแหล่งจริงอยู่แล้ว สำเนาในเครื่องเป็นแค่แคช) ไม่ปล่อยให้ error ทำให้การส่งขึ้น NAS ล้มเหลวซ้ำๆ
+var _qcMem = {};
+function qcFreeSpace() { try { Object.keys(localStorage).forEach(function(k){ if (k.indexOf('qc100v2_') === 0) localStorage.removeItem(k); }); } catch(e){} }
+function qcSaveRecordsLocal(arr, line) {
+  var k = qcRecordsKey(line), v = JSON.stringify(arr);
+  try { localStorage.setItem(k, v); delete _qcMem[k]; return true; } catch(e) {}
+  qcFreeSpace();
+  try { localStorage.setItem(k, v); delete _qcMem[k]; return true; } catch(e2) {}
+  _qcMem[k] = arr;
+  try { console.warn('qc100: localStorage เต็ม — เก็บรายการไว้ในหน่วยความจำของหน้านี้ (ข้อมูลหลักอยู่บน NAS)'); } catch(e3){}
+  return false;
+}
 
 // ── ส่งขึ้น NAS: อ่านของบน NAS (ETag) → รวมกับของเครื่องนี้ → เขียนกลับด้วย If-Match (ชนกัน 412 = อ่านใหม่แล้วรวมซ้ำ) ──
 // รายการที่ลบ = tombstone (deleted:{id:ts}) กันรายการที่ลบแล้วถูกเครื่องอื่นส่งกลับมา
