@@ -2070,6 +2070,61 @@ function delBarrel(id) {
   renderBarrels();
 }
 
+
+// ✏️ แก้เลขบิลของ "รอบวันนี้" (ที่ยังไม่กดบันทึกสรุปวัน) — ผูก/เปลี่ยน/ล้างบิล แล้ว sync NAS + คำนวณคงเหลือใหม่
+function _bbCanEdit() {
+  var role = (typeof _currentRole !== 'undefined') ? _currentRole : (localStorage.getItem('b2_pinRole')||'');
+  if (role !== 'admin' && role !== 'operator') { alert('ไม่มีสิทธิ์แก้รายรอบ'); return false; }
+  return NasSync.canEdit();
+}
+function openBarrelBillEdit(id) {
+  if (!_bbCanEdit()) return;
+  var row = todayBarrels.find(function(r){ return r.id === id; }); if (!row) return;
+  var partNo = (row.partName||'').trim().split(' ')[0];
+  var cands = (jobMasterItems||[]).filter(function(j){
+    if (!String(j.bill||'').trim()) return false;
+    if (!jobMatchesPartNo(j, row.partName||partNo)) return false;
+    if (j.id === row.jobId) return true;
+    var r = calcJobRemainToPlate(j.id); return r.remainPcs > 0 || r.remainKg > 0;
+  }).sort(function(a,b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  var old = document.getElementById('bbEditModal'); if (old) old.remove();
+  var opts = cands.map(function(j){
+    var r = calcJobRemainToPlate(j.id);
+    var rem = j.unit==='kg' ? r.remainKg.toFixed(2)+' กก.' : r.remainPcs.toLocaleString()+' ชิ้น';
+    return '<option value="'+esc2(j.id)+'"'+(j.id===row.jobId?' selected':'')+'>['+esc2(j.bill)+'] '+esc2(j.date||'')+' · เหลือ '+rem+'</option>';
+  }).join('');
+  var m = document.createElement('div'); m.id = 'bbEditModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px;width:340px;max-width:100%;box-shadow:0 8px 32px rgba(0,0,0,.25);">' +
+    '<div style="font-size:14px;font-weight:700;margin-bottom:6px;">✏️ แก้เลขบิลของรอบนี้</div>' +
+    '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">'+esc2(row.time||'')+' · <b>'+esc2(row.partName||'')+'</b> · '+(row.pcs||0)+' ชิ้น</div>' +
+    '<select id="bbSel" style="width:100%;padding:8px;border:1.5px solid #86efac;border-radius:8px;font-size:13px;margin-bottom:8px;"><option value="">— เลือกบิล —</option>'+opts+'</select>' +
+    (cands.length ? '' : '<div style="color:#d97706;font-size:11px;margin-bottom:8px;">⚠️ ไม่มีบิลที่มีคงเหลือของชิ้นงานนี้</div>') +
+    '<div style="display:flex;gap:8px;"><button onclick="saveBarrelBillEdit('+id+')" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;">💾 บันทึก</button>' +
+    '<button onclick="document.getElementById(\'bbEditModal\').remove()" style="flex:1;background:#f1f5f9;border:none;border-radius:8px;padding:9px;font-size:13px;cursor:pointer;">ยกเลิก</button></div>' +
+    '<button onclick="saveBarrelBillEdit('+id+',true)" style="width:100%;margin-top:8px;background:none;border:1px dashed #fca5a5;color:#dc2626;border-radius:8px;padding:7px;font-size:12px;cursor:pointer;">🗑️ ล้างค่าบิล</button></div>';
+  document.body.appendChild(m); m.onclick = function(e){ if (e.target===m) m.remove(); };
+}
+function saveBarrelBillEdit(id, clear) {
+  if (!_bbCanEdit()) return;
+  var row = todayBarrels.find(function(r){ return r.id === id; }); if (!row) return;
+  var jobId = clear ? '' : ((document.getElementById('bbSel')||{}).value || '');
+  if (!clear && !jobId) { showToast('entry','กรุณาเลือกบิล','err'); return; }
+  if (jobId && jobId !== row.jobId) {
+    var r = calcJobRemainToPlate(jobId), j = (jobMasterItems||[]).find(function(x){ return x.id===jobId; }) || {};
+    var avail = j.unit==='kg' ? r.remainKg : r.remainPcs, need = j.unit==='kg' ? Number(row.kg||0) : Number(row.pcs||0);
+    if (need > avail + 0.0001) { showToast('entry','🚫 บิลนี้เหลือ '+avail+' ไม่พอสำหรับรอบนี้ ('+need+')','err'); return; }
+  }
+  row.jobId = jobId; row.manualBill = '';
+  if (row.type !== 'R') row.custLot = jobId ? _custLotOf(jobId) : '';
+  try { localStorage.setItem('b2_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
+  livePush();
+  setTimeout(_refreshWipAfterChange, 300);
+  var mm = document.getElementById('bbEditModal'); if (mm) mm.remove();
+  renderBarrels();
+  showToast('entry', clear ? '🗑️ ล้างค่าบิลแล้ว — กำลังบันทึกขึ้น NAS…' : '⏳ เปลี่ยนบิลแล้ว — กำลังบันทึกขึ้น NAS…', 'ok');
+}
+
 function renderBarrels() {
   var seq = todayBarrels.length + 1;
   document.getElementById('barrelSeq').textContent = 'รอบที่ ' + seq;
@@ -2109,7 +2164,7 @@ function renderBarrels() {
       (function(){
         var role=(typeof _currentRole!=='undefined')?_currentRole:(localStorage.getItem('b2_pinRole')||'');
         var canDel = role==='admin'||role==='operator';
-        return '<td>'+(canDel?'<button class="del-btn-barrel" onclick="delBarrel('+r.id+')">✕</button>':'')+'</td>';
+        return '<td style="white-space:nowrap;">'+(canDel?'<button class="del-btn-barrel" title="แก้เลขบิล" onclick="openBarrelBillEdit('+r.id+')" style="margin-right:4px;">✏️</button><button class="del-btn-barrel" onclick="delBarrel('+r.id+')">✕</button>':'')+'</td>';
       })() +
     '</tr>';
   }).join('');
