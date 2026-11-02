@@ -3670,7 +3670,7 @@ function loadLotOptionsForPartNo(partNo) {
       $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
       $('tgLotHint').className = 'hint warn';
     } else {
-      $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+(closedN ? ' · ปิดแล้ว '+closedN+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
+      $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+(closedN && tgIsAdmin() ? ' · ปิดแล้ว '+closedN+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
       $('tgLotHint').className = 'hint ' + (_tagLogOk ? 'ok' : 'warn');
     }
   });
@@ -3751,7 +3751,7 @@ function onLotSelected() {
     $('tgInspBy').value = m.insp || '';
     $('tgProLotShow').value = m.lot || '';
     if (!m.insp) { $('tgInspHint').textContent = '🚫 รายการ QC 100% นี้ไม่มีชื่อผู้ตรวจสอบ — ให้ QC แก้ไขก่อน'; $('tgInspHint').className = 'hint err'; return; }
-    $('tgInspHint').textContent = '✅ ดึงจาก QC 100% ('+m.line+(m.bill?', บิล '+m.bill:'')+') · คงเหลือพิมพ์ Tag ได้ '+m.rem.toLocaleString()+' ชิ้น';
+    $('tgInspHint').textContent = '✅ ดึงจาก QC 100% ('+m.line+(m.bill?', บิล '+m.bill:'')+') · คงเหลือพิมพ์ Tag ได้ '+m.rem.toLocaleString()+' ชิ้น — ถ้าพิมพ์เกินยอดบิลนี้ ระบบแบ่งพิมพ์ข้ามบิลให้อัตโนมัติ (เก่าสุดก่อน)';
     $('tgInspHint').className = 'hint ok';
     if (m.customer && !$('tgCust').value.trim()) $('tgCust').value = m.customer;
     if (m.custLots && m.custLots.length) { _clSet(m.custLots.join(', '), '✅ ดึงจากรายการ QC 100% ('+m.custLots.length+' ค่า)', 'ok'); return; }
