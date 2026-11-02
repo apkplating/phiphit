@@ -1362,7 +1362,8 @@ function qcBuildBills(){
     var closed = !!j.closed || !!bf || (lots.length>0 && openLots.length===0);
     if (received - u <= 0 || !lots.length) return;            // ไม่มีอะไรให้ตรวจ
     if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
-    list.push({ id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
+    var _pl = 0; Object.keys(platedBy[j.id]||{}).forEach(function(k){ _pl += platedBy[j.id][k].plated; });
+    list.push({ plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, remain:received-u, lots:openLots.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }), closed:closed, closedBill:!!bf });
   });
   list.sort(function(a,b){ var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });
@@ -1417,7 +1418,8 @@ function qcRenderLots(){
     }
     return '<div '+((b.locked||b.closed)?'':'onclick="qcPickBill(\''+esc(b.id)+'\')"')+' style="'+st+'border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
       + (b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:'+(b.closed?'#475569':b.locked?'#991b1b':'#15803d')+';">['+esc(b.bill)+']</b> '
-      + 'รับ '+b.received.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>คงเหลือ '+b.remain.toLocaleString()+'</b> ชิ้น'
+      + 'รับเข้า '+b.received.toLocaleString()+' · ชุบแล้ว '+b.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>ตรวจได้ตอนนี้ '+Math.max(0,Math.min(b.plated,b.received)-b.used).toLocaleString()+'</b> ชิ้น'
+      + (b.received-b.plated > 0 ? ' <span style="color:#b45309;">· ยังไม่ชุบ '+(b.received-b.plated).toLocaleString()+'</span>' : '')
       + (on?' ✅':'') + act
       + '<div style="font-size:10.5px;color:var(--text-muted);">'+esc(b.customer)+' · รับเข้า '+esc(d)+(b.custLot?' · Customer Lot No. '+esc(b.custLot):'')+'</div>'
       + (b.locked && b.blocker ? '<div style="font-size:11px;color:#dc2626;font-weight:600;">⏳ ติดคิว — ต้องตรวจบิล "'+esc(b.blocker.bill)+'" ให้หมดก่อน</div>' : '')
