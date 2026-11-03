@@ -145,6 +145,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
         <div class="hint" id="tgLotHint"></div>
         <div id="tgLotAdmin" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap;">
           <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgCloseSelectedLot()">🔒 ปิดรายการที่เลือก (ซ่อนจากรายการ)</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgBulkCloseOld()">🧹 ปิดรายการเก่าที่พิมพ์ไปแล้ว (ทีเดียวหลายรายการ)</button>
           <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgShowPrintLog()">🗑 ประวัติพิมพ์ Tag — ลบเพื่อคืนยอด</button>
           <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="tgShowClosedLots()">📂 รายการที่ปิดไว้ / เปิดคืน (<span id="tgClosedN">0</span>)</button>
         </div>
@@ -3594,6 +3595,56 @@ async function tgCloseSelectedLot(){
   try { var r = await fetch(FB_LINES.B1 + '/tag-lot-closed/' + tgCloseKey(ek) + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(v) }); if (!r.ok) throw new Error('HTTP '+r.status); }
   catch(e){ alert('บันทึกขึ้น NAS ไม่สำเร็จ ('+(e.message||e)+') — ยังไม่ได้ปิด'); return; }
   _tagClosed[tgCloseKey(ek)] = v; $('tgLot').value = ''; onLotSelected(); tgReloadLots();
+}
+// ปิดรายการเก่าทีละหลายรายการ (ของ P/No ที่เลือก) — รายการที่พิมพ์ Tag ไปแล้วก่อนมีระบบตัดยอดตามบิล ยังค้างคงเหลืออยู่ในรายการ
+// ปิด = ซ่อนจากรายการพิมพ์ (ไม่ลบข้อมูล เปิดคืนได้ที่ "รายการที่ปิดไว้") เห็น/ทำได้เฉพาะ admin
+function tgBulkCloseOld(){
+  if (!tgIsAdmin()) return;
+  var pn = $('tgPartNo').value.trim();
+  if (!pn) { alert('เลือก P/No ก่อน'); return; }
+  var keys = Object.keys(_lotMeta);
+  if (!keys.length) { alert('ไม่มีรายการคงเหลือของ P/No นี้'); return; }
+  var old = $('tgBulkBox'); if (old) old.remove();
+  var d = document.createElement('div'); d.id = 'tgBulkBox';
+  d.style.cssText = 'position:fixed;inset:0;z-index:100003;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  var dflt = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+  d.innerHTML = '<div style="background:#fff;color:#111;border-radius:12px;padding:16px;max-width:640px;width:100%;max-height:88vh;overflow:auto;font-size:14px;">'
+    + '<div style="font-weight:800;font-size:16px;margin-bottom:8px;">🧹 ปิดรายการเก่า — P/No '+esc(pn)+'</div>'
+    + '<div style="margin-bottom:8px;">ปิดรายการที่ Pro Lot (วันที่ชุบ) <b>ก่อนวันที่</b> <input type="date" id="tgBulkDate" value="'+dflt+'" style="padding:4px 8px;"></div>'
+    + '<label style="display:block;margin-bottom:8px;"><input type="checkbox" id="tgBulkNoBill" checked> เฉพาะรายการ "ไม่ระบุบิล" (ข้อมูลเก่าก่อนมีระบบบิล) — เอาติ๊กออกถ้าจะปิดรายการที่มีเลขบิลด้วย</label>'
+    + '<div id="tgBulkInfo" style="padding:8px;background:#f1f5f9;border-radius:8px;margin-bottom:8px;"></div>'
+    + '<div id="tgBulkList" style="max-height:34vh;overflow:auto;font-size:12.5px;border:1px solid #e2e8f0;border-radius:8px;padding:6px;margin-bottom:10px;"></div>'
+    + '<div style="display:flex;gap:10px;justify-content:flex-end;"><button type="button" id="tgBulkCancel" class="btn btn-secondary">ยกเลิก</button><button type="button" id="tgBulkGo" class="btn btn-primary">🔒 ปิดรายการที่เลือก</button></div></div>';
+  document.body.appendChild(d);
+  function pick(){
+    var cut = $('tgBulkDate').value, nb = $('tgBulkNoBill').checked, out = [];
+    keys.forEach(function(ek){ var m = _lotMeta[ek]; if (!m) return; if (nb && m.bill) return; if (cut && m.date && m.date >= cut) return; if (!cut && m.date) return; out.push(ek); });
+    return out;
+  }
+  function draw(){
+    var ks = pick(), tot = ks.reduce(function(a,k){ return a + (_lotMeta[k].rem||0); }, 0);
+    $('tgBulkInfo').innerHTML = ks.length ? 'จะปิด <b>'+ks.length+'</b> รายการ (คงเหลือรวม '+tot.toLocaleString()+' ชิ้น) จากทั้งหมด '+keys.length+' รายการ' : 'ไม่มีรายการที่ตรงเงื่อนไข';
+    $('tgBulkList').innerHTML = ks.map(function(k){ var m=_lotMeta[k]; return '<div style="padding:2px 0;border-bottom:1px solid #f1f5f9;">'+(m.bill?'บิล '+esc(m.bill):'ไม่ระบุบิล')+' · Pro Lot '+esc(m.lot)+' ('+esc(m.line||'')+') · '+esc(m.date||'ไม่มีวันที่')+' · คงเหลือ '+(m.rem||0).toLocaleString()+'</div>'; }).join('') || '—';
+    $('tgBulkGo').disabled = !ks.length;
+  }
+  $('tgBulkDate').onchange = draw; $('tgBulkNoBill').onchange = draw; draw();
+  $('tgBulkCancel').onclick = function(){ d.remove(); };
+  $('tgBulkGo').onclick = async function(){
+    var ks = pick(); if (!ks.length) return;
+    var who = (session.user && session.user.name) || 'admin', now = new Date().toISOString(), patch = {};
+    ks.forEach(function(ek){ var m=_lotMeta[ek]; patch[tgCloseKey(ek)] = { at:now, by:who, partNo:pn, label:(m.bill?'บิล '+m.bill:'ไม่ระบุบิล')+' · Pro Lot '+m.lot+' ('+(m.line||'')+') · ปิดเป็นชุด' }; });
+    $('tgBulkGo').disabled = true; $('tgBulkGo').textContent = '⏳ กำลังบันทึกขึ้น NAS…';
+    try {
+      var r = await fetch(FB_LINES.B1 + '/tag-lot-closed.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      var chk = await (await fetch(FB_LINES.B1 + '/tag-lot-closed.json', { cache:'no-store' })).json();
+      var miss = Object.keys(patch).filter(function(k){ return !chk || !chk[k]; });
+      if (miss.length) throw new Error('อ่านกลับไม่พบ '+miss.length+' รายการ');
+    } catch(e) { alert('บันทึกขึ้น NAS ไม่สำเร็จ ('+(e.message||e)+') — ยังไม่ได้ปิด'); $('tgBulkGo').disabled = false; $('tgBulkGo').textContent = '🔒 ปิดรายการที่เลือก'; return; }
+    Object.keys(patch).forEach(function(k){ _tagClosed[k] = patch[k]; });
+    d.remove(); $('tgLot').value = ''; try { onLotSelected(); } catch(e){} tgReloadLots();
+    showToast('✅ ปิดแล้ว '+ks.length+' รายการ (เปิดคืนได้ที่ "รายการที่ปิดไว้")', 'ok');
+  };
 }
 function tgShowClosedLots(){
   if (!tgIsAdmin()) return;
