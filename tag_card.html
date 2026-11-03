@@ -2728,7 +2728,7 @@ function _pstWinDraw(kind, head, rows){
     var col = kind==='fail' ? '#b91c1c' : kind==='ok' ? '#047857' : '#334155';
     el.style.color = col;
     el.innerHTML = '<div style="font-size:20px;font-weight:800;margin-bottom:8px;">'+head+'</div><div style="font-size:16px;line-height:1.7;">'+rows+'</div>'
-      + (kind==='run' ? '<div style="margin-top:10px;font-size:13px;color:#64748b;">ห้ามปิดหน้าต่างนี้ — ระบบจะแสดงหน้าพิมพ์เองเมื่อพร้อม</div>' : kind==='fail' ? '<div style="margin-top:14px;"><button onclick="window.close()" style="padding:10px 20px;font-size:15px;border-radius:10px;border:1px solid #94a3b8;background:#f1f5f9;cursor:pointer;">ปิดหน้าต่างนี้</button></div>' : '');
+      + (kind==='run' ? '<div style="margin-top:10px;font-size:13px;color:#64748b;">ห้ามปิดหน้าต่างนี้ — ระบบจะแสดงหน้าพิมพ์เองเมื่อพร้อม</div>' : kind==='fail' ? '<div style="margin-top:14px;"><button onclick="parent._closePrintOverlay()" style="padding:10px 20px;font-size:15px;border-radius:10px;border:1px solid #94a3b8;background:#f1f5f9;cursor:pointer;">ปิดหน้าต่างนี้</button></div>' : '');
     w.__lastUpd = Date.now();
     if (kind !== 'run') _pst.win = null;
   } catch(e) {}
@@ -4378,11 +4378,32 @@ function _freshenTagLog() {
 // แล้วบล็อก pop-up เงียบๆ ผู้ใช้เห็นแค่หน้าเดิม ไม่มีอะไรเกิดขึ้น
 var _preWin = null, _offlinePrint = false;
 function _dropPreWin(){ try { if (_preWin && !_preWin.closed && _pst.win !== _preWin) _preWin.close(); } catch(e){} _preWin = null; }
-function _openPrintWin(){ var w = _preWin; _preWin = null; if (w && !w.closed) return w; w = window.open('', '_blank'); if (w) _pstWinInit(w); return w; }
+// หน้าพิมพ์แบบ "ซ้อนในหน้าเดียวกัน" (iframe เต็มจอ) แทนการเปิดหน้าต่าง/แท็บใหม่ — ไม่มี pop-up ให้ถูกบล็อก ไม่มีแท็บหลักถูกพักแท็บ เห็นสถานะ/ตัวอย่าง/ปุ่มพิมพ์ในที่เดียว
+function _closePrintOverlay(){ var o=document.getElementById('tgPrintOverlay'); if (o) o.remove(); }
+function _mkPrintWin(){
+  _closePrintOverlay();
+  var o=document.createElement('div'); o.id='tgPrintOverlay'; o.style.cssText='position:fixed;inset:0;z-index:100002;background:#fff;display:flex;flex-direction:column;';
+  var bar=document.createElement('div'); bar.style.cssText='flex:0 0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 12px;background:#0f172a;color:#fff;font-size:14px;';
+  bar.innerHTML='<b>🖨️ หน้าพิมพ์ Tag</b><span><button id="tgOvPrint" style="padding:7px 16px;font-size:14px;font-weight:700;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;margin-right:8px;">🖨️ พิมพ์</button><button id="tgOvClose" style="padding:7px 16px;font-size:14px;border-radius:8px;border:none;background:#e2e8f0;cursor:pointer;">✖ ปิด</button></span>';
+  var f=document.createElement('iframe'); f.style.cssText='flex:1 1 auto;border:0;width:100%;background:#fff;';
+  o.appendChild(bar); o.appendChild(f); document.body.appendChild(o);
+  var api={
+    get document(){ return f.contentWindow.document; },
+    get closed(){ return !o.isConnected; },
+    close:function(){ o.remove(); },
+    focus:function(){ try{ f.contentWindow.focus(); }catch(e){} },
+    print:function(){ f.contentWindow.focus(); f.contentWindow.print(); },
+    set __lastUpd(v){ try{ f.contentWindow.__lastUpd=v; }catch(e){} }
+  };
+  bar.querySelector('#tgOvPrint').onclick=function(){ try{ api.print(); }catch(e){ alert('สั่งพิมพ์ไม่ได้: '+e.message); } };
+  bar.querySelector('#tgOvClose').onclick=function(){ o.remove(); };
+  return api;
+}
+function _openPrintWin(){ var w = _preWin; _preWin = null; if (w && !w.closed) return w; w = _mkPrintWin(); _pstWinInit(w); return w; }
 function printTags() {
   _dropPreWin(); _offlinePrint = false; _icsLastErr = ''; pstStart();
   try {
-    _preWin = window.open('', '_blank');
+    _preWin = _mkPrintWin();
     if (!_preWin) { pstStep('⚠️ เบราว์เซอร์ไม่ให้เปิดหน้าต่างใหม่ (pop-up ถูกบล็อก) — จะลองเปิดอีกครั้งหลังตรวจยอด'); }
     if (_preWin) _pstWinInit(_preWin);
   } catch(e) { _preWin = null; }
@@ -4545,11 +4566,11 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
   if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
   if (d.test) {
     html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;}.pv-bar button{font-size:14px;padding:6px 14px;cursor:pointer;}@media print{.pv-bar{display:none;}}</style>')
-      .replace('<body>', '<body><div class="pv-bar"><b>🧪 ตัวอย่าง (ทดสอบ — ไม่ตัดยอดบิล ไม่บันทึกประวัติ ไม่มี QR)</b><button onclick="window.print()">🖨️ พิมพ์</button><button onclick="window.close()">✖ ปิด</button></div>');
+      .replace('<body>', '<body><div class="pv-bar"><b>🧪 ตัวอย่าง (ทดสอบ — ไม่ตัดยอดบิล ไม่บันทึกประวัติ ไม่มี QR)</b><button onclick="window.print()">🖨️ พิมพ์</button><button onclick="parent._closePrintOverlay()">✖ ปิด</button></div>');
   } else {
     // โหมดพิมพ์จริง: มีแถบปุ่ม "พิมพ์" ในหน้าต่างพิมพ์ด้วย (ไม่ออกตอนพิมพ์) — ถ้ากล่องพิมพ์ของเบราว์เซอร์ไม่เด้งเอง กดปุ่มนี้ได้เลย ไม่ต้องกลับไปสั่งใหม่ (กันตัดยอดซ้ำ)
     html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#dcfce7;border-bottom:2px solid #16a34a;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}.pv-bar button{font-size:15px;padding:8px 18px;cursor:pointer;font-weight:700;}@media print{.pv-bar{display:none;}}</style>')
-      .replace('<body>', '<body><div class="pv-bar"><b>✅ เตรียมใบพิมพ์แล้ว (' + count + ' ใบ' + (icsPageHtml ? ' + ICS' : '') + ')</b><button onclick="window.print()">🖨️ พิมพ์ (ถ้ากล่องพิมพ์ไม่เด้งเอง กดตรงนี้)</button><button onclick="window.close()">✖ ปิด</button></div>');
+      .replace('<body>', '<body><div class="pv-bar"><b>✅ เตรียมใบพิมพ์แล้ว (' + count + ' ใบ' + (icsPageHtml ? ' + ICS' : '') + ')</b><button onclick="window.print()">🖨️ พิมพ์ (ถ้ากล่องพิมพ์ไม่เด้งเอง กดตรงนี้)</button><button onclick="parent._closePrintOverlay()">✖ ปิด</button></div>');
   }
   if (_pst.win === win) _pst.win = null;
   win.document.open();
