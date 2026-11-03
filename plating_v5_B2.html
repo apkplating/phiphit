@@ -2578,6 +2578,7 @@ function renderHistory() {
         '<td><span class="badge-'+b.color+'">'+b.color+'</span></td>' +
         '<td>' + (b.kg||0) + '</td>' +
         '<td>' + (b.pcs||0) + '</td>' +
+        '<td>' + (NasSync.canEdit() ? '<button class="td-del-btn" title="ลบรอบนี้" onclick="event.stopPropagation();delHistRound('+r.id+','+i+')">✕</button>' : '') + '</td>' +
       '</tr>';
     }).join('');
 
@@ -2587,9 +2588,9 @@ function renderHistory() {
           '<th style="text-align:left;">เวลา</th><th>โม่</th><th>บ่อ</th>' +
           '<th style="text-align:left;">ชื่อชิ้นงาน</th><th style="text-align:left;">ลูกค้า</th>' +
           '<th>บิล</th><th>Customer Lot No</th>' +
-          '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th>' +
+          '<th>ประเภท</th><th>สี</th><th>Kgs</th><th>Pcs</th><th></th>' +
         '</tr></thead><tbody>' +
-        (detRows || '<tr><td colspan="11" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
+        (detRows || '<tr><td colspan="12" style="text-align:center;padding:10px;color:var(--text-muted);">ไม่มีรายรอบ</td></tr>') +
         '</tbody></table></div>' +
         '<div style="padding:8px 4px 2px;">' +
           '<button onclick="event.stopPropagation();openAddHistRoundModal('+r.id+')" style="font-size:11px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:6px 12px;cursor:pointer;color:#1e40af;font-family:inherit;font-weight:600;">➕ เพิ่มรอบย้อนหลังเข้าวันนี้</button>' +
@@ -2618,6 +2619,29 @@ function delDay(id) {
   renderHistory();
   if (fbIsConfigured()) fbSave();
   setTimeout(_refreshWipAfterChange, 800);
+}
+
+// ลบ "รายรอบ" เดียวในวันนั้น (ไม่ลบทั้ง Pro Lot No) — คำนวณยอดรวมวันใหม่ + เก็บสำเนารอบที่ลบไว้ใน dr.deletedRounds (กู้ย้อนดูได้)
+function delHistRound(dayId, idx) {
+  if (!NasSync.canEdit()) return;
+  var dr = dayRecords.find(function(r){ return r.id === dayId; });
+  if (!dr || !dr.rows || !dr.rows[idx]) return;
+  if (dr.rows.length <= 1) { alert('นี่คือรอบสุดท้ายของวันนี้ — ถ้าต้องการลบทั้งวัน ให้กดปุ่ม ✕ ท้ายแถววัน'); return; }
+  var b = dr.rows[idx];
+  var job = (jobMasterItems||[]).find(function(j){ return j.id === b.jobId; });
+  var bill = job ? job.bill : (b.manualBill || '–');
+  if (!confirm('ลบรอบที่ ' + (idx+1) + ' ?\n\nเวลา ' + (b.time||'–') + ' · ชิ้นงาน ' + (b.partName||'–') + '\nบิล ' + bill + ' · ' + (b.kg||0) + ' กก. / ' + (b.pcs||0) + ' ชิ้น\n\nยอดรวมของวันจะคำนวณใหม่ และยอดบิลที่ผูกไว้จะคืนให้ชุบได้อีก')) return;
+  if (!dr.deletedRounds) dr.deletedRounds = [];
+  dr.deletedRounds.push({ at: new Date().toISOString(), by: (typeof currentUserName !== 'undefined' && currentUserName) || 'admin', round: b });
+  dr.rows.splice(idx, 1);
+  recalcDayRecordSummary(dr);
+  try { localStorage.setItem('b2_dayRecords', JSON.stringify(pruneForLocalStorage(dayRecords))); } catch(e){}
+  renderHistory();
+  showToast('hist', '🗑 ลบรอบที่ ' + (idx+1) + ' แล้ว — กำลัง sync...', 'ok');
+  Promise.resolve(fbSave()).then(function(ok){
+    showToast('hist', ok ? '✅ ลบรอบและ sync แล้ว (ยอดรวมของวันคำนวณใหม่)' : '⚠️ ลบแล้วแต่ยังไม่ขึ้น NAS — บันทึกไว้ในเครื่องนี้ก่อน', ok ? 'ok' : 'err');
+    setTimeout(_refreshWipAfterChange, 800);
+  }).catch(function(){ showToast('hist', '⚠️ ลบแล้วแต่ยังไม่ขึ้น NAS — บันทึกไว้ในเครื่องนี้ก่อน', 'err'); });
 }
 
 // ═══════════════════════════════════════
@@ -8865,9 +8889,9 @@ function openAddHistRoundModal(dayId) {
       '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">วันที่ '+esc2(dateLabel)+'</div>' +
       '<label style="'+labelStyle+'">เวลา</label><input type="text" id="hrTime" value="'+new Date().toTimeString().slice(0,5)+'" placeholder="HH:MM" style="'+fieldStyle+'">' +
       '<label style="'+labelStyle+'">โม่/บ่อ (ไม่บังคับ)</label><input type="text" id="hrBarrel" placeholder="เช่น 5" style="'+fieldStyle+'">' +
-      '<label style="'+labelStyle+'">ชื่อชิ้นงาน (P/No)</label><input type="text" id="hrPartName" placeholder="พิมพ์ชื่อชิ้นงาน" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">ชื่อชิ้นงาน (P/No)</label><input type="text" id="hrPartName" list="hrPartList" autocomplete="off" oninput="hrPartChanged()" onchange="hrPartChanged()" placeholder="พิมพ์ P/No แล้วเลือกจากรายการ" style="'+fieldStyle+'margin-bottom:2px;"><datalist id="hrPartList"></datalist><div id="hrPartHint" style="font-size:10px;margin-bottom:8px;min-height:12px;"></div>' +
       '<label style="'+labelStyle+'">ลูกค้า</label><input type="text" id="hrCustomer" placeholder="ชื่อลูกค้า" style="'+fieldStyle+'">' +
-      '<label style="'+labelStyle+'">เลขบิล (พิมพ์ตรงกับ Job Master ถ้ามี — เว้นว่างได้)</label><input type="text" id="hrBill" placeholder="เช่น CL2608001" style="'+fieldStyle+'">' +
+      '<label style="'+labelStyle+'">เลขบิล (พิมพ์ตรงกับ Job Master ถ้ามี — เว้นว่างได้)</label><input type="text" id="hrBill" list="hrBillList" autocomplete="off" placeholder="เลือกจากบิลที่ค้างชุบ หรือพิมพ์เอง" style="'+fieldStyle+'margin-bottom:2px;"><datalist id="hrBillList"></datalist><div id="hrBillHint" style="font-size:10px;margin-bottom:8px;min-height:12px;"></div>' +
       '<label style="'+labelStyle+'">LOT NO</label><input type="text" id="hrLot" placeholder="เช่น 6.8.69" style="'+fieldStyle+'">' +
       '<label style="'+labelStyle+'">ประเภท</label><select id="hrType" style="'+fieldStyle+'"><option value="N">N (งานใหม่)</option><option value="R">R (งานซ่อม)</option></select>' +
       '<label style="'+labelStyle+'">สี</label><select id="hrColor" style="'+fieldStyle+'"><option value="B">B</option><option value="C">C</option><option value="K">K</option></select>' +
@@ -8882,6 +8906,48 @@ function openAddHistRoundModal(dayId) {
   modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
   makeModalDraggable('addHistRoundBox', 'addHistRoundDragHandle');
   setTimeout(function(){ var el=document.getElementById('hrPartName'); if(el) el.focus(); }, 50);
+}
+
+// หน้า "เพิ่มรอบย้อนหลัง": พิมพ์ P/No → แนะนำจาก Part Master, เติมลูกค้าให้, และแนะนำเฉพาะ "บิลที่ยังค้างชุบ" ของชิ้นงานนั้น (เก่าสุดก่อน) — ลดการพิมพ์ผิด
+function hrPartChanged() {
+  var el = document.getElementById('hrPartName'); if (!el) return;
+  var v = (el.value || '').trim(), k = v ? normalizePartKey(v) : '';
+  var dl = document.getElementById('hrPartList');
+  if (dl) {
+    var opts = [];
+    if (k) (partList || []).some(function(p){
+      if (normalizePartKey(p.partNo + ' ' + (p.partName||'') + ' ' + (p.customer||'')).indexOf(k) >= 0)
+        opts.push('<option value="' + esc2(p.partNo) + '">' + esc2((p.partName||'') + (p.customer ? ' · ' + p.customer : '')) + '</option>');
+      return opts.length >= 40;
+    });
+    dl.innerHTML = opts.join('');
+  }
+  var hit = k ? (partList || []).find(function(p){ return normalizePartKey(p.partNo) === k; }) : null;
+  var cu = document.getElementById('hrCustomer');
+  if (hit && cu && !cu.dataset.touched && hit.customer) cu.value = hit.customer;
+  var jobs = v ? (jobMasterItems || []).filter(function(j){ return String(j.bill||'').trim() && jobMatchesPartNo(j, v); }) : [];
+  var act = jobs.map(function(j){ return { j: j, r: calcJobRemainToPlate(j.id) }; })
+    .filter(function(x){ return x.r.remainPcs > 0 || x.r.remainKg > 0; })
+    .sort(function(a,b){ return String(a.j.date||'').localeCompare(String(b.j.date||'')); });
+  var bl = document.getElementById('hrBillList');
+  if (bl) bl.innerHTML = act.map(function(x){
+    var rem = x.j.unit === 'kg' ? x.r.remainKg.toFixed(2) + ' กก.' : x.r.remainPcs.toLocaleString() + ' ชิ้น';
+    return '<option value="' + esc2(x.j.bill) + '">เหลือ ' + rem + (x.j.customer ? ' · ' + esc2(x.j.customer) : '') + (x.j.date ? ' · รับ ' + esc2(x.j.date) : '') + '</option>';
+  }).join('');
+  var ph = document.getElementById('hrPartHint'), bh = document.getElementById('hrBillHint');
+  if (ph) {
+    if (!v) { ph.textContent = ''; }
+    else if (hit) { ph.textContent = '✅ พบใน Part Master' + (hit.partName ? ' — ' + hit.partName : ''); ph.style.color = '#15803d'; }
+    else if (jobs.length) { ph.textContent = '✅ พบบิลของชิ้นงานนี้ใน Job Master'; ph.style.color = '#15803d'; }
+    else { ph.textContent = '⚠️ ไม่พบ P/No นี้ใน Part Master / Job Master — ตรวจตัวสะกด'; ph.style.color = '#d97706'; }
+  }
+  if (bh) {
+    if (!v) { bh.textContent = ''; }
+    else if (act.length) { bh.textContent = '✅ บิลที่ยังค้างชุบ ' + act.length + ' บิล (เก่าสุดก่อน) — กดช่องเลขบิลเพื่อเลือก'; bh.style.color = '#15803d'; }
+    else { bh.textContent = '⚠️ ไม่มีบิลค้างชุบของชิ้นงานนี้ใน Job Master (งานซ่อม R เว้นว่างได้)'; bh.style.color = '#d97706'; }
+  }
+  var bi = document.getElementById('hrBill');
+  if (bi && act.length === 1 && !bi.value.trim()) { bi.value = act[0].j.bill; if (cu && !cu.value.trim() && act[0].j.customer) cu.value = act[0].j.customer; }
 }
 
 function saveHistRound(dayId) {
