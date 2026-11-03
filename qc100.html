@@ -574,7 +574,7 @@ function qcDefectRowQtyChange(i, val) {
 var PLATING_PAGE = { B1:'plating_v4.html', B2:'plating_v5_B2.html', R1:'plating_v6_R1.html' };
 var qcDayRecords = null;   // null = ยังไม่โหลด / โหลดไม่ได้
 var qcPlatingErr = '';
-var qcJobsById = {};
+var qcJobsById = {}, qcJmRecs = [], qcJmInvNos = null, qcJmTmp = {}, qcJmOk = false;
 var qcCurLots = [];        // [{lot,date,plated,used,remain,bills[],custLots[]}] เรียงเก่าสุดก่อน
 var qcLotUnchecked = {};   // lot -> true ถ้าผู้ใช้เอาติ๊กออก (ข้าม Lot นี้)
 var qcAlloc = [];          // ผลการจัดสรรล่าสุด [{lot,qty,remainAfter,...}]
@@ -617,6 +617,16 @@ async function qcLoadPlating(silent) {
       var items = (jd && jd.items) || [];
       if (!Array.isArray(items)) items = Object.values(items);
       qcJobsById = {}; items.forEach(function(j){ if (j && j.id) qcJobsById[j.id] = j; });
+      var _a = function(x){ if (Array.isArray(x)) return x; if (x && typeof x==='object') return Object.keys(x).map(function(k){ return x[k]; }).filter(function(v){ return v!=null; }); return []; };
+      qcJmRecs = _a(jd && jd.records);
+      var _inv = _a(jd && jd.invoices); qcJmInvNos = null;
+      if (_inv.length) { qcJmInvNos = {}; _inv.forEach(function(v){ if (v && v.invNo) qcJmInvNos[v.invNo] = true; }); }
+      qcJmTmp = {};
+      try {
+        var tr = await fetch(FB_LINES.B1.replace(/\/+$/,'') + '/temp-notes.json', { cache:'no-store' });
+        if (tr.ok) { _a(await tr.json()).forEach(function(n){ if (n.status !== 'open') return; (n.lines||[]).forEach(function(l){ if (l.convertedTo) return; var o = qcJmTmp[l.jobId] || (qcJmTmp[l.jobId] = { pcs:0, kg:0 }); if (l.unit==='kg') o.kg += Number(l.qty||0); else o.pcs += Number(l.qty||0); }); }); }
+      } catch(e2) {}
+      qcJmOk = !!qcJmInvNos;   // ไม่มีข้อมูล INV = ไม่ตัดสินจาก JM (แสดงตามเดิม)
     }
   } catch(e) {}
   qcRenderLots();
@@ -1329,6 +1339,20 @@ function qcLotClosed(jobId, lot, date){
   return !!(qcClosed[qcCK(jobId+'|'+lot)] || (qcClosedBefore && date && date < qcClosedBefore));
 }
 function qcBillClosedFlag(jobId){ qcLoadClosed(); return qcClosed[qcCK('BILL|'+jobId)] || null; }
+// คงเหลือใน Job Master (กติกาเดียวกับหน้าออก INV): รับเข้า − INV จริง(ไม่ยกเลิก) − ใบส่งของชั่วคราวที่ค้าง; บิลที่ปิดแล้ว = 0
+function qcJmOpen(j){
+  if (!qcJmOk) return true;
+  if (j.closed) return false;
+  var inQ=0, inKg=0, outQ=0, outKg=0, hasIn=false;
+  qcJmRecs.forEach(function(r){
+    if (r.jobId !== j.id) return;
+    if (r.type==='in') { hasIn=true; inQ+=Number(r.qty||0); inKg+=Number(r.qtyKg||0); }
+    else if (r.type==='out' && r.inv && qcJmInvNos[r.inv] && !r.voided) { outQ+=Number(r.qty||0); outKg+=Number(r.qtyKg||0); }
+  });
+  if (!hasIn) { inQ=Number(j.qty||j.pcs||0); inKg=Number(j.qtyKg||j.kg||0); }
+  var t = qcJmTmp[j.id]; if (t) { outQ+=t.pcs; outKg+=t.kg; }
+  return j.unit==='kg' ? (inKg-outKg) > 0.0005 : (inQ-outQ) > 0;
+}
 function qcBuildBills(){
   var usedBill = {}, usedLot = {};
   qcLoadRecords().forEach(function(r){
@@ -1360,16 +1384,19 @@ function qcBuildBills(){
     var openLots = lots.filter(function(e){ return !e.closed; });
     var bf = qcBillClosedFlag(j.id);
     var closed = !!j.closed || !!bf || (lots.length>0 && openLots.length===0);
-    if (received - u <= 0 || !lots.length) return;            // ไม่มีอะไรให้ตรวจ
-    if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
+    if (!qcJmOpen(j)) return;                                  // JM ปิด/จ่ายครบแล้ว — ไม่ต้องแสดง
+    if (received - u <= 0) return;                             // ตรวจครบแล้ว
+    var noPlate = !lots.length;                                // ไม่มียอดชุบที่รอตรวจ (ไม่มีประวัติชุบผูกบิลนี้ หรือตรวจครบแล้ว)
+    if (noPlate) closed = false; else if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
     var _pl = 0; Object.keys(platedBy[j.id]||{}).forEach(function(k){ _pl += platedBy[j.id][k].plated; });
-    list.push({ plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
+    list.push({ noPlate:noPlate, plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, remain:received-u, lots:openLots.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }), closed:closed, closedBill:!!bf });
   });
-  list.sort(function(a,b){ var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });
+  list.sort(function(a,b){ if (!!a.noPlate !== !!b.noPlate) return a.noPlate ? 1 : -1; var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลที่มียอดชุบรอตรวจขึ้นก่อน
   var head = null;
   list.forEach(function(b){
     if (b.closed) { b.locked = true; b.blocker = null; return; }
+    if (b.noPlate) { b.locked = false; b.blocker = null; return; }   // ยังไม่มียอดชุบ — ไม่เข้าคิว FIFO ไม่บังบิลอื่น
     if (!head) head = b;
     b.locked = (b !== head); b.blocker = b.locked ? head : null;
   });
@@ -1420,6 +1447,7 @@ function qcRenderLots(){
       + (b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:'+(b.closed?'#475569':b.locked?'#991b1b':'#15803d')+';">['+esc(b.bill)+']</b> '
       + 'รับเข้า '+b.received.toLocaleString()+' · ชุบแล้ว '+b.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>ตรวจได้ตอนนี้ '+Math.max(0,Math.min(b.plated,b.received)-b.used).toLocaleString()+'</b> ชิ้น'
       + (b.received-b.plated > 0 ? ' <span style="color:#b45309;">· ยังไม่ชุบ '+(b.received-b.plated).toLocaleString()+'</span>' : '')
+      + (b.noPlate ? '<div style="font-size:11px;color:#b91c1c;font-weight:600;">'+(b.plated>0 ? '⚠️ ชุบแล้ว '+b.plated.toLocaleString()+' ชิ้น ตรวจครบแล้ว — ถ้ามีงานชุบเพิ่ม ให้กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1)' : '⚠️ ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1) ก่อน')+'</div>' : '')
       + (on?' ✅':'') + act
       + '<div style="font-size:10.5px;color:var(--text-muted);">'+esc(b.customer)+' · รับเข้า '+esc(d)+(b.custLot?' · Customer Lot No. '+esc(b.custLot):'')+'</div>'
       + (b.locked && b.blocker ? '<div style="font-size:11px;color:#dc2626;font-weight:600;">⏳ ติดคิว — ต้องตรวจบิล "'+esc(b.blocker.bill)+'" ให้หมดก่อน</div>' : '')
@@ -1432,7 +1460,7 @@ function qcRenderLots(){
   if (sel) {
     sel.innerHTML = arr.length
       ? arr.map(function(e){ return '<option value="'+esc(e.lot)+'" data-date="'+esc(e.date)+'">'+esc(e.lot)+' ('+esc((e.date||'').split('-').reverse().join('/'))+') · ชุบ '+e.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+e.used.toLocaleString()+' · คงเหลือ '+e.remain.toLocaleString()+'</option>'; }).join('')
-      : '<option value="">— ไม่มี Pro Lot No. ที่เหลือของบิลนี้ —</option>';
+      : '<option value="">— ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบ —</option>';
     if (keep && arr.some(function(e){ return e.lot===keep; })) sel.value = keep;
   }
   qcUpdateAlloc();
@@ -1443,7 +1471,7 @@ function qcUpdateAlloc(){
   var b = qcBills.filter(function(x){ return x.id===qcSelBill; })[0];
   var sel = document.getElementById('qcProLot');
   if (!b) { prev.innerHTML=''; return; }
-  if (!sel || !sel.value) { prev.innerHTML='<span style="color:var(--red);font-weight:600;">🚫 ไม่มี Pro Lot No. ที่เหลือให้ตรวจของบิลนี้ (ยังไม่ได้ผูกบิลที่หน้าชุบ หรือตรวจครบแล้ว)</span>'; return; }
+  if (!sel || !sel.value) { prev.innerHTML='<span style="color:var(--red);font-weight:600;">🚫 ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1) เนื่องจากไม่มีบิลนี้ (หรือยอดชุบตรวจครบแล้ว)</span>'; return; }
   var qty = qcGetQtyInPcs();
   var ng = Math.min(qty, qcDefectRows.reduce(function(s,r){ return s+(parseInt(r.qty)||0); }, 0));
   var scrap = parseInt((document.getElementById('qcScrap')||{}).value)||0;
@@ -1478,7 +1506,7 @@ function qcSaveRecord(){
   var b = qcBills.filter(function(x){ return x.id===qcSelBill && !x.locked; })[0];
   if (!b) { showErr('🚫 กรุณาเลือกบิล (ต้องเป็นบิลที่ถึงคิว FIFO)'); return; }
   var sel = document.getElementById('qcProLot');
-  if (!sel || !sel.value) { showErr('🚫 ไม่มี Pro Lot No. ที่เหลือให้ตรวจของบิลนี้'); return; }
+  if (!sel || !sel.value) { showErr('🚫 ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบก่อน'); return; }
   qcUpdateAlloc();
   if (qcAllocOver) { showErr('🚫 ตรวจสอบจำนวนผ่าน/ทิ้ง — เกินยอดคงเหลือของบิล หรือทิ้งเกิน NG'); return; }
   var defects = qcDefectRows.filter(function(r){ return r.name && r.qty>0; }).map(function(r){ return { name:r.name, qty:r.qty }; });
