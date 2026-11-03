@@ -4347,13 +4347,11 @@ function _printTags(preGroups) {
         : (res.reason === 'encrypt'
           ? 'เข้ารหัสใบ ICS ของลูกค้านี้ไม่สำเร็จ (เบราว์เซอร์อาจไม่รองรับ หรือเปิดหน้านี้ผ่านที่อยู่ที่ไม่ใช่ https)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
           : 'บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ'+(_icsLastErr ? '\nสาเหตุ: '+_icsLastErr : ' (อินเทอร์เน็ตไม่เสถียร)')+'\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR');
-      if (res.reason === 'offline') { info.qr = false; renderAndPrint(d, count, ics.pageHtml, win, info); return; }
-      pstStep('รอผู้ใช้เลือก: พิมพ์ต่อโดยไม่มี QR หรือยกเลิก…');
-      return tgConfirm(why + '\n\nพิมพ์ต่อโดยไม่มี QR หรือยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)?', 'พิมพ์ต่อ (ไม่มี QR)', 'ยกเลิก').then(function(go){
-        if (!go) { try { win.close(); } catch (e) {} pstFail('ผู้ใช้กดยกเลิก — ' + why.split('\n')[0]); return; }
-        info.qr = false;
-        renderAndPrint(d, count, ics.pageHtml, win, info);
-      });
+      // ส่งใบ ICS ขึ้นระบบไม่สำเร็จ: ไม่ถามแล้ว พิมพ์ต่อทันทีโดยไม่มี QR (ระบุสาเหตุไว้ในแผงสถานะ/ข้อความหลังพิมพ์) — กันพิมพ์บิลจำนวนมากแล้วต้องกดตอบทุกใบ
+      info.qr = false;
+      pstStep('ส่งใบ ICS ขึ้นระบบไม่สำเร็จ — พิมพ์ต่อโดยไม่มี QR' + (_icsLastErr ? ' (' + _icsLastErr + ')' : '') + '…');
+      renderAndPrint(d, count, ics.pageHtml, win, info);
+      return;
     }
     renderAndPrint(d, count, ics.pageHtml, win, info);
   }).catch(function(e){
