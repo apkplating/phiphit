@@ -2725,7 +2725,7 @@ function _pstWinDraw(kind, head, rows){
   var w = _pst.win; if (!w) return;
   try {
     if (w.closed) { _pst.win = null; return; }
-    var el = w.document.getElementById('st'); if (!el) return;
+    var el = w.document.getElementById('st'); if (!el) { _pstWinInit(w); _pst.win = w; el = w.document.getElementById('st'); if (!el) return; }
     var col = kind==='fail' ? '#b91c1c' : kind==='ok' ? '#047857' : '#334155';
     el.style.color = col;
     el.innerHTML = '<div style="font-size:20px;font-weight:800;margin-bottom:8px;">'+head+'</div><div style="font-size:16px;line-height:1.7;">'+rows+'</div>'
@@ -2755,7 +2755,7 @@ window.addEventListener('unhandledrejection', function(ev){ if(_pst.on) pstFail(
 // ยืนยันแบบในหน้าเว็บ (แทน confirm() ของเบราว์เซอร์ ที่ Edge/Chrome อาจถูกบล็อก/ตอบ "ยกเลิก" เองถ้าเคยติ๊ก "ไม่ให้หน้านี้แสดงกล่องโต้ตอบ")
 function tgConfirm(msg, okText, cancelText){
   return new Promise(function(resolve){
-    var o=document.createElement('div'); o.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var o=document.createElement('div'); o.style.cssText='position:fixed;inset:0;z-index:100010;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
     var b=document.createElement('div'); b.style.cssText='background:#fff;color:#111;border-radius:14px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:18px;font-size:15px;box-shadow:0 10px 40px rgba(0,0,0,.4);';
     var t=document.createElement('div'); t.style.cssText='white-space:pre-wrap;line-height:1.55;margin-bottom:14px;'; t.textContent=msg;
     var r=document.createElement('div'); r.style.cssText='display:flex;gap:10px;justify-content:flex-end;';
@@ -3488,16 +3488,16 @@ function sendJsonWithTimeout(method, url, obj, ms) {
   return _sendJsonOnce(method, url, obj, ms).then(function(r){
     if (r.ok) return true;
     if (r.perm) { _icsLastErr = r.err; return false; }
-    return _sendJsonOnce(method, url, obj, ms + 8000).then(function(r2){ if (!r2.ok) _icsLastErr = r2.err; return !!r2.ok; });
+    _icsLastErr = r.err; return false;   // ไม่ลองซ้ำ — ไม่ให้การพิมพ์ Tag รอนาน (QR ไม่ติดไม่ขวางการพิมพ์)
   });
 }
 function putJsonWithTimeout(url, obj, ms) { return sendJsonWithTimeout('PUT', url, obj, ms); }
 function saveIcsRecord(id, ctx, P) {
   var record = Object.assign({}, ctx, { id: id, printedAt: new Date().toISOString() });
   var url = ICS_RECORDS_URL + '/' + id + '.json';
-  if (!P) return putJsonWithTimeout(url, record, 12000);
+  if (!P) return putJsonWithTimeout(url, record, 8000);
   // ใบของลูกค้าที่ตั้งรหัส: ส่งขึ้นไปเฉพาะซองที่เข้ารหัสแล้ว (ไม่มีข้อความอ่านได้) — เข้ารหัสไม่สำเร็จ = false ไม่ส่งอะไรขึ้นไปเลย
-  return icsEncrypt(P, record, id).then(function(env){ return putJsonWithTimeout(url, env, 12000); }).catch(function(){ return false; });
+  return icsEncrypt(P, record, id).then(function(env){ return putJsonWithTimeout(url, env, 8000); }).catch(function(){ return false; });
 }
 function saveIcsSnapshot(id, dataUrl, P) {
   var snap = { img: dataUrl, at: new Date().toISOString() };
@@ -4317,10 +4317,6 @@ function _printTags(preGroups) {
   var win = _openPrintWin();
   if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
   _printBusy = true;
-  try {
-    win.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>กำลังเตรียม…</title></head><body style="font-family:sans-serif;padding:24px;color:#334155;">⏳ กำลังเตรียมใบตรวจสอบและบันทึกขึ้นระบบ… (ถ้าเน็ตช้าอาจใช้เวลาสักครู่)</body></html>');
-    win.document.close();
-  } catch (e) {}
 
   // รีโหลดรหัสป้องกันสดทุกครั้งที่พิมพ์ (กันใช้ค่าเก่าที่แอดมินเพิ่งตั้ง/เปลี่ยน) — โหลดไม่ได้ = ไม่รู้ว่าลูกค้ารายนี้ต้องป้องกันหรือไม่
   // จึงไม่บันทึกใบขึ้นระบบ (ปิดทางรั่ว) แล้วถามว่าจะพิมพ์ต่อโดยไม่มี QR หรือยกเลิก
