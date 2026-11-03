@@ -991,14 +991,27 @@ async function qcFbLoadRecordsLine(line) {
     qcSaveDefectNames(merged2);
   }
 }
-async function qcFbLoadRecords() {
+function qcRecSig(){ var r = qcLoadRecords(), m = 0; r.forEach(function(x){ if (x && x.ts > m) m = x.ts; }); return r.length + ':' + m; }
+async function qcFbLoadRecords(quiet) {
   try {
+    var s0 = quiet ? qcRecSig() : '';
     await Promise.all(QC_LINES.map(function(l){ return qcFbLoadRecordsLine(l).catch(function(e){ console.warn('qcFbLoadRecords '+l+':', e.message); }); }));
+    if (quiet && qcRecSig() === s0) return;   // รีเฟรชพื้นหลัง: ไม่มีอะไรเปลี่ยน = ไม่วาดหน้าใหม่ (ไม่รบกวนคนกำลังกรอก)
     qcPopulateDateFilter();
     qcRenderHistory();
     qcRenderLots();
+    if (quiet) { var t = document.getElementById('qcToast'); if (t) { t.className = 'toast ok'; t.textContent = '🔄 อัปเดตข้อมูล QC100 ที่เครื่องอื่นบันทึกแล้ว'; setTimeout(function(){ t.className = 'toast'; }, 4000); } }
   } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
 }
+// เดิมโหลดผลตรวจจาก NAS ครั้งเดียวตอนเปิดหน้า → เครื่องที่เปิดค้างไว้เห็นยอดตรวจเก่า (บิล/Lot ที่อีกเครื่องตรวจครบแล้วยังโผล่) — ตอนนี้รีเฟรชเมื่อกลับมาที่แท็บ และทุก 30 วินาที (เหมือนสถานะปิดรายการ)
+var _qcRecTick = 0, _qcRecBusy = false;
+function qcRecordsRefreshSoon(){
+  var t = Date.now(); if (_qcRecBusy || t - _qcRecTick < 5000 || !session) return; _qcRecTick = t; _qcRecBusy = true;
+  Promise.resolve(qcFbLoadRecords(true)).then(function(){ _qcRecBusy = false; }, function(){ _qcRecBusy = false; });
+}
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) qcRecordsRefreshSoon(); });
+window.addEventListener('focus', qcRecordsRefreshSoon);
+setInterval(function(){ if (!document.hidden) qcRecordsRefreshSoon(); }, 30000);
 
 // ── โหมดระบุ Pro Lot เอง: Pro Lot No. = วันที่ชุบ (DDMMYYYY) + เลขบิลอ้างอิง ──
 var qcManual = false;
