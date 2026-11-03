@@ -2724,13 +2724,26 @@ function _pstDraw(kind, head){
 }
 function pstStart(){ _pst.on=true; _pst.steps=[]; _pst.t0=Date.now(); clearInterval(_pst.tm);
   _pst.tm=setInterval(function(){ if(!_pst.on) return; var w=(Date.now()-_pst.stepAt)/1000; var last=_pst.steps[_pst.steps.length-1];
-    if (w>15 && last && last.st==='run') { pstFail('ค้างที่ขั้นตอน "'+last.t.replace(/…$/,'')+'" นานเกิน 15 วินาที — ตรวจอินเทอร์เน็ต/NAS แล้วกดพิมพ์ใหม่ (ยังไม่ได้ตัดยอดถ้าไม่ขึ้นว่าบันทึกประวัติสำเร็จ)'); } },1000);
+    if (w>15 && last && last.st==='run' && !/^รอผู้ใช้/.test(last.t)) { pstFail('ค้างที่ขั้นตอน "'+last.t.replace(/…$/,'')+'" นานเกิน 15 วินาที — ตรวจอินเทอร์เน็ต/NAS แล้วกดพิมพ์ใหม่ (ยังไม่ได้ตัดยอดถ้าไม่ขึ้นว่าบันทึกประวัติสำเร็จ)'); } },1000);
   pstStep('กดพิมพ์แล้ว — เริ่มทำงาน…'); }
 function pstStep(t){ if(!_pst.on) return; var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='ok'; _pst.steps.push({t:t,st:'run'}); _pst.stepAt=Date.now(); _pstDraw('run','🖨️ กำลังพิมพ์ Tag…'); }
 function pstOk(t){ if(!_pst.on) return; _pst.on=false; clearInterval(_pst.tm); var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='ok'; _pstDraw('ok','✅ พิมพ์สำเร็จ — '+t); setTimeout(function(){ var e=document.getElementById('tgPrintStatus'); if(e && _pst.on===false && e.style.background.indexOf('ecfdf5')>=0 || (e && /พิมพ์สำเร็จ/.test(e.textContent))) e.remove(); }, 12000); }
 function pstFail(why){ if(!_pst.on) return; _pst.on=false; clearInterval(_pst.tm); var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='fail'; _pstDraw('fail','❌ พิมพ์ไม่สำเร็จ — เพราะ: '+String(why||'ไม่ทราบสาเหตุ')); }
 window.addEventListener('error', function(ev){ if(_pst.on) pstFail('โปรแกรมผิดพลาด: '+((ev && ev.message)||'')); });
 window.addEventListener('unhandledrejection', function(ev){ if(_pst.on) pstFail('โปรแกรมผิดพลาด: '+String((ev && ev.reason && ev.reason.message)||(ev&&ev.reason)||'')); });
+// ยืนยันแบบในหน้าเว็บ (แทน confirm() ของเบราว์เซอร์ ที่ Edge/Chrome อาจถูกบล็อก/ตอบ "ยกเลิก" เองถ้าเคยติ๊ก "ไม่ให้หน้านี้แสดงกล่องโต้ตอบ")
+function tgConfirm(msg, okText, cancelText){
+  return new Promise(function(resolve){
+    var o=document.createElement('div'); o.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var b=document.createElement('div'); b.style.cssText='background:#fff;color:#111;border-radius:14px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:18px;font-size:15px;box-shadow:0 10px 40px rgba(0,0,0,.4);';
+    var t=document.createElement('div'); t.style.cssText='white-space:pre-wrap;line-height:1.55;margin-bottom:14px;'; t.textContent=msg;
+    var r=document.createElement('div'); r.style.cssText='display:flex;gap:10px;justify-content:flex-end;';
+    function done(v){ o.remove(); resolve(v); }
+    var c=document.createElement('button'); c.textContent=cancelText||'ยกเลิก'; c.style.cssText='padding:10px 18px;border-radius:10px;border:1px solid #94a3b8;background:#f1f5f9;font-size:15px;cursor:pointer;'; c.onclick=function(){ done(false); };
+    var k=document.createElement('button'); k.textContent=okText||'ตกลง'; k.style.cssText='padding:10px 22px;border-radius:10px;border:none;background:#15803d;color:#fff;font-weight:700;font-size:15px;cursor:pointer;'; k.onclick=function(){ done(true); };
+    r.appendChild(c); r.appendChild(k); b.appendChild(t); b.appendChild(r); o.appendChild(b); document.body.appendChild(o); try{ k.focus(); }catch(e){}
+  });
+}
 var _toastTm = null;
 function showToast(msg, kind){ var t=$('toast'); t.className='toast '+(kind||'ok'); t.textContent=msg; clearTimeout(_toastTm); _toastTm = setTimeout(function(){ t.className='toast'; }, kind==='err' ? 9000 : 3000);
   if (kind==='err' && typeof _dropPreWin==='function') _dropPreWin();
@@ -4245,9 +4258,12 @@ function _printTags(preGroups) {
         : (res.reason === 'encrypt'
           ? 'เข้ารหัสใบ ICS ของลูกค้านี้ไม่สำเร็จ (เบราว์เซอร์อาจไม่รองรับ หรือเปิดหน้านี้ผ่านที่อยู่ที่ไม่ใช่ https)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
           : 'บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR');
-      var go = confirm(why + '\n\nกด OK = พิมพ์ต่อโดยไม่มี QR\nกด Cancel = ยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)');
-      if (!go) { try { win.close(); } catch (e) {} pstFail('ผู้ใช้กดยกเลิก — ' + why.split('\n')[0]); return; }
-      info.qr = false;
+      pstStep('รอผู้ใช้เลือก: พิมพ์ต่อโดยไม่มี QR หรือยกเลิก…');
+      return tgConfirm(why + '\n\nพิมพ์ต่อโดยไม่มี QR หรือยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)?', 'พิมพ์ต่อ (ไม่มี QR)', 'ยกเลิก').then(function(go){
+        if (!go) { try { win.close(); } catch (e) {} pstFail('ผู้ใช้กดยกเลิก — ' + why.split('\n')[0]); return; }
+        info.qr = false;
+        renderAndPrint(d, count, ics.pageHtml, win, info);
+      });
     }
     renderAndPrint(d, count, ics.pageHtml, win, info);
   }).catch(function(e){
@@ -4362,9 +4378,13 @@ function _printTagsCore() {
   var multi = plan.some(function(g){ return g.ek !== ek; });
   var msg = (multi ? 'ยอดเกินบิลที่เลือก — ระบบจะแยกพิมพ์ตามบิล/Pro Lot No. (เก่าสุดก่อน)' : 'พิมพ์ Tag รวม ' + count + ' ใบ' + (rest ? ' (รวมใบเศษ 1 ใบ)' : '')) + ':\n\n' +
     plan.map(function(g){ return '• ' + (g.bill ? 'บิล '+g.bill+' · ' : '') + g.lot + ' : ' + g.count + ' ใบ × ' + g.qty + (noPcs ? '' : ' (' + g.pcs.toLocaleString() + ' ชิ้น)'); }).join('\n') + '\n\nกด OK เพื่อพิมพ์';
-  if (!confirm(msg)) { _dropPreWin(); pstFail('ผู้ใช้กดยกเลิกในหน้าต่างยืนยันการแบ่งใบ'); return; }
+  pstStep('รอผู้ใช้ยืนยันแผนแบ่งใบ…');
+  tgConfirm(msg, 'พิมพ์เลย', 'ยกเลิก').then(function(okGo){
+  if (!okGo) { _dropPreWin(); pstFail('ผู้ใช้กดยกเลิกในหน้ายืนยันแผนแบ่งใบ'); return; }
+  pstStep('เตรียมข้อมูล Customer Lot No. ของแต่ละบิล…');
   Promise.all(plan.map(function(g){ return (g.ek === ek ? Promise.resolve($('tgCustLot') ? $('tgCustLot').value.trim() : '') : ((g.custLots && g.custLots.length) ? Promise.resolve(g.custLots.join(', ')) : resolveCustLot(partNo, g.lot).catch(function(){ return ''; }))).then(function(c){ g.custLot = c; }); }))
     .then(function(){ _printTags(plan); });
+  });
 }
 // แปลง Q'TY × จำนวนใบ เป็นชิ้น: หน่วย pcs/... นับตรง, kg/... แปลงด้วยน้ำหนักต่อชิ้นใน Part Master, หน่วยอื่น = null (ไม่หักยอด)
 function tagQtyToPcs(qty, count, partNo) {
