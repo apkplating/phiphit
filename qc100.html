@@ -1387,17 +1387,21 @@ function qcBuildBills(){
     var bf = qcBillClosedFlag(j.id);
     var closed = !!j.closed || !!bf || (lots.length>0 && openLots.length===0);
     if (!qcJmOpen(j)) return;                                  // JM ปิด/จ่ายครบแล้ว — ไม่ต้องแสดง
-    if (received - u <= 0) return;                             // ตรวจครบแล้ว
-    var noPlate = !lots.length;                                // ไม่มียอดชุบที่รอตรวจ (ไม่มีประวัติชุบผูกบิลนี้ หรือตรวจครบแล้ว)
+    var inspDone = false;
+    if (received - u <= 0) {                                   // QC คำนวณว่าตรวจครบ: ถ้า JM ยืนยันว่ายังเปิด (มียอดค้าง) ห้ามซ่อนเงียบ — แสดงเป็นแถวเตือนให้ตรวจสอบ
+      if (closed || !qcJmOk || !(qcJmRemainPcs(j) > 0)) return;
+      inspDone = true;
+    }
+    var noPlate = !lots.length || inspDone;
     if (noPlate) closed = false; else if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
     var _pl = 0; Object.keys(platedBy[j.id]||{}).forEach(function(k){ _pl += platedBy[j.id][k].plated; });
-    list.push({ jmRemain:qcJmRemainPcs(j), noPlate:noPlate, plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
+    list.push({ jmRemain:qcJmRemainPcs(j), noPlate:noPlate, inspDone:inspDone, plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, remain:received-u, lots:openLots.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }), closed:closed, closedBill:!!bf });
   });
   list.sort(function(a,b){ if (!!a.noPlate !== !!b.noPlate) return a.noPlate ? 1 : -1; var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลที่มียอดชุบรอตรวจขึ้นก่อน
   var head = null;
   list.forEach(function(b){
-    if (b.closed) { b.locked = true; b.blocker = null; return; }
+    if (b.closed || b.inspDone) { b.locked = true; b.blocker = null; return; }
     if (b.noPlate) { b.locked = false; b.blocker = null; return; }   // ยังไม่มียอดชุบ — ไม่เข้าคิว FIFO ไม่บังบิลอื่น
     if (!head) head = b;
     b.locked = (b !== head); b.blocker = b.locked ? head : null;
@@ -1440,17 +1444,18 @@ function qcRenderLots(){
   box.innerHTML = bar + qcBills.map(function(b){
     var on = b.id===qcSelBill;
     var d = (b.date||'').split('-').reverse().join('/');
-    var st = b.closed ? 'border:1.5px dashed #94a3b8;background:#f1f5f9;opacity:.7;' : b.locked ? 'border:1.5px dashed #fca5a5;background:#fef2f2;opacity:.9;' : 'border:1.5px solid '+(on?'#16a34a':'#bbf7d0')+';background:'+(on?'#dcfce7':'#fff')+';cursor:pointer;';
+    var st = (b.closed || b.inspDone) ? 'border:1.5px dashed '+(b.inspDone?'#f59e0b':'#94a3b8')+';background:'+(b.inspDone?'#fffbeb':'#f1f5f9')+';opacity:.85;' : b.locked ? 'border:1.5px dashed #fca5a5;background:#fef2f2;opacity:.9;' : 'border:1.5px solid '+(on?'#16a34a':'#bbf7d0')+';background:'+(on?'#dcfce7':'#fff')+';cursor:pointer;';
     var act = '';
     if (isAdminQc()) {
       if (!b.closed) act = ' <a href="#" onclick="event.stopPropagation();qcCloseBillV2(\''+esc(b.id)+'\');return false;" style="float:right;color:#9a3412;font-size:11px;">จบบิล</a>';
       else if (b.closedBill) act = ' <a href="#" onclick="event.stopPropagation();qcReopenBillV2(\''+esc(b.id)+'\');return false;" style="float:right;font-size:11px;">เปิดคืน</a>';
     }
-    return '<div '+((b.locked||b.closed)?'':'onclick="qcPickBill(\''+esc(b.id)+'\')"')+' style="'+st+'border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
+    return '<div '+((b.locked||b.closed||b.inspDone)?'':'onclick="qcPickBill(\''+esc(b.id)+'\')"')+' style="'+st+'border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
       + (b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:'+(b.closed?'#475569':b.locked?'#991b1b':'#15803d')+';">['+esc(b.bill)+']</b> '
       + 'รับเข้า '+b.received.toLocaleString()+(b.jmRemain!=null ? ' <span style="color:#475569;">(ยอดค้าง '+b.jmRemain.toLocaleString()+')</span>' : '')+' · ชุบแล้ว '+b.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>ตรวจได้ตอนนี้ '+Math.max(0,Math.min(b.plated,b.received)-b.used).toLocaleString()+'</b> ชิ้น'
       + (b.received-b.plated > 0 ? ' <span style="color:#b45309;">· ยังไม่ชุบ '+(b.received-b.plated).toLocaleString()+'</span>' : '')
-      + (b.noPlate ? '<div style="font-size:11px;color:#b91c1c;font-weight:600;">'+(b.plated>0 ? '⚠️ ชุบแล้ว '+b.plated.toLocaleString()+' ชิ้น ตรวจครบแล้ว — ถ้ามีงานชุบเพิ่ม ให้กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1)' : '⚠️ ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1) ก่อน')+'</div>' : '')
+      + (b.inspDone ? '<div style="font-size:11px;color:#b45309;font-weight:700;">⚠️ JM ยังเปิดอยู่ (ยอดค้าง '+b.jmRemain.toLocaleString()+' ชิ้น) แต่ QC คำนวณว่าตรวจครบแล้ว (ผ่าน/ทิ้งรวม '+b.used.toLocaleString()+' / รับเข้า '+b.received.toLocaleString()+') — ตรวจสอบรายการใน "ประวัติการตรวจสอบ" ของบิลนี้ว่าซ้ำ/เกินหรือไม่</div>' : '')
+      + (b.noPlate && !b.inspDone ? '<div style="font-size:11px;color:#b91c1c;font-weight:600;">'+(b.plated>0 ? '⚠️ ชุบแล้ว '+b.plated.toLocaleString()+' ชิ้น ตรวจครบแล้ว — ถ้ามีงานชุบเพิ่ม ให้กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1)' : '⚠️ ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1) ก่อน')+'</div>' : '')
       + (on?' ✅':'') + act
       + '<div style="font-size:10.5px;color:var(--text-muted);">'+esc(b.customer)+' · รับเข้า '+esc(d)+(b.custLot?' · Customer Lot No. '+esc(b.custLot):'')+'</div>'
       + (b.locked && b.blocker ? '<div style="font-size:11px;color:#dc2626;font-weight:600;">⏳ ติดคิว — ต้องตรวจบิล "'+esc(b.blocker.bill)+'" ให้หมดก่อน</div>' : '')
