@@ -1340,9 +1340,11 @@ function qcLotClosed(jobId, lot, date){
 }
 function qcBillClosedFlag(jobId){ qcLoadClosed(); return qcClosed[qcCK('BILL|'+jobId)] || null; }
 // คงเหลือใน Job Master (กติกาเดียวกับหน้าออก INV): รับเข้า − INV จริง(ไม่ยกเลิก) − ใบส่งของชั่วคราวที่ค้าง; บิลที่ปิดแล้ว = 0
-function qcJmOpen(j){
-  if (!qcJmOk) return true;
-  if (j.closed) return false;
+function qcJmOpen(j){ var r = qcJmRemainPcs(j); return r === null ? true : r > 0; }
+// ยอดค้างใน JM เป็นชิ้น (null = ไม่มีข้อมูล JM); บิลหน่วย กก. แปลงด้วยน้ำหนัก/ชิ้นของ P/No ที่เลือก
+function qcJmRemainPcs(j){
+  if (!qcJmOk) return null;
+  if (j.closed) return 0;
   var inQ=0, inKg=0, outQ=0, outKg=0, hasIn=false;
   qcJmRecs.forEach(function(r){
     if (r.jobId !== j.id) return;
@@ -1351,7 +1353,8 @@ function qcJmOpen(j){
   });
   if (!hasIn) { inQ=Number(j.qty||j.pcs||0); inKg=Number(j.qtyKg||j.kg||0); }
   var t = qcJmTmp[j.id]; if (t) { outQ+=t.pcs; outKg+=t.kg; }
-  return j.unit==='kg' ? (inKg-outKg) > 0.0005 : (inQ-outQ) > 0;
+  if (j.unit==='kg') { var rk = inKg-outKg; if (rk <= 0.0005) return 0; var w = (qcSelectedPart && qcSelectedPart.weightG) || 0; return w>0 ? Math.round(rk*1000/w) : 1; }
+  return Math.max(0, inQ-outQ);
 }
 function qcBuildBills(){
   var usedBill = {}, usedLot = {};
@@ -1389,7 +1392,7 @@ function qcBuildBills(){
     var noPlate = !lots.length;                                // ไม่มียอดชุบที่รอตรวจ (ไม่มีประวัติชุบผูกบิลนี้ หรือตรวจครบแล้ว)
     if (noPlate) closed = false; else if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
     var _pl = 0; Object.keys(platedBy[j.id]||{}).forEach(function(k){ _pl += platedBy[j.id][k].plated; });
-    list.push({ noPlate:noPlate, plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
+    list.push({ jmRemain:qcJmRemainPcs(j), noPlate:noPlate, plated:_pl, id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, remain:received-u, lots:openLots.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); }), closed:closed, closedBill:!!bf });
   });
   list.sort(function(a,b){ if (!!a.noPlate !== !!b.noPlate) return a.noPlate ? 1 : -1; var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลที่มียอดชุบรอตรวจขึ้นก่อน
@@ -1445,7 +1448,7 @@ function qcRenderLots(){
     }
     return '<div '+((b.locked||b.closed)?'':'onclick="qcPickBill(\''+esc(b.id)+'\')"')+' style="'+st+'border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
       + (b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:'+(b.closed?'#475569':b.locked?'#991b1b':'#15803d')+';">['+esc(b.bill)+']</b> '
-      + 'รับเข้า '+b.received.toLocaleString()+' · ชุบแล้ว '+b.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>ตรวจได้ตอนนี้ '+Math.max(0,Math.min(b.plated,b.received)-b.used).toLocaleString()+'</b> ชิ้น'
+      + 'รับเข้า '+b.received.toLocaleString()+(b.jmRemain!=null ? ' <span style="color:#475569;">(ยอดค้าง '+b.jmRemain.toLocaleString()+')</span>' : '')+' · ชุบแล้ว '+b.plated.toLocaleString()+' · ผ่าน/ทิ้งแล้ว '+b.used.toLocaleString()+' · <b>ตรวจได้ตอนนี้ '+Math.max(0,Math.min(b.plated,b.received)-b.used).toLocaleString()+'</b> ชิ้น'
       + (b.received-b.plated > 0 ? ' <span style="color:#b45309;">· ยังไม่ชุบ '+(b.received-b.plated).toLocaleString()+'</span>' : '')
       + (b.noPlate ? '<div style="font-size:11px;color:#b91c1c;font-weight:600;">'+(b.plated>0 ? '⚠️ ชุบแล้ว '+b.plated.toLocaleString()+' ชิ้น ตรวจครบแล้ว — ถ้ามีงานชุบเพิ่ม ให้กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1)' : '⚠️ ไม่พบประวัติชุบของบิลนี้ — กลับไปเพิ่มประวัติชุบที่หน้าชุบ (B1/B2/R1) ก่อน')+'</div>' : '')
       + (on?' ✅':'') + act
