@@ -58,7 +58,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 .photo-box .ph-empty{font-size:9px;color:var(--text-muted);text-align:center;}
 .toast{margin-top:8px;font-size:12px;font-weight:700;padding:8px 10px;border-radius:8px;display:none;}
 .toast.ok{background:#ecfdf5;color:var(--green);display:block;}
-.toast.err{background:#fef2f2;color:var(--red);display:block;}
+.toast.err{background:#fef2f2;color:var(--red);display:block;position:fixed;left:12px;right:12px;bottom:16px;z-index:99999;font-size:14px;padding:12px 14px;border:2px solid #fca5a5;box-shadow:0 6px 24px rgba(0,0,0,.25);}
 </style>
 <script src="auto-update.js" defer></script>
 </head>
@@ -2712,7 +2712,9 @@ var _selectedPhotoB64 = null; // รูปที่เพิ่งเลือ�
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-function showToast(msg, kind){ var t=$('toast'); t.className='toast '+(kind||'ok'); t.textContent=msg; setTimeout(function(){ t.className='toast'; }, 3000); }
+var _toastTm = null;
+function showToast(msg, kind){ var t=$('toast'); t.className='toast '+(kind||'ok'); t.textContent=msg; clearTimeout(_toastTm); _toastTm = setTimeout(function(){ t.className='toast'; }, kind==='err' ? 9000 : 3000);
+  if (kind==='err' && typeof _dropPreWin==='function') _dropPreWin(); }   // แจ้งผิดพลาด: ลอยเต็มจอ 9 วิ (เดิมอยู่ในฟอร์ม 3 วิ เลื่อนจอแล้วมองไม่เห็น) + ปิดหน้าต่างพิมพ์เปล่าที่เปิดรอไว้
 function showIcsToast(msg, kind){ var t=$('icsToast'); t.className='toast '+(kind||'ok'); t.textContent=msg; setTimeout(function(){ t.className='toast'; }, 3000); }
 
 // ── Login (เหมือนไฟล์อื่นในระบบทุกจุด) ──
@@ -4187,7 +4189,7 @@ function _printTags(preGroups) {
   // มี ICS: ต้องบันทึกขึ้นระบบให้สำเร็จก่อนค่อยพิมพ์ QR — กัน QR บน Tag ที่สแกนแล้วเจอหน้าว่างเพราะตอนพิมพ์เน็ตหลุด
   // เปิดหน้าต่างพิมพ์ตั้งแต่ตอนกดปุ่มเลย (ถ้ารอบันทึกเสร็จก่อนค่อยเปิด เบราว์เซอร์จะมองว่าเป็น pop-up แล้วบล็อก)
   if (_printBusy) { showToast('⏳ กำลังเตรียมใบตรวจสอบอยู่ รอสักครู่', 'err'); return; }
-  var win = window.open('', '_blank');
+  var win = _openPrintWin();
   if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
   _printBusy = true;
   try {
@@ -4286,8 +4288,19 @@ function _freshenTagLog() {
     return true;
   }).catch(function(){ showToast('🚫 ตรวจยอดล่าสุดจาก NAS ไม่ได้ — ตรวจเน็ตแล้วลองใหม่ (ห้ามพิมพ์เพราะยอดอาจไม่ตรง)', 'err'); return false; });
 }
+// เปิดหน้าต่างพิมพ์ "ทันทีที่กดปุ่ม" (ก่อนรออ่านยอดจาก NAS) — เดิมรอ NAS ก่อนค่อยเปิด ถ้าเน็ตช้าเกิน ~5 วิ เบราว์เซอร์ถือว่าไม่ใช่การกดของผู้ใช้
+// แล้วบล็อก pop-up เงียบๆ ผู้ใช้เห็นแค่หน้าเดิม ไม่มีอะไรเกิดขึ้น
+var _preWin = null;
+function _dropPreWin(){ try { if (_preWin && !_preWin.closed) _preWin.close(); } catch(e){} _preWin = null; }
+function _openPrintWin(){ var w = _preWin; _preWin = null; if (w && !w.closed) return w; return window.open('', '_blank'); }
 function printTags() {
-  _freshenTagLog().then(function(ok){ if (ok) _printTagsCore(); });
+  _dropPreWin();
+  try {
+    _preWin = window.open('', '_blank');
+    if (_preWin) { _preWin.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>กำลังเตรียม…</title></head><body style="font-family:sans-serif;padding:24px;color:#334155;">⏳ กำลังตรวจยอดล่าสุด…</body></html>'); _preWin.document.close(); }
+  } catch(e) { _preWin = null; }
+  _freshenTagLog().then(function(ok){ if (ok) _printTagsCore(); else _dropPreWin(); })
+    .catch(function(e){ console.warn(e); showToast('⚠️ พิมพ์ไม่สำเร็จ: ' + String((e && e.message) || e).slice(0,120), 'err'); });
 }
 function _printTagsCore() {
   var qtyNum = parseFloat($('tgQty').value) || 0;
@@ -4325,7 +4338,7 @@ function _printTagsCore() {
   var multi = plan.some(function(g){ return g.ek !== ek; });
   var msg = (multi ? 'ยอดเกินบิลที่เลือก — ระบบจะแยกพิมพ์ตามบิล/Pro Lot No. (เก่าสุดก่อน)' : 'พิมพ์ Tag รวม ' + count + ' ใบ' + (rest ? ' (รวมใบเศษ 1 ใบ)' : '')) + ':\n\n' +
     plan.map(function(g){ return '• ' + (g.bill ? 'บิล '+g.bill+' · ' : '') + g.lot + ' : ' + g.count + ' ใบ × ' + g.qty + (noPcs ? '' : ' (' + g.pcs.toLocaleString() + ' ชิ้น)'); }).join('\n') + '\n\nกด OK เพื่อพิมพ์';
-  if (!confirm(msg)) return;
+  if (!confirm(msg)) { _dropPreWin(); return; }
   Promise.all(plan.map(function(g){ return (g.ek === ek ? Promise.resolve($('tgCustLot') ? $('tgCustLot').value.trim() : '') : ((g.custLots && g.custLots.length) ? Promise.resolve(g.custLots.join(', ')) : resolveCustLot(partNo, g.lot).catch(function(){ return ''; }))).then(function(c){ g.custLot = c; }); }))
     .then(function(){ _printTags(plan); });
 }
@@ -4386,7 +4399,7 @@ function logTagPrint(d, count) {
 function renderAndPrint(d, count, icsPageHtml, win, info) {
   // เปิดหน้าต่างพิมพ์ทันที (ยังอยู่ในจังหวะที่ผู้ใช้กดปุ่ม กัน pop-up ถูกบล็อก) แล้วบันทึกประวัติพิมพ์ขึ้น NAS ให้สำเร็จก่อนค่อยพิมพ์
   if (!win) {
-    win = window.open('', '_blank');
+    win = _openPrintWin();
     if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
     try { win.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>กำลังบันทึก…</title></head><body style="font-family:sans-serif;padding:24px;color:#334155;">⏳ กำลังบันทึกประวัติพิมพ์ขึ้น NAS… (ต้องสำเร็จก่อนจึงจะพิมพ์)</body></html>'); win.document.close(); } catch (e) {}
   }
@@ -4431,7 +4444,7 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
     '</style>'+
     '</head><body>'+pagesHtml+'</body></html>';
 
-  if (!win) win = window.open('', '_blank');
+  if (!win) win = _openPrintWin();
   if (!win) { showToast('⚠️ เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาต pop-up ของเว็บนี้แล้วลองใหม่', 'err'); return; }
   if (d.test) {
     html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;}.pv-bar button{font-size:14px;padding:6px 14px;cursor:pointer;}@media print{.pv-bar{display:none;}}</style>')
