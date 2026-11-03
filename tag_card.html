@@ -2748,7 +2748,7 @@ function pstStart(){ _pst.win=null; _pst.on=true; _pst.steps=[]; _pst.t0=Date.no
     if (w>15 && last && last.st==='run' && !/^รอผู้ใช้/.test(last.t)) { pstFail('ค้างที่ขั้นตอน "'+last.t.replace(/…$/,'')+'" นานเกิน 15 วินาที — ตรวจอินเทอร์เน็ต/NAS แล้วกดพิมพ์ใหม่ (ยังไม่ได้ตัดยอดถ้าไม่ขึ้นว่าบันทึกประวัติสำเร็จ)'); } },1000);
   pstStep('กดพิมพ์แล้ว — เริ่มทำงาน…'); }
 function pstStep(t){ if(!_pst.on) return; var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='ok'; _pst.steps.push({t:t,st:'run'}); _pst.stepAt=Date.now(); _pstDraw('run','🖨️ กำลังพิมพ์ Tag…'); }
-function pstOk(t){ if(!_pst.on) return; _pst.on=false; clearInterval(_pst.tm); var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='ok'; _pstDraw('ok','✅ พิมพ์สำเร็จ — '+t); setTimeout(function(){ var e=document.getElementById('tgPrintStatus'); if(e && _pst.on===false && e.style.background.indexOf('ecfdf5')>=0 || (e && /พิมพ์สำเร็จ/.test(e.textContent))) e.remove(); }, 12000); }
+function pstOk(t){ if(!_pst.on) return; _pst.on=false; clearInterval(_pst.tm); var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='ok'; _pstDraw('ok','📤 ส่งไปเครื่องพิมพ์แล้ว — '+t+' (ยืนยันผลที่หน้าพิมพ์: ออกแล้ว/ไม่ออก)'); setTimeout(function(){ var e=document.getElementById('tgPrintStatus'); if(e && _pst.on===false && e.style.background.indexOf('ecfdf5')>=0 || (e && /พิมพ์สำเร็จ/.test(e.textContent))) e.remove(); }, 12000); }
 function pstFail(why){ try { if (_preWin && _pst.win === _preWin) _preWin = null; } catch(e){} if(!_pst.on) return; _pst.on=false; clearInterval(_pst.tm); var last=_pst.steps[_pst.steps.length-1]; if(last && last.st==='run') last.st='fail'; _pstDraw('fail','❌ พิมพ์ไม่สำเร็จ — เพราะ: '+String(why||'ไม่ทราบสาเหตุ')); }
 window.addEventListener('error', function(ev){ if(_pst.on) pstFail('โปรแกรมผิดพลาด: '+((ev && ev.message)||'')); });
 window.addEventListener('unhandledrejection', function(ev){ if(_pst.on) pstFail('โปรแกรมผิดพลาด: '+String((ev && ev.reason && ev.reason.message)||(ev&&ev.reason)||'')); });
@@ -2791,6 +2791,9 @@ function doLogin(pin){
   });
 }
 var _deepEk = '';
+var _EMBED = false; try { _EMBED = new URLSearchParams(location.search).get('embed') === '1'; } catch(e){}
+var _lastInfo = null;
+function _embedBack(msg){ try { parent.postMessage(msg, location.origin); } catch(e){} }
 function enterApp(){
   try { NasSync.startup(); } catch(e){}
   $('loginScreen').style.display = 'none';
@@ -2807,6 +2810,13 @@ function enterApp(){
   $('tabTagBtn').style.display = okTag ? 'inline-block' : 'none';
   if (!okTag && okIcs) switchView('ics'); else if (!okTag && okArc) switchView('archive');
   if (!okTag && !okIcs && !okArc) $('tagView').innerHTML = '<div class="card">ยังไม่ได้รับสิทธิ์ใช้แท็บใดในระบบนี้ — ติดต่อแอดมินเพื่อกำหนดสิทธิ์</div>';
+  if (_EMBED && !document.getElementById('tgEmbedBar')) {
+    var eb = document.createElement('div'); eb.id = 'tgEmbedBar';
+    eb.style.cssText = 'position:sticky;top:0;z-index:50;background:#0f172a;color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;';
+    eb.innerHTML = '<b>🖨️ พิมพ์ Tag + ICS (จาก QC100)</b><button type="button" style="padding:6px 14px;border:none;border-radius:8px;background:#e2e8f0;cursor:pointer;font-size:14px;">← กลับ QC100</button>';
+    eb.querySelector('button').onclick = function(){ _embedBack({ type:'tagcard-close' }); };
+    $('app').insertBefore(eb, $('app').firstChild);
+  }
   initPartAutocomplete();
   loadPartList();
   loadPartPhotos();
@@ -3838,7 +3848,18 @@ function loadLotOptionsForPartNo(partNo) {
     }
     sel.innerHTML = options.join('');
     sel.disabled = false;
-    if (_deepEk) { var _dk = _deepEk; _deepEk = ''; if (_lotMeta[_dk]) { sel.value = _dk; try { onLotSelected(); } catch(e){} try { $('icsT1').focus(); } catch(e){} } else { showToast('ℹ️ บิล/Pro Lot ที่ส่งมาจาก QC100 ไม่มีให้พิมพ์แล้ว (พิมพ์ครบหรือถูกปิด) — เลือกบิลเองจากรายการ', 'err'); } }
+    if (_deepEk) { var _dk = _deepEk; _deepEk = '';
+      if (_lotMeta[_dk]) {
+        sel.value = _dk; try { onLotSelected(); } catch(e){}
+        // เติม Lot Size (ยอดที่จะพิมพ์ครั้งนี้) = ยอดคงเหลือของบิลนี้ (คำนวณจากระบบ) — ลดได้ เพิ่มเกินไม่ได้ (หน่วย pcs เท่านั้น)
+        try { if (getLotUnit().toLowerCase() === 'pcs' && !String($('icsLotSize').value).trim()) { $('icsLotSize').value = String(_lotMeta[_dk].rem); autoTagCount(); } } catch(e){}
+        try { $('tgQty').focus(); } catch(e){}
+      } else {
+        var why = _tagClosed[tgCloseKey(_dk)] ? 'แอดมินปิดรายการนี้แล้ว' : (lotInfo[_dk] ? 'พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้ว (ไม่มียอดคงเหลือ)' : 'ไม่พบบิล/Pro Lot นี้ในข้อมูล QC100 ของ P/No นี้ (อาจยังไม่ได้บันทึก QC100 หรือโหลดข้อมูลไม่ครบ)');
+        showToast('ℹ️ เลือกบิลให้ไม่ได้ — ' + why, 'err');
+        window._deepWhy = why;
+      }
+    }
     if (failed > 0) {
       $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
       $('tgLotHint').className = 'hint warn';
@@ -3846,6 +3867,7 @@ function loadLotOptionsForPartNo(partNo) {
       $('tgLotHint').textContent = '✅ สต๊อกคงเหลือรอพิมพ์ Tag รวม '+totalRemain.toLocaleString()+' ชิ้น ('+n+' Lot'+(usedUp ? ' · พิมพ์ครบแล้ว '+usedUp+' Lot' : '')+(closedN && tgIsAdmin() ? ' · ปิดแล้ว '+closedN+' Lot' : '')+')'+(_tagLogOk ? '' : ' ⚠️ โหลดประวัติพิมพ์ไม่ได้ ยอดอาจไม่ถูกต้อง');
       $('tgLotHint').className = 'hint ' + (_tagLogOk ? 'ok' : 'warn');
     }
+    if (window._deepWhy) { $('tgLotHint').textContent = '⚠️ บิลที่ส่งมาจาก QC100: ' + window._deepWhy + ' — ' + $('tgLotHint').textContent; $('tgLotHint').className = 'hint err'; window._deepWhy = ''; }
   });
 }
 
@@ -4424,6 +4446,43 @@ function _freshenTagLog() {
 var _preWin = null, _offlinePrint = false;
 function _dropPreWin(){ try { if (_preWin && !_preWin.closed && _pst.win !== _preWin) _preWin.close(); } catch(e){} _preWin = null; }
 // หน้าพิมพ์แบบ "ซ้อนในหน้าเดียวกัน" (iframe เต็มจอ) แทนการเปิดหน้าต่าง/แท็บใหม่ — ไม่มี pop-up ให้ถูกบล็อก ไม่มีแท็บหลักถูกพักแท็บ เห็นสถานะ/ตัวอย่าง/ปุ่มพิมพ์ในที่เดียว
+// ── ถามผลหลังพิมพ์: "ออกแล้ว" = ยืนยัน / "ไม่ออก" = คืนยอดบิลที่ตัดไปให้เองทันที (ไม่ต้องรอ admin ลบประวัติ) ──
+var _lastPrintIds = [], _askOpen = false;
+function _afterPrintAsk(){
+  var o = document.getElementById('tgPrintOverlay'); if (!o || _askOpen) return;
+  var ids = _lastPrintIds.slice();
+  _askOpen = true;
+  var a = document.createElement('div'); a.id = 'tgPrintAsk';
+  a.style.cssText = 'flex:0 0 auto;padding:14px 16px;background:#fef9c3;border-bottom:3px solid #eab308;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:16px;';
+  a.innerHTML = '<b>🖨️ พิมพ์ออกเรียบร้อยไหม?</b>'
+    + '<button id="tgAskOk" style="padding:10px 20px;font-size:16px;font-weight:800;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;">✅ ออกแล้ว</button>'
+    + '<button id="tgAskNo" style="padding:10px 20px;font-size:16px;font-weight:800;border:none;border-radius:10px;background:#dc2626;color:#fff;cursor:pointer;">❌ ไม่ออก — คืนยอดบิล</button>'
+    + '<button id="tgAskLater" style="padding:8px 14px;font-size:13px;border:1px solid #94a3b8;border-radius:10px;background:#fff;cursor:pointer;">พิมพ์อีกครั้ง (ยังไม่ตอบ)</button>';
+  o.insertBefore(a, o.children[1]);
+  function done(){ _askOpen = false; var x = document.getElementById('tgPrintAsk'); if (x) x.remove(); }
+  document.getElementById('tgAskLater').onclick = done;
+  document.getElementById('tgAskOk').onclick = function(){
+    ids.forEach(function(id){ try { fetch(FB_LINES.B1 + '/tag-print-log/' + encodeURIComponent(id) + '.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ confirmedAt:new Date().toISOString(), confirmedBy:(session&&session.user&&session.user.name)||'' }) }).catch(function(){}); } catch(e){} });
+    _lastPrintIds = []; done(); _closePrintOverlay(); showToast('✅ พิมพ์สำเร็จ — บันทึกผลแล้ว', 'ok');
+    if (_EMBED) { var _li = _lastInfo || {}; setTimeout(function(){ _embedBack({ type:'tagcard-done', partNo:_li.partNo||'', bill:_li.bill||'', pcs:_li.pcs||'' }); }, 700); }
+  };
+  document.getElementById('tgAskNo').onclick = async function(){
+    var b = this; b.disabled = true; b.textContent = '⏳ กำลังคืนยอด…';
+    try {
+      for (var i = 0; i < ids.length; i++) {
+        var r = await fetch(FB_LINES.B1 + '/tag-print-log/' + encodeURIComponent(ids[i]) + '.json', { method:'DELETE' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+      }
+      try { var pend = _tagPendLoad().filter(function(q){ return ids.indexOf(q.id) < 0; }); _tagPendSave(pend); } catch(e){}
+      try { fetch(FB_LINES.B1 + '/tag-print-log-audit.json', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ at:new Date().toISOString(), by:(session&&session.user&&session.user.name)||'', action:'ผู้พิมพ์แจ้งว่าพิมพ์ไม่ออก — คืนยอดอัตโนมัติ', ids:ids }) }).catch(function(){}); } catch(e){}
+    } catch(e) {
+      b.disabled = false; b.textContent = '❌ ไม่ออก — คืนยอดบิล';
+      alert('คืนยอดไม่สำเร็จ (' + (e.message||e) + ') — ยังไม่ได้คืน ลองกดอีกครั้ง หรือให้ admin ลบที่ "ประวัติพิมพ์ Tag — ลบเพื่อคืนยอด"'); return;
+    }
+    _lastPrintIds = []; done(); _closePrintOverlay(); try { tgReloadLots(); } catch(e){}
+    showToast('↩️ คืนยอดบิลแล้ว — เลือกบิลแล้วกดพิมพ์ใหม่ได้เลย', 'ok');
+  };
+}
 function _closePrintOverlay(){ var o=document.getElementById('tgPrintOverlay'); if (o) o.remove(); }
 function _mkPrintWin(){
   _closePrintOverlay();
@@ -4458,6 +4517,15 @@ function printTags() {
 }
 function _printTagsCore() {
   pstStep('ตรวจข้อมูล Tag / ยอดคงเหลือ / ICS…');
+  try { var _m0 = _lotMeta[getLotKey()] || {}; _lastInfo = { partNo: $('tgPartNo').value.trim(), bill: _m0.bill || '', pcs: String($('icsLotSize').value||'') }; } catch(e){ _lastInfo = null; }
+  if (_EMBED) { // เปิดจาก QC100: ยอดพิมพ์ต้องไม่เกินยอดคงเหลือของบิลที่เลือก
+    var _k0 = getLotKey(), _rm = _lotRemain[_k0], _pp = tagQtyToPcs($('tgQty').value || '0', Math.max(1, parseInt($('tgCount').value, 10) || 1), $('tgPartNo').value.trim());
+    if (_rm != null && _pp != null && _pp > _rm) {
+      pstFail('พิมพ์เกินยอดคงเหลือของบิลนี้ (พิมพ์ ' + _pp.toLocaleString() + ' > คงเหลือ ' + _rm.toLocaleString() + ' ชิ้น) — ลด Lot Size ลง');
+      showToast('🚫 พิมพ์เกินยอดคงเหลือของบิลนี้ (' + _rm.toLocaleString() + ' ชิ้น) — ลด Lot Size ลง', 'err'); _dropPreWin(); try { _closePrintOverlay(); } catch(e){}
+      return;
+    }
+  }
   var qtyNum = parseFloat($('tgQty').value) || 0;
   var count = Math.max(1, parseInt($('tgCount').value, 10) || 1);
   var lot = getLotValue(), ek = getLotKey(), partNo = $('tgPartNo').value.trim();
@@ -4549,6 +4617,7 @@ function logTagPrint(d, count) {
   var recs = _buildLogRecs(d, count);
   if (!recs.length) return Promise.resolve('ok');
   var p = _tagPendLoad(); recs.forEach(function(r){ p.push(r); }); _tagPendSave(p);
+  _lastPrintIds = recs.map(function(r){ return r.id; });   // ไว้ถามผลหลังพิมพ์ (ถ้าไม่ออก คืนยอดให้เอง)
   NasSync.markDirty('log', recs.length);
   if (_offlinePrint) return Promise.resolve('queued-local');   // ออฟไลน์: เก็บคิวในเครื่อง ส่งขึ้น NAS ภายหลัง
   return NasSync.commit({kind:'append'}).then(function(r){
@@ -4593,7 +4662,7 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
   // หน้า ICS (ถ้ามี) ต่อท้ายเป็นหน้าสุดท้ายเสมอ ไม่ใช้ class tag-page (เป็นเอกสารเต็มหน้าเดียว ไม่ใช่กริดของหลาย Tag)
   if (icsPageHtml) pagesHtml += '<div class="ics-page">'+icsPageHtml+'</div>';
 
-  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ใบกำกับผลิตภัณฑ์</title>'+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ใบกำกับผลิตภัณฑ์</title><script>window.addEventListener("afterprint",function(){try{parent._afterPrintAsk();}catch(e){}});<\/script>'+
     '<style>'+
     '*{box-sizing:border-box;}'+
     '@page{size:A4 portrait;margin:10mm;}'+
