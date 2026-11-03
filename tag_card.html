@@ -2789,6 +2789,7 @@ function doLogin(pin){
     enterApp();
   });
 }
+var _deepEk = '';
 function enterApp(){
   try { NasSync.startup(); } catch(e){}
   $('loginScreen').style.display = 'none';
@@ -2810,6 +2811,14 @@ function enterApp(){
   loadPartPhotos();
   loadIcsStandards();
   loadIcsPasswords();
+  // ลิงก์ตรงจาก QC100: ?part=P/No&ek=ไลน์|Pro Lot|บิล → เติม P/No + เลือกบิลให้เลย เหลือแค่กรอกความหนา 5 จุด
+  try {
+    var q = new URLSearchParams(location.search), qp = q.get('part'), qe = q.get('ek');
+    if (qp) {
+      _deepEk = qe || '';
+      var tries = 0, wait = setInterval(function(){ tries++; if ((partList && partList.length) || tries > 25) { clearInterval(wait); $('tgPartNo').value = qp; onPartNoInput(); $('tgPartNo').value = qp; onPartNoBlur(); } }, 200);
+    }
+  } catch(e) {}
 }
 function isoToday(){ return new Date().toISOString().split('T')[0]; }
 
@@ -3463,12 +3472,23 @@ function generateUniqueId() {
 var ICS_SNAPS_URL = ICS_FB_URL + '/ics-snaps'; // ภาพ JPEG ของใบที่ออกจริง แยก node ต่อ id (ไม่ปนใน ics-records กันตอนดึงรายการแล้วลากภาพหนักมาด้วย)
 
 // ส่ง JSON แบบมีเพดานเวลา คืน true/false (ไม่ throw) — เน็ตไม่เสถียรมักค้างยาวไม่ error ทันที
-function sendJsonWithTimeout(method, url, obj, ms) {
+var _icsLastErr = '';   // สาเหตุล่าสุดที่ส่งใบ ICS ขึ้นเซิร์ฟเวอร์สาธารณะไม่สำเร็จ (แสดงให้ผู้ใช้เห็น)
+function _sendJsonOnce(method, url, obj, ms) {
   var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, ms);
+  var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, ms), host = '';
+  try { host = new URL(url).host.split('.')[0]; } catch(e) {}
   return fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj), signal: ctl ? ctl.signal : undefined })
-    .then(function(r){ clearTimeout(timer); return !!r.ok; })
-    .catch(function(){ clearTimeout(timer); return false; });
+    .then(function(r){ clearTimeout(timer); if (r.ok) return { ok:true };
+      return r.text().then(function(t){ return { ok:false, perm:(r.status===401||r.status===403), err:'เซิร์ฟเวอร์ '+host+' ปฏิเสธ HTTP '+r.status+(t?' — '+t.slice(0,100):'') }; }, function(){ return { ok:false, perm:(r.status===401||r.status===403), err:'เซิร์ฟเวอร์ '+host+' ปฏิเสธ HTTP '+r.status }; }); })
+    .catch(function(e){ clearTimeout(timer); return { ok:false, err: (e && e.name==='AbortError') ? 'หมดเวลา '+Math.round(ms/1000)+' วินาที (ต่อ '+host+' ไม่ติด/ช้ามาก)' : 'เชื่อมต่อ '+host+' ไม่ได้ ('+((e&&e.message)||e)+') — เน็ตหลุด หรือเครือข่ายโรงงานบล็อก firebasedatabase.app' }; });
+}
+function sendJsonWithTimeout(method, url, obj, ms) {
+  // ลองซ้ำ 1 ครั้งถ้าเป็นปัญหาเครือข่าย/หมดเวลา (ไม่ลองซ้ำถ้าเซิร์ฟเวอร์ปฏิเสธสิทธิ์)
+  return _sendJsonOnce(method, url, obj, ms).then(function(r){
+    if (r.ok) return true;
+    if (r.perm) { _icsLastErr = r.err; return false; }
+    return _sendJsonOnce(method, url, obj, ms + 8000).then(function(r2){ if (!r2.ok) _icsLastErr = r2.err; return !!r2.ok; });
+  });
 }
 function putJsonWithTimeout(url, obj, ms) { return sendJsonWithTimeout('PUT', url, obj, ms); }
 function saveIcsRecord(id, ctx, P) {
@@ -3767,6 +3787,7 @@ function loadLotOptionsForPartNo(partNo) {
     }
     sel.innerHTML = options.join('');
     sel.disabled = false;
+    if (_deepEk) { var _dk = _deepEk; _deepEk = ''; if (_lotMeta[_dk]) { sel.value = _dk; try { onLotSelected(); } catch(e){} try { $('icsT1').focus(); } catch(e){} } else { showToast('ℹ️ บิล/Pro Lot ที่ส่งมาจาก QC100 ไม่มีให้พิมพ์แล้ว (พิมพ์ครบหรือถูกปิด) — เลือกบิลเองจากรายการ', 'err'); } }
     if (failed > 0) {
       $('tgLotHint').textContent = '⚠️ เจอ '+n+' Lot แต่โหลดข้อมูลไม่ครบ '+failed+' สาย — ถ้าไม่เจอ Lot ที่ต้องการ ติ๊ก "พิมพ์เอง"';
       $('tgLotHint').className = 'hint warn';
@@ -4278,7 +4299,7 @@ function _printTags(preGroups) {
         ? 'อ่านการตั้งค่ารหัสป้องกันใบ ICS ของลูกค้าไม่ได้ (อินเทอร์เน็ตไม่เสถียร หรือข้อมูลการตั้งค่าเสียหาย)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
         : (res.reason === 'encrypt'
           ? 'เข้ารหัสใบ ICS ของลูกค้านี้ไม่สำเร็จ (เบราว์เซอร์อาจไม่รองรับ หรือเปิดหน้านี้ผ่านที่อยู่ที่ไม่ใช่ https)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
-          : 'บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ (อินเทอร์เน็ตไม่เสถียร)\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR');
+          : 'บันทึกใบตรวจสอบขึ้นระบบไม่สำเร็จ'+(_icsLastErr ? '\nสาเหตุ: '+_icsLastErr : ' (อินเทอร์เน็ตไม่เสถียร)')+'\n\nถ้าพิมพ์ต่อ QR บน Tag จะสแกนไม่ได้ จึงจะไม่พิมพ์ QR');
       if (res.reason === 'offline') { info.qr = false; renderAndPrint(d, count, ics.pageHtml, win, info); return; }
       pstStep('รอผู้ใช้เลือก: พิมพ์ต่อโดยไม่มี QR หรือยกเลิก…');
       return tgConfirm(why + '\n\nพิมพ์ต่อโดยไม่มี QR หรือยกเลิก (ไว้ลองใหม่เมื่อเน็ตดี)?', 'พิมพ์ต่อ (ไม่มี QR)', 'ยกเลิก').then(function(go){
@@ -4359,7 +4380,7 @@ var _preWin = null, _offlinePrint = false;
 function _dropPreWin(){ try { if (_preWin && !_preWin.closed && _pst.win !== _preWin) _preWin.close(); } catch(e){} _preWin = null; }
 function _openPrintWin(){ var w = _preWin; _preWin = null; if (w && !w.closed) return w; w = window.open('', '_blank'); if (w) _pstWinInit(w); return w; }
 function printTags() {
-  _dropPreWin(); _offlinePrint = false; pstStart();
+  _dropPreWin(); _offlinePrint = false; _icsLastErr = ''; pstStart();
   try {
     _preWin = window.open('', '_blank');
     if (!_preWin) { pstStep('⚠️ เบราว์เซอร์ไม่ให้เปิดหน้าต่างใหม่ (pop-up ถูกบล็อก) — จะลองเปิดอีกครั้งหลังตรวจยอด'); }
@@ -4525,6 +4546,10 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
   if (d.test) {
     html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;}.pv-bar button{font-size:14px;padding:6px 14px;cursor:pointer;}@media print{.pv-bar{display:none;}}</style>')
       .replace('<body>', '<body><div class="pv-bar"><b>🧪 ตัวอย่าง (ทดสอบ — ไม่ตัดยอดบิล ไม่บันทึกประวัติ ไม่มี QR)</b><button onclick="window.print()">🖨️ พิมพ์</button><button onclick="window.close()">✖ ปิด</button></div>');
+  } else {
+    // โหมดพิมพ์จริง: มีแถบปุ่ม "พิมพ์" ในหน้าต่างพิมพ์ด้วย (ไม่ออกตอนพิมพ์) — ถ้ากล่องพิมพ์ของเบราว์เซอร์ไม่เด้งเอง กดปุ่มนี้ได้เลย ไม่ต้องกลับไปสั่งใหม่ (กันตัดยอดซ้ำ)
+    html = html.replace('</style>', '.pv-bar{position:sticky;top:0;z-index:9;background:#dcfce7;border-bottom:2px solid #16a34a;padding:8px 12px;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}.pv-bar button{font-size:15px;padding:8px 18px;cursor:pointer;font-weight:700;}@media print{.pv-bar{display:none;}}</style>')
+      .replace('<body>', '<body><div class="pv-bar"><b>✅ เตรียมใบพิมพ์แล้ว (' + count + ' ใบ' + (icsPageHtml ? ' + ICS' : '') + ')</b><button onclick="window.print()">🖨️ พิมพ์ (ถ้ากล่องพิมพ์ไม่เด้งเอง กดตรงนี้)</button><button onclick="window.close()">✖ ปิด</button></div>');
   }
   if (_pst.win === win) _pst.win = null;
   win.document.open();
@@ -4538,7 +4563,7 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
     (function waitImgs(){
       var pending = 0, imgs = win.document.images;
       for (var i = 0; i < imgs.length; i++) if (!imgs[i].complete) pending++;
-      if (pending === 0 || Date.now() - t0 > 5000) { win.print(); return; }
+      if (pending === 0 || Date.now() - t0 > 5000) { try { win.focus(); win.print(); } catch (e) { console.warn('print:', e); } return; }
       setTimeout(waitImgs, 200);
     })();
   }, 300);
@@ -4546,7 +4571,7 @@ function _renderAndPrintBody(d, count, icsPageHtml, win, info) {
   var msg = '✅ ส่งไปพิมพ์แล้ว ('+count+' ใบ'+(icsPageHtml?' + ICS 1 แผ่น':'')+')';
   var kind = 'ok';
   if (_offlinePrint) { msg += ' — โหมดออฟไลน์: ไม่มี QR / ประวัติพิมพ์ค้างส่งขึ้น NAS (เปิดหน้านี้ตอนมีเน็ตเพื่อส่ง)'; kind = 'err'; _offlinePrint = false; }
-  else if (icsPageHtml && info.qr === false) { msg += ' — ไม่มี QR เพราะบันทึกขึ้นระบบไม่สำเร็จ'; kind = 'err'; }
+  else if (icsPageHtml && info.qr === false) { msg += ' — ไม่มี QR เพราะบันทึกขึ้นระบบไม่สำเร็จ' + (_icsLastErr ? ' (' + _icsLastErr + ')' : ''); kind = 'err'; }
   else if (icsPageHtml && info.snapOk === false) { msg += ' — ใบออนไลน์ยังไม่มีภาพ (ลูกค้าจะเห็นแบบข้อความแทน)'; kind = 'err'; }
   if (icsPageHtml && info.qr !== false && info.encrypted) msg += ' · 🔒 ใบออนไลน์ป้องกันด้วยรหัสผ่านแล้ว';
   pstOk(msg.replace(/^✅ /,''));
