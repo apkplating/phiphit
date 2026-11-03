@@ -910,7 +910,7 @@ var _qcMem = {};
 function qcFreeSpace() { try { Object.keys(localStorage).forEach(function(k){ if (k.indexOf('qc100v2_') === 0) localStorage.removeItem(k); }); } catch(e){} }
 function qcLoadRecords(line) {
   if (line) return qcLoadRecords1(line);
-  var out = []; QC_LINES.forEach(function(l){ qcLoadRecords1(l).forEach(function(r){ if (r) { r.line = l; out.push(r); } }); }); return out;
+  var out = [], seen = {}; QC_LINES.forEach(function(l){ qcLoadRecords1(l).forEach(function(r){ if (r) { if (r.id && seen[r.id]) return; if (r.id) seen[r.id] = 1; r.line = l; out.push(r); } }); }); return out;
 }
 function qcSaveRecordsLocal(arr, line) {
   var k = qcRecordsKey(line), v = JSON.stringify(arr);
@@ -982,6 +982,17 @@ async function qcFbLoadRecordsLine(line) {
     var localIds = {}; local.forEach(function(r){ localIds[r.id]=true; });
     var merged = local.slice();
     data.records.forEach(function(r){ if (!localIds[r.id] && !tomb[r.id]) merged.push(r); });
+    // รายการ "ผี": มีแต่ในเครื่องนี้ ไม่มีบน NAS และไม่มีข้อมูลค้างส่ง → ไม่ใช่ของจริง (เช่นเครื่องค้างข้อมูลเก่าหลัง NAS ถูกกู้/แก้) ทำให้ยอดตรวจเกิน/ไม่ตรงกับเครื่องอื่น
+    // ล้างออกจากเครื่อง (เก็บสำเนาไว้ที่ qc100_ghost_backup กู้ได้) — ถ้ามีข้อมูลค้างส่ง NAS อยู่ จะไม่ล้าง
+    var nasIds = {}; data.records.forEach(function(r){ if (r && r.id) nasIds[r.id] = 1; });
+    var ghosts = [];
+    try { if (!NasSync.hasPending()) { ghosts = merged.filter(function(r){ return r && r.id && !nasIds[r.id]; }); } } catch(e){ ghosts = []; }
+    if (ghosts.length) {
+      merged = merged.filter(function(r){ return !(r && r.id && !nasIds[r.id]); });
+      try { var gb = JSON.parse(localStorage.getItem('qc100_ghost_backup') || '[]'); gb.push({ at:new Date().toISOString(), line:line, records:ghosts }); localStorage.setItem('qc100_ghost_backup', JSON.stringify(gb.slice(-5))); } catch(e){}
+      try { qcAudit('ล้างรายการผีในเครื่อง ['+line+']', ghosts.length+' รายการ: '+ghosts.map(function(r){ return (r.partNo||'')+' '+(r.bill||r.lotNo||'')+' '+(r.qtyOK||0); }).join('; ')); } catch(e){}
+      window._qcGhostN = (window._qcGhostN || 0) + ghosts.length;
+    }
     merged.sort(function(a,b){ return b.ts-a.ts; });
     qcSaveRecordsLocal(merged, line);
   }
@@ -997,10 +1008,11 @@ async function qcFbLoadRecords(quiet) {
     var s0 = quiet ? qcRecSig() : '';
     await Promise.all(QC_LINES.map(function(l){ return qcFbLoadRecordsLine(l).catch(function(e){ console.warn('qcFbLoadRecords '+l+':', e.message); }); }));
     if (quiet && qcRecSig() === s0) return;   // รีเฟรชพื้นหลัง: ไม่มีอะไรเปลี่ยน = ไม่วาดหน้าใหม่ (ไม่รบกวนคนกำลังกรอก)
+    var _gn = window._qcGhostN || 0; window._qcGhostN = 0;
     qcPopulateDateFilter();
     qcRenderHistory();
     qcRenderLots();
-    if (quiet) { var t = document.getElementById('qcToast'); if (t) { t.className = 'toast ok'; t.textContent = '🔄 อัปเดตข้อมูล QC100 ที่เครื่องอื่นบันทึกแล้ว'; setTimeout(function(){ t.className = 'toast'; }, 4000); } }
+    if (quiet || _gn) { var t = document.getElementById('qcToast'); if (t) { t.className = 'toast ok'; t.textContent = _gn ? '🧹 ล้างรายการค้างในเครื่อง ' + _gn + ' รายการที่ไม่มีบน NAS แล้ว (ยอดตรวจตรงกับเครื่องอื่น)' : '🔄 อัปเดตข้อมูล QC100 ที่เครื่องอื่นบันทึกแล้ว'; setTimeout(function(){ t.className = 'toast'; }, 8000); } }
   } catch(e) { console.warn('qcFbLoadRecords:', e.message); }
 }
 // เดิมโหลดผลตรวจจาก NAS ครั้งเดียวตอนเปิดหน้า → เครื่องที่เปิดค้างไว้เห็นยอดตรวจเก่า (บิล/Lot ที่อีกเครื่องตรวจครบแล้วยังโผล่) — ตอนนี้รีเฟรชเมื่อกลับมาที่แท็บ และทุก 30 วินาที (เหมือนสถานะปิดรายการ)
