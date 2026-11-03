@@ -125,8 +125,12 @@
 (function () {
   'use strict';
   if (typeof document === 'undefined') return;
-  var LS_KEY = 'apk_seen_version';
-  var lastAct = Date.now(), typed = false, busy = false;
+  // ถ้าหน้านี้ใช้ auto-update.js อยู่แล้ว ให้ตัวนั้นทำงานตัวเดียว (กันแถบ/รีโหลดซ้อนกัน 2 ตัว) — ตัวในไฟล์นี้ใช้เฉพาะหน้าที่ไม่มี auto-update.js
+  function otherUpdater() { return !!(window.__apkUpd || document.querySelector('script[src*="auto-update.js"]')); }   // ตรวจตอนเช็คจริง (ไม่ใช่ตอนโหลด) เพราะ auto-update.js อาจถูกโหลดทีหลังไฟล์นี้
+  try { if (window.top !== window.self) return; } catch (e) { return; }
+  // จำเวอร์ชันแยกต่อหน้า (เดิมใช้ key เดียวทุกแท็บ → แท็บหนึ่งอัปเดตแล้ว แท็บอื่นเข้าใจว่าใหม่แล้วจึงไม่รีโหลด)
+  var LS_KEY = 'apk_seen_version:' + location.pathname;
+  var lastAct = Date.now(), typed = false, busy = false, pending = null;
   function act() { lastAct = Date.now(); }
   ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(function (e) { document.addEventListener(e, act, { passive: true, capture: true }); });
   document.addEventListener('input', function () { typed = true; act(); }, true);
@@ -139,8 +143,22 @@
     if (document.querySelector('.modal-bg.open, .modal.open, .modal.show, [role=dialog]:not([hidden])')) return false;
     return true;
   }
+  function reloadTo(v) {
+    try { localStorage.setItem(LS_KEY, v); } catch (e) {}
+    var u = new URL(location.href); u.searchParams.set('v', Date.now());
+    location.replace(u.toString());
+  }
+  function showBanner(v) {
+    if (document.getElementById('apkUpdBar')) return;
+    var b = document.createElement('div');
+    b.id = 'apkUpdBar';
+    b.textContent = '🔄 มีเวอร์ชันใหม่ — แตะเพื่ออัปเดต (บันทึกงานที่กรอกค้างก่อน)';
+    b.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;background:#d97706;color:#fff;padding:12px 18px;border-radius:999px;font:600 15px/1.3 sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer;max-width:calc(100% - 32px);text-align:center';
+    b.onclick = function () { reloadTo(v); };
+    (document.body || document.documentElement).appendChild(b);
+  }
   function check() {
-    if (busy) return;
+    if (busy || otherUpdater()) return;
     busy = true;
     fetch('version.json?_=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -148,12 +166,15 @@
         if (!d || !d.version) return;
         var seen = null;
         try { seen = localStorage.getItem(LS_KEY); } catch (e) {}
-        if (seen === null) { try { localStorage.setItem(LS_KEY, d.version); } catch (e) {} return; }
         if (seen === d.version) return;
-        if (!isSafe()) return;
-        try { localStorage.setItem(LS_KEY, d.version); } catch (e) {}
-        var u = new URL(location.href); u.searchParams.set('v', Date.now());
-        location.replace(u.toString());
+        // กันวนรีโหลด: รีโหลดเองได้ครั้งเดียวต่อเวอร์ชันต่อแท็บ
+        var guard = null;
+        try { guard = sessionStorage.getItem('apk_upd_guard'); } catch (e) {}
+        if (guard === d.version) { try { localStorage.setItem(LS_KEY, d.version); } catch (e) {} return; }
+        if (isSafe()) {
+          try { sessionStorage.setItem('apk_upd_guard', d.version); } catch (e) {}
+          reloadTo(d.version);
+        } else { pending = d.version; showBanner(d.version); }
       })
       .catch(function () {})
       .then(function () { busy = false; });
