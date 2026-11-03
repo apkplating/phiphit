@@ -3476,7 +3476,7 @@ function captureIcsSnapshot(pageHtml) {
 }
 
 // บันทึกใบ (ข้อมูล + ภาพ) ขึ้นระบบพร้อมกัน — recordOk คือสิ่งที่ QR ต้องใช้ (ไม่มี record = QR สแกนแล้วว่าง)
-function publishIcs(id, ctx, pageHtml, password) {
+function publishIcs(id, ctx, pageHtml, password, deferSnap) {
   var P = null, setup = Promise.resolve(), capturedImg = null;
   if (password) {
     // ต้องเข้ารหัส: ถ้าเบราว์เซอร์ไม่มี WebCrypto (เช่น เปิดผ่าน http) = ไม่บันทึกอะไรเลย ห้ามถอยไปเก็บแบบไม่เข้ารหัส
@@ -3486,9 +3486,17 @@ function publishIcs(id, ctx, pageHtml, password) {
   }
   return setup.then(function(){
     var recP = saveIcsRecord(id, ctx, P);
+    if (deferSnap) {
+      // พิมพ์ไม่ต้องรอภาพถ่ายใบ ICS (ถ่าย+อัปโหลดภาพใช้เวลา/ทำเครื่องช้าค้าง) — รอแค่บันทึกใบ (ปลายทางของ QR) แล้วถ่ายภาพเบื้องหลังหลังเปิดหน้าพิมพ์แล้ว
+      var snapPromise = new Promise(function(resolve){ setTimeout(function(){
+        captureIcsSnapshot(pageHtml).then(function(img){ capturedImg = img; return img ? saveIcsSnapshot(id, img, P) : false; })
+          .then(function(ok){ resolve({ snapOk: ok, img: capturedImg }); }).catch(function(){ resolve({ snapOk: false, img: null }); });
+      }, 4000); });
+      return recP.then(function(ok){ return [ok, undefined, snapPromise]; });
+    }
     var snapP = captureIcsSnapshot(pageHtml).then(function(img){ capturedImg = img; return img ? saveIcsSnapshot(id, img, P) : false; });
     return Promise.all([recP, snapP]);
-  }).then(function(r){ return { recordOk: r[0], snapOk: r[1], encrypted: !!password, img: capturedImg }; })
+  }).then(function(r){ return { recordOk: r[0], snapOk: r[1], encrypted: !!password, img: capturedImg, snapPromise: r[2] }; })
     .catch(function(e){ if (!password) throw e; return { recordOk: false, snapOk: false, encrypted: true, reason: 'encrypt' }; });
 }
 
@@ -4190,17 +4198,24 @@ function _printTags(preGroups) {
   // รีโหลดรหัสป้องกันสดทุกครั้งที่พิมพ์ (กันใช้ค่าเก่าที่แอดมินเพิ่งตั้ง/เปลี่ยน) — โหลดไม่ได้ = ไม่รู้ว่าลูกค้ารายนี้ต้องป้องกันหรือไม่
   // จึงไม่บันทึกใบขึ้นระบบ (ปิดทางรั่ว) แล้วถามว่าจะพิมพ์ต่อโดยไม่มี QR หรือยกเลิก
   var custKey = icsPwKey(icsStd.customer);
+  var _t0 = Date.now(), _step = '1/2 ตรวจการตั้งค่ารหัสป้องกันใบ ICS';
+  var _prog = function(){ try { if (!win.closed) win.document.body.innerHTML = '<div style="font-family:sans-serif;padding:24px;color:#334155;">⏳ กำลังเตรียมใบตรวจสอบและบันทึกขึ้นระบบ…<br><br><b>' + _step + '</b> — ผ่านไป ' + Math.round((Date.now() - _t0)/1000) + ' วินาที<br><small>(ถ้าเน็ตช้า อาจนานถึง ~30 วินาที ระบบจะถามต่อเองถ้าบันทึกไม่สำเร็จ ห้ามปิดหน้าต่างนี้)</small></div>'; } catch(e){} };
+  var _progTimer = setInterval(_prog, 1000); _prog();
   loadIcsPasswords().then(function(){
     if (_icsPwState !== 'ok' || _icsPwBad[custKey]) return { recordOk: false, snapOk: false, reason: 'pwunknown' };
+    _step = '2/2 บันทึกใบ ICS ขึ้นระบบ (QR)';
     var entry = _icsPw[custKey];
-    return publishIcs(ics.id, ics.ctx, ics.pageHtml, entry ? entry.pw : '');
+    return publishIcs(ics.id, ics.ctx, ics.pageHtml, entry ? entry.pw : '', true);
   }).then(function(res){
+    clearInterval(_progTimer);
     _printBusy = false;
     if (win.closed) return; // ผู้ใช้ปิดหน้าต่างพิมพ์ไปเองระหว่างรอ — ยกเลิกเงียบๆ
     var info = { snapOk: res.snapOk, qr: true, encrypted: !!res.encrypted };
     if (res.recordOk) {
       d.icsViewUrl = ics.viewUrl;
-      try { archiveAfterPrint(ics, res); } catch (e) { console.warn('archive:', e); } // ไม่รอ ไม่บล็อกการพิมพ์
+      // ถ่ายภาพ ICS เบื้องหลังหลังเปิดหน้าพิมพ์แล้ว ถ่ายเสร็จค่อยเก็บเข้าคลัง (ไม่รอ ไม่บล็อกการพิมพ์)
+      if (res.snapPromise) res.snapPromise.then(function(sr){ res.img = sr.img; res.snapOk = sr.snapOk; try { archiveAfterPrint(ics, res); } catch (e) { console.warn('archive:', e); } });
+      else { try { archiveAfterPrint(ics, res); } catch (e) { console.warn('archive:', e); } }
     } else {
       var why = res.reason === 'pwunknown'
         ? 'อ่านการตั้งค่ารหัสป้องกันใบ ICS ของลูกค้าไม่ได้ (อินเทอร์เน็ตไม่เสถียร หรือข้อมูลการตั้งค่าเสียหาย)\n\nเพื่อความปลอดภัยของข้อมูลลูกค้า จะไม่บันทึกใบขึ้นระบบและไม่พิมพ์ QR'
@@ -4213,9 +4228,10 @@ function _printTags(preGroups) {
     }
     renderAndPrint(d, count, ics.pageHtml, win, info);
   }).catch(function(e){
+    clearInterval(_progTimer);
     _printBusy = false;
     console.warn(e);
-    try { win.close(); } catch (x) {}
+    try { win.document.body.innerHTML = '<div style="font-family:sans-serif;padding:24px;color:#b91c1c;">⚠️ เตรียมใบตรวจสอบไม่สำเร็จ: ' + String(e && e.message || e).replace(/[<>&]/g,'') + '<br><br>กลับไปหน้า Tag Card แล้วกดพิมพ์ใหม่ (ปิดหน้าต่างนี้ได้)</div>'; } catch (x) {}
     showToast('⚠️ เตรียมใบตรวจสอบไม่สำเร็จ — ลองใหม่อีกครั้ง', 'err');
   });
 }
