@@ -3054,6 +3054,7 @@ function tmpEnforceAdd(job, tmpNo, isClaim){
 }
 // แจ้งเตือน (ไม่บล็อก): ลูกค้ามีใบชั่วคราวค้าง (ก่อนวันนี้) ที่ยังไม่ได้อ้างอิงในร่าง INV นี้
 function tmpWarnPending(job, tmpNo){
+  return ''; // ไม่เตือนแล้ว — ลูกค้าบางรายตัดตาม PO ที่เปิดมาภายหลัง ไม่สนลำดับใบก่อนหลัง
   var cust = (job.customer||'').trim(), cover = tmpDraftCover();
   var unc = tmpPendingBefore(cust).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
   if (tmpNo) unc = unc.filter(function(p){ return !(p.no === tmpNo && p.jobId === job.id); });
@@ -3075,6 +3076,7 @@ function tmpEnforceSave(){
 }
 // แจ้งเตือนตอนบันทึก (ไม่บล็อก)
 function tmpWarnSave(){
+  return ''; // ไม่เตือนแล้ว — ออก INV จากใบชั่วคราวใบไหนก่อนก็ได้
   if (!invDraft.length || _editingInvoiceRef) return '';
   var cust = (invDraft[0].customer||'').trim(), cover = tmpDraftCover();
   var unc = tmpPendingBefore(cust).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
@@ -4576,6 +4578,7 @@ function onInvDateChange() {
 }
 
 // บันทึก INV — สร้าง jobRecords (type:out) ทุกรายการ + เก็บ invoice + เลือกพิมพ์
+var _saveWarn = '';
 function saveInvoice(doPrint) {
   // ก่อนบันทึก INV ทุกครั้ง: ดึงข้อมูลล่าสุดจาก NAS (เห็นบิลที่เครื่องอื่นเพิ่งส่งขึ้น) — ติดต่อ NAS ไม่ได้ = ห้ามออก INV
   if (!_invFreshOk) {
@@ -4611,7 +4614,7 @@ function saveInvoice(doPrint) {
     }
   }
 
-  if (!isClaim && !_editingInvoiceRef) { var _se = tmpEnforceSave(); if (_se) { alert(_se); return; } var _sw = tmpWarnSave(); if (_sw && !confirm(_sw + '\n\nบันทึกต่อ?')) return; }
+  if (!isClaim && !_editingInvoiceRef) { var _se = tmpEnforceSave(); if (_se) { alert(_se); return; } _saveWarn = tmpWarnSave(); } else { _saveWarn = ''; }
   // ── เรดาร์ "พร้อมออก INV" ต่อลูกค้า (กันบิลอื่นของลูกค้าเดียวกันที่ค้างไม่ออก INV เกิน 7 วัน ถูกลืมไปเรื่อยๆ) ──
   // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
   // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
@@ -4679,7 +4682,7 @@ function saveInvoice(doPrint) {
   var _wasEditing = !!_editingInvoiceRef;
   _editingInvoiceRef = null; // บันทึกสำเร็จแล้ว เลิกโหมดแก้ไข กลับสู่สถานะปกติ
 
-  showToast('out','✅ บันทึก'+(isClaim?'ใบส่งคืนงานเคลม':'INV')+' '+invNo+(_wasEditing?' (แก้ไขแล้ว)':'')+' สำเร็จ','ok');
+  showToast('out','✅ บันทึก'+(isClaim?'ใบส่งคืนงานเคลม':'INV')+' '+invNo+(_wasEditing?' (แก้ไขแล้ว)':'')+' สำเร็จ'+(_saveWarn ? ' — ⚠️ ลูกค้ายังมีใบส่งของชั่วคราวค้างที่ไม่ได้อยู่ใน INV นี้ (ดูแถบเหลืองด้านบน)' : ''),'ok');
 
   if (isClaim) {
     if (doPrint) printClaimNote(invObj);
@@ -4966,14 +4969,34 @@ function invoicePlainHtml(inv) {
   return html;
 }
 
+// เปิดหน้าพิมพ์: ลองเปิดแท็บใหม่ก่อน ถ้าเบราว์เซอร์บล็อก popup (เช่น เปิดช้าหลังกล่องยืนยัน/โหลด NAS) ให้พิมพ์ผ่านเฟรมซ่อนในหน้านี้แทน — ไม่ต้องพึ่งการอนุญาต popup
+function jmOpenPrint(html){
+  var w = null;
+  try { w = window.open('', '_blank'); } catch(e){}
+  if (w) {
+    w.document.write(html); w.document.close();
+    w.onload = function(){ w.focus(); w.print(); };
+    return true;
+  }
+  try {
+    var old = document.getElementById('jmPrintFrame'); if (old) old.remove();
+    var f = document.createElement('iframe');
+    f.id = 'jmPrintFrame';
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(f);
+    var d = f.contentWindow.document; d.open(); d.write(html); d.close();
+    setTimeout(function(){ try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e){ showToast('out','⚠️ พิมพ์ไม่สำเร็จ — เปิดจากหน้า "ประวัติ" แล้วกดพิมพ์ซ้ำ','err'); } }, 600);
+    showToast('out','🖨️ เบราว์เซอร์บล็อก popup — พิมพ์ผ่านหน้านี้แทน (ถ้าไม่ขึ้น ให้พิมพ์ซ้ำจากหน้า "ประวัติ")','ok');
+    return true;
+  } catch(e){
+    showToast('out','⚠️ พิมพ์ไม่สำเร็จ — เปิดจากหน้า "ประวัติ" แล้วกดพิมพ์ซ้ำ','err');
+    return false;
+  }
+}
 function printInvoice(inv) {
   var html = invoicePlainHtml(inv);
   try { archiveInvPdf(inv, 'plain'); } catch(e) { console.warn('[PDF archive]', e); }
-  var w = window.open('', '_blank');
-  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.onload = function(){ w.focus(); w.print(); };
+  jmOpenPrint(html);
 }
 
 // สร้าง HTML "ใบส่งคืนงานเคลม" แล้วเปิดหน้าต่างพิมพ์ — ตามฟอร์ม Excel เดิมที่ใช้กันอยู่ (ไม่มีราคา/VAT)
@@ -5073,11 +5096,7 @@ function claimNoteHtml(inv) {
 function printClaimNote(inv) {
   var html = claimNoteHtml(inv);
   try { archiveInvPdf(inv, 'plain'); } catch(e) { console.warn('[PDF archive]', e); }
-  var w = window.open('', '_blank');
-  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.onload = function(){ w.focus(); w.print(); };
+  jmOpenPrint(html);
 }
 
 // HTML-escape helper
@@ -5240,11 +5259,7 @@ function printInvoiceOnForm(inv) {
   }
   var body = buildFormOverlayBody(inv);
   var html = formPageHtml(body, 'ใบส่งสินค้า (ฟอร์ม) '+inv.invNo);
-  var w = window.open('', '_blank');
-  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.onload = function(){ w.focus(); w.print(); };
+  jmOpenPrint(html);
 }
 
 // พิมพ์กริดทดสอบ — เส้นไม้บรรทัด mm + จุด crosshair ที่ตำแหน่งฟอร์มทุกจุด
@@ -5284,11 +5299,7 @@ function printCalibrationGrid() {
     '<div style="position:absolute; left:'+off.x+'mm; top:'+off.y+'mm; width:210mm; height:297mm;">'+html+'</div>'+
     '</body></html>';
 
-  var w = window.open('', '_blank');
-  if (!w) { showToast('out','⚠️ เบราว์เซอร์บล็อก popup — กรุณาอนุญาตเพื่อพิมพ์','err'); return; }
-  w.document.write(fullHtml);
-  w.document.close();
-  w.onload = function(){ w.focus(); w.print(); };
+  jmOpenPrint(fullHtml);
 }
 
 // ══════════════════════════════════════
