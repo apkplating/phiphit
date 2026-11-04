@@ -488,8 +488,8 @@ if ('caches' in window) {
     </div>
     <div id="invLineRemainInfo" style="display:none;font-size:11px;color:var(--text-muted);margin-bottom:8px;"></div>
     <div id="invLineTmpWrap" style="display:none;margin-bottom:8px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:8px 10px;">
-      <label style="font-size:11px;">📄 อ้างอิงใบส่งของชั่วคราว <span style="color:var(--text-muted);font-weight:400;">(ส่งของไปแล้ว — เลือกเพื่อไม่ตัดสต็อกซ้ำ)</span></label>
-      <select id="invLineTmpSel" style="font-size:13px;"></select>
+      <label style="font-size:11px;">📄 อ้างอิงใบส่งของชั่วคราว <span style="color:var(--text-muted);font-weight:400;">(ส่งของไปแล้ว — ระบบเลือกให้และดึงจำนวนจากใบอัตโนมัติ)</span></label>
+      <select id="invLineTmpSel" style="font-size:13px;" onchange="tmpOnSel()"></select>
     </div>
     <div class="grid2">
       <div class="field" style="margin:0;">
@@ -2867,6 +2867,7 @@ function tmpReindex(){
       if (l.convertedTo) return;
       var o = _tmpByJob[l.jobId] || (_tmpByJob[l.jobId] = { pcs:0, kg:0, items:[] });
       if (l.unit === 'kg') o.kg += Number(l.qty||0); else o.pcs += Number(l.qty||0);
+      if (n.frozen) return; // ยกเลิกแบบไม่คืนยอด: ยังหักยอดบิลไว้ แต่ไม่ถือเป็นใบค้าง (ไม่ขึ้นรายการ/ไม่ล็อก/ไม่ให้อ้างอิง)
       o.items.push({ no:n.no, date:n.date, qty:Number(l.qty||0), unit:l.unit });
     });
   });
@@ -2909,6 +2910,20 @@ function tmpFillInvSel(job){
       return '<option value="' + esc(no) + '" data-job="' + esc(job.id) + '">' + esc(no) + ' · ' + fmtDate(g.date) + ' · ' + g.qty + ' ' + unitTH + '</option>';
     }).join('');
   wrap.style.display = 'block';
+  // เลือกใบที่เก่าสุดให้อัตโนมัติ + ดึงจำนวนจากใบ (ไม่ต้องพิมพ์จำนวนส่งเอง)
+  nos.sort(function(a,b){ return (byNo[a].date||'').localeCompare(byNo[b].date||'') || a.localeCompare(b); });
+  sel.value = nos[0];
+  tmpOnSel();
+}
+// เลือก/เปลี่ยนใบชั่วคราว → ใส่จำนวนและหน่วยตามใบ
+function tmpOnSel(){
+  var sel = tmpEl('invLineTmpSel'); if (!sel || !sel.value) return;
+  var opt = sel.options[sel.selectedIndex]; var jid = opt && opt.getAttribute('data-job'); if (!jid) return;
+  var job = jobItems.find(function(x){ return x.id === jid; }); if (!job) return;
+  var q = tmpNoteQty(sel.value, jid); if (!(q > 0)) return;
+  var qe = tmpEl('invLineQty'), ue = tmpEl('invLineQtyUnit');
+  if (ue) { ue.value = tmpIsKg(job) ? 'kg' : 'pcs'; try { onInvLineQtyUnitChange(); } catch(e){} }
+  if (qe) { qe.value = q; try { onInvLineQtyOrWeightChange(); } catch(e){} }
 }
 function tmpReadInvSel(jobId){
   var wrap = tmpEl('invLineTmpWrap'), sel = tmpEl('invLineTmpSel');
@@ -2937,7 +2952,7 @@ function tmpConvertForInv(lines, invNo){
   // ตัดทีละบรรทัดของใบ: INV ครบจำนวน → ปิดบรรทัด / INV น้อยกว่า → ปิดเฉพาะส่วนที่ออก INV แล้ว ที่เหลือยังค้างต่อ
   Object.keys(need).forEach(function(k){
     var no = k.split('\u0001')[0], jid = k.split('\u0001')[1], left = need[k];
-    var n = tmpNotes.find(function(x){ return x.no === no && x.status === 'open'; });
+    var n = tmpNotes.find(function(x){ return x.no === no && x.status === 'open' && !x.frozen; });
     if (!n) return;
     var add = [];
     (n.lines||[]).forEach(function(nl){
@@ -3002,7 +3017,7 @@ function tmpLockRows(){
 function tmpPendingBefore(cust, onlyNos){
   var today = _dueToday(), out = [];
   tmpNotes.forEach(function(n){
-    if (n.status !== 'open' || (n.customer||'').trim() !== cust) return;
+    if (n.status !== 'open' || n.frozen || (n.customer||'').trim() !== cust) return;
     if (!onlyNos && !((n.date||'') < today)) return;
     if (onlyNos && onlyNos.indexOf(n.no) < 0) return;
     (n.lines||[]).forEach(function(l){ if (!l.convertedTo) out.push({ no:n.no, jobId:l.jobId, partName:l.partName||'', qty:Number(l.qty||0), unit:l.unit }); });
@@ -3022,13 +3037,15 @@ function tmpEnforceAdd(job, tmpNo, isClaim){
     var cs = {}; rows.forEach(function(x){ cs[(x.job.customer||'').trim()] = 1; });
     if (!cs[cust]) return '🚫 ล็อกหน้า INV — มีใบส่งของชั่วคราวเกิน 3 วันทำการที่ยังไม่ออก INV ของลูกค้า: ' + Object.keys(cs).join(', ') + '\n\nต้องออก INV ให้ลูกค้ารายนั้นก่อน จึงจะออก INV ให้ลูกค้ารายอื่นได้';
   }
-  var pend = tmpPendingBefore(cust), cover = tmpDraftCover();
-  var unc = pend.filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
-  if (unc.length && !(tmpNo && unc.some(function(p){ return p.no === tmpNo && p.jobId === job.id; }))) {
-    return '🚫 ลูกค้า "' + cust + '" มีใบส่งของชั่วคราวค้างอยู่ (ของส่งไปแล้ว ต้องเก็บเงิน)\n\n' + unc.map(function(p){ return '• ' + p.no + ' · ' + p.partName + ' × ' + p.qty; }).join('\n')
-      + '\n\nต้องเลือก "อ้างอิงใบส่งของชั่วคราว" ของรายการเหล่านี้ให้ครบก่อน จึงเพิ่มรายการใหม่ได้ (เพิ่มรายการที่อ้างอิงใบก่อน แล้วค่อยเพิ่มรายการอื่น)';
-  }
   return '';
+}
+// แจ้งเตือน (ไม่บล็อก): ลูกค้ามีใบชั่วคราวค้าง (ก่อนวันนี้) ที่ยังไม่ได้อ้างอิงในร่าง INV นี้
+function tmpWarnPending(job, tmpNo){
+  var cust = (job.customer||'').trim(), cover = tmpDraftCover();
+  var unc = tmpPendingBefore(cust).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
+  if (tmpNo) unc = unc.filter(function(p){ return !(p.no === tmpNo && p.jobId === job.id); });
+  if (!unc.length) return '';
+  return '⚠️ ลูกค้า "' + cust + '" ยังมีใบส่งของชั่วคราวค้าง (ของส่งไปแล้ว ต้องเก็บเงิน): ' + unc.map(function(p){ return p.no + ' · ' + p.partName + ' × ' + p.qty; }).join(' | ');
 }
 function tmpEnforceSave(){
   if (!invDraft.length || _editingInvoiceRef) return '';
@@ -3041,9 +3058,15 @@ function tmpEnforceSave(){
     var miss = tmpPendingBefore(cust, nos).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
     if (miss.length) return '🚫 ต้องอ้างอิงใบส่งของชั่วคราวที่ล็อกอยู่ให้ครบก่อนบันทึก:\n' + miss.map(function(p){ return '• ' + p.no + ' · ' + p.partName + ' × ' + p.qty; }).join('\n');
   }
-  var unc = tmpPendingBefore(cust).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
-  if (unc.length) return '🚫 ลูกค้า "' + cust + '" ยังมีใบส่งของชั่วคราวค้าง (ก่อนวันนี้) ที่ไม่ได้อ้างอิงเต็มจำนวนใน INV นี้:\n' + unc.map(function(p){ return '• ' + p.no + ' · ' + p.partName + ' × ' + p.qty; }).join('\n');
   return '';
+}
+// แจ้งเตือนตอนบันทึก (ไม่บล็อก)
+function tmpWarnSave(){
+  if (!invDraft.length || _editingInvoiceRef) return '';
+  var cust = (invDraft[0].customer||'').trim(), cover = tmpDraftCover();
+  var unc = tmpPendingBefore(cust).filter(function(p){ return (cover[p.no+'|'+p.jobId]||0) + 0.0001 < p.qty; });
+  if (!unc.length) return '';
+  return '⚠️ ลูกค้า "' + cust + '" ยังมีใบส่งของชั่วคราวค้าง (ก่อนวันนี้) ที่ไม่ได้อ้างอิงใน INV นี้:\n' + unc.map(function(p){ return '• ' + p.no + ' · ' + p.partName + ' × ' + p.qty; }).join('\n') + '\n\nบันทึก INV ต่อไปได้ แต่ใบเหล่านี้จะยังค้างอยู่';
 }
 function tmpLockBanner(rows){
   var host = document.getElementById('v-out'); if (!host) return;
@@ -3076,23 +3099,74 @@ function tmpLockPrompt(){
   var du = document.getElementById('tmpLockDue');
   if (du) du.onclick = function(){ o.remove(); custLockShow(rows, false); _lkCb = function(){ _tmpLockAck = false; try { tmpLockPrompt(); } catch(e){} }; };
 }
+// admin ยกเลิกใบชั่วคราว: restore=true คืนยอดกลับบิล / restore=false ยอดที่หักไว้ยังคงอยู่ (frozen)
+function tmpAdminCancel(id, restore){
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var n = tmpNotes.find(function(x){ return x.id === id; });
+  if (!n || n.status !== 'open' || n.frozen) { alert('ไม่พบใบ หรือใบนี้ไม่ได้ค้างอยู่แล้ว'); return; }
+  var left = (n.lines||[]).filter(function(l){ return !l.convertedTo; });
+  var sum = left.map(function(l){ return l.partName + ' × ' + l.qty + (l.unit==='kg' ? ' กก.' : ' ชิ้น'); }).join('\n');
+  var msg = restore
+    ? 'ยกเลิกใบ ' + n.no + ' และ "คืนสต๊อก"\n\n' + sum + '\n\nยอดที่ใบนี้หักไว้จะกลับเข้าบิล (ใช้เมื่อบันทึกผิด/ของไม่ได้ส่งจริง หรือ INV ตัดยอดครบแล้ว)'
+    : 'ยกเลิกใบ ' + n.no + ' แบบ "ไม่คืนสต๊อก"\n\n' + sum + '\n\n⚠️ ใบจะหายจากรายการ แต่ยอดข้างบนยังถูกหักจากบิลถาวร ยอดคงเหลือบิลจะต่ำกว่าจริงเท่ากัน\nใช้เมื่อของออกไปแล้วจริง แต่ไม่มี INV ใบไหนรับผิดชอบ';
+  if (!confirm(msg)) return;
+  var why = prompt('เหตุผลที่ยกเลิกใบ ' + n.no + ' (จำเป็น — บันทึกไว้ตรวจย้อนหลัง):', '');
+  if (!why || !why.trim()) { alert('ต้องใส่เหตุผลก่อนยกเลิก'); return; }
+  var upd = JSON.parse(JSON.stringify(n));
+  upd.cancelledBy = currentUserName || 'admin'; upd.cancelledAt = new Date().toISOString(); upd.cancelReason = why.trim(); upd.cancelRestore = !!restore;
+  if (restore) { upd.status = 'cancelled'; } else { upd.frozen = true; upd.status = 'open'; }
+  tmpPutNote(upd).then(function(){
+    n.status = upd.status; n.frozen = upd.frozen; n.cancelledBy = upd.cancelledBy; n.cancelledAt = upd.cancelledAt; n.cancelReason = upd.cancelReason; n.cancelRestore = upd.cancelRestore;
+    tmpReindex(); try { renderTmpNotes(); renderBoard(); } catch(e){}
+    alert(restore ? '✅ ยกเลิกใบ ' + n.no + ' และคืนสต๊อกแล้ว' : '✅ ยกเลิกใบ ' + n.no + ' แบบไม่คืนสต๊อกแล้ว (ยอดที่หักไว้คงอยู่)');
+  }).catch(function(){ alert('ยกเลิกไม่สำเร็จ (ติดต่อ NAS ไม่ได้) — ลองใหม่'); });
+}
 function renderTmpNotes(){
   var _lockedNos = {}; try { tmpLockRows().forEach(function(r){ (r.tmpNos||[]).forEach(function(no){ _lockedNos[no] = 1; }); }); } catch(e){}
   var card = tmpEl('tmpCard'), box = tmpEl('tmpOpenList'), badge = tmpEl('tmpOpenBadge');
   if (!card || !box) return;
-  var open = tmpNotes.filter(function(n){ return n.status === 'open' && (n.lines||[]).some(function(l){ return !l.convertedTo; }); })
+  var open = tmpNotes.filter(function(n){ return n.status === 'open' && !n.frozen && (n.lines||[]).some(function(l){ return !l.convertedTo; }); })
     .sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
   card.style.display = open.length ? '' : 'none';
-  if (badge) badge.innerHTML = open.length ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">ค้าง ' + open.length + ' ใบ</span>' : '';
-  box.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="background:#f1f5f9;"><th style="text-align:left;padding:5px;">เลขที่</th><th>วันที่</th><th style="text-align:left;">ลูกค้า / รายการ</th><th>ค้าง (วัน)</th></tr>' +
-    open.map(function(n){
-      var d = daysSince(n.date);
-      var items = (n.lines||[]).filter(function(l){ return !l.convertedTo; }).map(function(l){ return esc(l.partName) + ' × ' + l.qty + (l.unit==='kg' ? ' กก.' : ' ชิ้น'); }).join(' · ');
-      return '<tr><td style="padding:5px;border-bottom:1px solid #e2e8f0;font-weight:700;">' + esc(n.no) + '</td>' +
-        '<td style="text-align:center;border-bottom:1px solid #e2e8f0;">' + fmtDate(n.date) + '</td>' +
-        '<td style="border-bottom:1px solid #e2e8f0;">' + esc(n.customer||'') + '<div style="font-size:10px;color:var(--text-muted);">' + items + '</div></td>' +
-        '<td style="text-align:center;border-bottom:1px solid #e2e8f0;font-weight:700;color:' + (d > 7 ? '#dc2626' : '#92400e') + ';">' + d + (_lockedNos[n.no] ? '<div style="font-size:10px;">🔒 ล็อกหน้า INV</div>' : '') + '</td></tr>';
-    }).join('') + '</table>';
+  var isAdm = currentRole === 'admin', nRows = 0;
+  var TH = 'padding:6px;text-align:left;font-size:12px;white-space:nowrap;';
+  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="background:#f1f5f9;">' +
+    '<th style="'+TH+'">ลูกค้า</th><th style="'+TH+'">หมายเลขชิ้นงาน (P/No)</th><th style="'+TH+'">เลขบิลอ้างอิง</th><th style="'+TH+'text-align:right;">ส่งชั่วคราว</th><th style="'+TH+'">INV ที่ออกแล้ว</th><th style="'+TH+'text-align:right;">ค้างออก INV</th><th style="'+TH+'text-align:center;">ค้าง(วัน)</th><th style="'+TH+'text-align:center;">สถานะ</th></tr>';
+  open.forEach(function(n){
+    var d = daysSince(n.date), wd = tmpWorkdaysSince(n.date), locked = !!_lockedNos[n.no];
+    var btns = isAdm ? ('<span style="float:right;white-space:nowrap;">' +
+      '<button onclick="tmpAdminCancel(\'' + esc(n.id) + '\', true)" title="ยกเลิกใบทั้งใบ และคืนยอดกลับเข้าบิล" style="background:#ecfdf5;color:#047857;border:none;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;margin-left:4px;">↩️ ยกเลิก คืนสต๊อก</button>' +
+      '<button onclick="tmpAdminCancel(\'' + esc(n.id) + '\', false)" title="ยกเลิกใบทั้งใบ แต่ยอดที่หักไว้ยังคงอยู่" style="background:#fef2f2;color:#b91c1c;border:none;border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;margin-left:4px;">🚫 ยกเลิก ไม่คืนสต๊อก</button></span>') : '';
+    html += '<tr><td colspan="8" style="background:#f8fafc;font-weight:700;border-top:2px solid #cbd5e1;padding:6px;">' + esc(n.no) + ' · ' + fmtDate(n.date) + ' · ' + esc(n.customer||'') + btns + '</td></tr>';
+    // รวมบรรทัดของใบตามบิล (jobId): ส่ง / INV ที่ออกแล้ว / ค้าง
+    var g = {}, order = [];
+    (n.lines||[]).forEach(function(l){
+      var o = g[l.jobId]; if (!o) { o = g[l.jobId] = { jobId:l.jobId, part:l.partName||'', unit:l.unit, sent:0, inv:0, left:0, invNos:{} }; order.push(l.jobId); }
+      var q = Number(l.qty||0); o.sent += q;
+      if (l.convertedTo) { o.inv += q; o.invNos[l.convertedTo] = (o.invNos[l.convertedTo]||0) + q; } else o.left += q;
+    });
+    order.forEach(function(jid){
+      var o = g[jid], j = jobItems.find(function(x){ return x.id === jid; }) || {};
+      var u = o.unit === 'kg' ? ' กก.' : '', fin = !(o.left > 0.0001);
+      var invTxt = Object.keys(o.invNos).map(function(no){ return '<span style="color:#166534;font-weight:600;">' + esc(no) + '</span> <span style="color:#64748b;">(' + o.invNos[no].toLocaleString() + ')</span>'; }).join('<br>') || '<span style="color:#94a3b8;">—</span>';
+      var st = fin ? '<span style="background:#dcfce7;color:#166534;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">ปิดแล้ว</span>'
+        : locked ? '<span style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">🔒 เกินกำหนด</span>'
+        : o.inv > 0 ? '<span style="background:#fef3c7;color:#92400e;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">ออก INV บางส่วน</span>'
+        : '<span style="background:#fef3c7;color:#92400e;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">ค้าง</span>';
+      nRows++;
+      html += '<tr><td style="padding:6px;border-bottom:1px solid #e2e8f0;">' + esc(n.customer||'') + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;font-weight:700;">' + esc(o.part) + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;"><span style="font-family:monospace;background:#eff6ff;color:#1d4ed8;padding:1px 6px;border-radius:5px;">' + esc(j.bill || '?') + '</span></td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:right;">' + o.sent.toLocaleString() + u + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;">' + invTxt + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;">' + o.left.toLocaleString() + u + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:' + (wd > TMP_LOCK_WD ? '#dc2626' : '#92400e') + ';">' + (fin ? '—' : d) + '</td>' +
+        '<td style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:center;">' + st + '</td></tr>';
+    });
+  });
+  html += '</table></div>';
+  box.innerHTML = html;
+  if (badge) badge.innerHTML = open.length ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">ค้าง ' + open.length + ' ใบ · ' + nRows + ' รายการ</span>' : '';
 }
 
 // ══════════════════════════════════════
@@ -3798,7 +3872,8 @@ function addInvLine() {
 
   // ── FIFO บล็อกแข็งต่อ P.No (โหมดขายเท่านั้น ไม่ใช้กับเคลม) — จุดบังคับใช้จริง กันเผื่อ dropdown ถูกข้ามด้วยวิธีอื่น ──
   if (!isClaim) {
-    var blocker = getFifoBlocker(job);
+    // บิลที่มีใบส่งของชั่วคราวค้าง = ส่งของไปแล้ว (FIFO ถูกตรวจตอนทำใบชั่วคราวแล้ว) ต้องออก INV อ้างอิงใบได้เสมอ — ไม่บล็อกซ้ำ (ตรงกับ dropdown)
+    var blocker = invHasTmp(job) ? null : getFifoBlocker(job);
     if (blocker) {
       showToast('invline','🚫 ออก INV ให้บิลนี้ไม่ได้ — ต้องออก INV ให้บิล ['+(blocker.bill||'?')+'] ('+(blocker.date||'')+') ของชิ้นงานเดียวกันที่รับเข้าก่อนให้หมดคงเหลือก่อนเสมอ (FIFO)','err');
       return;
@@ -3838,14 +3913,11 @@ function addInvLine() {
     .reduce(function(s,l){ return s + l.qty; }, 0);
   var _tmpNo = tmpReadInvSel(jobId);
   var _enf = tmpEnforceAdd(job, _tmpNo, isClaim); if (_enf) { alert(_enf); return; }
+  var _warnTmp = isClaim ? '' : tmpWarnPending(job, _tmpNo); // แจ้งเตือนอย่างเดียว ไม่บล็อก
   // บิลมีใบส่งของชั่วคราวค้าง → ต้องเลือก "อ้างอิงใบส่งของชั่วคราว" (ไม่งั้นใบค้างตลอดและตัดสต็อกแยกกัน) — admin ข้ามได้พร้อมยืนยัน
   if (!isClaim && !_tmpNo && _tmpByJob[jobId] && _tmpByJob[jobId].items.length) {
     var _tl = Object.keys(_tmpByJob[jobId].items.reduce(function(a,it){ a[it.no]=1; return a; }, {})).join(', ');
-    if (currentRole !== 'admin') {
-      alert('🚫 บิล ['+(job.bill||'?')+'] มีใบส่งของชั่วคราวค้างอยู่ ('+_tl+')\n\nของส่งไปแล้ว ต้องออก INV โดยเลือก "อ้างอิงใบส่งของชั่วคราว" ที่ช่องด้านล่าง\n(ถ้าไม่ใช่ของชุดเดียวกันจริง ๆ ให้ admin เป็นผู้บันทึก)');
-      return;
-    }
-    if (!confirm('⚠️ [Admin] บิล ['+(job.bill||'?')+'] มีใบส่งของชั่วคราวค้างอยู่ ('+_tl+') แต่คุณไม่ได้เลือกอ้างอิง\n\nใบชั่วคราวจะยังค้างต่อ และ INV นี้จะตัดสต็อกส่วนที่เหลือของบิล\n\nยืนยันออกโดยไม่อ้างอิง?')) return;
+    if (!confirm('⚠️ บิล ['+(job.bill||'?')+'] มีใบส่งของชั่วคราวค้างอยู่ ('+_tl+') แต่คุณเลือก "ไม่อ้างอิง"\n\nใบชั่วคราวจะยังค้างต่อ และ INV นี้จะตัดสต็อกส่วนที่เหลือของบิล\n\nยืนยันออกโดยไม่อ้างอิง?')) return;
   }
   var remain = (isKg ? b.remainKg : b.remain) + tmpAddBack(jobId, isKg, _tmpNo);
   if (!stockOverride && stockQty + alreadyInDraft > remain + 0.0001) {
@@ -3896,7 +3968,7 @@ function addInvLine() {
   if (selReset) { selReset.size = 1; selReset.value = ''; }
   document.getElementById('invLineRemainInfo').style.display = 'none';
 
-  showToast('invline','✅ เพิ่มรายการแล้ว — ค้นหา P/No ถัดไปได้เลย','ok');
+  showToast('invline', _warnTmp ? _warnTmp : '✅ เพิ่มรายการแล้ว — ค้นหา P/No ถัดไปได้เลย', _warnTmp ? 'err' : 'ok');
   renderInvLines();
   renderInvLineSelect();
 }
@@ -4406,7 +4478,7 @@ function saveInvoice(doPrint) {
     }
   }
 
-  if (!isClaim && !_editingInvoiceRef) { var _se = tmpEnforceSave(); if (_se) { alert(_se); return; } }
+  if (!isClaim && !_editingInvoiceRef) { var _se = tmpEnforceSave(); if (_se) { alert(_se); return; } var _sw = tmpWarnSave(); if (_sw && !confirm(_sw + '\n\nบันทึกต่อ?')) return; }
   // ── เรดาร์ "พร้อมออก INV" ต่อลูกค้า (กันบิลอื่นของลูกค้าเดียวกันที่ค้างไม่ออก INV เกิน 7 วัน ถูกลืมไปเรื่อยๆ) ──
   // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
   // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
