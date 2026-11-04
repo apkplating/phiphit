@@ -186,7 +186,7 @@ var session = null;
 var DB = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
 var TMP_URL = DB + '/temp-notes';
 
-var jobItems = [], recByJob = {}, invNoSet = {}, notes = [];
+var jobItems = [], recByJob = {}, invNoSet = {}, notes = [], invList = [], dueMap = {};
 var draft = [];
 var _loaded = false;
 
@@ -245,7 +245,12 @@ function getJSON(url){
 function loadNotesOnly(){
   return getJSON(TMP_URL + '.json').then(function(d){ notes = toArr(d); }).catch(function(){});
 }
+var pmParts = [];
+function loadPM(){ getJSON(DB + '/part-master.json').then(function(d){ var a = d && d.parts; pmParts = Array.isArray(a) ? a : (a && typeof a==='object' ? Object.keys(a).map(function(k){return a[k];}) : []); pmParts = pmParts.filter(Boolean); }).catch(function(){}); }
+// ลูกค้าจาก Part Master (ใช้เมื่อยังไม่เลือกบิล) — แสดงเมื่อค้นเจอ P/No เดียว
+function pmCustFor(q){ if (q.length < 3) return null; var m = pmParts.filter(function(p){ return normQ(p.partNo).indexOf(q) >= 0; }); var ex = m.filter(function(p){ return normQ(p.partNo) === q; }); if (ex.length) m = ex; return m.length === 1 ? m[0] : null; }
 function loadAll(){
+  loadPM();
   $('tmpJobHint').textContent = '⏳ กำลังโหลดข้อมูลบิล...';
   Promise.all([
     getJSON(DB + '/job-master/items.json'),
@@ -257,8 +262,10 @@ function loadAll(){
     recByJob = {};
     toArr(res[1]).forEach(function(r){ (recByJob[r.jobId] = recByJob[r.jobId] || []).push(r); });
     invNoSet = {};
-    toArr(res[2]).forEach(function(i){ if (i.invNo) invNoSet[i.invNo] = true; });
+    invList = toArr(res[2]);
+    invList.forEach(function(i){ if (i.invNo) invNoSet[i.invNo] = true; });
     notes = toArr(res[3]);
+    getJSON(DB + '/jm-due.json').then(function(d){ dueMap = (d && typeof d==='object') ? d : {}; }).catch(function(){});
     _loaded = true; refreshNo();
     $('tmpJobHint').textContent = '✅ โหลดข้อมูลแล้ว (' + jobItems.length + ' บิล)';
     renderLists();
@@ -309,7 +316,7 @@ function renderJobSel(){
     .filter(function(x){ return x.rem > 0.0001; });
   rows.sort(function(a,b){ return (a.j.date||'').localeCompare(b.j.date||''); }); // เก่าสุดก่อน
   var allRows = rows.slice(); rows = rows.slice(0, 40);
-  if (!rows.length) { sel.innerHTML=''; var L0=$('tmpJobList'); L0.style.display=''; L0.innerHTML='<div style="padding:12px;color:#64748b;">ไม่พบบิลที่ยังมีคงเหลือ</div>'; $('tmpUnitLbl').textContent=''; return; }
+  if (!rows.length) { sel.innerHTML=''; var L0=$('tmpJobList'); L0.style.display=''; var pm0 = pmCustFor(q); L0.innerHTML='<div style="padding:12px;color:#64748b;">ไม่พบบิลที่ยังมีคงเหลือ'+(pm0 ? '<br><span style="color:#0f766e;">Part Master: '+esc(pm0.partNo)+' · ลูกค้า <b>'+esc(pm0.customer||'-')+'</b> — ยังไม่มีบิลรับเข้าคงเหลือ ไปรับเข้าที่ Job Master ก่อน</span>' : '')+'</div>'; if (pm0 && !draft.length) $('tmpCust').value = (pm0.customer||'') + ' (จาก Part Master)'; $('tmpUnitLbl').textContent=''; return; }
   sel.innerHTML=''; sel.style.display='none';
   var L=$('tmpJobList'); L.style.display='';
   L.innerHTML = '<div style="max-height:46vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;background:#fff;">' + rows.map(function(x){
@@ -368,6 +375,43 @@ function nextNo(date){
   return ym + '/' + String(mx+1).padStart(3,'0');
 }
 function refreshNo(){ $('tmpNo').value = nextNo($('tmpDate').value); }
+
+// ── กฎบังคับ (ตกลง 4 พ.ย.) ──
+// FIFO: ชิ้นงาน P/No เดียวกัน ต้องส่งบิลเก่าให้หมดก่อน (นับยอดในรายการที่กำลังเพิ่มด้วย) — admin ข้ามได้พร้อมเหตุผล บันทึกไว้ในรายการ
+// ลูกค้าที่มีใบชั่วคราวค้างเกิน 3 วันทำการโดยไม่มี INV ออกตามมา → ทำใบใหม่ให้ลูกค้ารายนั้นไม่ได้ จนกว่าจะออก INV (หรือ admin ลง due ใน Job Master)
+function tdDueKey(id){ return String(id).replace(/[.#$\[\]\/]/g,'_'); }
+function tdWorkdays(dateStr){
+  if(!dateStr) return 0; var d = new Date(String(dateStr).slice(0,10)+'T00:00:00'), t = new Date(bkkToday()+'T00:00:00'), n = 0;
+  while (d < t) { d.setDate(d.getDate()+1); var w = d.getDay(); if (w !== 0 && w !== 6) n++; }
+  return n;
+}
+function tdLastInv(cust){
+  var best = '';
+  invList.forEach(function(i){ if (i.voided || i.docType === 'claim') return;
+    if ((i.items||[]).some(function(l){ return (l.customer||'').trim() === cust; }) && (i.date||'') > best) best = i.date; });
+  return best;
+}
+function tdOverdueNotes(cust){
+  var today = bkkToday(), last = tdLastInv(cust);
+  return notes.filter(function(n){
+    if (n.status !== 'open' || (n.customer||'').trim() !== cust) return false;
+    if (!(n.lines||[]).some(function(l){ return !l.convertedTo; })) return false;
+    if (!(tdWorkdays(n.date) > 3) || last > (n.date||'')) return false;
+    return !(n.lines||[]).some(function(l){ var d = (dueMap[tdDueKey(l.jobId)]||{}).due; return d && d >= today; });
+  });
+}
+function tdFifoBlockers(j){
+  var key = normQ(j.partName);
+  return jobItems.filter(function(x){
+    if (x.id === j.id || normQ(x.partName) !== key || !((x.date||'') < (j.date||''))) return false;
+    var used = draft.filter(function(l){ return l.jobId === x.id; }).reduce(function(s,l){ return s + l.qty; }, 0);
+    return jobRemain(x) - used > 0.0001;
+  }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+}
+function tdCustBlock(cust){
+  var od = tdOverdueNotes((cust||'').trim());
+  return od.length ? ('🚫 ลูกค้า "' + cust + '" มีใบส่งของชั่วคราวค้างเกิน 3 วันทำการโดยยังไม่ออก INV (' + od.map(function(n){ return n.no; }).join(', ') + ') — ทำใบใหม่ให้ลูกค้ารายนี้ไม่ได้ ต้องออก INV ที่ Job Master ก่อน') : '';
+}
 function addLine(){
   var id = $('tmpJobSel').value, qty = parseFloat($('tmpQty').value) || 0;
   if (window._grp && window._grp.length > 1) {
@@ -377,6 +421,7 @@ function addLine(){
       var used = draft.filter(function(l){return l.jobId===i;}).reduce(function(sm,l){return sm+l.qty;},0);
       var r = Math.max(0, jobRemain(jj) - used); tot += r; });
     var j0 = jobItems.find(function(x){return x.id===ids[0];});
+    var _cb0 = tdCustBlock(j0 && j0.customer); if (_cb0) { showToast(_cb0, 'err'); return; }
     if (draft.length && (draft[0].customer||'') !== (j0.customer||'')) { showToast('⚠️ 1 บิลต้องเป็นลูกค้าเดียวกัน (' + (draft[0].customer||'-') + ')', 'err'); return; }
     if (qty > tot + 0.0001) { showToast('⚠️ ยอดส่งเกินคงเหลือรวมของ P/No นี้ (เหลือรวม ' + tot + (isKgJob(j0) ? ' กก.' : ' ชิ้น') + ')', 'err'); return; }
     ids.forEach(function(i){
@@ -396,12 +441,21 @@ function addLine(){
   var j = jobItems.find(function(x){ return x.id === id; });
   if (!j) { showToast('กรุณาค้นหาและเลือกบิลก่อน', 'err'); return; }
   if (!(qty > 0)) { showToast('กรุณากรอกจำนวนที่ส่ง', 'err'); return; }
+  var _cb = tdCustBlock(j.customer); if (_cb) { showToast(_cb, 'err'); return; }
+  var fifoNote = '';
+  var _fb = tdFifoBlockers(j);
+  if (_fb.length) {
+    var _fbTxt = 'บิล ' + _fb.map(function(x){ return (x.bill||'?') + ' (' + fmtDate(x.date) + ')'; }).join(', ') + ' ของ P/No เดียวกันเก่ากว่าและยังเหลืออยู่';
+    if (!isAdmin()) { showToast('🚫 ข้ามคิว FIFO ไม่ได้ — ' + _fbTxt + ' ต้องส่งให้หมดก่อน (หรือใช้ "ส่งทั้ง P/No" ที่ตัดบิลเก่าก่อนอัตโนมัติ)', 'err'); return; }
+    fifoNote = prompt('[Admin] ' + _fbTxt + '\n\nถ้าจะข้ามคิวจริง ให้ใส่เหตุผล (จะบันทึกไว้ในใบ) — เว้นว่าง = ยกเลิก:', '');
+    if (!fifoNote || !fifoNote.trim()) return;
+  }
   var used = draft.filter(function(l){ return l.jobId === id; }).reduce(function(s,l){ return s + l.qty; }, 0);
   var rem = jobRemain(j);
   if (qty + used > rem + 0.0001) { showToast('⚠️ เกินคงเหลือของบิลนี้ (เหลือ ' + (rem - used) + (isKgJob(j) ? ' กก.' : ' ชิ้น') + ')', 'err'); return; }
   if (draft.length && (draft[0].customer||'') !== (j.customer||'')) { showToast('⚠️ 1 บิลต้องเป็นลูกค้าเดียวกัน (' + (draft[0].customer||'-') + ') — ออกอีกบิลสำหรับลูกค้าอื่น', 'err'); return; }
   draft.push({ jobId: id, bill: j.bill || '', partName: j.partName || '', customer: j.customer || '', qty: qty, unit: j.unit || 'pcs',
-    proLot: $('tmpProLot').value.trim(), custLot: $('tmpCustLot').value.trim() });
+    proLot: $('tmpProLot').value.trim(), custLot: $('tmpCustLot').value.trim(), fifoOverride: fifoNote ? fifoNote.trim() : '' });
   $('tmpQty').value = ''; $('tmpSearch').value = ''; $('tmpProLot').value = ''; $('tmpCustLot').value = '';
   $('tmpJobSel').innerHTML=''; $('tmpJobSel').style.display='none'; $('tmpJobList').style.display='none'; $('tmpJobList').innerHTML=''; $('tmpUnitLbl').textContent='';
   renderDraft();
@@ -436,9 +490,10 @@ function saveNote(){
       return !j || sums[id] > jobRemain(j) + 0.0001;
     });
     if (bad.length) throw { user: '⚠️ มีบิลที่คงเหลือไม่พอ (มีคนบันทึกไปก่อนหน้านี้) — ตรวจรายการอีกครั้ง' };
+    var _lk = tdCustBlock(draft[0].customer || ''); if (_lk) throw { user: _lk };
     var id = 'T' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
     var note = { id: id, no: no, date: date, customer: draft[0].customer || '',
-      lines: draft.map(function(l){ return { jobId:l.jobId, bill:l.bill, partName:l.partName, customer:l.customer, qty:l.qty, unit:l.unit, proLot:l.proLot||'', custLot:l.custLot||'' }; }),
+      lines: draft.map(function(l){ return { jobId:l.jobId, bill:l.bill, partName:l.partName, customer:l.customer, qty:l.qty, unit:l.unit, proLot:l.proLot||'', custLot:l.custLot||'', fifoOverride:l.fifoOverride||'' }; }),
       note: memo, by: myName(), issuer: myName(), createdAt: new Date().toISOString(), status: 'open' };
     return fetch(TMP_URL + '/' + id + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(note) })
       .then(function(r){ if (!r.ok) throw { user: '⚠️ บันทึกไม่สำเร็จ (HTTP ' + r.status + ') — ตรวจ Tailscale แล้วลองใหม่' }; notes.push(note); return note; });
@@ -467,8 +522,10 @@ function cancelNote(id){
   var n = notes.find(function(x){ return x.id === id; });
   if (!n || !canCancel(n)) { alert('ยกเลิกไม่ได้ — พนักงานยกเลิกได้เฉพาะใบที่ตัวเองบันทึกภายในวันเดียวกัน (นอกนั้นต้องแจ้ง admin)'); return; }
   if (!confirm('ยกเลิกใบ ' + n.no + ' ?\n\nสต็อกจะถูกคืนกลับตามจำนวนในใบนี้ (ใช้เมื่อบันทึกผิด/ของไม่ได้ส่งจริง)')) return;
+  var _why = prompt('เหตุผลที่ยกเลิกใบ ' + n.no + ' (จำเป็น — บันทึกไว้ตรวจย้อนหลัง):', '');
+  if (!_why || !_why.trim()) { alert('ต้องใส่เหตุผลก่อนยกเลิก'); return; }
   var upd = JSON.parse(JSON.stringify(n));
-  upd.status = 'cancelled'; upd.cancelledBy = myName(); upd.cancelledAt = new Date().toISOString();
+  upd.status = 'cancelled'; upd.cancelledBy = myName(); upd.cancelledAt = new Date().toISOString(); upd.cancelReason = _why.trim();
   fetch(TMP_URL + '/' + encodeURIComponent(id) + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(upd) })
     .then(function(r){ if (!r.ok) throw 0; n.status = 'cancelled'; n.cancelledBy = upd.cancelledBy; n.cancelledAt = upd.cancelledAt; renderLists(); showToast('↩️ ยกเลิกใบ ' + n.no + ' และคืนสต็อกแล้ว', 'ok'); })
     .catch(function(){ alert('ยกเลิกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่'); });
@@ -483,7 +540,7 @@ function renderLists(){
     '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>ลูกค้า / รายการ</th><th>ค้าง</th><th></th></tr>' + open.map(function(n){
       var d = daysSince(n.date);
       return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+' · '+esc(n.by||'')+'</div></td><td>'+esc(n.customer||'')+'<div class="hint">'+linesText(n)+'</div>'+(n.note?'<div class="hint">📝 '+esc(n.note)+'</div>':'')+'</td>' +
-        '<td style="white-space:nowrap;font-weight:700;color:'+(d>7?'#dc2626':'#92400e')+';">'+d+' วัน</td><td>'+'<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin-bottom:4px;" onclick="printNote(\''+esc(n.id)+'\')">🖨️ พิมพ์</button> '+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
+        '<td style="white-space:nowrap;font-weight:700;color:'+(tdWorkdays(n.date)>3?'#dc2626':'#92400e')+';">'+d+' วัน'+(tdWorkdays(n.date)>3?'<div class="hint" style="color:#dc2626;">🔒 เกิน 3 วันทำการ</div>':'')+'</td><td>'+'<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin-bottom:4px;" onclick="printNote(\''+esc(n.id)+'\')">🖨️ พิมพ์</button> '+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
     }).join('') + '</table>';
   var cut = Date.now() - 30*86400000;
   var hist = notes.filter(function(n){ return n.status !== 'open' && new Date(n.createdAt||n.date||0).getTime() >= cut; })
