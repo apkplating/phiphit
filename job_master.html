@@ -2358,6 +2358,9 @@ function dueRestore() {
 // ══════════════════════════════════════════════════════════════
 var _lkFresh = false, _lkRows = [], _lkCb = null;
 function custLockRows() {
+  return []; // เลิกล็อกหน้า INV 'ลูกค้ามีบิลเกินกำหนด' ทั้งหมด (ตัดสินใจเมื่อ 4 พ.ย.) — คืนค่าเดิมได้โดยลบบรรทัดนี้
+}
+function _custLockRowsOld() {
   var today = _dueToday(), custSet = {}, excl = {};
   invDraft.forEach(function(l){
     excl[l.jobId] = true;
@@ -4618,7 +4621,9 @@ function saveInvoice(doPrint) {
   // ── เรดาร์ "พร้อมออก INV" ต่อลูกค้า (กันบิลอื่นของลูกค้าเดียวกันที่ค้างไม่ออก INV เกิน 7 วัน ถูกลืมไปเรื่อยๆ) ──
   // ใช้เฉพาะตอนออก INV ใหม่โหมด "ขาย" เท่านั้น ไม่ใช้กับเคลม (ไม่ใช่การขายข้ามคิว) และไม่ใช้ตอนกำลังแก้ไข INV เดิม
   // (จะไม่บล็อกตัวเองซ้ำเวลาแค่แก้ไขบิลที่มีอยู่แล้ว)
-  if (!isClaim && !_editingInvoiceRef) {
+  // INV ที่ทุกรายการมาจากใบส่งของชั่วคราว = ส่งของไปแล้ว ตัดตาม PO ที่ลูกค้าเปิดมาภายหลัง → ไม่ติดล็อกบิลเกินกำหนดของลูกค้า (ออก/พิมพ์ได้ปกติ)
+  var _allFromTemp = invDraft.length > 0 && invDraft.every(function(l){ return !!l.fromTemp; });
+  if (!isClaim && !_editingInvoiceRef && !_allFromTemp) {
     // ล็อกต่อลูกค้า: ลูกค้ารายนี้มีบิลอื่นเกินกำหนด (>7 วัน) ที่ยังไม่มี due / due หมดอายุ → ห้ามออก INV จน admin ลง due ให้
     var _lk = custLockRows();
     if (_lk.length) {
