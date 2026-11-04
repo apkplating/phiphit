@@ -385,7 +385,7 @@ if ('caches' in window) {
   <!-- ── ใบส่งของชั่วคราวที่ค้างออก INV (อ่านอย่างเดียว — พนักงานบันทึกที่หน้า temp_delivery.html) ── -->
   <details class="card" id="tmpCard" style="display:none;">
     <summary style="cursor:pointer;font-weight:700;font-size:14px;">📄 ใบส่งของชั่วคราวที่ค้างออก INV <span id="tmpOpenBadge" style="margin-left:6px;"></span></summary>
-    <div style="font-size:11px;color:var(--text-muted);margin:8px 0;line-height:1.5;">ส่งของไปแล้ว ตัดสต็อกแล้ว — เมื่อออก INV ให้เลือก "อ้างอิงใบส่งของชั่วคราว" ตอนเพิ่มรายการ ระบบจะไม่ตัดสต็อกซ้ำ · ค้างเกิน 7 วัน = ล็อกออก INV ใบอื่นของลูกค้ารายนั้น จนกว่าจะออก INV อ้างอิงใบนี้หรือ admin ลง due (บันทึก/ยกเลิกใบทำที่หน้า <a href="temp_delivery.html">ใบส่งของชั่วคราว</a>)</div>
+    <div style="font-size:11px;color:var(--text-muted);margin:8px 0;line-height:1.5;">ส่งของไปแล้ว ตัดสต็อกแล้ว — เมื่อออก INV ให้เลือก "อ้างอิงใบส่งของชั่วคราว" ตอนเพิ่มรายการ ระบบจะไม่ตัดสต็อกซ้ำ · เกิน 3 วันทำการโดยลูกค้ารายนั้นไม่มี INV ตามมา = ล็อกหน้า INV (ออกได้เฉพาะลูกค้ารายนั้นโดยอ้างอิงใบ) จนกว่าจะเคลียร์หรือ admin ลง due (บันทึก/ยกเลิกใบทำที่หน้า <a href="temp_delivery.html">ใบส่งของชั่วคราว</a>)</div>
     <div id="tmpOpenList"></div>
   </details>
 
@@ -2992,6 +2992,8 @@ function tmpCustLastInv(cust){
   });
   return best;
 }
+// บิลที่ส่งของไปแล้วตามใบชั่วคราว (คงเหลือในระบบ = 0 เพราะใบชั่วคราวตัดไปแล้ว) ต้องยังเลือกได้ เพื่ออ้างอิงใบตอนออก INV
+function invHasTmp(j){ var o = (typeof _tmpByJob !== 'undefined') ? _tmpByJob[j.id] : null; return !!(o && o.items && o.items.length); }
 function tmpLockRows(){
   var today = _dueToday();
   return overdueAllJobs().filter(function(x){ return x.tmp && (!x.due || x.due < today); });
@@ -3048,7 +3050,7 @@ function tmpLockBanner(rows){
   var b = document.getElementById('tmpLockBanner');
   if (!rows || !rows.length) { if (b) b.remove(); return; }
   if (!b) { b = document.createElement('div'); b.id = 'tmpLockBanner'; b.style.cssText = 'margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#fef2f2;border:2px solid #dc2626;color:#991b1b;font-size:13px;font-weight:600;line-height:1.6;'; host.insertBefore(b, host.firstChild); }
-  var cs = {}; rows.forEach(function(x){ var c = (x.job.customer||'-').split('\n')[0]; (cs[c] = cs[c] || []).push((x.tmpNos||[]).join(', ')); });
+  var cs = {}; rows.forEach(function(x){ var c = (x.job.customer||'-').split('\n')[0]; (cs[c] = cs[c] || []); (x.tmpNos||[]).forEach(function(no){ if (cs[c].indexOf(no) < 0) cs[c].push(no); }); });
   b.innerHTML = '🔒 ล็อกหน้า INV — ออกได้เฉพาะ: ' + Object.keys(cs).map(function(c){ return '<b>' + esc(c) + '</b> (ใบชั่วคราว ' + esc(cs[c].join(', ')) + ')'; }).join(' · ') + ' และต้องอ้างอิงใบชั่วคราวนั้น';
 }
 function tmpLockPrompt(){
@@ -3075,6 +3077,7 @@ function tmpLockPrompt(){
   if (du) du.onclick = function(){ o.remove(); custLockShow(rows, false); _lkCb = function(){ _tmpLockAck = false; try { tmpLockPrompt(); } catch(e){} }; };
 }
 function renderTmpNotes(){
+  var _lockedNos = {}; try { tmpLockRows().forEach(function(r){ (r.tmpNos||[]).forEach(function(no){ _lockedNos[no] = 1; }); }); } catch(e){}
   var card = tmpEl('tmpCard'), box = tmpEl('tmpOpenList'), badge = tmpEl('tmpOpenBadge');
   if (!card || !box) return;
   var open = tmpNotes.filter(function(n){ return n.status === 'open' && (n.lines||[]).some(function(l){ return !l.convertedTo; }); })
@@ -3088,7 +3091,7 @@ function renderTmpNotes(){
       return '<tr><td style="padding:5px;border-bottom:1px solid #e2e8f0;font-weight:700;">' + esc(n.no) + '</td>' +
         '<td style="text-align:center;border-bottom:1px solid #e2e8f0;">' + fmtDate(n.date) + '</td>' +
         '<td style="border-bottom:1px solid #e2e8f0;">' + esc(n.customer||'') + '<div style="font-size:10px;color:var(--text-muted);">' + items + '</div></td>' +
-        '<td style="text-align:center;border-bottom:1px solid #e2e8f0;font-weight:700;color:' + (d > 7 ? '#dc2626' : '#92400e') + ';">' + d + (d > 7 ? '<div style="font-size:10px;">🔒 ล็อกออก INV ลูกค้านี้</div>' : '') + '</td></tr>';
+        '<td style="text-align:center;border-bottom:1px solid #e2e8f0;font-weight:700;color:' + (d > 7 ? '#dc2626' : '#92400e') + ';">' + d + (_lockedNos[n.no] ? '<div style="font-size:10px;">🔒 ล็อกหน้า INV</div>' : '') + '</td></tr>';
     }).join('') + '</table>';
 }
 
@@ -3253,7 +3256,7 @@ function _onInvPartSearchInputImpl() {
   jobItems.forEach(function(j) {
     var b = calcJob(j.id);
     var hasRemain = j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
-    if (!hasRemain) return;
+    if (!hasRemain && !invHasTmp(j)) return;
     var pn = (j.partName||'').trim();
     if (!pn) return;
     var pnN = pn.toLowerCase().replace(/[\s\-]+/g,'');
@@ -3269,7 +3272,7 @@ function _onInvPartSearchInputImpl() {
     var hasJob = jobItems.some(function(j){
       var b = calcJob(j.id);
       var hasR = j.unit==='kg' ? b.remainKg>0 : b.remain>0;
-      return hasR && normalizePartKey(j.partName) === normalizePartKey(p.partNo||p.name||'');
+      return (hasR || invHasTmp(j)) && normalizePartKey(j.partName) === normalizePartKey(p.partNo||p.name||'');
     });
     items.push({ partNo: p.partNo||'', name: p.name||'', fromPM: true, hasStock: hasJob });
   });
@@ -3336,7 +3339,7 @@ function selectInvPart(partNo, hasStock, fromPM) {
   // ✅ อยู่ใน PM + มีสต็อก → แสดงขั้นที่ 2
   var normSel = normalizePartKey(partNo);
   var active = jobItems.filter(function(j) {
-    return getEffectiveRemain(j) > 0.0001 && normalizePartKey(j.partName) === normSel;
+    return (getEffectiveRemain(j) > 0.0001 || invHasTmp(j)) && normalizePartKey(j.partName) === normSel;
   });
 
   if (!active.length) {
@@ -3357,6 +3360,7 @@ function selectInvPart(partNo, hasStock, fromPM) {
   active.forEach(function(j) {
     var effRemain = getEffectiveRemain(j);
     var rem = j.unit==='kg' ? effRemain.toFixed(2)+' กก.' : effRemain.toLocaleString()+' ชิ้น';
+    if (effRemain <= 0.0001 && invHasTmp(j)) rem = '0 (ส่งแล้วตามใบชั่วคราว)';
     var blocker = getFifoBlocker(j);
     // บิลที่มีใบส่งของชั่วคราวค้าง = ของส่งไปแล้ว ต้องออก INV อ้างอิงใบนั้นได้เสมอ → ไม่บล็อกด้วย FIFO และแสดงเลขใบชั่วคราวให้เห็นก่อนเลือก
     var tmpO = (typeof _tmpByJob !== 'undefined') ? _tmpByJob[j.id] : null;
@@ -3388,7 +3392,7 @@ function renderInvLineSelect() {
     var stillExists = jobItems.find(function(j){
       if (j.id !== cur) return false;
       var b = calcJob(j.id);
-      return j.unit==='kg' ? b.remainKg > 0 : b.remain > 0;
+      return (j.unit==='kg' ? b.remainKg > 0 : b.remain > 0) || invHasTmp(j);
     });
     if (stillExists) {
       // เลือกบิลไปแล้วและยังใช้ได้อยู่ — ไม่ต้องรีเซ็ต/เปิดลิสต์ใหม่ (เลือกครั้งเดียวพอ)
