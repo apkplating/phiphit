@@ -3068,6 +3068,61 @@ function tmpWarnSave(){
   if (!unc.length) return '';
   return '⚠️ ลูกค้า "' + cust + '" ยังมีใบส่งของชั่วคราวค้าง (ก่อนวันนี้) ที่ไม่ได้อ้างอิงใน INV นี้:\n' + unc.map(function(p){ return '• ' + p.no + ' · ' + p.partName + ' × ' + p.qty; }).join('\n') + '\n\nบันทึก INV ต่อไปได้ แต่ใบเหล่านี้จะยังค้างอยู่';
 }
+// ── ดึงใบชั่วคราวค้างของลูกค้า เข้าร่าง INV ทั้งหมด (กันลืมรายการที่ไม่ได้ค้นเอง) ──
+function tmpPendingForCust(cust, beforeToday){
+  var today = _dueToday(), cover = tmpDraftCover(), out = [];
+  tmpNotes.forEach(function(n){
+    if (n.status !== 'open' || n.frozen || (n.customer||'').trim() !== cust) return;
+    if (beforeToday && !((n.date||'') < today)) return;
+    var by = {};
+    (n.lines||[]).forEach(function(l){ if (l.convertedTo) return; var o = by[l.jobId] || (by[l.jobId] = { no:n.no, date:n.date, jobId:l.jobId, partName:l.partName||'', unit:l.unit, qty:0 }); o.qty += Number(l.qty||0); });
+    Object.keys(by).forEach(function(jid){ var o = by[jid], c = cover[o.no+'|'+jid]||0; if (c + 0.0001 < o.qty) { o.qty = o.qty - c; out.push(o); } });
+  });
+  return out;
+}
+function tmpPendBanner(){
+  var host = document.getElementById('v-out'); if (!host) return;
+  var b = document.getElementById('tmpPendBanner');
+  var custs = {};
+  if (typeof invDocType === 'undefined' || invDocType !== 'claim') {
+    if (!_editingInvoiceRef) tmpNotes.forEach(function(n){ if (n.status === 'open' && !n.frozen) { var c = (n.customer||'').trim(); if (c) custs[c] = 1; } });
+  }
+  var list = Object.keys(custs).map(function(c){ return { c:c, rows:tmpPendingForCust(c, true) }; }).filter(function(x){ return x.rows.length; });
+  if (!list.length) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'tmpPendBanner'; b.style.cssText = 'margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e;font-size:13px;line-height:1.8;'; host.insertBefore(b, host.firstChild); }
+  b.innerHTML = '📄 <b>ใบส่งของชั่วคราวที่ค้างตั้งแต่ก่อนวันนี้ — ยังไม่ออก INV</b><br>' + list.map(function(x){
+    var nos = {}; x.rows.forEach(function(r){ nos[r.no] = 1; });
+    return '<span style="display:inline-block;margin:2px 6px 2px 0;"><b>' + esc(x.c) + '</b> · ' + x.rows.length + ' รายการ (ใบ ' + esc(Object.keys(nos).join(', ')) + ') ' +
+      '<button onclick="tmpPullCustomer(\'' + esc(x.c).replace(/'/g, "\\'") + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:12px;cursor:pointer;">📥 ดึงเข้าร่าง INV</button></span>';
+  }).join('<br>');
+}
+function tmpPullCustomer(cust){
+  if (invDocType === 'claim') { alert('โหมดเคลมไม่ใช้ใบส่งของชั่วคราว'); return; }
+  if (_editingInvoiceRef) { alert('กำลังแก้ไข INV เดิม — ดึงใบชั่วคราวไม่ได้'); return; }
+  if (invDraft.length && (invDraft[0].customer||'').trim() !== cust) { alert('ร่าง INV ตอนนี้เป็นของลูกค้า "' + (invDraft[0].customer||'-') + '" — บันทึกหรือล้างร่างก่อน แล้วค่อยดึงของ "' + cust + '"'); return; }
+  var rows = tmpPendingForCust(cust, false), added = [], skipped = [];
+  rows.forEach(function(r){
+    var job = jobItems.find(function(j){ return j.id === r.jobId; });
+    if (!job) { skipped.push(r.no + ' · ' + r.partName + ' (ไม่พบบิล)'); return; }
+    var pm = pmLookup(job.partName), wPerUnit = (pm && pm.weightPerPc) ? Number(pm.weightPerPc)/1000 : 0;
+    var found = getPriceForPart(job.partName, job.customer);
+    if (!found || !(found.price > 0)) { skipped.push(r.no + ' · ' + r.partName + ' (ไม่มีราคาในทะเบียนราคา — เพิ่มราคาหรือเพิ่มรายการเอง)'); return; }
+    var isKg = job.unit === 'kg', qty = r.qty;
+    var totalKg = isKg ? qty : qty * wPerUnit;
+    var totalPcs = isKg ? (wPerUnit > 0 ? Math.round(qty / wPerUnit) : 0) : qty;
+    var pu = found.priceUnit || 'pcs';
+    if (pu === 'kg' && !totalKg) { skipped.push(r.no + ' · ' + r.partName + ' (ราคาต่อ กก. แต่ไม่มีน้ำหนัก/ชิ้นใน Part Master)'); return; }
+    var amount = (pu === 'kg') ? money(money(totalKg) * found.price) : money(totalPcs * found.price);
+    invDraft.push({ jobId: job.id, bill: job.bill, partName: job.partName, customer: job.customer||'', unit: job.unit||'pcs', qty: qty,
+      qtyEntered: qty, qtyUnit: isKg ? 'kg' : 'pcs', weightPerUnit: wPerUnit, weight: parseFloat(totalKg.toFixed(3)), pcs: totalPcs,
+      price: found.price, priceUnit: pu, lot: job.custLot ? 'Cust. Lot: ' + job.custLot : '', amount: amount, stockOverride: false, fromTemp: r.no });
+    added.push(r.no + ' · ' + r.partName + ' × ' + qty);
+  });
+  try { renderInvLines(); } catch(e){}
+  try { tmpPendBanner(); } catch(e){}
+  showToast('invline', added.length ? '✅ ดึงใบชั่วคราวเข้าร่าง INV ' + added.length + ' รายการ — ตรวจราคาแล้วบันทึกได้เลย' : 'ไม่มีรายการให้ดึง', added.length ? 'ok' : 'err');
+  if (skipped.length) alert('⚠️ รายการที่ดึงไม่ได้ ต้องเพิ่มเอง:\n' + skipped.join('\n'));
+}
 function tmpLockBanner(rows){
   var host = document.getElementById('v-out'); if (!host) return;
   var b = document.getElementById('tmpLockBanner');
@@ -3166,6 +3221,7 @@ function renderTmpNotes(){
   });
   html += '</table></div>';
   box.innerHTML = html;
+  try { tmpPendBanner(); } catch(e){}
   if (badge) badge.innerHTML = open.length ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:11px;">ค้าง ' + open.length + ' ใบ · ' + nRows + ' รายการ</span>' : '';
 }
 
@@ -4038,6 +4094,7 @@ function removeInvLine(idx) {
 
 // แสดงตารางรายการในบิล INV + คำนวณยอดรวม
 function renderInvLines() {
+  try { tmpPendBanner(); } catch(e){}
   var tbody = document.getElementById('invLineBody');
   var isClaim = (invDocType === 'claim');
   var colCount = isClaim ? 4 : 6;
