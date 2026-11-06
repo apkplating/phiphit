@@ -60,6 +60,21 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 .toast.ok{background:#ecfdf5;color:var(--green);display:block;}
 .toast.err{background:#fef2f2;color:var(--red);display:block;}
 
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+#listView{max-width:1200px;}
+.tbl.cols{min-width:980px;}
+.tbl.cols th{white-space:nowrap;border-bottom:2px solid #cbd5e1;}
+.tbl.cols td{border-bottom:1px solid #e2e8f0;border-right:1px solid #f1f5f9;}
+.tbl.cols tr.grp-end td{border-bottom:2px solid #94a3b8;}
+.tbl.cols td.num{text-align:right;font-weight:700;white-space:nowrap;}
+.tbl.cols td.brk{word-break:break-all;}
+.edmask{position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;}
+.edbox{background:#fff;color:#111;border-radius:14px;max-width:880px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);margin:auto;}
+.edbox input[type=text],.edbox input[type=number],.edbox input[type=date]{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;font-size:13px;}
+.edbox input:disabled{background:#f1f5f9;color:#64748b;}
+.edbox table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.edbox th{background:#f1f5f9;text-align:left;padding:6px;white-space:nowrap;}
+.edbox td{padding:5px;border-bottom:1px solid #e2e8f0;vertical-align:middle;}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
 .tbl th{background:#f1f5f9;text-align:left;padding:6px;font-weight:700;}
 .tbl td{padding:6px;border-bottom:1px solid #e2e8f0;vertical-align:top;}
@@ -394,7 +409,7 @@ function tdLastInv(cust){
 function tdOverdueNotes(cust){
   var today = bkkToday(), last = tdLastInv(cust);
   return notes.filter(function(n){
-    if (n.status !== 'open' || (n.customer||'').trim() !== cust) return false;
+    if (n.status !== 'open' || n.frozen || (n.customer||'').trim() !== cust) return false;
     if (!(n.lines||[]).some(function(l){ return !l.convertedTo; })) return false;
     if (!(tdWorkdays(n.date) > 3) || last > (n.date||'')) return false;
     return !(n.lines||[]).some(function(l){ var d = (dueMap[tdDueKey(l.jobId)]||{}).due; return d && d >= today; });
@@ -408,10 +423,7 @@ function tdFifoBlockers(j){
     return jobRemain(x) - used > 0.0001;
   }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 }
-function tdCustBlock(cust){
-  var od = tdOverdueNotes((cust||'').trim());
-  return od.length ? ('🚫 ลูกค้า "' + cust + '" มีใบส่งของชั่วคราวค้างเกิน 3 วันทำการโดยยังไม่ออก INV (' + od.map(function(n){ return n.no; }).join(', ') + ') — ทำใบใหม่ให้ลูกค้ารายนี้ไม่ได้ ต้องออก INV ที่ Job Master ก่อน') : '';
-}
+function tdCustBlock(cust){ return ''; }   // เลิกล็อกลูกค้าที่มีใบค้างเกิน 3 วันทำการแล้ว (ตามสั่ง) — เดิม: บล็อกการออกใบใหม่
 function addLine(){
   var id = $('tmpJobSel').value, qty = parseFloat($('tmpQty').value) || 0;
   if (window._grp && window._grp.length > 1) {
@@ -512,7 +524,7 @@ function saveNote(){
 
 // ── รายการ / ยกเลิก ──
 function canCancel(n){
-  if (n.status !== 'open') return false;
+  if (n.status !== 'open' || n.frozen) return false;
   if (isAdmin()) return true;
   // พนักงาน: ยกเลิกได้เฉพาะใบที่ตัวเองบันทึก ภายในวันเดียวกัน (ตามเวลาไทย)
   var sameDay = n.createdAt && new Date(new Date(n.createdAt).getTime()+7*3600*1000).toISOString().slice(0,10) === bkkToday();
@@ -533,22 +545,142 @@ function cancelNote(id){
 function linesText(n){
   return (n.lines||[]).map(function(l){ return esc(l.partName) + (lotTxt(l) ? ' <span class="hint" style="display:inline;">['+lotTxt(l)+']</span>' : '') + ' × ' + l.qty + (l.unit==='kg'?' กก.':' ชิ้น') + (l.convertedTo ? ' <span class="pill done">INV ' + esc(l.convertedTo) + '</span>' : ''); }).join('<br>');
 }
+// ── ตารางแยกคอลัมน์: 1 แถว = 1 รายการชิ้นงาน (เซลล์ของใบ rowspan ตามจำนวนรายการ) ──
+function noteStatusCell(n, withDays){
+  var lines = n.lines||[], conv = lines.filter(function(l){ return l.convertedTo; }).length;
+  if (n.frozen) return '<span class="pill cancel">ยกเลิก (ไม่คืนสต๊อก)</span><div class="hint">'+esc(n.cancelledBy||'')+(n.cancelReason?' · '+esc(n.cancelReason):'')+'</div>';
+  if (n.status === 'cancelled') return '<span class="pill cancel">ยกเลิก</span><div class="hint">'+esc(n.cancelledBy||'')+(n.cancelReason?' · '+esc(n.cancelReason):'')+'</div>';
+  if (n.status === 'open') {
+    var d = daysSince(n.date);
+    return (conv ? '<span class="pill open">ออก INV บางส่วน</span>' : '<span class="pill open">ค้างออก INV</span>') + (withDays ? '<div style="font-weight:700;color:'+(tdWorkdays(n.date)>3?'#dc2626':'#92400e')+';margin-top:3px;">'+d+' วัน</div>' : '');
+  }
+  return '<span class="pill done">ออก INV แล้ว</span>';
+}
+function noteActions(n){
+  var id = esc(n.id);
+  return '<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin:0 0 4px 0;" onclick="printNote(\''+id+'\')">🖨️ พิมพ์</button>' +
+    (canEditNote(n) ? '<br><button class="btn-x" style="background:#fef3c7;color:#92400e;margin:0 0 4px 0;" onclick="editNote(\''+id+'\')">✏️ แก้ไข</button>' : '') +
+    (canCancel(n) ? '<br><button class="btn-x" onclick="cancelNote(\''+id+'\')">ยกเลิก</button>' : '');
+}
+function notesTable(list, withDays){
+  var head = '<tr><th>เลขที่บิล</th><th>วันที่ส่ง</th><th>ลูกค้า</th><th>P/No</th><th>บิลรับเข้า</th><th>Pro Lot No.</th><th>Cust. Lot No.</th><th style="text-align:right">จำนวน</th><th>INV</th><th>สถานะ</th><th></th></tr>';
+  var body = list.map(function(n){
+    var lines = n.lines && n.lines.length ? n.lines : [{}], c = lines.length;
+    return lines.map(function(l,i){
+      var first = i === 0, last = i === c-1;
+      var tdn = first ? '<td rowspan="'+c+'"><b>'+esc(n.no)+'</b>'+(n.by?'<div class="hint">'+esc(n.by)+'</div>':'')+(n.note?'<div class="hint">📝 '+esc(n.note)+'</div>':'')+(n.editedAt?'<div class="hint" style="color:#92400e;">✏️ แก้ไขโดย '+esc(n.editedBy||'')+'</div>':'')+'</td><td rowspan="'+c+'" style="white-space:nowrap;">'+fmtDate(n.date)+'</td><td rowspan="'+c+'">'+esc(n.customer||'')+'</td>' : '';
+      var tdl = '<td>'+esc(l.partName||'')+'</td><td class="brk">'+esc(l.bill||'-')+'</td><td class="brk">'+esc(l.proLot||'-')+'</td><td class="brk">'+esc(l.custLot||'-')+'</td><td class="num">'+(l.qty==null?'':Number(l.qty).toLocaleString())+' <span class="hint" style="display:inline;font-weight:400;">'+(l.unit==='kg'?'กก.':'ชิ้น')+'</span></td><td>'+(l.convertedTo?'<span class="pill done">'+esc(l.convertedTo)+'</span>':'<span class="hint">ยังไม่ออก</span>')+'</td>';
+      var tds = first ? '<td rowspan="'+c+'">'+noteStatusCell(n, withDays)+'</td><td rowspan="'+c+'" style="white-space:nowrap;">'+noteActions(n)+'</td>' : '';
+      return '<tr'+(last?' class="grp-end"':'')+'>'+tdn+tdl+tds+'</tr>';
+    }).join('');
+  }).join('');
+  return '<div class="tbl-wrap"><table class="tbl cols">'+head+body+'</table></div>';
+}
 function renderLists(){
-  var open = notes.filter(function(n){ return n.status === 'open'; }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  var open = notes.filter(function(n){ return n.status === 'open' && !n.frozen; }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
   $('openCount').textContent = open.length ? '(' + open.length + ' ใบ)' : '';
-  $('openList').innerHTML = !open.length ? '<div class="hint">ไม่มีใบที่ค้างออก INV</div>' :
-    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>ลูกค้า / รายการ</th><th>ค้าง</th><th></th></tr>' + open.map(function(n){
-      var d = daysSince(n.date);
-      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+' · '+esc(n.by||'')+'</div></td><td>'+esc(n.customer||'')+'<div class="hint">'+linesText(n)+'</div>'+(n.note?'<div class="hint">📝 '+esc(n.note)+'</div>':'')+'</td>' +
-        '<td style="white-space:nowrap;font-weight:700;color:'+(tdWorkdays(n.date)>3?'#dc2626':'#92400e')+';">'+d+' วัน'+(tdWorkdays(n.date)>3?'<div class="hint" style="color:#dc2626;">🔒 เกิน 3 วันทำการ</div>':'')+'</td><td>'+'<button class="btn-x" style="background:#eff6ff;color:#1d4ed8;margin-bottom:4px;" onclick="printNote(\''+esc(n.id)+'\')">🖨️ พิมพ์</button> '+(canCancel(n)?'<button class="btn-x" onclick="cancelNote(\''+esc(n.id)+'\')">ยกเลิก</button>':'')+'</td></tr>';
-    }).join('') + '</table>';
+  $('openList').innerHTML = !open.length ? '<div class="hint">ไม่มีใบที่ค้างออก INV</div>' : notesTable(open, true);
   var cut = Date.now() - 30*86400000;
-  var hist = notes.filter(function(n){ return n.status !== 'open' && new Date(n.createdAt||n.date||0).getTime() >= cut; })
+  var hist = notes.filter(function(n){ return (n.status !== 'open' || n.frozen) && new Date(n.createdAt||n.date||0).getTime() >= cut; })
     .sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
-  $('histList').innerHTML = !hist.length ? '<div class="hint">ยังไม่มีประวัติ</div>' :
-    '<table class="tbl"><tr><th>เลขที่ / วันที่</th><th>รายการ</th><th>สถานะ</th><th></th></tr>' + hist.map(function(n){
-      return '<tr><td><b>'+esc(n.no)+'</b><div class="hint">'+fmtDate(n.date)+'</div></td><td>'+linesText(n)+'</td><td>'+(n.status==='cancelled'?'<span class="pill cancel">ยกเลิก</span><div class="hint">'+esc(n.cancelledBy||'')+'</div>':'<span class="pill done">ออก INV แล้ว</span>')+'</td><td><button class="btn-x" style="background:#eff6ff;color:#1d4ed8;" onclick="printNote(\''+esc(n.id)+'\')">🖨️</button></td></tr>';
-    }).join('') + '</table>';
+  $('histList').innerHTML = !hist.length ? '<div class="hint">ยังไม่มีประวัติ</div>' : notesTable(hist, false);
+}
+
+// ── แอดมินแก้ไขรายการละเอียด ──
+function canEditNote(n){ return isAdmin() && n && n.status !== 'cancelled' && !n.frozen; }
+var _ed = null;   // { id, snap }
+function editNote(id){
+  var n = notes.find(function(x){ return x.id === id; });
+  if (!canEditNote(n)) { showToast('🚫 แก้ไขได้เฉพาะแอดมิน และใบที่ยังไม่ถูกยกเลิก', 'err'); return; }
+  _ed = { id: id, snap: JSON.parse(JSON.stringify(n)) };
+  var ym = String(n.date||'').slice(0,7);
+  var rows = (n.lines||[]).map(function(l,i){
+    var cv = !!l.convertedTo, kg = l.unit === 'kg';
+    return '<tr><td>'+(i+1)+'</td><td>'+esc(l.partName||'')+'</td><td>'+esc(l.bill||'-')+'</td>'+
+      '<td style="width:17%"><input type="text" id="edP'+i+'" value="'+esc(l.proLot||'')+'"></td>'+
+      '<td style="width:19%"><input type="text" id="edC'+i+'" value="'+esc(l.custLot||'')+'"></td>'+
+      '<td style="width:15%"><input type="number" id="edQ'+i+'" value="'+esc(l.qty)+'" min="0" step="'+(kg?'0.001':'1')+'" '+(cv?'disabled title="ออก INV แล้ว — แก้จำนวนไม่ได้"':'')+'> <span class="hint" style="display:inline;">'+(kg?'กก.':'ชิ้น')+'</span></td>'+
+      '<td>'+(cv?'<span class="pill done">'+esc(l.convertedTo)+'</span>':'<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" id="edD'+i+'"> ลบ</label>')+'</td></tr>';
+  }).join('');
+  var m = document.createElement('div'); m.className = 'edmask'; m.id = 'edMask';
+  m.innerHTML = '<div class="edbox"><div style="font-size:17px;font-weight:700;margin-bottom:4px;">✏️ แก้ไขใบ '+esc(n.no)+' <span class="hint" style="display:inline;">('+esc(n.customer||'')+')</span></div>'+
+    '<div class="hint" style="margin-bottom:10px;">แก้จำนวนแล้วสต็อกใน Job Master ปรับตามอัตโนมัติ · รายการที่ออก INV แล้วแก้จำนวนหรือลบไม่ได้ · การแก้ Pro Lot No./Cust. Lot No. แก้เฉพาะในใบนี้ ไม่แก้ INV ที่ออกไปแล้ว · P/No และบิลรับเข้าแก้ไม่ได้ (ถ้าผิดให้ยกเลิกแล้วออกใบใหม่)</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;"><div style="flex:1;min-width:150px;"><div class="hint">วันที่ส่ง (ต้องอยู่เดือนเดียวกับเลขที่บิล)</div><input type="date" id="edDate" value="'+esc(String(n.date||'').slice(0,10))+'" min="'+ym+'-01" max="'+ym+'-31"></div>'+
+    '<div style="flex:2;min-width:220px;"><div class="hint">หมายเหตุ</div><input type="text" id="edMemo" value="'+esc(n.note||'')+'"></div></div>'+
+    '<div class="tbl-wrap"><table><tr><th>#</th><th>P/No</th><th>บิลรับเข้า</th><th>Pro Lot No.</th><th>Cust. Lot No.</th><th>จำนวน</th><th></th></tr>'+rows+'</table></div>'+
+    '<div style="margin-top:12px;"><div class="hint">เหตุผลที่แก้ไข (จำเป็น — บันทึกไว้ตรวจย้อนหลัง)</div><input type="text" id="edWhy" placeholder="เช่น พิมพ์จำนวนผิด / ใส่ Cust. Lot ไม่ครบ"></div>'+
+    '<div id="edErr" style="color:#b91c1c;font-weight:700;margin-top:8px;"></div>'+
+    '<div style="display:flex;gap:10px;margin-top:12px;justify-content:flex-end;"><button class="btn-x" style="padding:9px 18px;font-size:14px;" onclick="editNoteClose()">ปิด</button><button id="edSave" style="padding:9px 22px;font-size:14px;font-weight:700;border:0;border-radius:8px;background:#1d4ed8;color:#fff;cursor:pointer;font-family:inherit;" onclick="editNoteSave()">💾 บันทึกการแก้ไข</button></div></div>';
+  document.body.appendChild(m);
+}
+function editNoteClose(){ var m = $('edMask'); if (m) m.remove(); _ed = null; }
+function editNoteSave(){
+  if (!_ed || !isAdmin()) return;
+  var err = function(t){ $('edErr').textContent = t; };
+  var snap = _ed.snap, id = _ed.id;
+  var why = $('edWhy').value.trim(); if (!why) { err('ต้องใส่เหตุผลที่แก้ไข'); return; }
+  var date = $('edDate').value, memo = $('edMemo').value.trim();
+  if (!date) { err('กรุณาระบุวันที่ส่ง'); return; }
+  if (date.slice(0,7) !== String(snap.date||'').slice(0,7)) { err('วันที่ต้องอยู่เดือนเดียวกับเลขที่บิล ('+snap.no+') — ถ้าผิดเดือนให้ยกเลิกแล้วออกใบใหม่'); return; }
+  var newLines = [], dels = 0, delta = {};
+  for (var i = 0; i < snap.lines.length; i++) {
+    var l = JSON.parse(JSON.stringify(snap.lines[i]));
+    if (!l.convertedTo) {
+      var del = $('edD'+i) && $('edD'+i).checked;
+      if (del) { dels++; delta[l.jobId] = (delta[l.jobId]||0) - Number(l.qty); continue; }
+      var q = parseFloat($('edQ'+i).value);
+      if (!(q > 0)) { err('รายการที่ '+(i+1)+': จำนวนต้องมากกว่า 0 (ถ้าไม่ส่งแล้วให้ติ๊ก "ลบ")'); return; }
+      if (l.unit !== 'kg' && Math.floor(q) !== q) { err('รายการที่ '+(i+1)+': จำนวนชิ้นต้องเป็นจำนวนเต็ม'); return; }
+      delta[l.jobId] = (delta[l.jobId]||0) + (q - Number(snap.lines[i].qty));
+      l.qty = q;
+    }
+    l.proLot = $('edP'+i).value.trim(); l.custLot = $('edC'+i).value.trim();
+    newLines.push(l);
+  }
+  if (!newLines.length) { err('ลบทุกรายการไม่ได้ — ถ้าไม่ส่งของแล้วให้ใช้ปุ่ม "ยกเลิก"'); return; }
+  var btn = $('edSave'); btn.disabled = true; err('⏳ กำลังตรวจข้อมูลล่าสุด...');
+  Promise.all([ getJSON(TMP_URL + '.json'), getJSON(DB + '/job-master/items.json'), getJSON(DB + '/job-master/records.json'), getJSON(DB + '/job-master/invoices.json') ]).then(function(res){
+    notes = toArr(res[0]); jobItems = toArr(res[1]); recByJob = {};
+    toArr(res[2]).forEach(function(r){ (recByJob[r.jobId] = recByJob[r.jobId] || []).push(r); });
+    invNoSet = {}; toArr(res[3]).forEach(function(x){ if (x.invNo) invNoSet[x.invNo] = true; });
+    var cur = notes.find(function(x){ return x.id === id; });
+    if (!cur || cur.status === 'cancelled' || cur.frozen) throw { user: 'ใบนี้ถูกยกเลิกไปแล้ว แก้ไขไม่ได้' };
+    var same = cur.lines.length === snap.lines.length && cur.lines.every(function(l,k){ return l.jobId === snap.lines[k].jobId && (l.convertedTo||'') === (snap.lines[k].convertedTo||'') && Number(l.qty) === Number(snap.lines[k].qty); });
+    if (!same) throw { user: 'ใบนี้ถูกแก้ไข/ออก INV โดยคนอื่นระหว่างที่เปิดหน้าต่างนี้ — ปิดแล้วเปิดแก้ไขใหม่อีกครั้ง' };
+    // ตรวจคงเหลือ: จำนวนที่เพิ่มขึ้นสุทธิต่อบิล ต้องไม่เกินคงเหลือ (คงเหลือล่าสุดหักจำนวนเดิมของใบนี้ไปแล้ว)
+    var bad = Object.keys(delta).filter(function(jid){
+      if (delta[jid] <= 0.0001) return false;
+      var j = jobItems.find(function(x){ return x.id === jid; });
+      return !j || delta[jid] > jobRemain(j) + 0.0001;
+    });
+    if (bad.length) { var jb = jobItems.find(function(x){ return x.id === bad[0]; }); throw { user: '⚠️ จำนวนที่เพิ่มเกินคงเหลือของบิล' + (jb ? ' '+(jb.bill||'')+' ('+jb.partName+') — เพิ่มได้อีกไม่เกิน '+jobRemain(jb) : '') }; }
+    // สรุปสิ่งที่เปลี่ยน (เก็บใน editLog)
+    var ch = [];
+    if (String(cur.date||'').slice(0,10) !== date) ch.push('วันที่ '+fmtDate(cur.date)+' → '+fmtDate(date));
+    if ((cur.note||'') !== memo) ch.push('หมายเหตุ "'+(cur.note||'')+'" → "'+memo+'"');
+    var nj = 0;
+    cur.lines.forEach(function(ol, k){
+      var chk = $('edD'+k);
+      if (!ol.convertedTo && chk && chk.checked) { ch.push('ลบรายการ '+ol.partName+' ('+ol.qty+')'); return; }
+      var nl = newLines[nj++]; var t = [];
+      if (Number(nl.qty) !== Number(ol.qty)) t.push('จำนวน '+ol.qty+' → '+nl.qty);
+      if ((nl.proLot||'') !== (ol.proLot||'')) t.push('Pro Lot No. "'+(ol.proLot||'')+'" → "'+(nl.proLot||'')+'"');
+      if ((nl.custLot||'') !== (ol.custLot||'')) t.push('Cust. Lot No. "'+(ol.custLot||'')+'" → "'+(nl.custLot||'')+'"');
+      if (t.length) ch.push(ol.partName+': '+t.join(', '));
+    });
+    if (!ch.length) throw { user: 'ไม่มีอะไรเปลี่ยน' };
+    var upd = JSON.parse(JSON.stringify(cur));
+    upd.date = date; upd.note = memo; upd.lines = newLines;
+    upd.editedBy = myName(); upd.editedAt = new Date().toISOString();
+    upd.editLog = (Array.isArray(upd.editLog) ? upd.editLog : []).concat([{ at: upd.editedAt, by: myName(), why: why, changes: ch }]);
+    return fetch(TMP_URL + '/' + encodeURIComponent(id) + '.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(upd) })
+      .then(function(r){ if (!r.ok) throw { user: 'บันทึกไม่สำเร็จ (HTTP '+r.status+') — ตรวจ Tailscale แล้วลองใหม่' }; var ix = notes.findIndex(function(x){ return x.id === id; }); if (ix >= 0) notes[ix] = upd; return upd; });
+  }).then(function(upd){
+    editNoteClose(); renderLists(); showToast('✅ แก้ไขใบ '+upd.no+' แล้ว ('+upd.editLog[upd.editLog.length-1].changes.length+' จุด)', 'ok');
+  }).catch(function(e){
+    var b = $('edSave'); if (b) b.disabled = false;
+    if ($('edErr')) $('edErr').textContent = (e && e.user) || '⚠️ บันทึกไม่สำเร็จ — ตรวจ Tailscale แล้วลองใหม่';
+  });
 }
 
 function printNote(id){
