@@ -1386,6 +1386,14 @@ function qcBuildBills(){
     var closed = !!j.closed || !!bf;
     if (avail <= 0) {
       // ตรวจครบพอดี → แสดงเฉพาะในรายการ "ตรวจแล้วรอออก INV"; ตรวจเกินบิล → ถือว่าจบบิล ไม่แสดงอีก
+      // กติกาใหม่: ตรวจครบตามยอดรับเข้าแล้ว แต่ JM ยังค้าง → ยังเลือกตรวจเพิ่มได้ ไม่เกินยอดค้าง JM (หักส่วนที่ตรวจเกินไปแล้ว) · นับเป็น "ตรวจเกินบิล"
+      var overDone = Math.max(0, u - received);
+      var extraCap = (jmRem == null) ? 0 : Math.max(0, jmRem - overDone);
+      if (!closed && extraCap > 0) {
+        list.push({ id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
+          received:received, used:u, avail:extraCap, remain:extraCap, jmRemain:jmRem, waitInv:waitInv, closed:false, closedBill:false, locked:false, over:true, overDone:overDone });
+        return;
+      }
       if (avail === 0 && !closed) qcWaitInv.push({ bill:String(j.bill).trim(), customer:j.customer||'', received:received, used:u, jmRemain:jmRem, waitInv:waitInv, date:j.date||'' });
       return;
     }
@@ -1393,7 +1401,7 @@ function qcBuildBills(){
     list.push({ id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, avail:avail, remain:avail, jmRemain:jmRem, waitInv:waitInv, closed:closed, closedBill:!!bf, locked:closed });
   });
-  list.sort(function(a,b){ var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลเก่าสุดก่อน (FIFO)
+  list.sort(function(a,b){ if (!!a.over !== !!b.over) return a.over ? 1 : -1; var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลที่ยังไม่ได้ตรวจเก่าสุดก่อน (FIFO) · บิล "ตรวจครบแล้วแต่ JM ยังค้าง" ไว้ท้ายสุด
   qcWaitInv.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
   return list;
 }
@@ -1571,9 +1579,9 @@ function qcRenderLots(){
       if (!b.closed) act = ' <a href="#" onclick="event.stopPropagation();qcCloseBillV2(\''+esc(b.id)+'\');return false;" style="float:right;color:#9a3412;font-size:11px;">จบบิล</a>';
       else if (b.closedBill) act = ' <a href="#" onclick="event.stopPropagation();qcReopenBillV2(\''+esc(b.id)+'\');return false;" style="float:right;font-size:11px;">เปิดคืน</a>';
     }
-    return '<div style="border:1.5px solid '+(b.closed?'#94a3b8':'#bbf7d0')+';background:'+(b.closed?'#f1f5f9':'#fff')+';border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
-      + '<span style="color:#64748b;font-size:11px;">'+(i+1)+'.</span> '+(b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:#15803d;">['+esc(b.bill)+']</b> '
-      + 'รับเข้า '+b.received.toLocaleString()+' · ตรวจแล้ว '+b.used.toLocaleString()+' · <b>คงเหลือรอตรวจ '+b.avail.toLocaleString()+'</b>'
+    return '<div style="border:1.5px solid '+(b.closed?'#94a3b8':(b.over?'#fcd34d':'#bbf7d0'))+';background:'+(b.closed?'#f1f5f9':(b.over?'#fffbeb':'#fff'))+';border-radius:8px;padding:6px 8px;margin-bottom:6px;">'
+      + '<span style="color:#64748b;font-size:11px;">'+(i+1)+'.</span> '+(b.closed?'🔒 ':'')+'<b style="font-family:\'IBM Plex Mono\',monospace;color:'+(b.over?'#b45309':'#15803d')+';">['+esc(b.bill)+']</b> '
+      + 'รับเข้า '+b.received.toLocaleString()+' · ตรวจแล้ว '+b.used.toLocaleString()+(b.over ? ' · <b style="color:#b45309;">ตรวจครบแล้ว แต่ JM ยังค้าง — ตรวจเพิ่มได้ไม่เกิน '+b.avail.toLocaleString()+' (นับเป็นตรวจเกินบิล)</b>' : ' · <b>คงเหลือรอตรวจ '+b.avail.toLocaleString()+'</b>')
       + (b.waitInv ? ' · <span style="color:#92400e;">ตรวจแล้วรอออก INV '+b.waitInv.toLocaleString()+'</span>' : '')
       + (b.jmRemain != null ? ' <span style="color:#64748b;font-size:11px;">(ยอดค้าง JM '+b.jmRemain.toLocaleString()+')</span>' : '') + act
       + '<div style="font-size:10.5px;color:var(--text-muted);">'+esc(b.customer)+' · รับเข้า '+esc(d)+(b.custLot?' · Customer Lot No. '+esc(b.custLot):'')+'</div></div>';
@@ -1595,6 +1603,8 @@ function qcUpdateAlloc(){
     h += '<tr style="border-top:1px solid #e5e7eb;"><td style="padding:3px 5px;font-family:monospace;">'+esc(g.bill.bill)+'</td><td>['+esc(g.lot.line)+'] '+esc(g.lot.lot)+'</td><td style="text-align:right;">'+g.ok.toLocaleString()+'</td><td style="text-align:right;">'+g.scrap.toLocaleString()+'</td><td style="text-align:right;">'+g.ng.toLocaleString()+'</td><td style="text-align:right;font-weight:700;">'+(g.ok+g.scrap).toLocaleString()+'</td><td style="text-align:right;">'+Math.max(0, after[g.bill.id]).toLocaleString()+'</td></tr>';
   });
   h += '</table>';
+  var _ov = p.groups.filter(function(g){ return g.bill.over; }).reduce(function(sm,g){ return sm + g.ok + g.scrap; }, 0);
+  if (_ov > 0) h += '<div style="color:#b45309;font-weight:700;margin-top:3px;">⚠️ เกินบิล: ตรวจเพิ่ม '+_ov.toLocaleString()+' ชิ้น จากบิลที่ตรวจครบตามยอดรับเข้าแล้ว (JM ยังค้างอยู่) — บันทึกได้ ระบบติดธงตรวจเกินบิลไว้</div>';
   if (p.excess > 0) h += '<div style="color:#b45309;font-weight:700;margin-top:3px;">⚠️ ยอดเกินบิล '+p.excess.toLocaleString()+' ชิ้น — ตัดเข้าบิล '+esc(p.lastBill.bill)+' และถือว่าจบบิลอัตโนมัติ (ไม่นำยอดเกินไปใช้ต่อ)</div>';
   if (p.noLink.length) {
     // แจ้งเตือนเท่านั้น (ไม่บล็อก) — Pro Lot นี้ยังไม่มีเลขบิลในบันทึกชุบ V4/5/6 บันทึก QC ได้ปกติ ระบบติดธง noBillLink ไว้ให้ฝ่ายผลิตตามเติมทีหลัง
@@ -1678,7 +1688,8 @@ function qcSaveRecord(){
       qtyInspect:g.insp, qtyOK:g.ok, qtyNG:g.ng, percentNG:g.insp?(g.ng/g.insp*100):0,
       defects: i === 0 ? defects : [], inspector:inspector,
       overBill: (p.excess > 0 && b.id === p.lastBill.id && i === p.groups.length-1) ? p.excess : 0,
-      noBillLink: !qcLotLinked(g.lot, b)
+      noBillLink: !qcLotLinked(g.lot, b),
+      overJm: b.over ? (g.ok + g.scrap) : 0
     };
   });
   var byLine = {}; recs.forEach(function(r){ (byLine[r.line] = byLine[r.line] || []).push(r); });
@@ -1695,6 +1706,51 @@ function qcSaveRecord(){
     setTimeout(function(){ toast.className='toast'; }, 3500);
   });
 }
+</script>
+<script>
+// ═══ QC100: เปิดได้แท็บเดียว (แท็บใหม่ทับแท็บเก่า) + หน้าจอพักแล้วกลับหน้าแรก ═══
+(function(){
+  var QC_IDLE_MS = 60*1000;               // ซ่อนหน้า/จอดับเกินกี่วินาทีถึงถือว่า "พักจอ" แล้วกลับหน้าแรก
+  var myId = String(Date.now()) + '-' + Math.random().toString(36).slice(2,8);
+  var bc = null;
+  try { if (window.BroadcastChannel) bc = new BroadcastChannel('apk-qc100-single'); } catch(e){}
+  function onClaim(id){ if (id !== myId) location.replace('index.html'); }   // แท็บใหม่ทับแท็บเก่า: แท็บเก่ากลับหน้าแรกเอง
+  function claim(){
+    try { if (bc) bc.postMessage({t:'claim', id:myId}); } catch(e){}
+    try { localStorage.setItem('qc100_tab_claim', myId + '|' + Date.now()); } catch(e){}
+  }
+  if (bc) bc.onmessage = function(ev){ if (ev.data && ev.data.t === 'claim') onClaim(ev.data.id); };
+  window.addEventListener('storage', function(ev){
+    if (ev.key === 'qc100_tab_claim' && ev.newValue) onClaim(String(ev.newValue).split('|')[0]);
+  });
+  claim();
+
+  // ── หน้าจอพัก/ซ่อนแท็บนานเกินกำหนด แล้วกลับมา → ล้างการเข้าสู่ระบบ + กลับหน้าแรก ──
+  var hiddenAt = 0, lastBeat = Date.now();
+  function goHome(){
+    try { if (typeof clearSession === 'function') clearSession(); } catch(e){}
+    try { sessionStorage.removeItem('qc100_hid'); } catch(e){}
+    location.replace('index.html');
+  }
+  function checkWake(){
+    var t = hiddenAt;
+    if (!t) { try { t = +sessionStorage.getItem('qc100_hid') || 0; } catch(e){} }
+    hiddenAt = 0; try { sessionStorage.removeItem('qc100_hid'); } catch(e){}
+    if (t && Date.now() - t >= QC_IDLE_MS && typeof session !== 'undefined' && session) goHome();
+  }
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden) { hiddenAt = Date.now(); try { sessionStorage.setItem('qc100_hid', String(hiddenAt)); } catch(e){} }
+    else checkWake();
+  });
+  window.addEventListener('pageshow', function(ev){ if (ev.persisted) checkWake(); });
+  // สำรอง: บางเครื่องไม่ยิง visibilitychange ตอนจอดับ — ดูจากนาฬิกาที่ "กระโดด"
+  setInterval(function(){
+    var n = Date.now();
+    if (n - lastBeat >= QC_IDLE_MS && typeof session !== 'undefined' && session) { lastBeat = n; goHome(); return; }
+    lastBeat = n;
+  }, 5000);
+  window.__qcSingle = { claim:claim, goHome:goHome };
+})();
 </script>
 </body>
 </html>
