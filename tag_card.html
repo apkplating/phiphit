@@ -219,6 +219,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
     </div>
 
     <button class="btn btn-primary" onclick="printTags()" style="margin-top:14px;">🖨️ พิมพ์ Tag (ประทับ QC PASS อัตโนมัติ)</button>
+    <button type="button" class="btn btn-secondary" onclick="tgReprintOpen()" style="margin-top:8px;width:100%;">🔁 พิมพ์ซ้ำ (เมื่อพิมพ์เดิมไม่ออก — ไม่ตัดยอดบิลเพิ่ม)</button>
     <div id="toast" class="toast"></div>
   </div>
 
@@ -4504,6 +4505,61 @@ function _mkPrintWin(){
   return api;
 }
 function _openPrintWin(){ var w = _preWin; _preWin = null; if (w && !w.closed) return w; w = _mkPrintWin(); _pstWinInit(w); return w; }
+// ── พิมพ์ซ้ำ: ใช้เมื่อเครื่องพิมพ์ไม่ออก/กระดาษเสีย — พิมพ์ Tag ชุดเดิมอีกครั้งโดย "ไม่ตัดยอดบิลเพิ่ม" ──
+async function tgReprintOpen(){
+  var pn = String($('tgPartNo').value||'').trim().toLowerCase();
+  if (!pn) { showToast('⚠️ เลือก P/No ก่อน', 'err'); return; }
+  var d = $('tgRpBox'); if (d) d.remove();
+  d = document.createElement('div'); d.id = 'tgRpBox';
+  d.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML = '<div style="background:#fff;border-radius:10px;padding:16px;max-width:720px;width:100%;max-height:85vh;overflow:auto;"><div style="font-weight:700;margin-bottom:4px;">🔁 พิมพ์ซ้ำ — '+esc($('tgPartNo').value)+' <span style="font-weight:400;color:#64748b;font-size:12px;">(ย้อนหลัง 30 วัน)</span></div><div style="font-size:12px;color:#92400e;margin-bottom:8px;">ใช้เมื่อพิมพ์เดิมไม่ออกจริง ๆ — ระบบไม่ตัดยอดบิลเพิ่ม และบันทึกว่าใครพิมพ์ซ้ำเมื่อไร · ถ้า Tag ใบเดิมออกมาแล้วต้องทำลายทิ้ง ห้ามติดสินค้าซ้ำ</div><div id="tgRpBody">⏳ กำลังโหลดประวัติพิมพ์…</div><div style="text-align:right;margin-top:10px;"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'tgRpBox\').remove()">ปิดหน้าต่าง</button></div></div>';
+  document.body.appendChild(d);
+  var body = $('tgRpBody'), log = {};
+  try { log = (await fetchJsonWithTimeout(FB_LINES.B1 + '/tag-print-log.json', 10000)) || {}; }
+  catch(e){ log = {}; body.textContent = ''; }
+  try { _tagPendLoad().forEach(function(r){ if (r && r.id && !log[r.id]) log[r.id] = r; }); } catch(e){}   // รวมที่ยังค้างส่งในเครื่อง (ออฟไลน์)
+  var cut = Date.now() - 30*86400000;
+  var rows = Object.keys(log).map(function(k){ return log[k]; }).filter(function(x){ return x && String(x.partNo||'').trim().toLowerCase() === pn && (x.ts||0) >= cut; }).sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if (!rows.length) { body.textContent = 'ไม่พบประวัติพิมพ์ของ P/No นี้ใน 30 วัน (หรือโหลดประวัติจาก NAS ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่)'; return; }
+  // รวมรายการที่พิมพ์ในครั้งเดียวกัน (คนเดียวกัน เวลาห่างกันไม่เกิน 10 วินาที) เป็น 1 รอบพิมพ์
+  var batches = [];
+  rows.forEach(function(x){
+    var b = batches[batches.length-1];
+    if (b && b.by === (x.by||'') && Math.abs(b.ts - (x.ts||0)) <= 10000) { b.items.push(x); b.ts = Math.min(b.ts, x.ts||0); }
+    else batches.push({ by:x.by||'', ts:x.ts||0, items:[x] });
+  });
+  batches = batches.slice(0, 15); window._tgRpBatches = batches;
+  body.innerHTML = batches.map(function(b, i){
+    var t = new Date(b.ts).toLocaleString('th-TH',{hour12:false});
+    var tot = b.items.reduce(function(s,x){ return s + Number(x.tags||0); }, 0);
+    return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eee;font-size:13px;"><span><b>'+esc(t)+'</b> · '+esc(b.by)+' · '+tot+' ใบ<br>'+b.items.map(function(x){ return '<small style="color:#475569;">'+(x.bill?'บิล '+esc(x.bill)+' · ':'')+'Pro Lot '+esc(x.lot)+(x.line?' ('+esc(x.line)+')':'')+' : '+esc(x.tags)+' ใบ × '+esc(x.qtyPerTag)+' = '+Number(x.qtyPcs||0).toLocaleString()+' ชิ้น</small>'; }).join('<br>')+'</span><button type="button" class="btn btn-primary" style="white-space:nowrap;padding:8px 12px;" onclick="tgReprintDo('+i+')">🔁 พิมพ์ซ้ำ</button></div>';
+  }).join('');
+}
+function tgReprintDo(i){
+  var b = (window._tgRpBatches||[])[i]; if (!b) return;
+  var first = b.items[0];
+  var inspBy = first.inspBy || String($('tgInspBy').value||'').trim();
+  var cust = first.cust || String($('tgCust').value||'').trim();
+  var partNo = String($('tgPartNo').value||'').trim();
+  if (!inspBy) { showToast('🚫 ไม่พบชื่อผู้ตรวจสอบ — เลือกบิลจาก QC 100% ในหน้าให้มีชื่อผู้ตรวจก่อน แล้วลองใหม่', 'err'); return; }
+  var tags = b.items.reduce(function(s,x){ return s + Number(x.tags||0); }, 0);
+  var pcs = b.items.reduce(function(s,x){ return s + Number(x.qtyPcs||0); }, 0);
+  tgConfirm('พิมพ์ซ้ำ Tag ชุดเดิม ' + tags + ' ใบ (' + pcs.toLocaleString() + ' ชิ้น)\nไม่ตัดยอดบิลเพิ่ม · บันทึกไว้ว่า ' + ((session&&session.user&&session.user.name)||'') + ' พิมพ์ซ้ำ\n\nใช้เมื่อพิมพ์เดิมไม่ออกเท่านั้น', 'พิมพ์ซ้ำเลย', 'ยกเลิก').then(function(ok){
+    if (!ok) return;
+    var box = $('tgRpBox'); if (box) box.remove();
+    var groups = b.items.map(function(x){ return { lot:x.lot, line:x.line||'', jobKey:x.jobKey||'', bill:x.bill||'', custLot:x.custLot||'', qty:x.qtyPerTag, count:Number(x.tags||1), pcs:Number(x.qtyPcs||0) }; });
+    var d = { cust:cust, partNo:partNo, partName:String($('tgPartName').value||'').trim(), lot:first.lot, custLot:first.custLot||'',
+      delDate: first.delDate || ($('tgDelDate').value ? fmtDateTH($('tgDelDate').value) : ''), inspBy:inspBy, qty:String(first.qtyPerTag), unit:first.unit || getUnitValue(),
+      photo:(getPartPhoto(partNo) || ''), reprint:true, groups:groups, printPcs:pcs,
+      lotLabel: groups.filter(function(g,k,a){ return a.findIndex(function(y){ return y.lot === g.lot; }) === k; }).map(function(g){ return g.lot; }).join(', '),
+      line:first.line||'', jobKey:first.jobKey||'', bill:first.bill||'' };
+    if (first.icsViewUrl) d.icsViewUrl = first.icsViewUrl;   // คง QR เดิมของใบ ICS ที่พิมพ์ครั้งแรก
+    try { fetch(FB_LINES.B1 + '/tag-print-log-audit.json', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ at:new Date().toISOString(), by:(session&&session.user&&session.user.name)||'', action:'พิมพ์ซ้ำ', partNo:partNo, ids:b.items.map(function(x){ return x.id; }), tags:tags, pcs:pcs }) }); } catch(e){}
+    _dropPreWin(); _offlinePrint = false; pstStart();
+    try { _preWin = _mkPrintWin(); if (_preWin) _pstWinInit(_preWin); } catch(e){ _preWin = null; }
+    renderAndPrint(d, tags, '', null, { qr: !!d.icsViewUrl, snapOk:true });
+  });
+}
 function printTags() {
   _dropPreWin(); _offlinePrint = false; _icsLastErr = ''; pstStart();
   try {
@@ -4519,7 +4575,10 @@ function _printTagsCore() {
   pstStep('ตรวจข้อมูล Tag / ยอดคงเหลือ / ICS…');
   try { var _m0 = _lotMeta[getLotKey()] || {}; _lastInfo = { partNo: $('tgPartNo').value.trim(), bill: _m0.bill || '', pcs: String($('icsLotSize').value||'') }; } catch(e){ _lastInfo = null; }
   if (_EMBED) { // เปิดจาก QC100: ยอดพิมพ์ต้องไม่เกินยอดคงเหลือของบิลที่เลือก
-    var _k0 = getLotKey(), _rm = _lotRemain[_k0], _pp = tagQtyToPcs($('tgQty').value || '0', Math.max(1, parseInt($('tgCount').value, 10) || 1), $('tgPartNo').value.trim());
+    var _k0 = getLotKey(), _rm = _lotRemain[_k0], _pc0 = Math.max(1, parseInt($('tgCount').value, 10) || 1), _pn0 = $('tgPartNo').value.trim(), _rs0 = tgRestQty(_pc0), _pp;
+    // ใบสุดท้ายเป็นใบเศษ (เช่น 296 = 1×200 + 1×96) → ยอดพิมพ์จริง = (ใบเต็ม × Q'TY) + เศษ ไม่ใช่ จำนวนใบ × Q'TY
+    if (_rs0) { var _a0 = tagQtyToPcs($('tgQty').value || '0', _pc0 - 1, _pn0), _b0 = tagQtyToPcs(String(_rs0), 1, _pn0); _pp = (_a0 == null || _b0 == null) ? null : _a0 + _b0; }
+    else _pp = tagQtyToPcs($('tgQty').value || '0', _pc0, _pn0);
     if (_rm != null && _pp != null && _pp > _rm) {
       pstFail('พิมพ์เกินยอดคงเหลือของบิลนี้ (พิมพ์ ' + _pp.toLocaleString() + ' > คงเหลือ ' + _rm.toLocaleString() + ' ชิ้น) — ลด Lot Size ลง');
       showToast('🚫 พิมพ์เกินยอดคงเหลือของบิลนี้ (' + _rm.toLocaleString() + ' ชิ้น) — ลด Lot Size ลง', 'err'); _dropPreWin(); try { _closePrintOverlay(); } catch(e){}
@@ -4606,12 +4665,13 @@ function _buildLogRecs(d, count) {
   if (d.printPcs == null) return [];
   var mk = function(o, n, pcs) {
     var id = 'TG' + Date.now() + Math.random().toString(36).slice(2,6);
-    return { id:id, ts:Date.now(), date:isoToday(), partNo:d.partNo, lot:o.lot, line:o.line||'', jobKey:o.jobKey||'', bill:o.bill||'', qtyPcs:pcs, qtyPerTag:(o.qty != null ? o.qty : d.qty), unit:d.unit, tags:n, custLot:o.custLot||'', by:(session&&session.user&&session.user.name)||'' };
+    return { id:id, ts:Date.now(), date:isoToday(), partNo:d.partNo, lot:o.lot, line:o.line||'', jobKey:o.jobKey||'', bill:o.bill||'', qtyPcs:pcs, qtyPerTag:(o.qty != null ? o.qty : d.qty), unit:d.unit, tags:n, custLot:o.custLot||'', by:(session&&session.user&&session.user.name)||'', inspBy:d.inspBy||'', cust:d.cust||'', delDate:d.delDate||'', icsViewUrl:d.icsViewUrl||'' };
   };
   if (d.groups) { return d.groups.map(function(g){ return mk(g, g.count, Math.round(g.pcs)); }); }
   return [mk({ lot:d.lot, line:d.line, jobKey:d.jobKey, bill:d.bill, custLot:d.custLot }, count, d.printPcs)];
 }
 function logTagPrint(d, count) {
+  if (d && d.reprint) { _lastPrintIds = []; return Promise.resolve('ok'); }   // พิมพ์ซ้ำ: ไม่ตัดยอด ไม่เพิ่มประวัติพิมพ์ใหม่ (บันทึกเป็น audit แทน)
   var _tm = $('tgTestMode');
   if ((d && d.test) || (_tm && _tm.checked && tgIsAdmin())) { if (_tm) _tm.checked = false; return Promise.resolve('ok'); }
   var recs = _buildLogRecs(d, count);
