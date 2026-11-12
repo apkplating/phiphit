@@ -239,7 +239,10 @@ if ('caches' in window) {
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="background:var(--navy);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">
       <div style="font-size:12px;font-weight:600;color:#fff;">📋 รายการเคลื่อนไหว</div>
-      <div id="stockItemName" style="font-size:11px;color:#93c5fd;"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        <div id="stockItemName" style="font-size:11px;color:#93c5fd;"></div>
+        <select id="stockMonthSel" onchange="window._stockMonth=this.value;renderStockCard()" style="padding:5px 8px;border-radius:7px;border:none;font-size:11px;font-family:'IBM Plex Sans Thai',sans-serif;"></select>
+      </div>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
       <table class="sc-table">
@@ -273,7 +276,7 @@ if ('caches' in window) {
   <!-- ประวัติการรับ แยกรายเดือน -->
   <div class="card" style="padding:0;overflow:hidden;">
     <div style="background:var(--navy);padding:10px 12px;">
-      <div style="font-size:12px;font-weight:600;color:#fff;margin-bottom:8px;">🗓️ ประวัติการรับ แยกรายเดือน</div>
+      <div style="font-size:12px;font-weight:600;color:#fff;margin-bottom:8px;">🗓️ ประวัติการรับ-เบิก แยกรายเดือน</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:5px;">
           <label style="font-size:10px;color:#93c5fd;">จาก</label>
@@ -289,18 +292,23 @@ if ('caches' in window) {
       </div>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table class="sc-table" style="min-width:520px;">
+      <table class="sc-table" style="min-width:760px;">
         <thead>
           <tr>
             <th class="in-col td-l" style="text-align:left;">เดือน</th>
-            <th class="in-col">จำนวนครั้ง</th>
-            <th class="in-col">รับเข้ารวม (ลิตร)</th>
-            <th class="in-col">รับเข้ารวม (ถัง)</th>
+            <th class="in-col">รับเข้า (ครั้ง)</th>
+            <th class="in-col">รับเข้า (ลิตร)</th>
+            <th class="in-col">รับเข้า (ถัง)</th>
+            <th class="in-col" style="color:#1d4ed8;">เบิก B1</th>
+            <th class="in-col" style="color:#7c3aed;">เบิก B2</th>
+            <th class="in-col" style="color:#be185d;">เบิก R1</th>
+            <th class="in-col">เบิกรวม (ลิตร)</th>
+            <th class="in-col">คงเหลือสิ้นเดือน</th>
             <th class="in-col"></th>
           </tr>
         </thead>
         <tbody id="monthlyInBody">
-          <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
+          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
         </tbody>
       </table>
     </div>
@@ -932,6 +940,37 @@ function renderStockCard() {
     balMap[r.id] = runBal;
   });
 
+  // เรียงวันที่ล่าสุดไว้บนสุด (ยอดคงเหลือคำนวณตามลำดับวันที่จริงไว้แล้วใน balMap)
+  inRecs  = inRecs.slice().reverse();
+  outRecs = outRecs.slice().reverse();
+
+  // แสดงเฉพาะเดือนที่เลือก (ค่าเริ่มต้น = เดือนปัจจุบัน) — ข้อมูลเก่ายังอยู่ครบ ยอดคงเหลือคำนวณจากทุกรายการ
+  var _now = new Date();
+  var curM = _now.getFullYear() + '-' + String(_now.getMonth()+1).padStart(2,'0');
+  var _months = {}; recs.forEach(function(r){ if (r.date) _months[r.date.slice(0,7)] = 1; });
+  _months[curM] = 1;
+  var _mk = Object.keys(_months).sort().reverse();
+  if (window._stockMonthItem !== itemId) { window._stockMonthItem = itemId; window._stockMonth = curM; }
+  var selM = window._stockMonth || curM;
+  if (selM !== 'ALL' && !_months[selM]) selM = curM;
+  window._stockMonth = selM;
+  var _msel = document.getElementById('stockMonthSel');
+  if (_msel) {
+    _msel.innerHTML = '<option value="ALL">ทุกเดือน</option>' + _mk.map(function(m){
+      return '<option value="'+m+'">' + new Date(m+'-01T00:00:00').toLocaleDateString('th-TH',{month:'long',year:'numeric'}) + (m===curM ? ' (เดือนนี้)' : '') + '</option>';
+    }).join('');
+    _msel.value = selM;
+  }
+  var openingBal = 0, hasPrior = false;
+  if (selM !== 'ALL') {
+    recs.forEach(function(r){
+      if (r.date && r.date.slice(0,7) < selM) { hasPrior = true; openingBal += (r.type==='in' ? 1 : -1) * Number(r.liter||0); }
+    });
+    inRecs  = inRecs.filter(function(r){ return r.date && r.date.slice(0,7) === selM; });
+    outRecs = outRecs.filter(function(r){ return r.date && r.date.slice(0,7) === selM; });
+  }
+  maxRows = Math.max(inRecs.length, outRecs.length);
+
   // render แบบ 2 ฝั่ง
   var rows = '';
   for (var i=0; i<maxRows; i++) {
@@ -974,6 +1013,11 @@ function renderStockCard() {
       '<td><button onclick="deleteRecord(\''+(or?or.id:'')+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;visibility:'+(or?'visible':'hidden')+'">✕</button></td>' +
     '</tr>';
   }
+  if (!maxRows) rows += '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:18px;">ไม่มีรายการในเดือนนี้</td></tr>';
+  if (selM !== 'ALL' && hasPrior) {
+    rows += '<tr style="background:#f1f5f9;"><td colspan="9" style="padding:8px 12px;font-size:11px;color:var(--text-mid);font-weight:600;">⬆ ยกมาจากเดือนก่อนหน้า (ดูรายละเอียดเดือนอื่นได้จากตัวเลือกเดือนด้านบน หรือตารางประวัติรายเดือนด้านล่าง)</td>' +
+      '<td class="'+(openingBal<0?'bal-neg':'bal-pos')+'" style="font-weight:700;">'+openingBal.toFixed(2)+'</td><td></td></tr>';
+  }
   tbody.innerHTML = rows;
 
   renderMonthlyIn();
@@ -994,68 +1038,85 @@ function renderMonthlyIn() {
   _monthlyInData = {};
 
   if (!itemId) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
     return;
   }
 
   var from = document.getElementById('monthlyInFrom').value; // yyyy-mm-dd
   var to   = document.getElementById('monthlyInTo').value;
+  var all  = chemRecords.filter(function(r){ return r.chemId === itemId && r.date; });
+  var inRange = function(r){ return !(from && r.date < from) && !(to && r.date > to); };
+  var fil  = all.filter(inRange);
 
-  var recs = chemRecords.filter(function(r){
-    if (r.chemId !== itemId || r.type !== 'in' || !r.date) return false;
-    if (from && r.date < from) return false;
-    if (to   && r.date > to)   return false;
-    return true;
-  });
-
-  if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีรายการรับเข้าในช่วงที่เลือก</td></tr>';
+  if (!fil.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีรายการในช่วงที่เลือก</td></tr>';
     return;
   }
 
-  // จัดกลุ่มตามเดือน (yyyy-mm)
+  // จัดกลุ่มตามเดือน (yyyy-mm) — รวมเดือนที่มีแต่การเบิกด้วย
   var groups = {};
-  recs.forEach(function(r){
-    var mk = r.date.slice(0,7); // yyyy-mm
-    if (!groups[mk]) groups[mk] = [];
-    groups[mk].push(r);
+  fil.forEach(function(r){
+    var mk = r.date.slice(0,7);
+    if (!groups[mk]) groups[mk] = { ins: [], outs: [] };
+    if (r.type === 'in') groups[mk].ins.push(r); else groups[mk].outs.push(r);
   });
+  var fmtD = function(d){ return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+  var fmt = function(n){ return n ? n.toFixed(2) : '–'; };
 
   var monthKeys = Object.keys(groups).sort().reverse(); // เดือนล่าสุดก่อน
   var rows = '';
   monthKeys.forEach(function(mk, idx){
-    var list = groups[mk].slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
-    var liters = 0, buckets = 0;
-    list.forEach(function(r){ liters += Number(r.liter||0); buckets += Number(r.bucket||0); });
+    var g = groups[mk];
+    var ins  = g.ins.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var outs = g.outs.slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    var liters = 0, buckets = 0, o1 = 0, o2 = 0, o3 = 0;
+    ins.forEach(function(r){ liters += Number(r.liter||0); buckets += Number(r.bucket||0); });
+    outs.forEach(function(r){
+      var l = Number(r.liter||0);
+      if (r.type === 'out-b1') o1 += l; else if (r.type === 'out-b2') o2 += l; else if (r.type === 'out-r1') o3 += l;
+    });
+    // คงเหลือสิ้นเดือน = รับเข้าสะสม − เบิกสะสม ถึงวันสิ้นเดือน (นับทุกรายการ ไม่ขึ้นกับตัวกรองวันที่)
+    var endKey = mk + '-31', bal = 0;
+    all.forEach(function(r){ if (r.date <= endKey) bal += (r.type === 'in' ? 1 : -1) * Number(r.liter||0); });
     var monthLabel = new Date(mk+'-01T00:00:00').toLocaleDateString('th-TH',{month:'long',year:'numeric'});
     var rowId = 'mrow-'+idx;
-    _monthlyInData[rowId] = list;
+    _monthlyInData[rowId] = ins;
 
     rows += '<tr style="cursor:pointer;" onclick="toggleMonthDetail(\''+rowId+'\')">' +
       '<td class="td-l" style="font-weight:600;color:var(--navy);">'+monthLabel+'</td>' +
-      '<td>'+list.length+'</td>' +
-      '<td style="font-weight:700;color:var(--green);">'+liters.toFixed(2)+'</td>' +
-      '<td>'+buckets+'</td>' +
+      '<td>'+(ins.length||'–')+'</td>' +
+      '<td style="font-weight:700;color:var(--green);">'+fmt(liters)+'</td>' +
+      '<td>'+(buckets||'–')+'</td>' +
+      '<td style="color:#1d4ed8;font-weight:600;">'+fmt(o1)+'</td>' +
+      '<td style="color:#7c3aed;font-weight:600;">'+fmt(o2)+'</td>' +
+      '<td style="color:#be185d;font-weight:600;">'+fmt(o3)+'</td>' +
+      '<td style="font-weight:700;color:var(--orange);">'+fmt(o1+o2+o3)+'</td>' +
+      '<td class="'+(bal<0?'bal-neg':'bal-pos')+'">'+bal.toFixed(2)+'</td>' +
       '<td style="color:var(--blue);font-size:10px;">▾ ดูรายละเอียด</td>' +
     '</tr>';
-    rows += '<tr id="'+rowId+'" style="display:none;"><td colspan="5" style="padding:0;background:#f8fafc;">' +
-      '<table style="width:100%;border-collapse:collapse;font-size:10px;">' +
-      list.map(function(r){
-        var d = new Date(r.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
-        return '<tr>' +
-          '<td class="td-l" style="padding:6px 10px;width:20%;color:var(--text-mid);">'+d+'</td>' +
-          '<td class="td-l" style="padding:6px 10px;width:30%;color:var(--text-muted);">'+(r.bill||'—')+
-            (r.receiver ? ' <span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;">👤'+r.receiver+'</span>' : '') +
-          '</td>' +
-          '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:var(--green);">'+r.liter.toFixed(2)+' L</td>' +
-          '<td style="padding:6px 10px;width:15%;text-align:center;color:var(--text-mid);">'+(r.bucket||'—')+' ถัง</td>' +
-          '<td style="padding:6px 10px;width:15%;text-align:center;">' +
-            (r.qcResult === 'pass' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;font-family:inherit;">✅ QC</button>' :
-             r.qcResult === 'fail' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;font-family:inherit;">❌ QC</button>' : '—') +
-          '</td>' +
-        '</tr>';
-      }).join('') +
-      '</table>' +
+    var inHtml = ins.map(function(r){
+      return '<tr>' +
+        '<td class="td-l" style="padding:6px 10px;width:20%;color:var(--text-mid);">'+fmtD(r.date)+'</td>' +
+        '<td class="td-l" style="padding:6px 10px;width:30%;color:var(--text-muted);">รับเข้า · '+(r.bill||'—')+
+          (r.receiver ? ' <span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;">👤'+r.receiver+'</span>' : '') +
+        '</td>' +
+        '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:var(--green);">+'+Number(r.liter||0).toFixed(2)+' L</td>' +
+        '<td style="padding:6px 10px;width:15%;text-align:center;color:var(--text-mid);">'+(r.bucket||'—')+' ถัง</td>' +
+        '<td style="padding:6px 10px;width:15%;text-align:center;">' +
+          (r.qcResult === 'pass' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;font-family:inherit;">✅ QC</button>' :
+           r.qcResult === 'fail' ? '<button onclick="showQCDetail(\''+r.id+'\')" style="border:none;cursor:pointer;font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 5px;border-radius:4px;font-family:inherit;">❌ QC</button>' : '—') +
+        '</td></tr>';
+    }).join('');
+    var outHtml = outs.slice().reverse().map(function(r){
+      var ln = ({'out-b1':'B1','out-b2':'B2','out-r1':'R1'})[r.type] || r.type;
+      return '<tr>' +
+        '<td class="td-l" style="padding:6px 10px;width:20%;color:var(--text-mid);">'+fmtD(r.date)+'</td>' +
+        '<td class="td-l" style="padding:6px 10px;width:30%;color:var(--text-muted);">เบิก · '+ln+(r.note ? ' · '+r.note : '')+'</td>' +
+        '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:var(--orange);">−'+Number(r.liter||0).toFixed(2)+' L</td>' +
+        '<td style="padding:6px 10px;width:15%;"></td><td style="padding:6px 10px;width:15%;"></td></tr>';
+    }).join('');
+    rows += '<tr id="'+rowId+'" style="display:none;"><td colspan="10" style="padding:0;background:#f8fafc;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10px;">' + inHtml + outHtml + '</table>' +
     '</td></tr>';
   });
 
