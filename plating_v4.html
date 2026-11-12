@@ -3345,19 +3345,21 @@ function readChemFromUI() {
   var rows = document.querySelectorAll('.chem-row');
   var result = [];
   rows.forEach(function(row) {
-    var name = row.querySelector('.chem-name-input').value.trim();
+    var _pk = chemPickRead(row.querySelector('.chem-name-input'));
+    var name = _pk.name, _code = _pk.code;
     var type = row.querySelector('.chem-type-select').value;
     if (!name) return;
-    var c = { name: name, type: type };
+    var c = { name: name, code: _code, type: type };
     if (type === 'AH') {
       c.rateAH = parseFloat(row.querySelector('[data-rate="AH"]').value) || 0;
     } else {
       c.color = row.querySelector('input[name^="cr-"]:checked') ? row.querySelector('input[name^="cr-"]:checked').value : 'B';
       c.chemicals = [];
       row.querySelectorAll('.chem-sub-row').forEach(function(sr) {
-        var n = sr.querySelector('[data-chem-name]').value.trim();
+        var _sp = chemPickRead(sr.querySelector('[data-chem-name]'));
+        var n = _sp.name;
         var r = parseFloat(sr.querySelector('[data-chem-rate]').value) || 0;
-        if (n) c.chemicals.push({ name: n, rate: r });
+        if (n) c.chemicals.push({ name: n, code: _sp.code, rate: r });
       });
     }
     result.push(c);
@@ -3436,6 +3438,75 @@ function importChemSettings(event) {
   reader.readAsText(file);
 }
 
+// ── เลือกเคมีจาก Chem Master (dropdown) — อ้างอิงด้วยรหัสเคมี ──
+function _escH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _normChemName(s){ return String(s||'').toLowerCase().replace(/[\s\-_]+/g,''); }
+function chemPickOptions(code, name) {
+  var items = (typeof masterItems !== 'undefined' && masterItems) ? masterItems : [];
+  var html = '', found = false;
+  items.forEach(function(m){ if (m.code === code) found = true; });
+  if (!code && name) html += '<option value="" data-orig="' + _escH(name) + '" selected>⚠ ' + _escH(name) + ' (ยังไม่ผูกรหัส — เลือกเคมีจาก Chem Master)</option>';
+  else html += '<option value="">— เลือกเคมีจาก Chem Master —</option>';
+  if (code && !found) html += '<option value="' + _escH(code) + '" data-orig="' + _escH(name||'') + '" selected>' + _escH(code) + ' — ' + _escH(name||'') + '</option>';
+  items.forEach(function(m){
+    html += '<option value="' + _escH(m.code) + '"' + (m.code === code ? ' selected' : '') + '>' + _escH(m.code) + ' — ' + _escH(m.name) + '</option>';
+  });
+  return html;
+}
+function chemPickHtml(code, name, cls, attrs) {
+  return '<select class="' + cls + '" ' + (attrs||'') + '>' + chemPickOptions(code, name) + '</select>';
+}
+function chemPickRead(el) {
+  if (!el) return { code:'', name:'' };
+  if (el.tagName !== 'SELECT') return { code:'', name:(el.value||'').trim() };
+  var code = el.value || '';
+  var opt = el.options[el.selectedIndex];
+  if (code) {
+    var m = (typeof masterItems !== 'undefined' && masterItems) ? masterItems.find(function(x){ return x.code === code; }) : null;
+    return { code: code, name: m ? m.name : ((opt && opt.getAttribute('data-orig')) || '') };
+  }
+  return { code:'', name: (opt && opt.getAttribute('data-orig')) || '' };
+}
+function refreshChemPickers() {
+  document.querySelectorAll('#chemList select.chem-name-input, #chemList select[data-chem-name]').forEach(function(sel){
+    var cur = chemPickRead(sel);
+    if (!cur.code && cur.name && typeof masterItems !== 'undefined' && masterItems) {
+      // ผูกรหัสให้อัตโนมัติเมื่อชื่อตรงกับ Chem Master แบบไม่กำกวม (กฎเดียวกับ canonChemSettings)
+      var k = _normChemName(cur.name), hit = masterItems.filter(function(m){ return _normChemName(m.name) === k; });
+      if (hit.length === 1) cur = { code: hit[0].code, name: hit[0].name };
+    }
+    sel.innerHTML = chemPickOptions(cur.code, cur.name);
+  });
+}
+// ทำให้รหัสเคมีเป็นตัวหลักของ chemSettings: ผูกรหัสให้รายการเก่าที่ชื่อตรง (ตัดช่องว่าง/ขีด/ตัวพิมพ์) แล้วใช้ชื่อจาก Chem Master เสมอ
+// รายการที่หาคู่ไม่เจอจะไม่เดา — ค้างไว้เป็น ⚠ ในหน้าตั้งค่าให้เลือกเอง (คำนวณยังใช้ชื่อเดิมไปก่อน)
+function canonChemSettings() {
+  if (typeof masterItems === 'undefined' || !masterItems || !masterItems.length || !chemSettings) return false;
+  var byCode = {}, byNorm = {}, dup = {};
+  masterItems.forEach(function(m){
+    byCode[m.code] = m;
+    var k = _normChemName(m.name);
+    if (byNorm[k]) dup[k] = 1; else byNorm[k] = m;
+  });
+  var changed = false;
+  function fix(o) {
+    var m = null;
+    if (o.code && byCode[o.code]) m = byCode[o.code];
+    else if (!o.code) { var k = _normChemName(o.name); if (byNorm[k] && !dup[k]) m = byNorm[k]; }
+    if (m && (o.code !== m.code || o.name !== m.name)) { o.code = m.code; o.name = m.name; changed = true; }
+  }
+  chemSettings.forEach(function(c){ fix(c); (c.chemicals || []).forEach(fix); });
+  return changed;
+}
+function chemSettingsUnmapped() {
+  var n = [];
+  (chemSettings || []).forEach(function(c){
+    if (!c.code) n.push(c.name);
+    (c.chemicals || []).forEach(function(ch){ if (!ch.code && ch.name) n.push(ch.name); });
+  });
+  return n;
+}
+
 function addChemRow(c) {
   // โครงสร้างใหม่: { name, type:'AH'|'COLOR', color:'B'|'C'|'K', chemicals:[{name,rate}], rateAH }
   c = c || { name:'', type:'AH', rateAH:0, color:'B', chemicals:[{name:'',rate:0}] };
@@ -3445,7 +3516,7 @@ function addChemRow(c) {
 
   var chemHtml = c.chemicals.map(function(ch) {
     return '<div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
-      '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร เช่น TB110" value="' + (ch.name||'') + '">' +
+      chemPickHtml(ch.code, ch.name, 'chem-rate-input', 'data-chem-name style="flex:1;text-align:left;font-size:11px;"') +
       '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="' + (ch.rate||0) + '">' +
       '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
       '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>' +
@@ -3456,7 +3527,7 @@ function addChemRow(c) {
   div.className = 'chem-row';
   div.innerHTML =
     '<div class="chem-row-top">' +
-      '<input class="chem-name-input" placeholder="ชื่อกลุ่มเคมี เช่น Additive B" value="' + (c.name||'') + '">' +
+      chemPickHtml(c.code, c.name, 'chem-name-input', '') +
       '<select class="chem-type-select" onchange="toggleChemRates(this)">' +
         '<option value="AH"' + (c.type==='AH'?' selected':'') + '>ml/AH</option>' +
         '<option value="COLOR"' + (c.type==='COLOR'?' selected':'') + '>ml/โม่ (ต่อสี)</option>' +
@@ -3486,7 +3557,7 @@ function addChemSubRow(btn) {
   row.className = 'chem-sub-row';
   row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
   row.innerHTML =
-    '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร">' +
+    chemPickHtml('', '', 'chem-rate-input', 'data-chem-name style="flex:1;text-align:left;font-size:11px;"') +
     '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="0">' +
     '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
     '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>';
@@ -3506,7 +3577,7 @@ function toggleChemRates(sel) {
     '</div>' +
     '<div class="chem-chemicals-list">' +
       '<div class="chem-sub-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
-        '<input class="chem-rate-input" data-chem-name style="flex:1;text-align:left;font-size:11px;" placeholder="ชื่อสาร">' +
+        chemPickHtml('', '', 'chem-rate-input', 'data-chem-name style="flex:1;text-align:left;font-size:11px;"') +
         '<input class="chem-rate-input" data-chem-rate type="number" step="0.01" min="0" style="width:60px;" value="0">' +
         '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;">ml/โม่</span>' +
         '<button onclick="this.closest(\'.chem-sub-row\').remove()" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:13px;padding:0 2px;">✕</button>' +
@@ -4461,6 +4532,7 @@ function toggleManualDosing() {
 }
 
 function populateManualChemSel() {
+  syncChemItemsFromMaster();
   var sel = document.getElementById('manualChemSel');
   if (!sel || !chemItems.length) return;
   sel.innerHTML = '<option value="">-- เลือกรายการเคมี --</option>' +
@@ -4611,6 +4683,8 @@ function saveChemData() {
 
 // ── Master: เพิ่มรายการเคมีใหม่ ──────────────────────────────
 function openAddChemItem() {
+  alert('รายการเคมีใช้ชุดเดียวกับ Chem Master — กรุณาเพิ่ม/แก้ไขรายการที่หน้า Chem Master (แท็บ รายการเคมี)');
+  return;
   var f = document.getElementById('addChemItemForm');
   f.style.display = f.style.display==='none' ? 'block' : 'none';
 }
@@ -4634,6 +4708,8 @@ function confirmAddChemItem() {
 
 // ── แก้ไขข้อมูลเคมีที่มีอยู่ ──────────────────────────────────
 function openEditChemItem() {
+  alert('รายการเคมีใช้ชุดเดียวกับ Chem Master — กรุณาแก้ไขที่หน้า Chem Master (แท็บ รายการเคมี)');
+  return;
   var item = chemItems.find(function(c){ return c.id===_selChemId; });
   if (!item) return;
   document.getElementById('editChemCode').value    = item.code    || '';
@@ -4711,8 +4787,46 @@ function updateChemStockCount() {
   if (el) el.textContent = chemItems.length;
 }
 
+// ── รายการเคมีชุดเดียวกับ Chem Master (จับคู่ด้วยรหัสเคมี เช่น C027) ──
+// ใช้รายการจาก Chem Master เป็นหลัก; ประวัติเก่าที่อ้างรหัสเดิมในหน้านี้ จะย้ายไปผูกกับรายการ Master ที่รหัสตรงกัน
+// รายการเก่าที่รหัสไม่มีใน Master จะแสดงต่อท้ายว่า (เก่า) และไม่ดึงยอดจาก Master
+var _legacyCodeById = {};
+function syncChemItemsFromMaster() {
+  if (typeof masterItems === 'undefined' || !masterItems || !masterItems.length) return;
+  var mIds = {}, mCodes = {};
+  masterItems.forEach(function(m){ mIds[m.id] = m; mCodes[m.code] = m; });
+  var legacyUnmapped = [];
+  chemItems.forEach(function(c){
+    if (mIds[c.id]) return;                       // เป็นรายการ Master อยู่แล้ว
+    if (c.legacy) return;                          // ถูกทำเครื่องหมายไว้แล้ว (จะสร้างใหม่ด้านล่าง)
+    _legacyCodeById[c.id] = c.code;
+    if (!mCodes[c.code]) legacyUnmapped.push(c);
+  });
+  chemItems.forEach(function(c){ if (c.legacy && c.origId) { _legacyCodeById[c.origId] = c.origCode; } });
+  chemRecords.forEach(function(r){
+    var code = _legacyCodeById[r.chemId];
+    if (code && mCodes[code]) r.chemId = mCodes[code].id;
+  });
+  if (_selChemId && _legacyCodeById[_selChemId] && mCodes[_legacyCodeById[_selChemId]]) _selChemId = mCodes[_legacyCodeById[_selChemId]].id;
+  var out = masterItems.map(function(m){
+    return { id:m.id, code:m.code, name:m.name, supplier:m.supplier||'', address:m.address||'', unit:'L', minStock:(m.minStock||0) };
+  });
+  var prevLegacy = chemItems.filter(function(c){ return c.legacy; });
+  legacyUnmapped.concat(prevLegacy).forEach(function(c){
+    if (out.some(function(o){ return o.id===c.id; })) return;
+    out.push({ id:c.id, code:(c.legacy ? c.code : c.code+' (เก่า)'), name:c.name, supplier:c.supplier||'', address:c.address||'', unit:'L', minStock:c.minStock||0, legacy:true, origId:(c.origId||c.id), origCode:(c.origCode||c.code) });
+  });
+  chemItems = out;
+  if (canonChemSettings()) {
+    try { localStorage.setItem('b1_chemSettings', JSON.stringify(chemSettings)); } catch(e){}
+    if (typeof renderSummary === 'function') { try { renderSummary(); } catch(e){} }
+  }
+  refreshChemPickers();
+}
+
 // ── Select dropdown ────────────────────────────────────────────
 function renderChemStockSelect() {
+  syncChemItemsFromMaster();
   var sel = document.getElementById('chemSelect');
   if (!sel) return;
   var cur = sel.value;
@@ -6847,6 +6961,8 @@ async function masterLoad() {
     if (data) {
       masterItems   = Array.isArray(data.items)   ? data.items   : [];
       masterRecords = Array.isArray(data.records) ? data.records : [];
+      syncChemItemsFromMaster();
+      if (typeof renderChemStockSelect === 'function') renderChemStockSelect();
       renderMasterStock();
     }
   } catch(e) { console.warn('masterLoad:', e.message); }
@@ -6859,16 +6975,24 @@ async function execMasterOut(chemId, liter, note, date) {
     date: date || isoDate(new Date()),
     liter: liter, bucket: 0, note: note || 'B1 เบิก'
   };
-  masterRecords.unshift(rec);
+  // กันข้อมูลทับ: อ่านข้อมูลล่าสุดจาก server ก่อนเขียนทุกครั้ง แล้วเพิ่มเฉพาะรายการนี้ (ห้ามเอา masterRecords เก่าที่เปิดค้างไว้ไปเขียนทับ)
   try {
-    await fetch(FB_MASTER_PATH + '.json', {
+    var r0 = await fetch(FB_MASTER_PATH + '.json', { cache: 'no-store' });
+    if (!r0.ok) throw new Error('อ่านข้อมูลล่าสุดไม่ได้ (' + r0.status + ')');
+    var cur = await r0.json();
+    if (!cur || !Array.isArray(cur.items) || !Array.isArray(cur.records)) throw new Error('ข้อมูล Chem Master บน server ไม่พร้อม');
+    var freshRecs = cur.records.filter(function(x){ return String(x.id) !== String(rec.id); });
+    freshRecs.unshift(rec);
+    var r1 = await fetch(FB_MASTER_PATH + '.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: masterItems, records: masterRecords, savedAt: new Date().toISOString() })
+      body: JSON.stringify({ items: cur.items, records: freshRecs, savedAt: new Date().toISOString() })
     });
-    showToast('master', '\u2705 เบิกเคมีสำเร็จ — ' + liter.toFixed(2) + ' ลิตร', 'ok');
-    masterLoad();
-  } catch(e) { showToast('master', '\u274c เบิกไม่สำเร็จ', 'err'); }
+    if (!r1.ok) throw new Error('บันทึกไม่สำเร็จ (' + r1.status + ')');
+    masterItems = cur.items; masterRecords = freshRecs;
+    showToast('master', '\u2705 เบิกเคมีสำเร็จ — ' + liter.toFixed(2) + ' ลิตร (บันทึกขึ้น server แล้ว)', 'ok');
+    renderMasterStock();
+  } catch(e) { showToast('master', '\u274c เบิกไม่สำเร็จ — ' + e.message + ' (ข้อมูลยังไม่ถูกบันทึก ลองใหม่)', 'err'); }
 }
 
 function calcMasterBalance(itemId) {
@@ -9962,4 +10086,34 @@ async function updatePOStatusBar(lineFilter) {
 }
 </script>
 
+<script>
+// ═══ เปิดได้แท็บเดียว: แท็บใหม่ทับแท็บเก่า (แท็บเก่ากลับหน้าแรกเอง) ═══
+(function(){
+  var KEY = 'plating_v4';
+  var myId = String(Date.now()) + '-' + Math.random().toString(36).slice(2,8);
+  var bc = null;
+  try { if (window.BroadcastChannel) bc = new BroadcastChannel('apk-single-' + KEY); } catch(e){}
+  function hasUnsaved(){ try { return !!(false); } catch(e){ return false; } }
+  function leave(){
+    if (hasUnsaved()) {
+      if (document.getElementById('apkDupBar')) return;
+      var d = document.createElement('div'); d.id = 'apkDupBar';
+      d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:100000;background:#b45309;color:#fff;padding:10px 14px;font-size:14px;font-weight:700;text-align:center;';
+      d.textContent = '⚠️ หน้านี้ถูกเปิดซ้ำในแท็บใหม่แล้ว — บันทึกงานที่ค้างอยู่ให้เสร็จ แล้วปิดแท็บนี้';
+      document.body.appendChild(d); return;
+    }
+    location.replace('index.html');
+  }
+  function onClaim(id){ if (id !== myId) leave(); }
+  function claim(){
+    try { if (bc) bc.postMessage({t:'claim', id:myId}); } catch(e){}
+    try { localStorage.setItem('apk_tab_claim_' + KEY, myId + '|' + Date.now()); } catch(e){}
+  }
+  if (bc) bc.onmessage = function(ev){ if (ev.data && ev.data.t === 'claim') onClaim(ev.data.id); };
+  window.addEventListener('storage', function(ev){
+    if (ev.key === 'apk_tab_claim_' + KEY && ev.newValue) onClaim(String(ev.newValue).split('|')[0]);
+  });
+  claim();
+})();
+</script>
 </body></html>

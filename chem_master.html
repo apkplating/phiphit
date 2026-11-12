@@ -678,17 +678,61 @@ function saveLocal() {
 }
 
 // ══ FIREBASE ══
-async function fbSave() {
+var _delRecIds = {}, _delItemIds = {}, _saveChain = Promise.resolve(), _unsaved = false;
+function cmToast(msg, ok){
+  var t = document.getElementById('cmToast');
+  if (!t){ t = document.createElement('div'); t.id='cmToast';
+    t.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.3);max-width:90vw;text-align:center;';
+    document.body.appendChild(t); }
+  t.style.background = ok ? '#16a34a' : '#dc2626';
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display='none'; }, ok ? 2500 : 8000);
+}
+function _mergeById(local, server, del, dropFn){
+  var seen = {}; local.forEach(function(x){ seen[String(x.id)] = 1; });
+  var out = local.slice();
+  server.forEach(function(x){
+    var k = String(x.id);
+    if (seen[k] || del[k]) return;
+    if (dropFn && dropFn(x)) return;
+    out.push(x);
+  });
+  return out;
+}
+// บันทึก: อ่านข้อมูลล่าสุดจาก server → รวมกับที่แก้ในเครื่อง (ตาม id) → เขียนกลับ แล้วเช็คว่าสำเร็จจริง
+// กันเครื่องที่เปิดค้างไว้ (ข้อมูลเก่า) เขียนทับรายการที่หน้าอื่น/เครื่องอื่นเพิ่งบันทึก
+function fbSave() {
+  _unsaved = true;
+  _saveChain = _saveChain.then(_fbSaveNow, _fbSaveNow);
+  return _saveChain;
+}
+async function _fbSaveNow() {
   try {
-    await fetch(FB_PATH+'.json', {
+    var r0 = await fetch(FB_PATH+'.json', {cache:'no-store'});
+    if (!r0.ok) throw new Error('อ่านข้อมูลล่าสุดไม่ได้ ('+r0.status+')');
+    var cur = await r0.json();
+    cur = cur || {};
+    var sItems = Array.isArray(cur.items) ? cur.items : [];
+    var sRecs  = Array.isArray(cur.records) ? cur.records : [];
+    chemItems = _mergeById(chemItems, sItems, _delItemIds);
+    chemRecords = _mergeById(chemRecords, sRecs, _delRecIds, function(r){ return !!_delItemIds[String(r.chemId)]; });
+    var r1 = await fetch(FB_PATH+'.json', {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ items:chemItems, records:chemRecords, savedAt:new Date().toISOString() })
     });
-    setSyncOk();
-  } catch(e){ setSyncErr(); }
+    if (!r1.ok) throw new Error('บันทึกไม่สำเร็จ ('+r1.status+')');
+    _delRecIds = {}; _delItemIds = {}; _unsaved = false;
+    saveLocal(); setSyncOk();
+    cmToast('✅ บันทึกขึ้น server สำเร็จ', true);
+  } catch(e){
+    setSyncErr();
+    cmToast('❌ บันทึกไม่สำเร็จ — ข้อมูลยังไม่ขึ้น server ('+e.message+') อย่าปิดหน้านี้ ระบบจะลองใหม่ให้', false);
+    setTimeout(function(){ if (_unsaved) fbSave(); }, 15000);
+  }
 }
 
 async function fbLoad() {
+  if (_unsaved) return; // มีรายการที่ยังบันทึกไม่สำเร็จ ห้ามโหลดข้อมูลเก่าทับ
   try {
     var res = await fetch(FB_PATH+'.json');
     if (!res.ok){ setSyncErr(); return; }
@@ -1474,7 +1518,19 @@ function confirmAddItem(){
   var reorderQty=parseFloat(document.getElementById('newReorderQty').value)||0;
   var lines=Array.from(document.getElementById('newLines').selectedOptions).map(function(o){return o.value;});
   if (!code||!name){alert('กรุณากรอกรหัสและชื่อเคมี');return;}
-  if (chemItems.some(function(c){return c.code===code && c.id!==editingItemId;})){alert('รหัสเคมีซ้ำ');return;}
+  function _nc(x){ return String(x||'').toUpperCase().replace(/[\s\-_]+/g,''); }
+  var dupC = chemItems.find(function(c){return _nc(c.code)===_nc(code) && c.id!==editingItemId;});
+  if (dupC){alert('รหัสเคมีซ้ำกับ "'+dupC.code+' — '+dupC.name+'" (รหัสเคมีต้องไม่ซ้ำ เพราะทุกหน้าอ้างอิงด้วยรหัสนี้)');return;}
+  var dupN = chemItems.find(function(c){return _nc(c.name)===_nc(name) && c.id!==editingItemId;});
+  if (dupN && !confirm('ชื่อเคมีซ้ำกับ "'+dupN.code+' — '+dupN.name+'" ต้องการบันทึกต่อหรือไม่?')) return;
+  if (editingItemId) {
+    var _cur = chemItems.find(function(c){return c.id===editingItemId;});
+    if (_cur && _cur.code !== code) {
+      if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้นที่แก้ไขรหัสเคมีได้ (ทุกหน้าอ้างอิงด้วยรหัสนี้)'); return; }
+      var _has = chemRecords.some(function(r){return r.chemId===_cur.id;});
+      if (_has && !confirm('รายการนี้มีประวัติรับเข้า/เบิกแล้ว การเปลี่ยนรหัสจาก "'+_cur.code+'" เป็น "'+code+'" จะทำให้หน้าชุบที่ตั้งค่าอ้างรหัสเดิมต้องเลือกใหม่ ยืนยันหรือไม่?')) return;
+    }
+  }
   if (editingItemId) {
     var item = chemItems.find(function(c){return c.id===editingItemId;});
     if (item) { item.code=code; item.name=name; item.supplier=supplier; item.price=price; item.minStock=minStock; item.reorderQty=reorderQty; item.lines=lines; }
@@ -1537,6 +1593,7 @@ function deleteItem(id){
   if(currentRole==='viewer'){ return; }
   var item=chemItems.find(function(c){return c.id===id;});
   if (!item||!confirm('ลบ "'+item.name+'" และประวัติทั้งหมด?')) return;
+  _delItemIds[String(id)] = 1;
   chemItems=chemItems.filter(function(c){return c.id!==id;});
   chemRecords=chemRecords.filter(function(r){return r.chemId!==id;});
   saveLocal(); fbSave(); renderItemsList(); populateStockSel(); renderStockCard();
@@ -1544,6 +1601,7 @@ function deleteItem(id){
 function deleteRecord(id){
   if(currentRole==='viewer'){ return; }
   if (!id||!confirm('ลบรายการนี้?')) return;
+  _delRecIds[String(id)] = 1;
   chemRecords=chemRecords.filter(function(r){return String(r.id)!==String(id);});
   saveLocal(); fbSave(); renderStockCard();
 }
