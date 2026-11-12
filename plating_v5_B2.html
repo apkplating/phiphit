@@ -6963,7 +6963,7 @@ async function masterLoad() {
 }
 
 async function execMasterOut(chemId, liter, note, date) {
-  if (!chemId || !liter) return;
+  if (!chemId || !liter) return false;
   var rec = {
     id: Date.now(), chemId: chemId, type: 'out-b2',
     date: date || isoDate(new Date()),
@@ -6975,6 +6975,19 @@ async function execMasterOut(chemId, liter, note, date) {
     if (!r0.ok) throw new Error('อ่านข้อมูลล่าสุดไม่ได้ (' + r0.status + ')');
     var cur = await r0.json();
     if (!cur || !Array.isArray(cur.items) || !Array.isArray(cur.records)) throw new Error('ข้อมูล Chem Master บน server ไม่พร้อม');
+    // เช็คสต๊อกคงเหลือล่าสุดจาก server — เบิกเกินคงเหลือไม่ได้ (ถ้ายอดในระบบผิด ให้แจ้ง admin ปรับสต๊อกที่ Chem Master)
+    var _rem = 0;
+    cur.records.forEach(function(x){
+      if (String(x.chemId) !== String(chemId)) return;
+      var l = Number(x.liter||0);
+      if (x.type === 'in' || x.type === 'adjust') _rem += l;
+      else if (x.type === 'out-b1' || x.type === 'out-b2' || x.type === 'out-r1' || x.type === 'out') _rem -= l;
+    });
+    if (liter > _rem + 0.005) {
+      masterItems = cur.items; masterRecords = cur.records; renderMasterStock();
+      showToast('master', '\u274c เบิกไม่ได้ — คงเหลือ ' + _rem.toFixed(2) + ' ลิตร น้อยกว่ายอดเบิก ' + liter.toFixed(2) + ' ลิตร กรุณาแจ้ง admin ตรวจสอบ/ปรับสต๊อกที่ Chem Master', 'err');
+      return false;
+    }
     var freshRecs = cur.records.filter(function(x){ return String(x.id) !== String(rec.id); });
     freshRecs.unshift(rec);
     var r1 = await fetch(FB_MASTER_PATH + '.json', {
@@ -6986,13 +6999,15 @@ async function execMasterOut(chemId, liter, note, date) {
     masterItems = cur.items; masterRecords = freshRecs;
     showToast('master', '\u2705 เบิกเคมีสำเร็จ — ' + liter.toFixed(2) + ' ลิตร (บันทึกขึ้น server แล้ว)', 'ok');
     renderMasterStock();
-  } catch(e) { showToast('master', '\u274c เบิกไม่สำเร็จ — ' + e.message + ' (ข้อมูลยังไม่ถูกบันทึก ลองใหม่)', 'err'); }
+    return true;
+  } catch(e) { showToast('master', '\u274c เบิกไม่สำเร็จ — ' + e.message + ' (ข้อมูลยังไม่ถูกบันทึก ลองใหม่)', 'err'); return false; }
 }
 
 function calcMasterBalance(itemId) {
-  var totalIn=0, out_b1=0, out_b2=0, out_r1=0, outOther=0;
+  var totalIn=0, out_b1=0, out_b2=0, out_r1=0, outOther=0, adj=0;
   masterRecords.forEach(function(r) {
     if (r.chemId !== itemId) return;
+    if (r.type==='adjust') adj += Number(r.liter||0);   // ปรับยอดตรวจนับจาก Chem Master (liter = ผลต่าง มีเครื่องหมาย)
     if (r.type==='in')     totalIn  += Number(r.liter||0);
     if (r.type==='out-b1') out_b1   += Number(r.liter||0);
     if (r.type==='out-b2') out_b2   += Number(r.liter||0);
@@ -7000,7 +7015,7 @@ function calcMasterBalance(itemId) {
     if (r.type==='out')    outOther += Number(r.liter||0);
   });
   return { totalIn: totalIn, out_b1: out_b1, out_b2: out_b2, out_r1: out_r1,
-    remain: totalIn - out_b1 - out_b2 - out_r1 - outOther };
+    adj: adj, remain: totalIn - out_b1 - out_b2 - out_r1 - outOther + adj };
 }
 
 function renderMasterStock() {
@@ -7034,7 +7049,7 @@ function renderMasterStock() {
   }).join('');
 }
 
-function doMasterOut() {
+async function doMasterOut() {
   var chemId = (document.getElementById('masterChemSel')||{}).value;
   var liter  = parseFloat((document.getElementById('masterOutLiter')||{}).value) || 0;
   var note   = (document.getElementById('masterOutNote')||{}).value || '';
@@ -7042,7 +7057,8 @@ function doMasterOut() {
   var date   = (dateEl && dateEl.value) ? dateEl.value : isoDate(new Date());
   if (!chemId) { showToast('master','กรุณาเลือกรายการเคมี','err'); return; }
   if (!liter)  { showToast('master','กรุณากรอกปริมาณ','err'); return; }
-  execMasterOut(chemId, liter, note, date);
+  var _ok = await execMasterOut(chemId, liter, note, date);
+  if (!_ok) return;   // เบิกไม่สำเร็จ/ยอดไม่พอ — คงค่าที่กรอกไว้
   document.getElementById('masterOutLiter').value = '';
   document.getElementById('masterOutNote').value  = '';
   // คงวันที่ไว้ ไม่ clear เผื่อเบิกหลายรายการในวันเดียวกัน

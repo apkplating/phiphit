@@ -201,6 +201,7 @@ if ('caches' in window) {
         style="flex:1;min-width:160px;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-family:'IBM Plex Sans Thai',sans-serif;">
         <option value="">— เลือกรายการเคมี —</option>
       </select>
+      <button id="adjBtn" onclick="openAdjust()" class="btn btn-outline btn-sm" style="display:none;">⚖️ ปรับสต๊อก</button>
       <button onclick="exportStockCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
     </div>
   </div>
@@ -292,7 +293,7 @@ if ('caches' in window) {
       </div>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table class="sc-table" style="min-width:760px;">
+      <table class="sc-table" style="min-width:820px;">
         <thead>
           <tr>
             <th class="in-col td-l" style="text-align:left;">เดือน</th>
@@ -303,12 +304,13 @@ if ('caches' in window) {
             <th class="in-col" style="color:#7c3aed;">เบิก B2</th>
             <th class="in-col" style="color:#be185d;">เบิก R1</th>
             <th class="in-col">เบิกรวม (ลิตร)</th>
+            <th class="in-col" style="color:#92400e;">ปรับยอด</th>
             <th class="in-col">คงเหลือสิ้นเดือน</th>
             <th class="in-col"></th>
           </tr>
         </thead>
         <tbody id="monthlyInBody">
-          <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
+          <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>
         </tbody>
       </table>
     </div>
@@ -868,15 +870,16 @@ function setSyncErr(){ document.getElementById('syncDot').className='sync-dot'; 
 
 // ══ STOCK CARD ══
 function calcBalance(itemId) {
-  var totalIn=0, outB1=0, outB2=0, outR1=0;
+  var totalIn=0, outB1=0, outB2=0, outR1=0, adj=0;
   chemRecords.forEach(function(r){
     if (r.chemId!==itemId) return;
+    if (r.type==='adjust') adj     += Number(r.liter||0);   // ปรับยอดตรวจนับ (liter = ผลต่าง มีเครื่องหมาย)
     if (r.type==='in')     totalIn += Number(r.liter||0);
     if (r.type==='out-b1') outB1   += Number(r.liter||0);
     if (r.type==='out-b2') outB2   += Number(r.liter||0);
     if (r.type==='out-r1') outR1   += Number(r.liter||0);
   });
-  return { totalIn, outB1, outB2, outR1, remain: totalIn-outB1-outB2-outR1 };
+  return { totalIn, outB1, outB2, outR1, adj, remain: totalIn-outB1-outB2-outR1+adj };
 }
 
 function populateStockSel() {
@@ -892,6 +895,8 @@ function renderStockCard() {
   var itemId = document.getElementById('stockItemSel').value;
   var summaryEl = document.getElementById('stockSummary');
   var tbody = document.getElementById('stockBody');
+  var _ab = document.getElementById('adjBtn');
+  if (_ab) _ab.style.display = (currentRole === 'admin' && itemId) ? '' : 'none';
 
   if (!itemId) {
     summaryEl.style.display = 'none';
@@ -903,7 +908,7 @@ function renderStockCard() {
   var item = chemItems.find(function(c){ return c.id===itemId; }) || {};
 
   var recs = chemRecords.filter(function(r){ return r.chemId===itemId; })
-    .slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+    .slice().sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || ((a.type==='adjust'?1:0)-(b.type==='adjust'?1:0)); });
 
   // คำนวณ summary
   var b = calcBalance(itemId);
@@ -927,7 +932,8 @@ function renderStockCard() {
 
   // แยก in/out แล้ว render คู่กัน (แบบ Excel)
   var inRecs  = recs.filter(function(r){ return r.type==='in'; });
-  var outRecs = recs.filter(function(r){ return r.type!=='in'; });
+  var outRecs = recs.filter(function(r){ return r.type!=='in' && r.type!=='adjust'; });
+  var adjRecs = recs.filter(function(r){ return r.type==='adjust'; });
   var maxRows = Math.max(inRecs.length, outRecs.length);
 
   // running balance
@@ -935,8 +941,8 @@ function renderStockCard() {
   var allSorted = recs.slice();
   var balMap = {};
   allSorted.forEach(function(r){
-    if (r.type==='in') runBal += Number(r.liter||0);
-    else               runBal -= Number(r.liter||0);
+    if (r.type==='in' || r.type==='adjust') runBal += Number(r.liter||0);
+    else                                    runBal -= Number(r.liter||0);
     balMap[r.id] = runBal;
   });
 
@@ -964,15 +970,29 @@ function renderStockCard() {
   var openingBal = 0, hasPrior = false;
   if (selM !== 'ALL') {
     recs.forEach(function(r){
-      if (r.date && r.date.slice(0,7) < selM) { hasPrior = true; openingBal += (r.type==='in' ? 1 : -1) * Number(r.liter||0); }
+      if (r.date && r.date.slice(0,7) < selM) { hasPrior = true; openingBal += ((r.type==='in' || r.type==='adjust') ? 1 : -1) * Number(r.liter||0); }
     });
     inRecs  = inRecs.filter(function(r){ return r.date && r.date.slice(0,7) === selM; });
     outRecs = outRecs.filter(function(r){ return r.date && r.date.slice(0,7) === selM; });
+    adjRecs = adjRecs.filter(function(r){ return r.date && r.date.slice(0,7) === selM; });
   }
+  adjRecs = adjRecs.slice().reverse();
   maxRows = Math.max(inRecs.length, outRecs.length);
 
-  // render แบบ 2 ฝั่ง
+  // แถวปรับยอด (ตรวจนับ) — แสดงไว้บนสุดของเดือนนั้น
   var rows = '';
+  adjRecs.forEach(function(a){
+    var d = Number(a.liter||0), ab = balMap[a.id];
+    rows += '<tr style="background:#fffbeb;">' +
+      '<td colspan="9" class="td-l" style="padding:8px 12px;font-size:11px;color:#92400e;">' +
+        '⚖️ <b>ปรับยอด (ตรวจนับ)</b> ' + new Date(a.date+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) +
+        ' · <b>' + (d>=0?'+':'') + d.toFixed(2) + ' L</b>' +
+        (a.before!=null ? ' (ยอดก่อนปรับ ' + Number(a.before).toFixed(2) + ' → นับได้ ' + Number(a.counted).toFixed(2) + ')' : '') +
+        ' · เหตุผล: ' + (a.note||'—') + (a.by ? ' · โดย ' + a.by : '') +
+      '</td>' +
+      '<td class="'+(ab<0?'bal-neg':'bal-pos')+'" style="font-weight:700;">'+(ab!=null?ab.toFixed(2):'—')+'</td><td></td></tr>';
+  });
+  // render แบบ 2 ฝั่ง
   for (var i=0; i<maxRows; i++) {
     var ir = inRecs[i];
     var or = outRecs[i];
@@ -1013,7 +1033,7 @@ function renderStockCard() {
       '<td><button onclick="deleteRecord(\''+(or?or.id:'')+'\')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:2px 7px;font-size:10px;cursor:pointer;visibility:'+(or?'visible':'hidden')+'">✕</button></td>' +
     '</tr>';
   }
-  if (!maxRows) rows += '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:18px;">ไม่มีรายการในเดือนนี้</td></tr>';
+  if (!maxRows && !adjRecs.length) rows += '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:18px;">ไม่มีรายการในเดือนนี้</td></tr>';
   if (selM !== 'ALL' && hasPrior) {
     rows += '<tr style="background:#f1f5f9;"><td colspan="9" style="padding:8px 12px;font-size:11px;color:var(--text-mid);font-weight:600;">⬆ ยกมาจากเดือนก่อนหน้า (ดูรายละเอียดเดือนอื่นได้จากตัวเลือกเดือนด้านบน หรือตารางประวัติรายเดือนด้านล่าง)</td>' +
       '<td class="'+(openingBal<0?'bal-neg':'bal-pos')+'" style="font-weight:700;">'+openingBal.toFixed(2)+'</td><td></td></tr>';
@@ -1038,7 +1058,7 @@ function renderMonthlyIn() {
   _monthlyInData = {};
 
   if (!itemId) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">เลือกรายการเคมีด้านบน</td></tr>';
     return;
   }
 
@@ -1049,7 +1069,7 @@ function renderMonthlyIn() {
   var fil  = all.filter(inRange);
 
   if (!fil.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีรายการในช่วงที่เลือก</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px;">ไม่มีรายการในช่วงที่เลือก</td></tr>';
     return;
   }
 
@@ -1057,8 +1077,8 @@ function renderMonthlyIn() {
   var groups = {};
   fil.forEach(function(r){
     var mk = r.date.slice(0,7);
-    if (!groups[mk]) groups[mk] = { ins: [], outs: [] };
-    if (r.type === 'in') groups[mk].ins.push(r); else groups[mk].outs.push(r);
+    if (!groups[mk]) groups[mk] = { ins: [], outs: [], adjs: [] };
+    if (r.type === 'in') groups[mk].ins.push(r); else if (r.type === 'adjust') groups[mk].adjs.push(r); else groups[mk].outs.push(r);
   });
   var fmtD = function(d){ return new Date(d+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
   var fmt = function(n){ return n ? n.toFixed(2) : '–'; };
@@ -1077,7 +1097,8 @@ function renderMonthlyIn() {
     });
     // คงเหลือสิ้นเดือน = รับเข้าสะสม − เบิกสะสม ถึงวันสิ้นเดือน (นับทุกรายการ ไม่ขึ้นกับตัวกรองวันที่)
     var endKey = mk + '-31', bal = 0;
-    all.forEach(function(r){ if (r.date <= endKey) bal += (r.type === 'in' ? 1 : -1) * Number(r.liter||0); });
+    all.forEach(function(r){ if (r.date <= endKey) bal += ((r.type === 'in' || r.type === 'adjust') ? 1 : -1) * Number(r.liter||0); });
+    var adjSum = 0; g.adjs.forEach(function(r){ adjSum += Number(r.liter||0); });
     var monthLabel = new Date(mk+'-01T00:00:00').toLocaleDateString('th-TH',{month:'long',year:'numeric'});
     var rowId = 'mrow-'+idx;
     _monthlyInData[rowId] = ins;
@@ -1091,6 +1112,7 @@ function renderMonthlyIn() {
       '<td style="color:#7c3aed;font-weight:600;">'+fmt(o2)+'</td>' +
       '<td style="color:#be185d;font-weight:600;">'+fmt(o3)+'</td>' +
       '<td style="font-weight:700;color:var(--orange);">'+fmt(o1+o2+o3)+'</td>' +
+      '<td style="color:#92400e;font-weight:600;">'+(adjSum ? (adjSum>0?'+':'')+adjSum.toFixed(2) : '–')+'</td>' +
       '<td class="'+(bal<0?'bal-neg':'bal-pos')+'">'+bal.toFixed(2)+'</td>' +
       '<td style="color:var(--blue);font-size:10px;">▾ ดูรายละเอียด</td>' +
     '</tr>';
@@ -1115,8 +1137,15 @@ function renderMonthlyIn() {
         '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:var(--orange);">−'+Number(r.liter||0).toFixed(2)+' L</td>' +
         '<td style="padding:6px 10px;width:15%;"></td><td style="padding:6px 10px;width:15%;"></td></tr>';
     }).join('');
-    rows += '<tr id="'+rowId+'" style="display:none;"><td colspan="10" style="padding:0;background:#f8fafc;">' +
-      '<table style="width:100%;border-collapse:collapse;font-size:10px;">' + inHtml + outHtml + '</table>' +
+    var adjHtml = g.adjs.map(function(r){
+      var dl = Number(r.liter||0);
+      return '<tr style="background:#fffbeb;"><td class="td-l" style="padding:6px 10px;width:20%;color:#92400e;">'+fmtD(r.date)+'</td>' +
+        '<td class="td-l" style="padding:6px 10px;width:30%;color:#92400e;">ปรับยอด · '+(r.note||'—')+(r.by?' · '+r.by:'')+'</td>' +
+        '<td style="padding:6px 10px;width:20%;text-align:center;font-weight:700;color:#92400e;">'+(dl>=0?'+':'')+dl.toFixed(2)+' L</td>' +
+        '<td style="padding:6px 10px;width:15%;"></td><td style="padding:6px 10px;width:15%;"></td></tr>';
+    }).join('');
+    rows += '<tr id="'+rowId+'" style="display:none;"><td colspan="11" style="padding:0;background:#f8fafc;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10px;">' + adjHtml + inHtml + outHtml + '</table>' +
     '</td></tr>';
   });
 
@@ -1127,6 +1156,71 @@ function toggleMonthDetail(rowId) {
   var el = document.getElementById(rowId);
   if (!el) return;
   el.style.display = (el.style.display==='none') ? 'table-row' : 'none';
+}
+
+// ══ ปรับสต๊อก (ตรวจนับ) — เฉพาะ admin ══
+function openAdjust() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้นที่ปรับสต๊อกได้'); return; }
+  var itemId = document.getElementById('stockItemSel').value;
+  var item = chemItems.find(function(c){ return c.id===itemId; });
+  if (!item) { alert('กรุณาเลือกรายการเคมีก่อน'); return; }
+  var cur = calcBalance(itemId).remain;
+  var old = document.getElementById('adjOverlay'); if (old) old.remove();
+  var now = new Date(), today = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var ov = document.createElement('div');
+  ov.id = 'adjOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:14px;padding:18px;width:100%;max-width:420px;font-family:\'IBM Plex Sans Thai\',sans-serif;">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px;">⚖️ ปรับสต๊อก (ตรวจนับ)</div>' +
+      '<div style="font-size:12px;color:var(--text-mid);margin-bottom:12px;">'+item.code+' — '+item.name+'</div>' +
+      '<div style="display:flex;justify-content:space-between;padding:8px 10px;background:#f1f5f9;border-radius:8px;font-size:13px;margin-bottom:10px;"><span>ยอดในระบบตอนนี้</span><b id="adjCur" style="font-family:\'IBM Plex Mono\',monospace;">'+cur.toFixed(2)+' L</b></div>' +
+      '<label style="font-size:11px;color:var(--text-mid);">ยอดนับจริง (ลิตร)</label>' +
+      '<input id="adjCounted" type="number" step="0.01" min="0" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin:3px 0 8px;box-sizing:border-box;" oninput="adjPreview()">' +
+      '<div id="adjDiff" style="font-size:13px;font-weight:700;margin-bottom:8px;min-height:18px;"></div>' +
+      '<label style="font-size:11px;color:var(--text-mid);">วันที่ปรับ</label>' +
+      '<input id="adjDate" type="date" value="'+today+'" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin:3px 0 8px;box-sizing:border-box;">' +
+      '<label style="font-size:11px;color:var(--text-mid);">เหตุผล (จำเป็น)</label>' +
+      '<input id="adjReason" type="text" placeholder="เช่น ตรวจนับสต๊อก 12 พ.ย." style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin:3px 0 12px;box-sizing:border-box;">' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="document.getElementById(\'adjOverlay\').remove()" class="btn btn-outline" style="flex:1;">ยกเลิก</button>' +
+        '<button onclick="confirmAdjust()" class="btn" style="flex:1;background:#d97706;color:#fff;border:none;">ยืนยันปรับสต๊อก</button>' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);margin-top:8px;">ระบบเพิ่มรายการ "ปรับยอด" ให้ยอดคงเหลือเท่ากับยอดนับ รายการเก่าไม่ถูกแก้ไข</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){ var c = document.getElementById('adjCounted'); if (c) c.focus(); }, 50);
+}
+function adjPreview() {
+  var itemId = document.getElementById('stockItemSel').value;
+  var cur = calcBalance(itemId).remain;
+  var v = document.getElementById('adjCounted').value;
+  var el = document.getElementById('adjDiff');
+  if (v === '') { el.textContent = ''; return; }
+  var d = Number(v) - cur;
+  el.style.color = Math.abs(d) < 0.005 ? 'var(--text-muted)' : (d > 0 ? 'var(--green)' : 'var(--red)');
+  el.textContent = Math.abs(d) < 0.005 ? 'ยอดตรงกับระบบ ไม่ต้องปรับ' : ('ผลต่าง ' + (d>0?'+':'') + d.toFixed(2) + ' L (ปรับยอดจาก ' + cur.toFixed(2) + ' → ' + Number(v).toFixed(2) + ')');
+}
+function confirmAdjust() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้นที่ปรับสต๊อกได้'); return; }
+  var itemId = document.getElementById('stockItemSel').value;
+  var item = chemItems.find(function(c){ return c.id===itemId; });
+  if (!item) return;
+  var v = document.getElementById('adjCounted').value;
+  var date = document.getElementById('adjDate').value;
+  var reason = document.getElementById('adjReason').value.trim();
+  if (v === '' || isNaN(Number(v)) || Number(v) < 0) { alert('กรุณากรอกยอดนับจริง (ไม่ติดลบ)'); return; }
+  if (!date) { alert('กรุณาเลือกวันที่'); return; }
+  if (!reason) { alert('กรุณากรอกเหตุผล'); return; }
+  var cur = calcBalance(itemId).remain;
+  var counted = Number(v);
+  var diff = Math.round((counted - cur) * 100) / 100;
+  if (Math.abs(diff) < 0.005) { alert('ยอดนับตรงกับยอดในระบบอยู่แล้ว ไม่ต้องปรับ'); return; }
+  if (!confirm('ยืนยันปรับสต๊อก ' + item.code + '\nยอดในระบบ ' + cur.toFixed(2) + ' → ยอดนับ ' + counted.toFixed(2) + ' L (ผลต่าง ' + (diff>0?'+':'') + diff.toFixed(2) + ' L)\nเหตุผล: ' + reason)) return;
+  chemRecords.push({ id:'ADJ'+Date.now(), chemId:itemId, type:'adjust', liter:diff, date:date, note:reason, by:(currentUserName||''), before:cur, counted:counted, savedAt:new Date().toISOString() });
+  saveLocal(); fbSave();
+  var ov = document.getElementById('adjOverlay'); if (ov) ov.remove();
+  renderStockCard();
 }
 
 function exportStockCSV() {
