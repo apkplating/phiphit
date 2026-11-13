@@ -250,6 +250,7 @@ if ('caches' in window) {
         <option value="BCK">B+C+K</option>
       </select>
       <button onclick="exportCSV()" class="btn btn-outline btn-sm">📥 CSV</button>
+      <button id="pmRestoreBtn" onclick="pmRestore()" class="btn btn-outline btn-sm" style="display:none;">🛟 กู้จากสำรอง</button>
     </div>
   </div>
 
@@ -658,6 +659,7 @@ function logoutPM() {
 }
 
 function applyRole() {
+  var _rb=document.getElementById('pmRestoreBtn'); if(_rb) _rb.style.display = (currentRole==='admin') ? '' : 'none';
   // viewer: ซ่อนแท็บ "เพิ่มชิ้นงาน" — operator/admin ใช้งานได้เต็มที่
   var isViewer = currentRole === 'viewer';
   document.querySelectorAll('.tab-btn').forEach(function(btn, i){
@@ -721,13 +723,27 @@ function getDeleted() { try { return JSON.parse(localStorage.getItem('pm_deleted
 function markDeleted(id) { var d=getDeleted(); d[id]=new Date().toISOString(); try{ localStorage.setItem('pm_deleted', JSON.stringify(d)); }catch(e){} }
 function _ts(x){ return (x && (x.updatedAt||x.createdAt)) || ''; }
 // รวมข้อมูลเครื่องนี้กับ cloud ทีละรายการ (id เดียวกัน → เอาอันที่แก้ล่าสุด) — ไม่ให้เครื่องใดเขียนทับงานของอีกเครื่อง
+// ป้องกันค่าหายเงียบๆ: ถ้ารายการที่ "ใหม่กว่า" มีช่องว่าง/0 แต่รายการเก่ากว่ามีค่า → เก็บค่าเดิมไว้ (ยกเว้นผู้ใช้กดล้างค่าเองใน _clr)
+var _PROTECT = ['areaDm2','weightPerPc','drumWeight','platingType','lineMain','lineBackup','customer','colors','name','jigConfigs'];
+function _isEmpty(v){ return v===undefined || v===null || v==='' || v===0 || (Array.isArray(v) && !v.length); }
+function _mergeRec(local, cloud) {
+  var base = (_ts(local) > _ts(cloud)) ? local : cloud, other = (base === local) ? cloud : local;
+  var out = base, clr = base._clr || {};
+  _PROTECT.forEach(function(k){
+    if (_isEmpty(base[k]) && !_isEmpty(other[k]) && !(clr[k] && clr[k] >= _ts(other))) {
+      if (out === base) out = Object.assign({}, base);
+      out[k] = other[k];
+    }
+  });
+  return out;
+}
 function mergeById(local, cloud, deleted) {
   var map = {}, order = [];
   (cloud||[]).forEach(function(x){ if(x && x.id && !deleted[x.id]){ map[x.id]=x; order.push(x.id); } });
   (local||[]).forEach(function(x){
     if (!x || !x.id || deleted[x.id]) return;
     if (!map[x.id]) { map[x.id]=x; order.unshift(x.id); }
-    else if (_ts(x) > _ts(map[x.id])) map[x.id]=x;
+    else map[x.id] = _mergeRec(x, map[x.id]);
   });
   return order.map(function(id){ return map[id]; });
 }
@@ -737,12 +753,37 @@ async function fbPull() {
   return await res.json();
 }
 function _setDirty(v){ try{ if(v) localStorage.setItem('pm_dirty','1'); else localStorage.removeItem('pm_dirty'); }catch(e){} }
-async function fbSave() {
-  if (_fbBusy) { await new Promise(function(r){ setTimeout(r,600); }); }
+// คิวบันทึก: ทำทีละงานตามลำดับ (กันบันทึกซ้อนกันแล้วอันเก่าไปทับอันใหม่)
+var _saveChain = Promise.resolve();
+function fbSave() {
+  var run = _saveChain.then(_fbSaveNow, _fbSaveNow);
+  _saveChain = run.catch(function(){});
+  return run;
+}
+// สำรองข้อมูลบน server (ก่อนเขียนทับ): อย่างน้อยทุก 3 ชม. ต่อเครื่อง เก็บล่าสุด 40 ชุด — ใช้กู้คืนด้วยปุ่ม 🛟
+var PM_BAK_PATH = DB_URL + '/part-master-bak';
+async function pmBackupIfDue(cloud) {
+  try {
+    if (!cloud || !Array.isArray(cloud.parts) || !cloud.parts.length) return;
+    var last = Number(localStorage.getItem('pm_bak_at')||0);
+    if (Date.now() - last < 3*3600*1000) return;
+    var d = new Date(Date.now() + 7*3600*1000).toISOString();   // เวลาไทย
+    var key = d.slice(0,10).replace(/-/g,'') + '-' + d.slice(11,16).replace(':','');
+    var r = await fetch(PM_BAK_PATH+'/'+key+'.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cloud) });
+    if (!r.ok) return;
+    try { localStorage.setItem('pm_bak_at', String(Date.now())); } catch(e){}
+    try {   // ลบชุดเก่าเกิน 40
+      var kr = await fetch(PM_BAK_PATH+'.json?shallow=true');
+      if (kr.ok) { var ks = Object.keys((await kr.json())||{}).sort(); while (ks.length > 40) { await fetch(PM_BAK_PATH+'/'+ks.shift()+'.json', {method:'DELETE'}); } }
+    } catch(e){}
+  } catch(e){}
+}
+async function _fbSaveNow() {
   _fbBusy = true;
   try {
     var cloud = null;
     try { cloud = await fbPull(); } catch(e) { setSyncErr(); _setDirty(true); return false; }
+    await pmBackupIfDue(cloud);
     var del = Object.assign({}, (cloud && cloud.deleted) || {}, getDeleted());
     parts = mergeById(parts, cloud && cloud.parts, del);
     jigs  = mergeById(jigs,  cloud && cloud.jigs,  del);
@@ -1050,6 +1091,11 @@ async function savePart() {
   var payload = { partNo:partNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
     lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, platingType:platingType, areaDm2:areaDm2, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() };
   if (idx >= 0) {
+    // ฟอร์มเพิ่ม: ช่องที่เว้นว่างห้ามไปล้างค่าเดิมของ P/No นี้ (เช่น พื้นที่ dm²)
+    ['areaDm2','weightPerPc','drumWeight','platingType','lineMain','lineBackup','customer','colors','name'].forEach(function(k){
+      if (_isEmpty(payload[k]) && !_isEmpty(parts[idx][k])) delete payload[k];
+    });
+    if (!jigConfigs.length) delete payload.jigConfigs;
     parts[idx] = Object.assign({}, parts[idx], payload);
     // ล้างฟิลด์เก่าก่อนเปลี่ยนเป็น array (กันข้อมูลค้างซ้ำซ้อนกับ jigConfigs ใหม่)
     delete parts[idx].pcsPerRack; delete parts[idx].jigSuggest;
@@ -1269,8 +1315,11 @@ async function saveEdit() {
   // ตรวจว่า P/No ซ้ำกับรายการอื่นไหม
   var dupIdx = parts.findIndex(function(p){ return p.partNo===newPartNo && p.id!==id; });
   if (dupIdx >= 0) { showToast('edit','P/No "'+newPartNo+'" ซ้ำกับรายการอื่น','err'); return; }
-  parts[idx] = Object.assign({}, parts[idx], { partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
-    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, platingType:platingType, areaDm2:areaDm2, jigConfigs:jigConfigs, updatedAt:new Date().toISOString() });
+  var _old = parts[idx], _now = new Date().toISOString(), _clr = Object.assign({}, _old._clr || {});
+  var _nv = { areaDm2:areaDm2, weightPerPc:wt, drumWeight:drumWeight, platingType:platingType, name:name, customer:cust };
+  Object.keys(_nv).forEach(function(k){ if (_isEmpty(_nv[k]) && !_isEmpty(_old[k])) _clr[k] = _now; else delete _clr[k]; });
+  parts[idx] = Object.assign({}, parts[idx], { _clr:_clr, partNo:newPartNo, name:name, customer:cust, colors:colors, weightPerPc:wt, note:note,
+    lineMain:lineMain, lineBackup:lineBackup, drumWeight:drumWeight, platingType:platingType, areaDm2:areaDm2, jigConfigs:jigConfigs, updatedAt:_now });
   // ล้างฟิลด์เก่าหลัง migrate เป็น jigConfigs แล้ว กันข้อมูลค้างซ้ำซ้อน
   delete parts[idx].pcsPerRack; delete parts[idx].jigSuggest;
 
@@ -1372,6 +1421,37 @@ function calcResult() {
 // ══════════════════════════════════════
 //  EXPORT CSV
 // ══════════════════════════════════════
+// กู้จากสำรอง (admin): เติมเฉพาะช่องที่ "ว่างอยู่ตอนนี้" จากชุดสำรอง ไม่ทับค่าที่มีอยู่ และไม่เอารายการที่ลบไปแล้วกลับมา
+async function pmRestore() {
+  if (currentRole !== 'admin') return;
+  try {
+    var kr = await fetch(PM_BAK_PATH+'.json?shallow=true');
+    var keys = kr.ok ? Object.keys((await kr.json())||{}).sort().reverse() : [];
+    if (!keys.length) { alert('ยังไม่มีข้อมูลสำรองบน server (ระบบจะสำรองอัตโนมัติเมื่อมีการบันทึกครั้งถัดไป)'); return; }
+    var list = keys.slice(0,15).map(function(k,i){ return (i+1)+'. '+k.slice(6,8)+'/'+k.slice(4,6)+'/'+k.slice(0,4)+' '+k.slice(9,11)+':'+k.slice(11,13); }).join('\n');
+    var n = parseInt(prompt('เลือกชุดสำรองที่ต้องการกู้ (พิมพ์เลขลำดับ)\n\n'+list, '1'), 10);
+    if (!n || n < 1 || n > Math.min(15, keys.length)) return;
+    var key = keys[n-1];
+    var br = await fetch(PM_BAK_PATH+'/'+key+'.json'); var bak = br.ok ? await br.json() : null;
+    if (!bak || !Array.isArray(bak.parts)) { alert('อ่านชุดสำรองไม่สำเร็จ'); return; }
+    var cur = await fbPull(); var del = Object.assign({}, (cur&&cur.deleted)||{}, getDeleted());
+    var curMap = {}; parts.forEach(function(x){ curMap[x.id] = x; });
+    var fixed = 0, fields = 0;
+    bak.parts.forEach(function(b){
+      var c = curMap[b.id]; if (!c || del[b.id]) return;
+      var changed = false, o = Object.assign({}, c);
+      _PROTECT.forEach(function(k){ if (_isEmpty(c[k]) && !_isEmpty(b[k])) { o[k] = b[k]; changed = true; fields++; } });
+      if (changed) { o.updatedAt = new Date().toISOString(); curMap[b.id] = o; fixed++; }
+    });
+    if (!fixed) { alert('ชุดสำรองนี้ไม่มีค่าที่ขาดหายไปให้กู้'); return; }
+    if (!confirm('จะกู้ค่าที่ว่างอยู่ในตอนนี้จากชุดสำรอง '+key+'\n\n• '+fixed+' ชิ้นงาน · '+fields+' ช่อง\n• ไม่ทับค่าที่มีอยู่แล้ว\n\nยืนยัน?')) return;
+    parts = parts.map(function(x){ return curMap[x.id] || x; });
+    saveLocal(); renderAll();
+    var ok = await fbSave();
+    alert(ok ? ('✅ กู้คืน '+fixed+' ชิ้นงานสำเร็จ') : '⚠️ กู้ในเครื่องแล้ว แต่ยังไม่ขึ้น Firebase');
+  } catch(e) { alert('กู้คืนไม่สำเร็จ: '+(e && e.message || e)); }
+}
+
 function exportCSV() {
   var rows = [['P/No','ชื่อชิ้นงาน','ลูกค้า','สีที่ชุบ','ไลน์หลัก','ไลน์สำรอง','น้ำหนัก/โม่(kg)','จิ๊ก+ชิ้น/Rack','น้ำหนัก/ชิ้น(g)','Plating Type','พื้นที่(dm²)','หมายเหตุ']];
   parts.forEach(function(p){
