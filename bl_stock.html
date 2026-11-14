@@ -34,7 +34,8 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 .card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border);}
 
-.sum-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.sum-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px;}
+@media(max-width:700px){.sum-grid{grid-template-columns:repeat(2,1fr);}}
 .sum-card{text-align:center;padding:10px 4px;border-radius:10px;border:1px solid;}
 .sum-card .val{font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;line-height:1.1;}
 .sum-card .lbl{font-size:9px;color:var(--text-muted);margin-top:3px;}
@@ -233,7 +234,12 @@ if ('caches' in window) {
       <div class="sum-card" style="background:var(--amber-bg);border-color:var(--amber-border);">
         <div class="val" style="color:var(--amber);" id="sWip">0</div>
         <div id="sWipKg" style="font-size:10px;color:#d97706;margin-top:1px;"></div>
-        <div class="lbl">WIP ชุบแล้ว</div>
+        <div class="lbl">WIP (ชุบ − คัด QC100)</div>
+      </div>
+      <div class="sum-card" style="background:#ecfdf5;border-color:#a7f3d0;">
+        <div class="val" style="color:#059669;" id="sReady">0</div>
+        <div id="sReadyKg" style="font-size:10px;color:#10b981;margin-top:1px;"></div>
+        <div class="lbl">พร้อมส่ง (คัดผ่าน − ขาย)</div>
       </div>
       <div class="sum-card" style="background:var(--orange-bg);border-color:var(--orange-border);">
         <div class="val" style="color:var(--orange);" id="sDel">0</div>
@@ -261,14 +267,15 @@ if ('caches' in window) {
             <th class="tl" style="min-width:130px;">P/No · ชิ้นงาน</th>
             <th class="tl" style="min-width:70px;">ลูกค้า</th>
             <th style="min-width:80px;">รับเข้า<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
-            <th style="min-width:70px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
+            <th style="min-width:80px;">WIP<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชุบ − คัด QC100 · ชิ้น</span></th>
+            <th style="min-width:80px;">พร้อมส่ง<br><span style="opacity:.6;font-weight:400;font-size:9px;">คัดผ่าน − ขาย INV · ชิ้น</span></th>
             <th style="min-width:80px;">Delivery<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
             <th style="min-width:80px;">คงเหลือ<br><span style="opacity:.6;font-weight:400;font-size:9px;">ชิ้น / kg</span></th>
             <th style="min-width:65px;">สถานะ</th>
             <th style="width:28px;"></th>
           </tr></thead>
           <tbody id="stockBody">
-            <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">กำลังโหลด...</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);">กำลังโหลด...</td></tr>
           </tbody>
         </table>
       </div>
@@ -563,7 +570,7 @@ function fmtD(s){
 async function loadAll(manual) {
   setSyncing(true);
   try {
-    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster(), loadQCData() ]);
+    await Promise.all([ loadJobMaster(), loadBLDel(), loadWIP(), loadPartMaster(), loadQCData(), loadQC100() ]);
     // debug: แสดง path ที่ดึง
     console.log('[BL Stock] intake:', INTAKE_URL);
     console.log('[BL Stock] job-master:', JM_URL);
@@ -824,18 +831,33 @@ function getWip(partNo) {
   return wo || null;
 }
 
-function buildMap() {
+// buildMap(month) — month = 'YYYY-MM' → นับเฉพาะ "บิลรับเข้า" ที่รับในเดือนนั้น (รับเข้า/ชุบ/ขาย ผูกกับบิลเดียวกันทั้งหมด จึงเทียบกันได้ตรง)
+//   ไม่ส่ง/'all' → ทุกเดือน (ใช้กับฟอร์ม Delivery ที่ต้องเช็คคงเหลือรวม)
+function buildMap(month) {
   var map = {};
+  var scoped = !!(month && month !== 'all');
+  function inScope(job){ return !scoped || (job.date||'').slice(0,7) === month; }
 
   // รับเข้าจาก Job Master items
   jmItems.forEach(function(job){
+    if (!inScope(job)) return;
     var pn = jobPartNo(job);
     var k  = norm(pn);
     if (!k) return;
-    if (!map[k]) map[k]={ partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, autoConsumed:0, autoConsumedKg:0, jobIds:[], dueDate:job.dueDate||'' };
+    if (!map[k]) map[k]={ plated:0, platedKg:0, unlinked:0, unlinkedKg:0, qcOK:0, qcDone:0, partNo:pn, customer:job.customer||'', receive:0, receiveKg:0, delivery:0, deliveryKg:0, shipped:0, shippedKg:0, autoConsumed:0, autoConsumedKg:0, jobIds:[], dueDate:job.dueDate||'' };
     map[k].receive    += jobQty(job);
     map[k].receiveKg  += Number(job.qtyKg||0);
     map[k].jobIds.push(job.id);
+    // ยอดชุบ (v4/5/6) เฉพาะรอบชุบที่ผูกเลขบิลนี้ — หน่วยชิ้น ถ้าแถวมีแต่ kg แปลงด้วยน้ำหนัก/ชิ้นจาก Part Master
+    var _pmw = pmLookup(pn), _w = _pmw && _pmw.weightPerPc > 0 ? _pmw.weightPerPc : 0;
+    (wipByJob[job.id]||[]).forEach(function(r){
+      var rp = Number(r.pcs||0), rk = Number(r.kg||0);
+      if (!rp && rk > 0 && _w) rp = ucKgToPcs(rk, _w);
+      map[k].plated += rp; map[k].platedKg += rk;
+    });
+    var _q1 = qc100ByJob[job.id], _q2 = qc100ByBill[norm(job.bill||'')];
+    if (_q1) { map[k].qcOK += _q1.ok; map[k].qcDone += _q1.done; }
+    if (_q2) { map[k].qcOK += _q2.ok; map[k].qcDone += _q2.done; }
     if (!map[k].customer && job.customer) map[k].customer=job.customer;
     if (!map[k].dueDate  && job.dueDate)  map[k].dueDate=job.dueDate;
   });
@@ -857,7 +879,7 @@ function buildMap() {
     if (r.type!=='out') return;
     // หา job ที่ r.jobId ตรงกัน แล้ว map กลับไป partNo
     var job = jmItems.find(function(j){ return j.id===r.jobId; });
-    if (!job) return;
+    if (!job || !inScope(job)) return;
     var pn = jobPartNo(job);
     var k = norm(pn);
     if (!k || !map[k]) return;
@@ -886,6 +908,33 @@ function buildMap() {
     map[k].deliveryAdjKg = (map[k].deliveryAdjKg||0) + Number(d.qtyKg||0);
   });
 
+  // รอบชุบที่ "ไม่ผูกเลขบิล" (แสดงแยก ไม่รวมในยอดชุบ) — ตามเดือนที่เลือก (ใช้วันที่ของรอบชุบ)
+  Object.keys(map).forEach(function(k){
+    var rows = getWipRows(map[k].partNo), pmx = pmLookup(map[k].partNo), wx = pmx && pmx.weightPerPc > 0 ? pmx.weightPerPc : 0;
+    rows.forEach(function(rw){
+      if (rw.linked) return;
+      if (scoped && String(rw.date||'').slice(0,7) !== month) return;
+      var rp = Number(rw.pcs||0), rk = Number(rw.kg||0);
+      if (!rp && rk > 0 && wx) rp = ucKgToPcs(rk, wx);
+      map[k].unlinked += rp; map[k].unlinkedKg += rk;
+    });
+  });
+
+  // ── WIP / พร้อมส่ง ต่อ P/No ──
+  //  P/No ที่เคยมีบันทึกคัด QC100: WIP = ชุบ − คัดแล้ว(ผ่าน+ทิ้ง) · พร้อมส่ง = คัดผ่าน − ขาย INV
+  //  P/No ที่ไม่เคยมีบันทึกคัดเลย (หรือโหลด QC100 ไม่ได้): ใช้สูตรเดิม WIP = ชุบ − ขาย INV และไม่แสดงพร้อมส่ง (noQc)
+  Object.keys(map).forEach(function(k){
+    var m = map[k], pmx = pmLookup(m.partNo), w = pmx && pmx.weightPerPc > 0 ? pmx.weightPerPc : 0;
+    m.noQc = !(qc100Ok && (qc100Parts[k] || m.qcDone > 0));
+    if (m.noQc) {
+      m.wip = m.plated - m.shipped; m.wipKg = m.platedKg - m.shippedKg;
+      m.ready = null; m.readyKg = null;
+    } else {
+      m.wip = m.plated - m.qcDone;  m.wipKg = w ? m.platedKg - m.qcDone*w/1000 : 0;
+      m.ready = m.qcOK - m.shipped; m.readyKg = w ? m.qcOK*w/1000 - m.shippedKg : 0;
+    }
+  });
+
   // ── เติมข้อมูลจาก Part Master ──
   Object.keys(map).forEach(function(k) {
     var pm = pmLookup(map[k].partNo);
@@ -909,10 +958,10 @@ function buildMap() {
 //  RENDER STOCK BOARD
 // ══════════════════════════════════════════════════════
 function renderStock() {
-  var map    = buildMap();
-  var parts  = Object.values(map);
   var fSt    = document.getElementById('fStatus').value;
   var fMonth = document.getElementById('fMonth').value;
+  var map    = buildMap(fMonth);
+  var parts  = Object.values(map);
   var fSrch  = norm(document.getElementById('fSearch').value||'');
 
   // Month dropdown จาก job items
@@ -929,27 +978,17 @@ function renderStock() {
   }
 
   // Month filter (จาก job items ที่มีวันที่รับในเดือนนั้น)
-  if (fMonth!=='all') {
-    var validKeys={};
-    jmItems.filter(function(j){ return (j.date||'').slice(0,7)===fMonth; })
-           .forEach(function(j){ validKeys[norm(jobPartNo(j))]=1; });
-    parts=parts.filter(function(p){ return validKeys[norm(p.partNo)]; });
-  }
+  // (ตัวกรองเดือนทำใน buildMap แล้ว — ตัวเลขทุกช่องเป็นของบิลที่รับในเดือนนั้น)
 
   if (fSrch) parts=parts.filter(function(p){
     return norm(p.partNo).includes(fSrch)||norm(p.customer).includes(fSrch);
   });
 
   // Summary
-  var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0;
+  var sumRcv=0,sumRcvKg=0,sumWip=0,sumWipKg=0,sumDel=0,sumDelKg=0,sumReady=0,sumReadyKg=0;
   parts.forEach(function(p){
-    var wo=getWip(p.partNo)||{};
-    var pmw=pmLookup(p.partNo);
-    var platedPcs = wo.pcs||0;
-    if (!platedPcs && (wo.kgs||0) > 0 && pmw && pmw.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pmw.weightPerPc);
-    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wpcs = Math.max(0, platedPcs   - (p.shipped||0));
-    var wkg  = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+    var wpcs = p.wip||0, wkg = p.wipKg||0;
+    if (p.ready != null) { sumReady += p.ready; sumReadyKg += (p.readyKg||0); }
     sumRcv+=p.receive; sumRcvKg+=(p.receiveKg||0);
     sumWip+=wpcs;      sumWipKg+=wkg;
     sumDel+=p.delivery;sumDelKg+=(p.deliveryKg||0);
@@ -964,6 +1003,8 @@ function renderStock() {
   document.getElementById('sRcv').textContent=sumRcv.toLocaleString();
   document.getElementById('sWip').textContent=sumWip.toLocaleString();
   document.getElementById('sDel').textContent=sumDel.toLocaleString();
+  document.getElementById('sReady').textContent=sumReady.toLocaleString();
+  var rdKgEl=document.getElementById('sReadyKg'); if(rdKgEl) rdKgEl.textContent=Math.abs(sumReadyKg)>0.005?sumReadyKg.toFixed(1)+' kg':'';
 
   // Filter by status
   var mn=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -982,38 +1023,40 @@ function renderStock() {
 
   var tbody=document.getElementById('stockBody');
   if (!filtParts.length) {
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">ไม่มีข้อมูล — ตรวจสอบ Job Master</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);">ไม่มีข้อมูล — ตรวจสอบ Job Master</td></tr>';
     return;
   }
 
   tbody.innerHTML = filtParts.map(function(p,i){
     var pm     = pmLookup(p.partNo);
-    var wo     = getWip(p.partNo)||{};
-    var platedPcs = wo.pcs||0;
-    if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
-    // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV
-    var wip   = Math.max(0, platedPcs  - (p.shipped||0));
-    var wipKg = Math.max(0, (wo.kgs||0) - (p.shippedKg||0));
+    // WIP = ยอดชุบ v4/5/6 (เฉพาะรอบที่ผูกเลขบิลรับเข้า) − ขายออก INV · คงเหลือ = รับเข้า − ขายออก INV (ติดลบได้ = ข้อมูลผิดปกติ แสดงสีแดง)
+    var wip   = p.wip||0;
+    var wipKg = p.wipKg||0;
 
-    var remain   = Math.max(0, p.receive - p.delivery);
-    var remainKg = Math.max(0, (p.receiveKg||0) - (p.deliveryKg||0));
+    var remain   = p.receive - p.delivery;
+    var remainKg = (p.receiveKg||0) - (p.deliveryKg||0);
     var st       = getStatus(p);
 
     var badgeCls={'กำลังผลิต':'wip','จ่ายบางส่วน':'part','จ่ายครบ':'done','เกินกำหนด':'over'}[st]||'ok';
 
     // helper: แสดง ชิ้น + kg ซ้อนกัน
     function dualCell(pcs, kg, color) {
-      var pcsStr = pcs > 0 ? '<div style="font-weight:700;color:'+(color||'var(--navy)')+';">'+pcs.toLocaleString()+'</div>' : '<div style="color:#94a3b8;">–</div>';
-      var kgStr  = kg  > 0 ? '<div style="font-size:9px;color:var(--text-muted);">'+kg.toFixed(2)+' kg</div>' : '';
+      var neg = pcs < 0 || (pcs === 0 && kg < -0.005);
+      var pcsStr = pcs !== 0 ? '<div style="font-weight:700;color:'+(pcs<0?'#dc2626':(color||'var(--navy)'))+';">'+pcs.toLocaleString()+'</div>' : (neg ? '<div style="font-weight:700;color:#dc2626;">0</div>' : '<div style="color:#94a3b8;">–</div>');
+      var kgStr  = Math.abs(kg) > 0.005 ? '<div style="font-size:9px;color:'+(kg<0?'#dc2626':'var(--text-muted)')+';">'+kg.toFixed(2)+' kg</div>' : '';
       return pcsStr + kgStr;
     }
 
-    var wipStr = (wip>0||wipKg>0)
-      ? '<div style="font-weight:700;">'+wip.toLocaleString()+'</div>'+
-        '<div style="font-size:9px;color:var(--text-muted);">'+wipKg.toFixed(2)+' kg</div>'
+    var wipStr = (wip!==0||Math.abs(wipKg)>0.005)
+      ? '<div style="font-weight:700;color:'+(wip<0?'#dc2626':'inherit')+';">'+wip.toLocaleString()+'</div>'+
+        '<div style="font-size:9px;color:'+(wipKg<0?'#dc2626':'var(--text-muted)')+';">'+wipKg.toFixed(2)+' kg</div>'
       : '<div style="color:#94a3b8;">–</div>';
+    var readyStr;
+    if (p.ready == null) readyStr = '<div style="color:#94a3b8;" title="P/No นี้ยังไม่มีบันทึกคัด QC100 จึงยังไม่คำนวณพร้อมส่ง (WIP ใช้ ชุบ − ขาย INV)">n/a</div><div style="font-size:9px;color:#d97706;">ไม่มีข้อมูลคัด</div>';
+    else readyStr = dualCell(p.ready, p.readyKg||0, '#059669');
+    if ((p.unlinked||0) > 0 || (p.unlinkedKg||0) > 0) wipStr += '<div style="font-size:9px;color:#d97706;" title="รอบชุบที่ไม่ผูกเลขบิล — ไม่รวมในยอดชุบ">+'+(p.unlinked||0).toLocaleString()+' ไม่ผูกบิล</div>';
 
-    var remColor = remain===0&&remainKg===0?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
+    var remColor = remain===0&&Math.abs(remainKg)<0.005?'#94a3b8':remain<p.receive*0.15?'#dc2626':'var(--navy)';
 
     // สีชุบ + ชื่อจาก Part Master
     var colorStr = '';
@@ -1034,12 +1077,13 @@ function renderStock() {
       '<td class="tl" style="font-size:11px;color:var(--text-muted);max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(p.customer||'–')+'</td>'+
       '<td>'+dualCell(p.receive, p.receiveKg||0, 'var(--blue)')+'</td>'+
       '<td>'+wipStr+'</td>'+
+      '<td>'+readyStr+'</td>'+
       '<td>'+dualCell(p.delivery, p.deliveryKg||0, '#059669')+'</td>'+
       '<td>'+dualCell(remain, remainKg, remColor)+'</td>'+
       '<td><span class="badge '+badgeCls+'">'+st+'</span></td>'+
       '<td><button onclick="toggleDetail('+i+')" id="chv'+i+'" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);">›</button></td>'+
     '</tr>'+
-    '<tr id="dr'+i+'" style="display:none;"><td colspan="8" style="padding:0 6px 10px;"><div id="dc'+i+'"></div></td></tr>';
+    '<tr id="dr'+i+'" style="display:none;"><td colspan="9" style="padding:0 6px 10px;"><div id="dc'+i+'"></div></td></tr>';
   }).join('');
 }
 
@@ -1069,15 +1113,12 @@ function toggleDetail(i) {
 function buildDetail(p) {
   var k=norm(p.partNo);
   var pm=pmLookup(p.partNo); // Part Master data
-  var wo=getWip(p.partNo)||{};
-  var platedPcs = wo.pcs||0;
-  if (!platedPcs && (wo.kgs||0) > 0 && pm && pm.weightPerPc > 0) platedPcs = ucKgToPcs(wo.kgs, pm.weightPerPc);
-  // WIP = ชุบไปแล้ว (จาก v4,5,6) − ขายจริงผ่าน INV (ตรงกับ STOCK2 ในหน้า Traceability)
-  var wip = Math.max(0, platedPcs - (p.shipped||0));
-  var remain=Math.max(0,p.receive-p.delivery);
+  var wo={ kgs:(p.wipKg||0), lines:{} };
+  var wip = p.wip||0;
+  var remain=p.receive-p.delivery;
 
-  // Job master items ของ P/No นี้
-  var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k; });
+  // Job master items ของ P/No นี้ (เฉพาะบิลในช่วงที่เลือก)
+  var jobs=jmItems.filter(function(j){ return norm(jobPartNo(j))===k && (!p.jobIds || p.jobIds.indexOf(j.id)>=0); });
   // Job master delivery records
   var jmDels=[];
   jobs.forEach(function(job){
@@ -1121,22 +1162,28 @@ function buildDetail(p) {
   }
 
   // Summary row
-  html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">';
+  html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">';
   html+='<div style="padding:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center;">';
   html+='<div style="font-size:9px;color:var(--text-muted);">รับเข้ารวม</div>';
   html+='<div style="font-size:16px;font-weight:800;color:var(--blue);">'+p.receive.toLocaleString()+'</div>';
   html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น ('+jobs.length+' ล็อต)</div></div>';
 
   html+='<div style="padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;text-align:center;">';
-  html+='<div style="font-size:9px;color:var(--text-muted);">WIP ชุบแล้ว</div>';
-  html+='<div style="font-size:16px;font-weight:800;color:var(--amber);">'+wip.toLocaleString()+'</div>';
-  if(wo.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wo.kgs.toFixed(1)+' Kgs · '+Object.keys(wo.lines||{}).join('/')+'</div>';
+  html+='<div style="font-size:9px;color:var(--text-muted);">WIP ('+(p.noQc?'ชุบ−ขาย':'ชุบ−คัด')+')</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:'+(wip<0?'#dc2626':'var(--amber)')+';">'+wip.toLocaleString()+'</div>';
+  if(wo.kgs) html+='<div style="font-size:9px;color:var(--text-muted);">'+wo.kgs.toFixed(1)+' Kgs · ชุบ '+(p.plated||0).toLocaleString()+' − '+(p.noQc?('ขาย '+(p.shipped||0).toLocaleString()):('คัด '+(p.qcDone||0).toLocaleString()))+'</div>';
   else html+='<div style="font-size:9px;color:var(--text-muted);">ชิ้น</div>';
+  html+='</div>';
+
+  html+='<div style="padding:8px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;text-align:center;">';
+  html+='<div style="font-size:9px;color:var(--text-muted);">พร้อมส่ง (คัดผ่าน−ขาย)</div>';
+  if (p.ready == null) html+='<div style="font-size:13px;font-weight:700;color:#94a3b8;">n/a</div><div style="font-size:9px;color:#d97706;">ไม่มีข้อมูลคัด QC100</div>';
+  else { html+='<div style="font-size:16px;font-weight:800;color:'+(p.ready<0?'#dc2626':'#059669')+';">'+p.ready.toLocaleString()+'</div>'; html+='<div style="font-size:9px;color:var(--text-muted);">คัดผ่าน '+(p.qcOK||0).toLocaleString()+' − ขาย '+(p.shipped||0).toLocaleString()+'</div>'; }
   html+='</div>';
 
   html+='<div style="padding:8px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;text-align:center;">';
   html+='<div style="font-size:9px;color:var(--text-muted);">คงเหลือ</div>';
-  html+='<div style="font-size:16px;font-weight:800;color:'+(remain===0?'#94a3b8':'var(--green)')+';">'+remain.toLocaleString()+'</div>';
+  html+='<div style="font-size:16px;font-weight:800;color:'+(remain<0?'#dc2626':remain===0?'#94a3b8':'var(--green)')+';">'+remain.toLocaleString()+'</div>';
   html+='<div style="font-size:9px;color:var(--text-muted);">ส่งแล้ว '+p.delivery+'</div></div>';
   html+='</div>';
 
@@ -2083,6 +2130,33 @@ function monthLabel(period){
   var mi = parseInt(parts[1],10);
   var yBE = parseInt(parts[0],10) + 543;
   return (m[mi]||parts[1])+' '+yBE;
+}
+
+// ── QC100% (จาก qc100.html: plating-{b1,b2,r1}-qc100.json) — ใช้คำนวณ WIP (ชุบ − คัด) และ พร้อมส่ง (คัดผ่าน − ขาย) ──
+// ต่อบิล: คัดแล้ว = qtyOK + scrap (ตรงกับที่ qc100.html นับ "ใช้ไปแล้ว") · NG ที่ส่งซ่อมยังไม่ถือว่าคัดเสร็จ (กลับเข้ารอบชุบซ่อม)
+var qc100ByJob = {}, qc100ByBill = {}, qc100Parts = {}, qc100Ok = false;
+async function loadQC100(){
+  qc100ByJob = {}; qc100ByBill = {}; qc100Parts = {}; qc100Ok = false;
+  var urls = [ DB_B1+'/plating-b1-qc100.json', DB_B2+'/plating-b2-qc100.json', DB_R1+'/plating-r1-qc100.json' ];
+  var okN = 0;
+  await Promise.all(urls.map(async function(u){
+    try {
+      var res = await fetch(u, {cache:'no-store'}); if (!res.ok) return;
+      var data = await res.json(); okN++;
+      if (!data) return;
+      var del = data.deleted || {};
+      (Array.isArray(data.records) ? data.records : []).forEach(function(r){
+        if (!r || !r.id || del[r.id]) return;
+        var ok = Number(r.qtyOK||0), sc = Number(r.scrap||0);
+        var pk = norm(r.partNo||r.partName||''); if (pk) qc100Parts[pk] = true;
+        var tgt = r.jobId ? (qc100ByJob[r.jobId] || (qc100ByJob[r.jobId] = {ok:0, done:0}))
+                : (norm(r.bill||'') ? (qc100ByBill[norm(r.bill)] || (qc100ByBill[norm(r.bill)] = {ok:0, done:0})) : null);
+        if (!tgt) return;
+        tgt.ok += ok; tgt.done += ok + sc;
+      });
+    } catch(e) { console.warn('[BL Stock] QC100 load', u, e); }
+  }));
+  qc100Ok = okN === urls.length;
 }
 
 // ── QC map (โหลด QC records จาก Firebase เพื่อแสดงใน Stock 3) ──
