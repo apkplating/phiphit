@@ -4109,6 +4109,7 @@ function addInvLine() {
 function editInvLine(idx) {
   var l = invDraft[idx];
   if (!l) return;
+  if (l.fromTemp) { showToast('invline','🔒 รายการนี้ดึงมาจากใบชั่วคราว '+l.fromTemp+' — แก้จำนวน/ราคาที่ INV ไม่ได้ ต้องให้ admin แก้ที่ใบชั่วคราวต้นฉบับ','err'); return; }
   var isClaim = (invDocType === 'claim');
   var qU = l.qtyUnit || l.unit || 'pcs';
   var curQty = (l.qtyEntered != null) ? l.qtyEntered : l.qty;
@@ -4162,6 +4163,16 @@ function editInvLine(idx) {
 }
 
 function removeInvLine(idx) {
+  var l0 = invDraft[idx];
+  if (l0 && l0.fromTemp) {
+    // บรรทัดจากใบชั่วคราว: แก้ INV ที่ออกแล้วไม่ได้ · ฉบับร่างที่ยังไม่บันทึก เอาออกได้ทั้งใบเท่านั้น (ต้องตรงใบชั่วคราว 100%)
+    if (_editingInvoiceRef) { showToast('invline','🔒 INV นี้ดึงจากใบชั่วคราว '+l0.fromTemp+' — ลบ/แก้ที่ INV ไม่ได้ ต้องให้ admin แก้ที่ใบชั่วคราวต้นฉบับ','err'); return; }
+    var no0 = l0.fromTemp, cnt0 = invDraft.filter(function(x){ return x.fromTemp === no0; }).length;
+    if (!confirm('เอาใบชั่วคราว '+no0+' ออกจากฉบับร่างนี้ทั้งใบ ('+cnt0+' รายการ) ?\n\n(ยังไม่ได้บันทึก INV — ใบชั่วคราวไม่เปลี่ยน)')) return;
+    invDraft = invDraft.filter(function(x){ return x.fromTemp !== no0; });
+    renderInvLines(); renderInvLineSelect();
+    return;
+  }
   invDraft.splice(idx,1);
   renderInvLines();
   renderInvLineSelect();
@@ -4194,7 +4205,9 @@ function renderInvLines() {
         '<td>'+qtyStr+'</td>'+
         '<td>'+wStr+pcsHint+'</td>'+
         priceCells+
-        '<td><button onclick="editInvLine('+idx+')" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;margin-right:8px;" title="แก้ไขจำนวน/ราคา">✏️</button><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;" title="ลบรายการนี้">✕</button></td>'+
+        (l.fromTemp
+          ? '<td><span title="ดึงมาจากใบชั่วคราว '+esc(l.fromTemp)+' — แก้ที่ INV ไม่ได้ ต้องให้ admin แก้ที่ใบชั่วคราวต้นฉบับ" style="font-size:12px;cursor:help;">🔒</span>'+(_editingInvoiceRef ? '' : '<button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;margin-left:6px;" title="เอาใบชั่วคราว '+esc(l.fromTemp)+' ออกจากฉบับร่าง (ทั้งใบ)">✕</button>')+'<div style="font-size:9px;color:#92400e;">'+esc(l.fromTemp)+'</div></td>'
+          : '<td><button onclick="editInvLine('+idx+')" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;margin-right:8px;" title="แก้ไขจำนวน/ราคา">✏️</button><button onclick="removeInvLine('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;" title="ลบรายการนี้">✕</button></td>')+
       '</tr>';
     }).join('');
   }
@@ -7406,6 +7419,36 @@ window.addEventListener('load', function(){
     }
   } catch(e){}
 });
+</script>
+<script>
+// ═══ เปิดได้แท็บเดียว: แท็บใหม่ทับแท็บเก่า (แท็บเก่ากลับหน้าแรกเอง) ═══
+(function(){
+  var KEY = 'job_master';
+  var myId = String(Date.now()) + '-' + Math.random().toString(36).slice(2,8);
+  var bc = null;
+  try { if (window.BroadcastChannel) bc = new BroadcastChannel('apk-single-' + KEY); } catch(e){}
+  function hasUnsaved(){ try { return !!(typeof invDraft !== 'undefined' && invDraft && invDraft.length); } catch(e){ return false; } }
+  function leave(){
+    if (hasUnsaved()) {
+      if (document.getElementById('apkDupBar')) return;
+      var d = document.createElement('div'); d.id = 'apkDupBar';
+      d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:100000;background:#b45309;color:#fff;padding:10px 14px;font-size:14px;font-weight:700;text-align:center;';
+      d.textContent = '⚠️ หน้านี้ถูกเปิดซ้ำในแท็บใหม่แล้ว — บันทึกงานที่ค้างอยู่ให้เสร็จ แล้วปิดแท็บนี้';
+      document.body.appendChild(d); return;
+    }
+    location.replace('index.html');
+  }
+  function onClaim(id){ if (id !== myId) leave(); }
+  function claim(){
+    try { if (bc) bc.postMessage({t:'claim', id:myId}); } catch(e){}
+    try { localStorage.setItem('apk_tab_claim_' + KEY, myId + '|' + Date.now()); } catch(e){}
+  }
+  if (bc) bc.onmessage = function(ev){ if (ev.data && ev.data.t === 'claim') onClaim(ev.data.id); };
+  window.addEventListener('storage', function(ev){
+    if (ev.key === 'apk_tab_claim_' + KEY && ev.newValue) onClaim(String(ev.newValue).split('|')[0]);
+  });
+  claim();
+})();
 </script>
 </body>
 </html>

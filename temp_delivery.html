@@ -586,6 +586,20 @@ function renderLists(){
   $('histList').innerHTML = !hist.length ? '<div class="hint">ยังไม่มีประวัติ</div>' : notesTable(hist, false);
 }
 
+// ── ส่วนเกินของบรรทัดที่ผูก INV: ใบชั่วคราวบอกว่าออก INV แล้ว X แต่ใน INV จริงมี Y (หลัง INV ถูกแก้ลดจำนวน) ──
+// overage = Σ บรรทัดใบชั่วคราว(ผูก INV นี้, บิลนี้) − Σ ยอดออก INV นี้ของบิลนี้ (ไม่นับ voided) · > 0 แปลว่าใบชั่วคราวแสดงเกิน
+function convOverage(invNo, jobId, noteArr){
+  var conv = 0, inv = 0, kg = false;
+  (noteArr||notes).forEach(function(n){
+    if (n.status === 'cancelled') return;
+    (n.lines||[]).forEach(function(l){ if (l.jobId === jobId && l.convertedTo === invNo) { conv += Number(l.qty||0); if (l.unit === 'kg') kg = true; } });
+  });
+  (recByJob[jobId]||[]).forEach(function(r){
+    if (r.type !== 'out' || r.inv !== invNo || r.voided) return;
+    inv += Number(kg ? (r.qtyKg||0) : (r.qty||0));
+  });
+  return +(conv - inv).toFixed(3);
+}
 // ── แอดมินแก้ไขรายการละเอียด ──
 function canEditNote(n){ return isAdmin() && n && n.status !== 'cancelled' && !n.frozen; }
 var _ed = null;   // { id, snap }
@@ -600,7 +614,7 @@ function editNote(id){
       '<td style="width:17%"><input type="text" id="edP'+i+'" value="'+esc(l.proLot||'')+'"></td>'+
       '<td style="width:19%"><input type="text" id="edC'+i+'" value="'+esc(l.custLot||'')+'"></td>'+
       '<td style="width:15%"><input type="number" id="edQ'+i+'" value="'+esc(l.qty)+'" min="0" step="'+(kg?'0.001':'1')+'" '+(cv?'disabled title="ออก INV แล้ว — แก้จำนวนไม่ได้"':'')+'> <span class="hint" style="display:inline;">'+(kg?'กก.':'ชิ้น')+'</span></td>'+
-      '<td>'+(cv?'<span class="pill done">'+esc(l.convertedTo)+'</span>':'<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" id="edD'+i+'"> ลบ</label>')+'</td></tr>';
+      '<td>'+(cv?'<span class="pill done">'+esc(l.convertedTo)+'</span>'+((convOverage(l.convertedTo, l.jobId) >= Number(l.qty||0) - 0.0001) ? '<br><label style="white-space:nowrap;font-size:11px;color:#b45309;" title="ใน INV '+esc(l.convertedTo)+' มียอดน้อยกว่าที่ใบนี้แสดง — ลบส่วนเกินได้ (สต็อกไม่เปลี่ยน)"><input type="checkbox" id="edD'+i+'"> ลบส่วนเกิน</label>' : ''):'<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" id="edD'+i+'"> ลบ</label>')+'</td></tr>';
   }).join('');
   var m = document.createElement('div'); m.className = 'edmask'; m.id = 'edMask';
   m.innerHTML = '<div class="edbox"><div style="font-size:17px;font-weight:700;margin-bottom:4px;">✏️ แก้ไขใบ '+esc(n.no)+' <span class="hint" style="display:inline;">('+esc(n.customer||'')+')</span></div>'+
@@ -622,9 +636,10 @@ function editNoteSave(){
   var date = $('edDate').value, memo = $('edMemo').value.trim();
   if (!date) { err('กรุณาระบุวันที่ส่ง'); return; }
   if (date.slice(0,7) !== String(snap.date||'').slice(0,7)) { err('วันที่ต้องอยู่เดือนเดียวกับเลขที่บิล ('+snap.no+') — ถ้าผิดเดือนให้ยกเลิกแล้วออกใบใหม่'); return; }
-  var newLines = [], dels = 0, delta = {};
+  var newLines = [], dels = 0, delta = {}, convDel = [];
   for (var i = 0; i < snap.lines.length; i++) {
     var l = JSON.parse(JSON.stringify(snap.lines[i]));
+    if (l.convertedTo && $('edD'+i) && $('edD'+i).checked) { convDel.push({ inv:l.convertedTo, jobId:l.jobId, qty:Number(l.qty||0), part:l.partName }); dels++; continue; }
     if (!l.convertedTo) {
       var del = $('edD'+i) && $('edD'+i).checked;
       if (del) { dels++; delta[l.jobId] = (delta[l.jobId]||0) - Number(l.qty); continue; }
@@ -647,6 +662,13 @@ function editNoteSave(){
     if (!cur || cur.status === 'cancelled' || cur.frozen) throw { user: 'ใบนี้ถูกยกเลิกไปแล้ว แก้ไขไม่ได้' };
     var same = cur.lines.length === snap.lines.length && cur.lines.every(function(l,k){ return l.jobId === snap.lines[k].jobId && (l.convertedTo||'') === (snap.lines[k].convertedTo||'') && Number(l.qty) === Number(snap.lines[k].qty); });
     if (!same) throw { user: 'ใบนี้ถูกแก้ไข/ออก INV โดยคนอื่นระหว่างที่เปิดหน้าต่างนี้ — ปิดแล้วเปิดแก้ไขใหม่อีกครั้ง' };
+    // ลบบรรทัดที่ผูก INV ได้เฉพาะ "ส่วนเกิน" ที่ INV จริงไม่มี (เช็คซ้ำด้วยข้อมูลล่าสุด) — ไม่งั้นจะลบของที่ออก INV จริงไปด้วย
+    var _grp = {};
+    convDel.forEach(function(d){ var k = d.inv + '\u0001' + d.jobId; _grp[k] = (_grp[k]||0) + d.qty; });
+    Object.keys(_grp).forEach(function(k){
+      var a = k.split('\u0001'), ov = convOverage(a[0], a[1], notes);
+      if (_grp[k] > ov + 0.0001) throw { user: '🚫 ลบบรรทัดที่ผูก '+a[0]+' ไม่ได้ — ยอดใน INV ยังรวมจำนวนนี้อยู่ (ส่วนเกินที่ลบได้ '+Math.max(0,ov)+' แต่จะลบ '+_grp[k]+')' };
+    });
     // ตรวจคงเหลือ: จำนวนที่เพิ่มขึ้นสุทธิต่อบิล ต้องไม่เกินคงเหลือ (คงเหลือล่าสุดหักจำนวนเดิมของใบนี้ไปแล้ว)
     var bad = Object.keys(delta).filter(function(jid){
       if (delta[jid] <= 0.0001) return false;
@@ -661,7 +683,7 @@ function editNoteSave(){
     var nj = 0;
     cur.lines.forEach(function(ol, k){
       var chk = $('edD'+k);
-      if (!ol.convertedTo && chk && chk.checked) { ch.push('ลบรายการ '+ol.partName+' ('+ol.qty+')'); return; }
+      if (chk && chk.checked) { ch.push(ol.convertedTo ? ('ลบรายการส่วนเกินที่ผูก '+ol.convertedTo+': '+ol.partName+' ('+ol.qty+') — INV จริงมียอดน้อยกว่า') : ('ลบรายการ '+ol.partName+' ('+ol.qty+')')); return; }
       var nl = newLines[nj++]; var t = [];
       if (Number(nl.qty) !== Number(ol.qty)) t.push('จำนวน '+ol.qty+' → '+nl.qty);
       if ((nl.proLot||'') !== (ol.proLot||'')) t.push('Pro Lot No. "'+(ol.proLot||'')+'" → "'+(nl.proLot||'')+'"');
