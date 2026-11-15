@@ -407,6 +407,7 @@ if ('caches' in window) {
         <button data-sub="types">ประเภทเอกสาร</button>
         <button data-sub="cat">ค่าเริ่มต้นประเภทเอกสาร</button>
         <button data-sub="depts">รายชื่อแผนก</button>
+        <button data-sub="links">เอกสารที่เกี่ยวข้อง</button>
         <button data-sub="notify">การแจ้งเตือน</button>
       </div>
 
@@ -505,6 +506,12 @@ if ('caches' in window) {
         </div>
       </div>
 
+      <div class="card admin-sub" id="admin-links" style="display:none;">
+        <h2>เอกสารที่เกี่ยวข้อง (ปุ่ม 📚 ในหน้าใช้งาน)</h2>
+        <div class="sub">เลือกว่าแต่ละจุดในระบบ (หน้า/แท็บ) จะโชว์เอกสารฉบับไหน — เลือกจากเอกสารที่เผยแพร่แล้ว บันทึกอัตโนมัติ · พนักงานดูอย่างเดียว (ตามแผนก Production ที่ตั้งตอนเผยแพร่)</div>
+        <div id="linksWrap"><div class="empty">กำลังโหลด…</div></div>
+      </div>
+
       <div class="card admin-sub" id="admin-notify" style="display:none;">
         <h2>การแจ้งเตือน (Discord)</h2>
         <div class="sub">แยก Webhook ต่อแผนก — แผนกไหนไม่เกี่ยวข้องกับเอกสารนั้นจะไม่เห็นข้อความแจ้งเตือนเลย เว้นว่างแผนกใดไว้ได้ถ้ายังไม่ต้องการแจ้งเตือนแผนกนั้น</div>
@@ -579,6 +586,7 @@ if ('caches' in window) {
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
+<script src="docs-panel.js"></script>
 <script>
 'use strict';
 
@@ -593,6 +601,7 @@ var PATHS = {
   depts:    DB_URL + '/doc_control/settings/depts',
   docTypes: DB_URL + '/doc_control/settings/docTypes',
   discordWebhooks: DB_URL + '/doc_control/settings/discordWebhooks',
+  docLinks: DB_URL + '/doc_control/settings/docLinks',
   printLogs: DB_URL + '/doc_control/printLogs'
 };
 
@@ -1590,6 +1599,61 @@ function renderNotifyList(){
   });
 }
 
+/* ── Admin: เอกสารที่เกี่ยวข้อง (ผูกเอกสาร ↔ จุดใช้งาน) ── */
+var linksState = { master: {}, links: {} };
+function renderLinks(){
+  var wrap = $('linksWrap');
+  wrap.innerHTML = '<div class="empty">กำลังโหลด…</div>';
+  Promise.all([fbGet(PATHS.master), fbGet(PATHS.docLinks)]).then(function(a){
+    linksState.master = a[0] || {}; linksState.links = a[1] || {};
+    drawLinks();
+  });
+}
+function drawLinks(){
+  var wrap = $('linksWrap'), master = linksState.master, links = linksState.links;
+  var codes = Object.keys(master).filter(function(c){ return master[c] && master[c].status !== 'cancelled'; })
+    .sort(function(a,b){ var ao = master[a].docType==='OPS'?0:1, bo = master[b].docType==='OPS'?0:1; return ao-bo || (a<b?-1:1); });
+  var places = DocsPanel.PLACES, group = '', h = '';
+  places.forEach(function(p){
+    if (p.group !== group){ group = p.group; h += '<div class="sub" style="margin:14px 0 6px;font-weight:700;">'+escapeHtml(group)+'</div>'; }
+    var cur = links[p.key]; cur = Array.isArray(cur) ? cur : (cur ? Object.keys(cur).map(function(k){return cur[k];}) : []);
+    var chips = cur.map(function(c){
+      var d = master[c];
+      return '<span style="display:inline-flex;align-items:center;gap:6px;background:#eef2ff;border-radius:999px;padding:4px 6px 4px 10px;margin:2px 4px 2px 0;font-size:12.5px;">'+
+        '<b style="font-family:monospace;">'+escapeHtml(c)+'</b> '+escapeHtml(d ? d.docName : '(ไม่พบเอกสาร)')+
+        ' <button class="btn btn-ghost btn-sm" style="padding:0 7px;" data-ldel="'+escapeHtml(p.key)+'|'+escapeHtml(c)+'" title="เอาออก">✕</button></span>';
+    }).join('');
+    var opts = '<option value="">+ เพิ่มเอกสาร…</option>' + codes.filter(function(c){ return cur.indexOf(c) < 0; }).map(function(c){
+      return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+' — '+escapeHtml(master[c].docName||'')+'</option>'; }).join('');
+    h += '<div class="dept-row" style="align-items:flex-start;gap:10px;flex-wrap:wrap;">'+
+      '<div style="width:170px;font-weight:600;padding-top:6px;">'+escapeHtml(p.label)+'</div>'+
+      '<div style="flex:1;min-width:240px;">'+(chips || '<span style="color:#94a3b8;font-size:12.5px;">ยังไม่ผูกเอกสาร</span>')+
+      '<div style="margin-top:4px;"><select data-ladd="'+escapeHtml(p.key)+'" style="max-width:100%;">'+opts+'</select></div></div></div>';
+  });
+  if (!codes.length) h = '<div class="empty">ยังไม่มีเอกสารที่เผยแพร่ในระบบ — เผยแพร่เอกสาร OPS ก่อน</div>';
+  wrap.innerHTML = h;
+  wrap.querySelectorAll('[data-ladd]').forEach(function(sel){
+    sel.addEventListener('change', function(){
+      var key = sel.getAttribute('data-ladd'), code = sel.value; if (!code) return;
+      var cur = linksState.links[key]; cur = Array.isArray(cur) ? cur.slice() : [];
+      cur.push(code); saveLink(key, cur);
+    });
+  });
+  wrap.querySelectorAll('[data-ldel]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var pr = btn.getAttribute('data-ldel').split('|'), key = pr[0], code = pr[1];
+      var cur = linksState.links[key]; cur = Array.isArray(cur) ? cur.filter(function(c){ return c !== code; }) : [];
+      saveLink(key, cur);
+    });
+  });
+}
+function saveLink(key, arr){
+  fbPut(PATHS.docLinks + '/' + key, arr).then(function(){
+    if (arr.length) linksState.links[key] = arr; else delete linksState.links[key];
+    toast('บันทึกแล้ว'); drawLinks();
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ', true); });
+}
+
 /* ── Admin: รายชื่อแผนก ── */
 function renderDeptsList(){
   var wrap = $('deptsListWrap');
@@ -1668,6 +1732,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (sub === 'depts') renderDeptsList();
       if (sub === 'import') renderImportForm();
       if (sub === 'notify') renderNotifyList();
+      if (sub === 'links') renderLinks();
     });
   });
   $('addTypeBtn').addEventListener('click', function(){
