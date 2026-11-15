@@ -1888,6 +1888,13 @@ function mcGateApply() {
   form.classList.toggle('mc-locked', !open);
   return open;
 }
+// ย้ายแท็บ ความหนา/QA/ตรวจเครื่องจักร เข้าไปอยู่ใน .body-wrap (เดิมหลุดออกนอก ทำให้หน้าว่างขาวด้านบน)
+document.addEventListener('DOMContentLoaded', function(){
+  try {
+    var bw = document.querySelector('.body-wrap');
+    if (bw) ['v-thick','v-qa','v-mcheck'].forEach(function(id){ var el = document.getElementById(id); if (el && el.parentElement !== bw) bw.appendChild(el); });
+  } catch(e){}
+});
 setInterval(function(){ try{ mcGateApply(); }catch(e){} }, 60000);
 setTimeout(function(){ try{ mcRecords = mcLoadRecords(); mcGateApply(); if (typeof mcFbLoad==='function') mcFbLoad(); }catch(e){} }, 1500);
 
@@ -8293,6 +8300,26 @@ async function confirmJobOut() {
   <div style="background:var(--navy);border-radius:14px;padding:12px 14px;margin-bottom:10px;">
     <div style="font-size:14px;font-weight:700;color:#fff;">🔧 ใบตรวจสอบเครื่องจักร/อุปกรณ์ประจำวัน</div>
     <div style="font-size:10px;color:var(--blue-light);margin-top:2px;">APK-FR-PU-XXX · ตรวจรายวันตามมาตรฐาน</div>
+  </div>
+
+  <!-- กฎระเบียบเมื่อพบเครื่องจักร/อุปกรณ์ชำรุด (Audit 0260) -->
+  <div id="mcRuleBox" style="background:#fff8e6;border:1.5px solid #f5c04a;border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+    <div style="font-size:13px;font-weight:700;color:#7a4b00;">⚠️ กฎระเบียบ: เมื่อตรวจพบเครื่องจักร/อุปกรณ์ชำรุดเสียหาย</div>
+    <ol style="margin:8px 0 0 18px;padding:0;font-size:12.5px;line-height:1.65;color:#3b2a00;">
+      <li><b>หยุดใช้งานทันที</b></li>
+      <li>แจ้งหัวหน้าให้รับทราบ</li>
+      <li>ซ่อมแซมให้อยู่ในสภาพปกติ ตรวจซ้ำก่อนนำกลับมาใช้ และบันทึกในช่อง "รายการซ่อม"</li>
+      <li>หากไม่สามารถซ่อมเองได้ ให้แจ้งผู้บริหารเพื่อรับทราบ</li>
+      <li>คัดแยกอุปกรณ์ที่ชำรุดออกนอกไลน์ชุบ ติดป้าย "ชำรุด/รอซ่อม" และไว้ในพื้นที่ที่กำหนดเพื่อรอส่งซ่อม</li>
+    </ol>
+    <div style="font-size:12px;font-weight:700;color:#7a4b00;margin-top:10px;border-top:1px dashed #e0b24a;padding-top:8px;">စည်းမျဉ်း — စက်/ကိရိယာ ပျက်စီးချို့ယွင်းနေသည်ကို တွေ့ရှိပါက</div>
+    <ol style="margin:6px 0 0 18px;padding:0;font-size:12px;line-height:1.65;color:#3b2a00;">
+      <li><b>ချက်ချင်း အသုံးမပြုပါနှင့်</b></li>
+      <li>ခေါင်းဆောင်/ကြီးကြပ်သူကို အကြောင်းကြားပါ</li>
+      <li>ပုံမှန်အခြေအနေ ပြန်ဖြစ်အောင် ပြုပြင်ပါ၊ ပြန်မသုံးမီ ပြန်စစ်ပါ၊ "ပြုပြင်မှုစာရင်း" တွင် မှတ်တမ်းတင်ပါ</li>
+      <li>ကိုယ်တိုင် မပြင်နိုင်ပါက စီမံခန့်ခွဲသူကို အကြောင်းကြားပါ</li>
+      <li>ချို့ယွင်းသော ကိရိယာကို ဓာတ်ပြားလိုင်းပြင်ပသို့ ခွဲထုတ်ပါ၊ "ပျက်စီး/ပြုပြင်ရန်စောင့်" တံဆိပ်ကပ်ပြီး သတ်မှတ်ထားသော နေရာတွင် ထားပါ</li>
+    </ol>
   </div>
 
   <!-- ประวัติย้อนหลัง -->
