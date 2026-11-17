@@ -157,6 +157,16 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 .btn-loading .btn-lbl{opacity:.6;}
 
 /* ── Toast ── */
+
+#qaPendBox{display:none;margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fca5a5;color:#7f1d1d;font-size:12px;line-height:1.5}
+#qaPendBox .qp-t{font-weight:700;font-size:13px}
+#qaPendBox .qp-m{font-size:11px;opacity:.85}
+#qaPendBox .qp-l{margin:6px 0;font-family:'IBM Plex Mono',monospace;font-size:11px}
+#qaPendBox button{margin-top:4px;padding:7px 12px;border:none;border-radius:8px;background:#b91c1c;color:#fff;font-weight:700;font-size:12px;cursor:pointer}
+.qa-fixbtn{background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap}
+.qa-edbtn{background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 6px;cursor:pointer;font-size:12px}
+#qaFixModal .f{margin-bottom:8px}#qaFixModal label{display:block;font-size:11px;color:#374151;margin-bottom:2px}
+#qaFixModal input{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box}
 .toast{display:none;padding:11px 14px;border-radius:10px;font-size:12px;font-weight:500;text-align:center;margin-bottom:10px;animation:slIn .2s ease;}
 @keyframes slIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 .toast.ok{background:var(--success-bg);color:var(--success);border:1px solid rgba(13,110,86,.2);}
@@ -298,7 +308,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 #mcGateBox.ok{background:#14532d;}
 #mcGateBox.ok .mcg-b{display:none;}
 #mcGateBox .mcg-adm{margin-left:8px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:7px 10px;font-size:11px;cursor:pointer;}
-.barrel-form.mc-locked > *:not(.barrel-form-title):not(#mcGateBox):not(#dpMountEntry){opacity:.35;pointer-events:none;user-select:none;}
+.barrel-form.mc-locked > *:not(.barrel-form-title):not(#mcGateBox):not(#dpMountEntry):not(#qaPendBox){opacity:.35;pointer-events:none;user-select:none;}
 </style>
 <style id="googleidentityservice_button_styles">.qJTHM{-moz-user-select:none;-webkit-user-select:none;-ms-user-select:none;color:#202124;direction:ltr;-webkit-touch-callout:none;font-family:Roboto-Regular,arial,sans-serif;-webkit-font-smoothing:antialiased;font-weight:400;margin:0;overflow:hidden;-webkit-text-size-adjust:100%}.ynRLnc{left:-9999px;position:absolute;top:-9999px}.L6cTce{display:none}.bltWBb{overflow-wrap:break-word;word-break:break-word}.hSRGPd{color:#1a73e8;cursor:pointer;font-weight:500;text-decoration:none}.Bz112c-W3lGp{height:16px;width:16px}.Bz112c-E3DyYd{height:20px;width:20px}.Bz112c-r9oPif{height:24px;width:24px}.Bz112c-u2z5K{height:36px;width:36px}.Bz112c-uaxL4e{border-radius:10px}.LgbsSe-Bz112c{display:block}.S9gUrf-YoZ4jf{border:none;margin:0;padding:0}.S9gUrf-YoZ4jf *{border:none;margin:0;padding:0}.fFW7wc-ibnC6b>.aZ2wEe>div{border-color:#4285f4}.P1ekSe-ZMv3u{-webkit-transition:height .2s linear;transition:height .2s linear}.P1ekSe-ZMv3u>div:first-child{background-color:#1a73e8!important;-webkit-transition:width .3s linear;transition:width .3s linear}.P1ekSe-ZMv3u>div:nth-child(2){background-image:-webkit-gradient(linear,left top,right top,from(rgba(255,255,255,.7)),to(rgba(255,255,255,.7))),-webkit-gradient(linear,left top,right top,from(#1a73e8),to(#1a73e8))!important;background-image:-webkit-linear-gradient(left,rgba(255,255,255,.7),rgba(255,255,255,.7)),-webkit-linear-gradient(left,#1a73e8,#1a73e8)!important;background-image:linear-gradient(90deg,rgba(255,255,255,.7),rgba(255,255,255,.7)),linear-gradient(90deg,#1a73e8,#1a73e8)!important}.P1ekSe-ZMv3u>div:nth-child(3){background-image:-webkit-gradient(linear,left top,right top,from(rgba(255,255,255,.7)),to(rgba(255,255,255,.7))),-webkit-gradient(linear,left top,right top,from(#1a73e8),to(#1a73e8))!important;background-image:-webkit-linear-gradient(left,rgba(255,255,255,.7),rgba(255,255,255,.7)),-webkit-linear-gradient(left,#1a73e8,#1a73e8)!important;background-image:linear-gradient(90deg,rgba(255,255,255,.7),rgba(255,255,255,.7)),linear-gradient(90deg,#1a73e8,#1a73e8)!important}.haAclf{display:inline-block}.nsm7Bb-HzV7m-LgbsSe{border-radius:4px;box-sizing:border-box;-webkit-transition:background-color .218s,border-color .218s;transition:background-color .218s,border-color .218s;-moz-user-select:none;-webkit-user-select:none;-ms-user-select:none;-webkit-appearance:none;background-color:#fff;background-image:none;border:1px solid #dadce0;color:#3c4043;cursor:pointer;font-family:Google Sans,arial,sans-serif;font-size:14px;height:40px;letter-spacing:.25px;outline:none;overflow:hidden;padding:0 12px;position:relative;text-align:center;vertical-align:middle;white-space:nowrap;width:auto}@media screen and (-ms-high-contrast:active){.nsm7Bb-HzV7m-LgbsSe{border:2px solid windowText;color:windowText}}@media screen and (preferes-contrast:more){.nsm7Bb-HzV7m-LgbsSe{color:#000}}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe{font-size:14px;height:32px;letter-spacing:.25px;padding:0 10px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe{font-size:11px;height:20px;letter-spacing:.3px;padding:0 8px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe{padding:0;width:40px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe{width:32px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe{width:20px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK{border-radius:20px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.pSzOP-SxQuSe{border-radius:16px}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK.purZT-SxQuSe{border-radius:10px}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc{border:none;color:#fff}.nsm7Bb-HzV7m-LgbsSe.MFS4be-v3pZbf-Ia7Qfc{background-color:#1a73e8}.nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc{background-color:#202124;color:#e8eaed}@media screen and (prefers-contrast:more){.nsm7Bb-HzV7m-LgbsSe.MFS4be-JaPV2b-Ia7Qfc{color:#fff}}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:18px;margin-right:8px;min-width:18px;width:18px}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:14px;min-width:14px;width:14px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{height:10px;min-width:10px;width:10px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin-left:8px;margin-right:-4px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin:0;padding:10px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{padding:8px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c{padding:4px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-top-left-radius:3px;border-bottom-left-radius:3px;display:-webkit-box;display:-webkit-flex;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;align-items:center;background-color:#fff;height:36px;margin-left:-10px;margin-right:12px;min-width:36px;width:36px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf .nsm7Bb-HzV7m-LgbsSe-Bz112c,.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf .nsm7Bb-HzV7m-LgbsSe-Bz112c{margin:0;padding:0}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{height:28px;margin-left:-8px;margin-right:10px;min-width:28px;width:28px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{height:16px;margin-left:-6px;margin-right:8px;min-width:16px;width:16px}.nsm7Bb-HzV7m-LgbsSe.Bz112c-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:3px;margin-left:2px;margin-right:0;padding:0}.nsm7Bb-HzV7m-LgbsSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:18px}.nsm7Bb-HzV7m-LgbsSe.pSzOP-SxQuSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:14px}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:8px}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-bN97Pc-sM5MNb{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-align-items:center;-webkit-box-align:center;align-items:center;-webkit-flex-direction:row;-webkit-box-orient:horizontal;-webkit-box-direction:normal;flex-direction:row;-webkit-box-pack:justify;-webkit-justify-content:space-between;justify-content:space-between;-webkit-flex-wrap:nowrap;flex-wrap:nowrap;height:100%;position:relative;width:100%}.nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX{-webkit-box-pack:center;-webkit-justify-content:center;justify-content:center}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-BPrWId{-webkit-flex-grow:1;-webkit-box-flex:1;flex-grow:1;font-family:Google Sans,arial,sans-serif;font-weight:500;overflow:hidden;text-overflow:ellipsis;vertical-align:top}.nsm7Bb-HzV7m-LgbsSe.purZT-SxQuSe .nsm7Bb-HzV7m-LgbsSe-BPrWId{font-weight:300}.nsm7Bb-HzV7m-LgbsSe .oXtfBe-l4eHX .nsm7Bb-HzV7m-LgbsSe-BPrWId{-webkit-flex-grow:0;-webkit-box-flex:0;flex-grow:0}.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-MJoBVe{-webkit-transition:background-color .218s;transition:background-color .218s;bottom:0;left:0;position:absolute;right:0;top:0}.nsm7Bb-HzV7m-LgbsSe:focus,.nsm7Bb-HzV7m-LgbsSe:hover{box-shadow:none;border-color:rgb(210,227,252);outline:none}.nsm7Bb-HzV7m-LgbsSe:focus-within{outline:2px solid #00639b;border-color:transparent}.nsm7Bb-HzV7m-LgbsSe:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(66,133,244,.08)}.nsm7Bb-HzV7m-LgbsSe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,.nsm7Bb-HzV7m-LgbsSe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(66,133,244,.1)}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(255,255,255,.24)}.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,.nsm7Bb-HzV7m-LgbsSe.MFS4be-Ia7Qfc:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe{background:rgba(255,255,255,.32)}.nsm7Bb-HzV7m-LgbsSe .n1UuX-DkfjY{border-radius:50%;display:-webkit-box;display:-webkit-flex;display:flex;height:20px;margin-left:-4px;margin-right:8px;min-width:20px;width:20px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId{font-family:Roboto;font-size:12px;text-align:left}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .fmcmS,.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .ssJRIf{overflow:hidden;text-overflow:ellipsis}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-align-items:center;-webkit-box-align:center;align-items:center;color:#5f6368;fill:#5f6368;font-size:11px;font-weight:400}.nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{color:#e8eaed;fill:#e8eaed}@media screen and (prefers-contrast:more){.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff,.nsm7Bb-HzV7m-LgbsSe.jVeSEe.MFS4be-Ia7Qfc .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff{color:#000;fill:#000}}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff .Bz112c{height:18px;margin:-3px -3px -3px 2px;min-width:18px;width:18px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-top-left-radius:0;border-bottom-left-radius:0;border-top-right-radius:3px;border-bottom-right-radius:3px;margin-left:12px;margin-right:-10px}.nsm7Bb-HzV7m-LgbsSe.jVeSEe.JGcpL-RbRzK .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf{border-radius:18px}.L5Fo6c-sM5MNb{border:0;display:block;left:0;position:relative;top:0}.L5Fo6c-bF1uUb{border-radius:4px;bottom:0;cursor:pointer;left:0;position:absolute;right:0;top:0}.L5Fo6c-bF1uUb:focus{border:none;outline:none}sentinel{}</style><script>
 // ══════════════════════════════════════════════════════
@@ -514,7 +524,8 @@ if ('caches' in window) {
   <div class="barrel-form">
     <div class="barrel-form-title">เพิ่มรายรอบชุบ <span id="barrelSeq">รอบที่ 1</span></div>
     <div id="mcGateBox"></div>
-    <div id="dpMountEntry" style="margin-bottom:6px;"></div>
+    <div id="qaPendBox"></div>
+        <div id="dpMountEntry" style="margin-bottom:6px;"></div>
 
     <div class="grid2" style="margin-bottom:8px;">
       <div class="field" style="margin:0;">
@@ -8286,6 +8297,24 @@ async function confirmJobOut() {
     <div id="toast-qa" class="toast"></div>
   </div>
 
+<div id="qaFixModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;align-items:center;justify-content:center;padding:16px;">
+ <div style="background:#fff;border-radius:14px;max-width:430px;width:100%;padding:16px;max-height:92vh;overflow:auto;">
+  <div style="font-weight:700;color:var(--navy);font-size:15px;">🔧 บันทึกการแก้ไข / วัดซ้ำหลังแก้ไข</div>
+  <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">ပြင်ဆင်မှု မှတ်တမ်း / ပြင်ပြီးနောက် ပြန်တိုင်းခြင်း</div>
+  <div id="qaFixInfo" style="background:#fffbeb;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px;"></div>
+  <div class="f" id="qaFixTitrWrap"><label>Titration หลังแก้ (cc) · ပြင်ပြီး Titration</label><input type="number" id="qaFixTitr" step="0.01" inputmode="decimal" oninput="qaFixCalc()"></div>
+  <div class="f"><label>ค่าผลวิเคราะห์หลังแก้ (<span id="qaFixUnit">-</span>) · ပြင်ပြီးရလဒ်</label><input type="number" id="qaFixResult" step="0.001" inputmode="decimal" oninput="qaFixCheck()" style="font-size:20px;font-weight:700;text-align:center;"></div>
+  <div id="qaFixStatus" style="display:none;text-align:center;padding:7px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:8px;"></div>
+  <div class="f"><label>หมายเหตุ / ข้อมูลการปรับเติม (สารที่เติม + ปริมาณ) · မှတ်ချက် (ထည့်သောဓာတုပစ္စည်းနှင့် ပမာဏ)</label><input type="text" id="qaFixNote" placeholder="เช่น เติมซิงค์ 2 kg แล้วกวน 30 นาที"></div>
+  <div class="f"><label>ผู้บันทึกเดิม · မူလမှတ်တမ်းတင်သူ</label><input type="text" id="qaFixJudge"></div>
+  <div class="f"><label>ผู้วัดซ้ำ · ပြန်တိုင်းသူ</label><input type="text" id="qaFixBy"></div>
+  <div style="display:flex;gap:8px;margin-top:10px;">
+   <button onclick="qaCloseFix()" style="flex:1;padding:11px;border:1px solid var(--border);background:#fff;border-radius:10px;font-weight:600;cursor:pointer;">ยกเลิก · ပယ်ဖျက်</button>
+   <button onclick="qaSaveFix()" style="flex:2;padding:11px;border:none;background:var(--navy);color:#fff;border-radius:10px;font-weight:700;cursor:pointer;">💾 บันทึก · သိမ်းမည်</button>
+  </div>
+ </div>
+</div>
+
   <!-- ตารางประวัติ -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
@@ -8320,13 +8349,14 @@ async function confirmJobOut() {
             <th>CL</th>
             <th>LCL</th>
             <th>สถานะ</th>
+            <th>หลังแก้ไข · ပြင်ပြီး</th>
             <th style="text-align:left;">ผู้บันทึก</th>
             <th style="text-align:left;">หมายเหตุ</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="qaHistBody">
-          <tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
+          <tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>
         </tbody>
       </table>
     </div>
@@ -8469,16 +8499,12 @@ async function qaFbLoadRecords() {
     if (!res.ok) return;
     var data = await res.json();
     if (data && Array.isArray(data.records) && data.records.length > 0) {
-      var local = qaLoadRecords();
-      var localIds = {};
-      local.forEach(function(r){ localIds[r.id] = true; });
-      var merged = local.slice();
-      data.records.forEach(function(r){ if (!localIds[r.id]) merged.push(r); });
-      merged.sort(function(a,b){ return b.ts - a.ts; });
+      var merged = qaMergeRecs(qaLoadRecords(), data.records);
       localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(merged));
       qaPopulateDateFilter();
       qaRenderHistory();
       qaRenderChart();
+      qaPendRefresh();
     }
   } catch(e) { console.warn('qaFbLoadRecords:', e.message); }
 }
@@ -8759,7 +8785,7 @@ function qaAddRecord() {
     result: result,
     ucl: p.ucl, cl: p.cl, lcl: p.lcl,
     status: qaGetStatus(result, p),
-    judge: judge, note: note, ts: Date.now()
+    judge: judge, note: note, ts: Date.now(), updatedAt: Date.now()
   };
 
   var recs = qaLoadRecords();
@@ -8773,10 +8799,11 @@ function qaAddRecord() {
   document.getElementById('qaTitration') && (document.getElementById('qaTitration').value = '');
   document.getElementById('qaCalcDisplay') && (document.getElementById('qaCalcDisplay').textContent = '–');
   document.getElementById('qaResultStatus').style.display = 'none';
-  qaToast('✅ บันทึกสำเร็จ', true);
+  qaToast(rec.status==='OK' ? '✅ บันทึกสำเร็จ' : '✅ บันทึกแล้ว — ค่าออกนอกช่วง กรุณาปรับเติมแล้วกด ⚠ รอแก้ไข เพื่อวัดซ้ำ · တန်ဖိုး ကန့်သတ်ချက်ပြင်ပ — ပြင်ပြီး ပြန်တိုင်းပါ', true);
   qaPopulateDateFilter();
   qaRenderHistory();
   qaRenderChart();
+  qaPendRefresh();
 }
 
 function qaToast(msg, ok) {
@@ -8793,6 +8820,7 @@ function qaDeleteRecord(id) {
   qaFbSaveRecords(); // sync ขึ้น Firebase
   qaRenderHistory();
   qaRenderChart();
+  qaPendRefresh();
 }
 
 // ── Date filter populate ── (qaChartDate ถูกแทนที่ด้วย qaChartMode + ช่วงวันที่/เดือนแล้ว เหลือแค่ qaFilterDate)
@@ -8842,7 +8870,7 @@ function qaRenderHistory() {
   document.getElementById('qaTotalCount').textContent = recs.length;
   var tbody = document.getElementById('qaHistBody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:20px;">ยังไม่มีข้อมูล</td></tr>';
     return;
   }
   tbody.innerHTML = recs.map(function(r){
@@ -8851,7 +8879,7 @@ function qaRenderHistory() {
     var sl = r.status==='OK'?'✅ IN':r.status==='HIGH'?'🔴 HIGH':'🟡 LOW';
     var titrCell = (r.resultType==='titration' && r.titration!=null) ? r.titration : '—';
     var coeffCell = (r.resultType==='titration') ? ('×'+r.coeff) : 'Direct';
-    return '<tr>'
+    return '<tr'+(qaIsPending(r)?' style="background:#fff5f5;"':'')+'>'
       +'<td class="td-l">'+r.date+'</td>'
       +'<td>'+r.shift+'</td>'
       +'<td class="td-l">'+r.processName+'<br><span style="font-size:9px;color:var(--text-muted);">'+r.item+'</span></td>'
@@ -8863,9 +8891,10 @@ function qaRenderHistory() {
       +'<td style="color:#2e75b6;">'+r.cl+'</td>'
       +'<td style="color:#b45309;">'+r.lcl+'</td>'
       +'<td><span style="background:'+sc+';color:'+tc+';padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">'+sl+'</span></td>'
+      +qaAfterCell(r)
       +'<td class="td-l">'+(r.judge||'–')+'</td>'
       +'<td class="td-l">'+(r.note||'–')+'</td>'
-      +'<td><button class="del-btn" onclick="qaDeleteRecord(\''+r.id+'\')">🗑</button></td>'
+      +'<td style="white-space:nowrap;">'+(r.status!=='OK'?'<button class="qa-edbtn" title="แก้ไข/วัดซ้ำ" onclick="qaOpenFix(\''+r.id+'\')">✏️</button> ':'')+'<button class="del-btn" onclick="qaDeleteRecord(\''+r.id+'\')">🗑</button></td>'
       +'</tr>';
   }).join('');
 }
@@ -8907,13 +8936,16 @@ function qaRenderChart() {
   canvasEl.style.display='block'; emptyEl.style.display='none'; legendEl.style.display='flex';
 
   var labels  = recs.map(function(r){ return r.date+' '+r.shift; });
-  var values  = recs.map(function(r){ return r.result; });
+  var values  = recs.map(function(r){ return r.after != null ? r.after : r.result; });
   var ptColors= values.map(function(v){
     return v > p.ucl ? '#ef4444' : v < p.lcl ? '#f59e0b' : '#10b981';
   });
+  var befores = recs.map(function(r){ return r.after != null ? r.result : null; });
+  var befColors = recs.map(function(r){ return r.status === 'HIGH' ? '#ef4444' : '#f59e0b'; });
 
   qaChartInst = new Chart(canvasEl, {
     type:'line',
+    plugins:[qaDashPlugin(recs)],
     data:{
       labels:labels,
       datasets:[
@@ -8922,6 +8954,7 @@ function qaRenderChart() {
         { label:'UCL', data:recs.map(function(){return p.ucl;}), borderColor:'#ef4444', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:2 },
         { label:'CL',  data:recs.map(function(){return p.cl;}),  borderColor:'#2e75b6', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:3 },
         { label:'LCL', data:recs.map(function(){return p.lcl;}), borderColor:'#f59e0b', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:4 },
+        { label:'ก่อนแก้', data:befores, showLine:false, borderColor:'#f59e0b', backgroundColor:befColors, pointBackgroundColor:befColors, pointBorderColor:befColors, pointRadius:5, order:0 },
       ]
     },
     options:{
@@ -8930,6 +8963,7 @@ function qaRenderChart() {
         tooltip:{ callbacks:{ label:function(ctx){
           if(ctx.datasetIndex===0){
             var r=recs[ctx.dataIndex];
+            if (r.after!=null) return 'หลังแก้: '+Number(r.after).toFixed(3)+' '+p.unit+' (ก่อนแก้ '+Number(r.result).toFixed(3)+')';
             var titrStr = (r.resultType==='titration'&&r.titration!=null) ? ' (Titr: '+r.titration+' cc × '+r.coeff+')' : '';
             return 'Result: '+ctx.parsed.y.toFixed(3)+' '+p.unit+titrStr;
           }
@@ -8945,13 +8979,125 @@ function qaRenderChart() {
 }
 
 // ── Export CSV ──
+
+// ═══════ ค่าหลังแก้ไข (วัดซ้ำ) — เก็บในแถวเดิม ═══════
+function qaMergeRecs(local, remote){
+  var map = {}; local.forEach(function(r){ map[r.id] = r; });
+  (remote||[]).forEach(function(r){
+    var l = map[r.id];
+    if (!l || (r.updatedAt||0) > (l.updatedAt||0)) map[r.id] = r;
+  });
+  var out = Object.keys(map).map(function(k){ return map[k]; });
+  out.sort(function(a,b){ return b.ts - a.ts; });
+  return out;
+}
+function qaIsPending(r){ return r.status !== 'OK' && (r.after == null || r.afterStatus !== 'OK'); }
+function qaFinalStatus(r){ return r.after != null ? r.afterStatus : r.status; }
+
+function qaPendRefresh(){
+  var box = document.getElementById('qaPendBox'); if (!box) return;
+  var lim = new Date(Date.now() - 7*86400000).toISOString().split('T')[0];
+  var list = qaLoadRecords().filter(function(r){ return qaIsPending(r) && r.date >= lim; })
+    .sort(function(a,b){ return b.ts - a.ts; });
+  if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  var lines = list.slice(0,4).map(function(r){
+    var st = (r.after != null) ? 'หลังแก้ ' + Number(r.after).toFixed(2) + ' ' + r.afterStatus : Number(r.result).toFixed(2) + ' ' + r.status;
+    return r.date.slice(5) + ' · ' + r.item + ' · ' + st;
+  });
+  if (list.length > 4) lines.push('+' + (list.length-4) + ' รายการ');
+  box.innerHTML = '<div class="qp-t">⚠️ ค่าเคมีออกนอกช่วงควบคุม ยังไม่บันทึกการแก้ไข/วัดซ้ำ</div>'
+    + '<div class="qp-m">ဓာတုပစ္စည်းတန်ဖိုး ထိန်းချုပ်ကန့်သတ်ချက်ပြင်ပ — ပြင်ဆင်မှုမှတ်တမ်း/ပြန်တိုင်းမှု မရှိသေးပါ</div>'
+    + '<div class="qp-l">' + lines.join('<br>') + '</div>'
+    + '<button onclick="tab(\'qa\')">ไปบันทึก · မှတ်တမ်းသွင်းရန်</button>';
+  box.style.display = 'block';
+}
+
+var _qaFixId = null, _qaFixRec = null;
+function qaOpenFix(id){
+  var r = qaLoadRecords().find(function(x){ return x.id === id; }); if (!r) return;
+  _qaFixId = id; _qaFixRec = r;
+  var f = function(i){ return document.getElementById(i); };
+  f('qaFixInfo').innerHTML = '<b>' + r.date + ' ' + r.shift + '</b> · ' + r.processName + ' · ' + r.item
+    + '<br>ค่าก่อนแก้ <b>' + Number(r.result).toFixed(3) + '</b> ' + r.unit + ' (' + r.status + ') · ช่วง ' + r.lcl + '–' + r.ucl;
+  f('qaFixUnit').textContent = r.unit;
+  f('qaFixTitrWrap').style.display = (r.resultType === 'titration') ? '' : 'none';
+  f('qaFixTitr').value = (r.afterTitr != null) ? r.afterTitr : '';
+  f('qaFixResult').value = (r.after != null) ? r.after : '';
+  f('qaFixNote').value = r.note || '';
+  f('qaFixJudge').value = r.judge || '';
+  var lastBy = ''; try { lastBy = localStorage.getItem('qa_last_by') || ''; } catch(e){}
+  f('qaFixBy').value = r.afterBy || lastBy;
+  qaFixCheck();
+  f('qaFixModal').style.display = 'flex';
+}
+function qaCloseFix(){ document.getElementById('qaFixModal').style.display = 'none'; _qaFixId = null; _qaFixRec = null; }
+function qaFixCalc(){
+  if (!_qaFixRec) return;
+  var t = parseFloat(document.getElementById('qaFixTitr').value);
+  if (isNaN(t)) return;
+  document.getElementById('qaFixResult').value = Math.round(t * (_qaFixRec.coeff||1) * 1000) / 1000;
+  qaFixCheck();
+}
+function qaFixCheck(){
+  var el = document.getElementById('qaFixStatus'), r = _qaFixRec;
+  var v = parseFloat(document.getElementById('qaFixResult').value);
+  if (!r || isNaN(v)) { el.style.display = 'none'; return; }
+  var s = qaGetStatus(v, r);
+  el.style.display = 'block';
+  if (s === 'OK') { el.style.background = '#e0f4ef'; el.style.color = '#065f46'; el.textContent = '✅ กลับเข้าช่วงควบคุมแล้ว (IN) · ထိန်းချုပ်ကန့်သတ်ချက်အတွင်း ပြန်ရောက်ပြီ'; }
+  else { el.style.background = '#fef2f2'; el.style.color = '#9b2c2c'; el.textContent = '🔴 ยังไม่ผ่าน (' + s + ') ต้องปรับเติมต่อ · မအောင်မြင်သေးပါ — ဆက်ပြင်ပါ'; }
+}
+function qaSaveFix(){
+  var r = _qaFixRec; if (!r) return;
+  var v = parseFloat(document.getElementById('qaFixResult').value);
+  if (isNaN(v)) { qaToast('กรุณากรอกค่าหลังแก้ไข · ပြင်ပြီးတန်ဖိုး ထည့်ပါ', false); return; }
+  var t = parseFloat(document.getElementById('qaFixTitr').value);
+  var note = document.getElementById('qaFixNote').value.trim();
+  var by = document.getElementById('qaFixBy').value.trim();
+  var recs = qaLoadRecords();
+  var i = recs.findIndex(function(x){ return x.id === r.id; }); if (i < 0) return;
+  var x = recs[i];
+  x.after = v; x.afterTitr = isNaN(t) ? null : t; x.afterStatus = qaGetStatus(v, x);
+  x.afterBy = by; x.afterTs = Date.now();
+  x.note = note; x.judge = document.getElementById('qaFixJudge').value.trim();
+  x.updatedAt = Date.now();
+  qaSaveRecords(recs); qaFbSaveRecords();
+  try { localStorage.setItem('qa_last_by', by); } catch(e){}
+  qaCloseFix();
+  qaPopulateDateFilter(); qaRenderHistory(); qaRenderChart(); qaPendRefresh();
+  qaToast(note ? '✅ บันทึกค่าหลังแก้ไขแล้ว · သိမ်းပြီး' : '✅ บันทึกแล้ว — แต่ยังไม่ได้ระบุหมายเหตุการปรับเติม · မှတ်ချက် မထည့်ရသေးပါ', !!note);
+}
+function qaAfterCell(r){
+  if (r.after != null) {
+    var ok = r.afterStatus === 'OK';
+    var bg = ok ? '#e0f4ef' : '#fef2f2', tc = ok ? '#065f46' : '#9b2c2c';
+    return '<td><span style="background:' + bg + ';color:' + tc + ';padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">'
+      + (ok ? '✅ IN' : '🔴 ' + r.afterStatus) + '</span><br><b style="font-size:13px;color:var(--navy);">' + Number(r.after).toFixed(3) + '</b>'
+      + (r.afterBy ? '<br><span style="font-size:9px;color:var(--text-muted);">' + r.afterBy + '</span>' : '') + '</td>';
+  }
+  if (r.status !== 'OK') return '<td><button class="qa-fixbtn" onclick="qaOpenFix(\'' + r.id + '\')">⚠ รอแก้ไข · ပြင်ရန်</button></td>';
+  return '<td style="color:#9ca3af;">—</td>';
+}
+function qaDashPlugin(recs){
+  return { id:'qaDash', afterDatasetsDraw:function(chart){
+    var xs = chart.scales.x, ys = chart.scales.y, c = chart.ctx;
+    c.save(); c.setLineDash([4,3]); c.strokeStyle = '#6b7280'; c.lineWidth = 1.6;
+    recs.forEach(function(r, i){
+      if (r.after == null) return;
+      var x = xs.getPixelForValue(i);
+      c.beginPath(); c.moveTo(x, ys.getPixelForValue(r.result)); c.lineTo(x, ys.getPixelForValue(r.after)); c.stroke();
+    });
+    c.restore();
+  }};
+}
+
 function qaExportCSV() {
   var recs = qaLoadRecords().sort(function(a,b){return a.ts-b.ts;});
   if (!recs.length) { alert('ไม่มีข้อมูล'); return; }
-  var h = ['วันที่','เวลา','Process','Pos no.','Item','Standard','Titration(cc)','Coefficient','Result','หน่วย','UCL','CL','LCL','สถานะ','ผู้บันทึก','หมายเหตุ'];
+  var h = ['วันที่','เวลา','Process','Pos no.','Item','Standard','Titration(cc)','Coefficient','Result','หน่วย','UCL','CL','LCL','สถานะ','ผู้บันทึก','หมายเหตุ','ค่าหลังแก้','สถานะหลังแก้','ผู้วัดซ้ำ','เวลาวัดซ้ำ'];
   var rows = recs.map(function(r){
     return [r.date,r.shift,r.processName,r.posNo||'',r.item,r.standard||'',
-      (r.titration!=null?r.titration:''),r.coeff,r.result,r.unit,r.ucl,r.cl,r.lcl,r.status,r.judge||'',r.note||''].join(',');
+      (r.titration!=null?r.titration:''),r.coeff,r.result,r.unit,r.ucl,r.cl,r.lcl,r.status,r.judge||'',r.note||'',(r.after!=null?r.after:''),(r.afterStatus||''),r.afterBy||'',(r.afterTs?new Date(r.afterTs).toISOString():'')].join(',');
   });
   var csv = '\uFEFF'+h.join(',')+'\n'+rows.join('\n');
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
@@ -8963,6 +9109,8 @@ function qaExportCSV() {
 // ── Init on load ──
 document.addEventListener('DOMContentLoaded', function() {
   qaPopulateAll();
+  qaPendRefresh();
+  setInterval(qaPendRefresh, 60000);
   var today = new Date().toISOString().split('T')[0];
   var qd = document.getElementById('qaDate');
   if (qd && !qd.value) qd.value = today;
