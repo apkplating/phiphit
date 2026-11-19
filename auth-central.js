@@ -183,7 +183,7 @@
       ]
     },
     {
-      key: 'baking', label: '🔥 อบ (Baking)', group: 'สายการผลิต',
+      key: 'baking', label: '🔥 ใบรายงานการ Baking ประจำวัน', group: 'สายการผลิต',
       tabs: [
         { id: 'run',  label: 'รออบ / ชุดอบ' },
         { id: 'hist', label: 'ประวัติ / พิมพ์ PR-008 / Baking Tag' }

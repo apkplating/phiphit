@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>🔥 อบ (Baking) — APK Plating</title>
+<title>ใบรายงานการ Baking ประจำวัน — APK Plating</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -106,7 +106,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 
 <div id="loginScreen">
   <div class="login-box">
-    <h1>🔥 อบ (Baking)</h1>
+    <h1>🔥 ใบรายงานการ Baking ประจำวัน</h1>
     <p>APK Plating — บันทึกการอบ · ใส่ PIN เพื่อเข้าใช้งาน</p>
     <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
     <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
@@ -117,8 +117,8 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 <div id="app" style="display:none;">
 <div class="app-header">
   <div class="hdr-badge">APK PLATING</div>
-  <div class="hdr-title">🔥 อบ (Baking)</div>
-  <div class="hdr-sub">เตาอบเตาเดียวใช้ร่วม B1 / B2 / R1 · บันทึก APK-FR-PR-008 + Baking Tag</div>
+  <div class="hdr-title">🔥 ใบรายงานการ Baking ประจำวัน</div>
+  <div class="hdr-sub">APK-FR-PR-008 · เตาอบเตาเดียวใช้ร่วม B1 / B2 / R1 · พิมพ์ Baking Tag ได้</div>
   <div class="who-row">
     <a href="index.html">← หน้าแรก</a>
     <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
@@ -233,7 +233,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 <script src="fb-auth.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  🔥 อบ (Baking) — ไฟล์แยก รวมรอบชุบ B1/B2/R1 · เตาเดียวใช้ร่วมกัน
+//  🔥 ใบรายงานการ Baking ประจำวัน (APK-FR-PR-008) — ไฟล์แยก รวมรอบชุบ B1/B2/R1 · เตาเดียวใช้ร่วมกัน
 //  เก็บชุดอบที่ NAS กลาง: /baking-batches/{id}.json (1 ชุด = 1 โหนด ไม่เขียนทับกัน)
 //  อ่านรอบชุบ (ไม่แก้ไข) จาก /plating-{b1|b2|r1} + /data/todayBarrels ของแต่ละไลน์
 //  ยังไม่เชื่อมกับ Tag Card
@@ -312,7 +312,7 @@ function doLogin(pin){
   $('loginErr').textContent = '';
   CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
     if (!result.ok) {
-      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ยังไม่มีสิทธิ์ระบบ "อบ" — ให้แอดมินเพิ่มสิทธิ์ที่หน้าจัดการผู้ใช้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ยังไม่มีสิทธิ์ระบบ "ใบรายงานการ Baking ประจำวัน" — ให้แอดมินเพิ่มสิทธิ์ที่หน้าจัดการผู้ใช้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
       $('loginErr').textContent = msg; return;
     }
     session = result; saveSession(result); enterApp();
