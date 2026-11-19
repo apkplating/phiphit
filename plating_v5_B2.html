@@ -5389,7 +5389,7 @@ function pmSpecOf(partNo){
   }
   return '';
 }
-function barrelSpecClear(){ var b = document.getElementById('bSpecBox'); if (b){ b.style.display='none'; b.innerHTML=''; } }
+function barrelSpecClear(){ window._colorAppliedFor = null; var b = document.getElementById('bSpecBox'); if (b){ b.style.display='none'; b.innerHTML=''; } }
 function barrelSpecShow(p){
   var b = document.getElementById('bSpecBox'); if (!b) return;
   if (!p){ barrelSpecClear(); return; }
@@ -7350,6 +7350,9 @@ function barrelPmAcPick(idx) {
   // auto-fill hidden fields ที่ logic เดิมอ่าน
   document.getElementById('bPartName').value = partNo + (nm && nm !== partNo ? ' '+nm : '');
   if (cust) document.getElementById('bCustomer').value = cust;
+  // สีชุบ: ตั้งอัตโนมัติตามสีใน Part Master (B/C/K) — ตั้งครั้งเดียวต่อการเลือก P/No ไม่ทับถ้าพนักงานแก้เอง
+  try { var _pc = String(p.color || p.colors || '').trim().charAt(0).toUpperCase();
+    if ('BCK'.indexOf(_pc) >= 0 && _pc && window._colorAppliedFor !== partNo) { selTypeColor(_pc); window._colorAppliedFor = partNo; } } catch(e){}
 
   var statusEl = document.getElementById('bPartSearchStatus');
 
