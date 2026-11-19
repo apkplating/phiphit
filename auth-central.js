@@ -6,7 +6,7 @@
      2. ตั้งชื่อระบบของไฟล์นี้ด้วย: var SYSTEM_KEY = 'job_master';
         (ค่าที่ใช้ได้: job_master, bl_stock, part_master, chem_master, po_master,
                        plating_v4, plating_v5_b2, plating_v6_r1, apk_hr, auth_admin,
-                       doc_control, kpi, qc100, tagcard, temp_delivery)
+                       doc_control, kpi, qc100, tagcard)
      3. ตอน login เรียก:
           CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
             if (!result.ok) { แสดง error; return; }
@@ -100,13 +100,6 @@
       ]
     },
     {
-      key: 'temp_delivery', label: 'ใบส่งของชั่วคราว', group: 'สำนักงาน & ทะเบียนกลาง',
-      tabs: [
-        { id: 'new',  label: 'ออกใบส่งของชั่วคราว' },
-        { id: 'list', label: 'รายการค้าง / ยกเลิก' }
-      ]
-    },
-    {
       key: 'bl_stock', label: 'B/L Stock', group: 'สำนักงาน & ทะเบียนกลาง',
       tabs: [
         { id: 'stock',    label: 'Stock Board' },
@@ -187,6 +180,13 @@
         { id: 'context',      label: 'บริบทขององค์กร' },
         { id: 'stakeholders', label: 'ผู้มีส่วนได้ส่วนเสีย' },
         { id: 'risk',         label: 'ความเสี่ยงและโอกาส' }
+      ]
+    },
+    {
+      key: 'baking', label: '🔥 อบ (Baking)', group: 'สายการผลิต',
+      tabs: [
+        { id: 'run',  label: 'รออบ / ชุดอบ' },
+        { id: 'hist', label: 'ประวัติ / พิมพ์ PR-008 / Baking Tag' }
       ]
     },
     {

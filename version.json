@@ -1,1 +1,1 @@
-{"version": "2026-11-19.231", "updatedAt": "2026-11-19T16:20:00+07:00", "note": "plating v4/v5/v6: สีชุบ (B/C/K) ตั้งอัตโนมัติตาม Part Master เมื่อเลือก P/No"}
+{"version": "2026-11-19.232", "updatedAt": "2026-11-19T18:10:00+07:00", "note": "หน้าใหม่ baking.html: บันทึกการอบ (เตาเดียวร่วม B1/B2/R1) + พิมพ์ APK-FR-PR-008 และ Baking Tag; เพิ่มสิทธิ์ระบบ baking ใน auth-central.js; การ์ดในหน้าแรก"}

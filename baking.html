@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🔥 อบ (Baking) — APK Plating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0f2744; --navy-mid:#1a3a5c; --blue:#2e75b6; --blue-light:#5ba3d9;
+  --sky:#d6eaf8; --sky-pale:#eaf4fb; --white:#fff;
+  --text:#0f2744; --text-mid:#2c4a6e; --text-muted:#6b8cae;
+  --border:rgba(46,117,182,0.18);
+  --red:#dc2626; --red-bg:#fef2f2;
+  --green:#065f46; --green-bg:#ecfdf5;
+  --amber:#b45309; --amber-bg:#fffbeb; --orange:#ea580c; --orange-bg:#fff7ed;
+  --shadow:0 2px 10px rgba(15,39,68,0.08);
+}
+*{box-sizing:border-box;}
+html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai',sans-serif;font-size:14px;margin:0;color:var(--text);}
+.app-header{background:var(--navy);padding:20px 20px 14px;}
+.hdr-badge{font-size:10px;font-weight:600;color:var(--blue-light);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:19px;font-weight:800;color:#fff;}
+.hdr-sub{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.who-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--text-muted);}
+.who-row a{color:var(--blue-light);text-decoration:none;}
+.btn-logout{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+.tabs{display:flex;gap:8px;margin-top:12px;}
+.tab{padding:8px 16px;border-radius:10px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:#cbd8e8;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.wrap{max-width:1000px;margin:0 auto;padding:14px 16px 80px;}
+.card{background:var(--white);border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid var(--border);box-shadow:var(--shadow);}
+.card-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.10em;text-transform:uppercase;margin-bottom:10px;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--text-mid);margin-bottom:4px;}
+.field input,.field select,.field textarea,.inp{width:100%;padding:9px 11px;font-family:inherit;font-size:14px;color:var(--text);background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;outline:none;}
+.field input:focus,.field select:focus,.field textarea:focus,.inp:focus{border-color:var(--blue);background:#fff;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+@media (max-width:520px){.grid2,.grid3{grid-template-columns:1fr;}}
+.btn{padding:12px 16px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-fire{background:var(--orange);color:#fff;}
+.btn-green{background:#059669;color:#fff;}
+.btn-outline{background:#fff;border:1.5px solid var(--blue);color:var(--blue);}
+.btn-danger{background:#fff;border:1.5px solid var(--red);color:var(--red);}
+.btn-sm{padding:6px 11px;font-size:11.5px;border-radius:8px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{background:var(--navy);color:var(--blue-light);padding:7px 6px;font-size:9.5px;font-weight:700;letter-spacing:.04em;white-space:nowrap;}
+td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.td-l{text-align:left;} .td-c{text-align:center;} .td-r{text-align:right;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700;}
+.pill-red{background:var(--red-bg);color:var(--red);}
+.pill-ok{background:var(--green-bg);color:var(--green);}
+.pill-amber{background:var(--amber-bg);color:var(--amber);}
+.pill-gray{background:#eef2f7;color:var(--text-mid);}
+.pill-line{background:var(--sky);color:var(--navy);}
+.banner{border-radius:12px;padding:11px 13px;font-size:12.5px;font-weight:600;margin-bottom:10px;line-height:1.5;white-space:pre-line;}
+.banner.warn{background:var(--orange-bg);color:#9a3412;border:1.5px solid #fdba74;}
+.banner.err{background:var(--red-bg);color:var(--red);border:1.5px solid #fca5a5;}
+.banner.info{background:var(--sky-pale);color:var(--text-mid);border:1px solid var(--border);}
+.banner.ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(6,95,70,.25);}
+.oven{border:2px solid var(--orange);background:var(--orange-bg);}
+.oven-big{font-size:22px;font-weight:800;color:#9a3412;}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:70px;z-index:100000;max-width:92vw;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;white-space:pre-line;box-shadow:0 6px 24px rgba(0,0,0,.3);display:none;}
+.toast.ok{background:#065f46;color:#fff;display:block;} .toast.err{background:#b91c1c;color:#fff;display:block;}
+.modal-bg{position:fixed;inset:0;background:rgba(15,39,68,.6);z-index:5000;display:none;align-items:flex-start;justify-content:center;padding:20px 12px;overflow:auto;}
+.modal{background:#fff;border-radius:16px;padding:16px;width:100%;max-width:640px;}
+.modal h3{margin:0 0 10px;font-size:15px;color:var(--navy);}
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;}
+.login-box{background:#fff;border-radius:16px;padding:32px 28px;width:100%;max-width:340px;text-align:center;}
+.login-box h1{font-size:16px;font-weight:700;color:var(--navy);margin:0 0 2px;}
+.login-box p{font-size:11.5px;color:var(--text-mid);margin:0 0 20px;}
+.login-box input{width:100%;text-align:center;letter-spacing:6px;font-size:20px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
+.login-box .btn{width:100%;}
+.login-err{color:var(--red);font-size:11.5px;margin-top:10px;min-height:14px;}
+.hidden{display:none !important;}
+.temp-chip{display:inline-block;margin:2px 4px 2px 0;padding:3px 9px;border-radius:8px;background:var(--sky-pale);font-size:12px;font-weight:700;}
+.temp-chip.bad{background:var(--red-bg);color:var(--red);}
+/* ---------- print ---------- */
+#printRoot{display:none;}
+@media print{
+  body{background:#fff !important;}
+  body.printing > *:not(#printRoot){display:none !important;}
+  body.printing #printRoot{display:block !important;}
+  .pg{page-break-after:always;}
+  .pg:last-child{page-break-after:auto;}
+  @page{size:A4 portrait;margin:8mm;}
+}
+.pg{width:191mm;margin:0 auto;background:#fff;color:#000;font-family:'IBM Plex Sans Thai',sans-serif;}
+.pr-tbl{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed;}
+.pr-tbl th,.pr-tbl td{border:1px solid #000;padding:2px 3px;color:#000;background:#fff;text-align:center;font-size:10px;font-weight:500;}
+.pr-tbl th{font-weight:700;letter-spacing:0;text-transform:none;font-size:8.5px;}
+.pr-tbl td.l{text-align:left;}
+.tag-tbl{width:100%;border-collapse:collapse;}
+.tag-tbl td,.tag-tbl th{border:1.5px solid #000;padding:4px 6px;font-size:13px;color:#000;background:#fff;font-weight:500;letter-spacing:0;text-transform:none;}
+</style>
+</head>
+<body>
+
+<a href="index.html" title="กลับหน้าหลัก" style="position:fixed;bottom:14px;left:14px;z-index:99999;width:42px;height:42px;border-radius:50%;background:#0f2a4a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.25);">🏠</a>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>🔥 อบ (Baking)</h1>
+    <p>APK Plating — บันทึกการอบ · ใส่ PIN เพื่อเข้าใช้งาน</p>
+    <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
+    <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+<div class="app-header">
+  <div class="hdr-badge">APK PLATING</div>
+  <div class="hdr-title">🔥 อบ (Baking)</div>
+  <div class="hdr-sub">เตาอบเตาเดียวใช้ร่วม B1 / B2 / R1 · บันทึก APK-FR-PR-008 + Baking Tag</div>
+  <div class="who-row">
+    <a href="index.html">← หน้าแรก</a>
+    <span><b id="whoName">—</b> · <span id="whoRole">—</span></span>
+    <button class="btn-logout" id="logoutBtn">ออกจากระบบ</button>
+    <span id="syncLbl" style="margin-left:auto;"></span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-run" onclick="showTab('run')">🔥 รออบ / ชุดอบ</button>
+    <button class="tab" id="tab-hist" onclick="showTab('hist')">🗂 ประวัติ / พิมพ์</button>
+  </div>
+</div>
+
+<div class="wrap">
+<!-- ═══════ TAB: RUN ═══════ -->
+<div id="v-run">
+  <div id="ovenCard"></div>
+
+  <div class="card" id="pendCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+      <div class="card-label" style="margin:0;">📋 รายการรออบ (รอบชุบที่สเปคต้อง Baking · ทั้ง 3 ไลน์)</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <select id="fDays" class="inp" style="width:auto;padding:5px 8px;font-size:11.5px;" onchange="reloadRounds()">
+          <option value="2">2 วันล่าสุด</option><option value="4" selected>4 วันล่าสุด</option><option value="7">7 วันล่าสุด</option><option value="14">14 วันล่าสุด</option>
+        </select>
+        <select id="fLine" class="inp" style="width:auto;padding:5px 8px;font-size:11.5px;" onchange="renderPending()">
+          <option value="">ทุกไลน์</option><option>B1</option><option>B2</option><option>R1</option>
+        </select>
+        <label style="font-size:11px;color:var(--text-mid);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="fUnknown" onchange="renderPending()"> รวมรอบที่ไม่มีสเปค (ไม่ทราบว่าต้องอบ)</label>
+        <button class="btn btn-outline btn-sm" onclick="reloadRounds()">↻ รีเฟรช</button>
+      </div>
+    </div>
+    <div class="banner info" id="gapRule">เข้าตู้อบภายใน 1 ชั่วโมงหลังชุบ — กดเพิ่มรอบทันทีที่ดึงโม่/แร็คขึ้น เพื่อให้เวลาในระบบตรงกับความจริง
+ชุบเสร็จแล้วกดเพิ่มรอบทันที · ပလိတ်ပြီးသည်နှင့် အရစ်ထည့်ရန် ချက်ချင်း နှိပ်ပါ</div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th></th><th>ไลน์</th><th class="td-l">P/No · สเปค</th><th class="td-l">ลูกค้า</th><th class="td-l">Customer Lot No</th>
+          <th class="td-l">เลขบิล</th><th class="td-l">Pro Lot No</th><th>เวลาเพิ่มรอบ</th><th>ผ่านมา</th><th>ชุบ (kg)</th><th>เหลือ (kg)</th><th>อบรอบนี้ (kg)</th>
+        </tr></thead>
+        <tbody id="pendBody"><tr><td colspan="12" class="td-c" style="padding:20px;color:var(--text-muted);">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px;">
+      <div id="selSum" style="font-size:12.5px;font-weight:700;color:var(--text-mid);">เลือก 0 รายการ · 0.0 kg</div>
+      <button class="btn btn-fire" id="startBtn" onclick="openStart()">🔥 เริ่มอบ (นำเข้าเตา)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TAB: HISTORY ═══════ -->
+<div id="v-hist" class="hidden">
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
+      <div class="field" style="margin:0;"><label>ตั้งแต่วันที่</label><input type="date" id="hFrom"></div>
+      <div class="field" style="margin:0;"><label>ถึงวันที่</label><input type="date" id="hTo"></div>
+      <button class="btn btn-outline btn-sm" onclick="renderHistory()">ค้นหา</button>
+      <button class="btn btn-primary btn-sm" onclick="printPR008()">🖨 พิมพ์ APK-FR-PR-008</button>
+      <label style="font-size:11px;color:var(--text-mid);display:flex;align-items:center;gap:4px;"><input type="checkbox" id="hLotCol"> เพิ่มคอลัมน์ Pro Lot No / เลขบิล (ส่วนเสริม ไม่อยู่ใน Rev.00)</label>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>#</th><th>วันที่</th><th>เริ่ม</th><th>สิ้นสุด</th><th>รวม</th><th class="td-l">ชิ้นงาน</th><th>kg</th><th>Temp</th><th class="td-l">ผู้บันทึก</th><th>สถานะ</th><th></th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- modal: start -->
+<div class="modal-bg" id="mStart"><div class="modal">
+  <h3>🔥 เริ่มอบ — นำงานเข้าเตา</h3>
+  <div id="startItems" style="margin-bottom:10px;font-size:12.5px;"></div>
+  <div class="grid3">
+    <div class="field"><label>เวลาเข้าเตา</label><input type="time" id="sTime"></div>
+    <div class="field"><label>อุณหภูมิเตาตอนเข้า (°C)</label><input type="number" id="sTemp" inputmode="decimal" placeholder="190–220"></div>
+    <div class="field"><label>ผู้นำงานเข้าเตา</label><input type="text" id="sWho" readonly></div>
+  </div>
+  <div id="startWarn"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <button class="btn btn-outline" onclick="closeM('mStart')">ยกเลิก</button>
+    <button class="btn btn-fire" id="sOk" onclick="doStart()">ยืนยันเริ่มอบ</button>
+  </div>
+</div></div>
+
+<!-- modal: end -->
+<div class="modal-bg" id="mEnd"><div class="modal">
+  <h3>✅ จบการอบ — นำงานออกจากเตา</h3>
+  <div class="grid3">
+    <div class="field"><label>เวลาออกจากเตา</label><input type="time" id="eTime" oninput="endCalc()"></div>
+    <div class="field"><label>อุณหภูมิเตาตอนออก (°C)</label><input type="number" id="eTemp" inputmode="decimal" placeholder="190–220"></div>
+    <div class="field"><label>ผู้นำงานออกจากเตา</label><input type="text" id="eWho" readonly></div>
+  </div>
+  <div id="endInfo"></div>
+  <div class="field hidden" id="eReasonBox"><label style="color:var(--red);">เหตุผลที่อบไม่ถึง 4 ชั่วโมง (จำเป็น) · ၄ နာရီ မပြည့်ရခြင်း အကြောင်းရင်း</label><textarea id="eReason" rows="2"></textarea></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <button class="btn btn-outline" onclick="closeM('mEnd')">ยกเลิก</button>
+    <button class="btn btn-green" onclick="doEnd()">ยืนยันจบการอบ</button>
+  </div>
+</div></div>
+
+<!-- modal: detail / tag -->
+<div class="modal-bg" id="mDetail"><div class="modal" style="max-width:760px;" id="mDetailBody"></div></div>
+
+<div id="toast" class="toast"></div>
+<div id="printRoot"></div>
+
+<script src="auth-central.js"></script>
+<script src="fb-auth.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  🔥 อบ (Baking) — ไฟล์แยก รวมรอบชุบ B1/B2/R1 · เตาเดียวใช้ร่วมกัน
+//  เก็บชุดอบที่ NAS กลาง: /baking-batches/{id}.json (1 ชุด = 1 โหนด ไม่เขียนทับกัน)
+//  อ่านรอบชุบ (ไม่แก้ไข) จาก /plating-{b1|b2|r1} + /data/todayBarrels ของแต่ละไลน์
+//  ยังไม่เชื่อมกับ Tag Card
+// ═══════════════════════════════════════════════════════════════
+var SYSTEM_KEY = 'baking';
+var session = null;
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+var DB_B1 = 'https://platingapp-92e21-c1346-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_B2 = 'https://platingapp-b2-default-rtdb.asia-southeast1.firebasedatabase.app';
+var DB_R1 = 'https://platingapp-r1-default-rtdb.asia-southeast1.firebasedatabase.app';
+var LINES = { B1:{base:DB_B1,node:'plating-b1'}, B2:{base:DB_B2,node:'plating-b2'}, R1:{base:DB_R1,node:'plating-r1'} };
+var PM_URL  = DB_B1 + '/part-master.json';
+var JOB_URL = DB_B1 + '/job-master.json';
+var BK_BASE = DB_B1 + '/baking-batches';
+
+var T_MIN = 190, T_MAX = 220, MIN_HOURS = 4, GAP_MIN = 60;
+
+// ── ข้อความ 2 ภาษา (ไทย + พม่า) ──
+var MSG = {
+  gap:   { th:'ชุบเสร็จเกิน 60 นาทีแล้ว — รีบนำเข้าเตาอบ', mm:'ပလိတ်ပြီးပြီး ၆၀ မိနစ်ကျော်ပြီ — ဘေကင်မီးဖိုထဲ အမြန်ထည့်ပါ' },
+  due:   { th:'ถึงเวลาจดอุณหภูมิเตาแล้ว', mm:'မီးဖို အပူချိန် မှတ်တမ်းတင်ချိန် ရောက်ပြီ' },
+  short: { th:'อบไม่ถึง 4 ชั่วโมง — ต้องระบุเหตุผล', mm:'ဘေကင် ၄ နာရီ မပြည့်သေးပါ — အကြောင်းရင်း ရေးရန် လိုအပ်သည်' },
+  range: { th:'อุณหภูมิอยู่นอก 190–220 °C', mm:'အပူချိန် ၁၉၀–၂၂၀ °C ပြင်ပ ရောက်နေသည်' },
+  busy:  { th:'เตากำลังอบอยู่ — จบชุดเดิมก่อนจึงเริ่มชุดใหม่ได้', mm:'မီးဖိုတွင် ဘေကင်လုပ်နေဆဲ — လက်ရှိအသုတ်ကို အရင်ပြီးမှ အသစ်စနိုင်သည်' },
+  nosel: { th:'ยังไม่ได้เลือกรอบที่จะอบ', mm:'ဘေကင်လုပ်မည့် အရစ် မရွေးရသေးပါ' },
+  saved: { th:'บันทึกแล้ว', mm:'သိမ်းပြီး' },
+  fail:  { th:'บันทึกไม่สำเร็จ — ตรวจสอบสัญญาณแล้วลองใหม่', mm:'သိမ်းမရပါ — အင်တာနက်စစ်ပြီး ထပ်ကြိုးစားပါ' },
+  over:  { th:'kg ที่อบเกินยอดที่เหลือของรอบนั้น', mm:'ဘေကင် kg သည် ကျန်ရှိသည့်ပမာဏထက် ပိုနေသည်' }
+};
+function tm(k){ var m = MSG[k]; return m.th + '\n' + m.mm; }
+
+var rounds = [];      // รอบชุบทุกไลน์ (normalize แล้ว)
+var batches = [];     // ชุดอบ
+var partMaster = [];
+var jobMap = {};      // jobId -> {bill, custLot}
+var sel = {};         // key -> {on, kg}
+var lastLoad = 0;
+
+// ── helpers ──
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtD(ts){ var d=new Date(ts); return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(); }
+function fmtT(ts){ var d=new Date(ts); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function isoD(ts){ var d=new Date(ts); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function nowTimeStr(){ return fmtT(Date.now()); }
+function tsFromTimeStr(hhmm, refTs){ // วันเดียวกับ refTs
+  var p = String(hhmm||'').split(':'); var d = new Date(refTs||Date.now());
+  d.setHours(+p[0]||0, +p[1]||0, 0, 0); return d.getTime();
+}
+function durStr(min){ if (min==null || isNaN(min)) return '–'; var tot=Math.round(min), h=Math.floor(tot/60), m=tot%60; return h+':'+pad(m); }
+function num(v){ var n=parseFloat(v); return isNaN(n)?0:n; }
+function canEdit(){ return session && (session.role==='admin' || session.role==='operator'); }
+function isAdmin(){ return session && session.role==='admin'; }
+function userName(){ return (session && session.user && (session.user.name || session.pin)) || ''; }
+function toast(text, ok){ var t=$('toast'); t.className='toast '+(ok?'ok':'err'); t.textContent=text; clearTimeout(toast._t); toast._t=setTimeout(function(){ t.className='toast'; }, ok?2500:6000); }
+function closeM(id){ $(id).style.display='none'; }
+function openM(id){ $(id).style.display='flex'; }
+
+function normKey(s){ return String(s||'').toLowerCase().replace(/[\s\-\.]+/g,''); }
+function bakeFromSpec(spec){ var s=String(spec||'').trim(); if(!s) return null; return /-H[BCK]/i.test(s); }
+function pmFind(partRaw){
+  var raw = String(partRaw||'').trim(); if(!raw) return null;
+  var k = normKey(raw);
+  for (var i=0;i<partMaster.length;i++){ if (normKey(partMaster[i].partNo)===k) return partMaster[i]; }
+  var first = normKey(raw.split(/\s+/)[0]);
+  for (var j=0;j<partMaster.length;j++){ if (normKey(partMaster[j].partNo)===first) return partMaster[j]; }
+  return null;
+}
+
+// ═══════════ LOGIN ═══════════
+function loadSession(){ try{ var r=sessionStorage.getItem('baking_session'); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ try{ sessionStorage.setItem('baking_session', JSON.stringify(s)); }catch(e){} }
+function clearSession(){ try{ sessionStorage.removeItem('baking_session'); }catch(e){} }
+function doLogin(pin){
+  $('loginErr').textContent = '';
+  CentralAuth.login(pin, SYSTEM_KEY).then(function(result){
+    if (!result.ok) {
+      var msg = {invalid_pin:'PIN ไม่ถูกต้อง', no_access:'PIN นี้ยังไม่มีสิทธิ์ระบบ "อบ" — ให้แอดมินเพิ่มสิทธิ์ที่หน้าจัดการผู้ใช้', connection_error:'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง'}[result.reason] || 'เข้าสู่ระบบไม่สำเร็จ';
+      $('loginErr').textContent = msg; return;
+    }
+    session = result; saveSession(result); enterApp();
+  });
+}
+function enterApp(){
+  $('loginScreen').style.display = 'none';
+  $('app').style.display = 'block';
+  $('whoName').textContent = userName();
+  $('whoRole').textContent = {admin:'ผู้ดูแลระบบ', operator:'เจ้าหน้าที่', viewer:'ผู้ดูเท่านั้น'}[session.role] || session.role;
+  var d = new Date(); var f = new Date(d.getFullYear(), d.getMonth(), 1);
+  $('hFrom').value = isoD(f.getTime()); $('hTo').value = isoD(d.getTime());
+  loadAll();
+  setInterval(function(){ if (document.visibilityState!=='hidden') loadBatches(true); }, 30000);
+  setInterval(function(){ renderOven(); updateGapCells(); }, 20000);
+}
+function showTab(t){
+  $('v-run').classList.toggle('hidden', t!=='run'); $('v-hist').classList.toggle('hidden', t!=='hist');
+  $('tab-run').classList.toggle('active', t==='run'); $('tab-hist').classList.toggle('active', t==='hist');
+  if (t==='hist') renderHistory();
+}
+
+// ═══════════ LOAD ═══════════
+async function getJSON(url){
+  var r = await fetch(url, { cache:'no-cache' });
+  if (!r.ok) throw new Error('HTTP '+r.status+' '+url);
+  return await r.json();
+}
+function toArr(x){ if (Array.isArray(x)) return x.filter(function(v){return v!=null;}); if (x && typeof x==='object') return Object.keys(x).map(function(k){return x[k];}).filter(function(v){return v!=null;}); return []; }
+
+async function loadAll(){
+  $('syncLbl').textContent = '⏳ กำลังโหลด...';
+  try { var pm = await getJSON(PM_URL); partMaster = toArr(pm && pm.parts); } catch(e){ partMaster = []; }
+  try {
+    var jm = await getJSON(JOB_URL); jobMap = {};
+    toArr(jm && jm.items).forEach(function(j){ if (j && j.id) jobMap[j.id] = { bill:j.bill||'', custLot:j.custLot||'' }; });
+  } catch(e){ jobMap = {}; }
+  await loadBatches(true);
+  await reloadRounds();
+  lastLoad = Date.now();
+  $('syncLbl').textContent = '🟢 ซิงค์ ' + nowTimeStr();
+}
+
+async function loadBatches(silent){
+  try {
+    var data = await getJSON(BK_BASE + '.json');
+    batches = toArr(data).map(function(b){
+      b.itemsArr = toArr(b.items);
+      b.tempsArr = toArr(b.temps).sort(function(a,c){ return a.ts - c.ts; });
+      return b;
+    }).sort(function(a,b){ return b.startTs - a.startTs; });
+    if (!silent) $('syncLbl').textContent = '🟢 ซิงค์ ' + nowTimeStr();
+  } catch(e){ if (!silent) toast(tm('fail'), false); }
+  renderOven(); renderPending(); if (!$('v-hist').classList.contains('hidden')) renderHistory();
+}
+
+async function reloadRounds(){
+  var days = +$('fDays').value || 4;
+  var since = Date.now() - days*86400000;
+  var out = {};
+  async function oneLine(L){
+    var cfg = LINES[L], rows = [];
+    try {
+      var dr = null;
+      try { dr = await getJSON(cfg.base + '/' + cfg.node + '/dayRecords.json'); } catch(e){ var whole = await getJSON(cfg.base + '/' + cfg.node + '.json'); dr = whole && whole.dayRecords; }
+      toArr(dr).forEach(function(d){ toArr(d && d.rows).forEach(function(r){ rows.push(r); }); });
+    } catch(e){}
+    try {
+      var live = await getJSON(cfg.base + '/data/todayBarrels.json');
+      toArr(live).forEach(function(r){ rows.push(r); });
+    } catch(e){}
+    try { // todayBarrels ที่อยู่ใน blob (กรณี live path ว่าง)
+      var tb = await getJSON(cfg.base + '/' + cfg.node + '/todayBarrels.json'); toArr(tb).forEach(function(r){ rows.push(r); });
+    } catch(e){}
+    rows.forEach(function(r){
+      if (!r || r.id==null) return;
+      var id = +r.id; if (!(id > since)) return;
+      var key = L + '_' + r.id; if (out[key]) return;
+      var partRaw = r.partName || '';
+      var pm = pmFind(partRaw);
+      var partNo = pm ? pm.partNo : String(partRaw).trim().split(/\s+/)[0];
+      var spec = r.spec || (pm && pm.platingType) || '';
+      var bake = (r.bakeReq===true||r.bakeReq===false) ? r.bakeReq : bakeFromSpec(spec);
+      var job = r.jobId ? jobMap[r.jobId] : null;
+      var ts = id;
+      if (/^\d\d?:\d\d$/.test(String(r.time||''))) { var t2 = tsFromTimeStr(r.time, id); if (Math.abs(t2 - id) < 12*3600000) ts = t2; }
+      out[key] = { key:key, line:L, id:id, ts:ts, barrel:r.barrel, type:r.type, color:r.color,
+        kg:num(r.kg), pcs:num(r.pcs), partNo:partNo, partName:(pm&&pm.name)||'', customer:r.customer || (pm&&pm.customer) || '',
+        custLot:r.custLot || (job&&job.custLot) || '', bill:job?job.bill:'', lotNo:r.lotNo||'', spec:spec, bake:bake };
+    });
+  }
+  await Promise.all(['B1','B2','R1'].map(oneLine));
+  rounds = Object.keys(out).map(function(k){ return out[k]; }).sort(function(a,b){ return a.ts - b.ts; });
+  renderPending();
+}
+
+// ═══════════ PENDING ═══════════
+function bakedKgMap(){
+  var m = {};
+  batches.forEach(function(b){ if (b.status==='cancelled') return; b.itemsArr.forEach(function(it){ m[it.key] = (m[it.key]||0) + num(it.kg); }); });
+  return m;
+}
+function runningBatch(){ for (var i=0;i<batches.length;i++) if (batches[i].status==='running') return batches[i]; return null; }
+function round1(n){ return Math.round(n*10)/10; }
+
+function renderPending(){
+  var tb = $('pendBody'); if (!tb) return;
+  var baked = bakedKgMap();
+  var fl = $('fLine').value, unk = $('fUnknown').checked;
+  var list = rounds.filter(function(r){
+    if (fl && r.line!==fl) return false;
+    if (!(r.bake===true || (unk && r.bake===null))) return false;
+    return (r.kg - (baked[r.key]||0)) > 0.05;
+  });
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="12" class="td-c" style="padding:22px;color:var(--text-muted);">ไม่มีรอบที่รออบ · မစောင့်ဆိုင်းသော အရစ် မရှိပါ</td></tr>';
+    updateSelSum(); return;
+  }
+  tb.innerHTML = list.map(function(r){
+    var rem = round1(r.kg - (baked[r.key]||0));
+    var s = sel[r.key]; var on = !!(s && s.on);
+    var kgVal = (s && s.kg!=null) ? s.kg : rem;
+    var partial = (baked[r.key]||0) > 0.05 ? ' <span class="pill pill-amber">อบแล้ว '+round1(baked[r.key])+'</span>' : '';
+    var unkPill = r.bake===null ? ' <span class="pill pill-gray">ไม่มีสเปค</span>' : '';
+    return '<tr data-key="'+esc(r.key)+'">' +
+      '<td class="td-c"><input type="checkbox" '+(on?'checked':'')+' onchange="togSel(\''+esc(r.key)+'\',this.checked,'+rem+')" '+(canEdit()?'':'disabled')+'></td>' +
+      '<td class="td-c"><span class="pill pill-line">'+esc(r.line)+'</span></td>' +
+      '<td class="td-l"><b>'+esc(r.partNo)+'</b><br><span style="font-size:10.5px;color:var(--text-muted);">'+esc(r.spec||'–')+'</span>'+unkPill+'</td>' +
+      '<td class="td-l">'+esc(r.customer||'–')+'</td>' +
+      '<td class="td-l mono">'+esc(r.custLot||'–')+'</td>' +
+      '<td class="td-l mono">'+esc(r.bill||'–')+'</td>' +
+      '<td class="td-l mono">'+esc(r.lotNo||'–')+'</td>' +
+      '<td class="td-c mono">'+fmtD(r.ts).slice(0,5)+' '+fmtT(r.ts)+'</td>' +
+      '<td class="td-c gapcell" data-ts="'+r.ts+'"></td>' +
+      '<td class="td-r mono">'+round1(r.kg).toFixed(1)+'</td>' +
+      '<td class="td-r mono"><b>'+rem.toFixed(1)+'</b>'+partial+'</td>' +
+      '<td class="td-c"><input class="inp mono" style="width:78px;padding:5px 7px;text-align:right;" type="number" step="0.1" min="0" value="'+kgVal+'" '+(on&&canEdit()?'':'disabled')+' oninput="setKg(\''+esc(r.key)+'\',this.value)"></td>' +
+      '</tr>';
+  }).join('');
+  updateGapCells(); updateSelSum();
+}
+function updateGapCells(){
+  var cells = document.querySelectorAll('.gapcell'); var now = Date.now();
+  cells.forEach(function(c){
+    var m = Math.floor((now - (+c.getAttribute('data-ts')))/60000);
+    c.innerHTML = m > GAP_MIN ? '<span class="pill pill-red">'+durStr(m)+' ⚠️</span>' : '<span class="pill pill-ok">'+durStr(Math.max(m,0))+'</span>';
+  });
+  var anyOver = false; cells.forEach(function(c){ if ((now - (+c.getAttribute('data-ts')))/60000 > GAP_MIN && selOn(c.parentNode.getAttribute('data-key'))) anyOver = true; });
+  $('gapRule').className = 'banner ' + (anyOver ? 'warn' : 'info');
+  $('gapRule').textContent = anyOver ? tm('gap') : 'เข้าตู้อบภายใน 1 ชั่วโมงหลังชุบ — กดเพิ่มรอบทันทีที่ดึงโม่/แร็คขึ้น เพื่อให้เวลาในระบบตรงกับความจริง\nပလိတ်ပြီးသည်နှင့် အရစ်ထည့်ရန် ချက်ချင်း နှိပ်ပါ';
+}
+function selOn(k){ return !!(sel[k] && sel[k].on); }
+function togSel(k, on, rem){
+  if (on) sel[k] = { on:true, kg:(sel[k] && sel[k].kg!=null) ? sel[k].kg : rem }; else if (sel[k]) sel[k].on = false;
+  renderPending();
+}
+function setKg(k, v){ if (!sel[k]) sel[k] = {on:true}; sel[k].kg = v; updateSelSum(); }
+function selectedRows(){
+  var baked = bakedKgMap();
+  return rounds.filter(function(r){ return selOn(r.key); }).map(function(r){
+    var rem = round1(r.kg - (baked[r.key]||0));
+    return { r:r, rem:rem, kg:round1(num(sel[r.key].kg)) };
+  });
+}
+function updateSelSum(){
+  var s = selectedRows(), kg = 0; s.forEach(function(x){ kg += x.kg; });
+  $('selSum').textContent = 'เลือก ' + s.length + ' รายการ · ' + round1(kg).toFixed(1) + ' kg';
+  var run = runningBatch();
+  var b = $('startBtn'); b.disabled = !canEdit() || !!run || !s.length;
+  b.title = run ? 'เตากำลังอบอยู่' : '';
+}
+
+// ═══════════ OVEN CARD (ชุดที่กำลังอบ) ═══════════
+function renderOven(){
+  var el = $('ovenCard'); if (!el) return;
+  var b = runningBatch();
+  if (!b) { el.innerHTML = '<div class="card" style="padding:12px 14px;"><b style="color:var(--green);">🟢 เตาว่าง</b> <span style="color:var(--text-muted);font-size:12px;">· เลือกรอบจากรายการด้านล่างแล้วกด "เริ่มอบ"</span></div>'; return; }
+  var now = Date.now(), el_min = (now - b.startTs)/60000;
+  var last = b.tempsArr.length ? b.tempsArr[b.tempsArr.length-1] : null;
+  var dueMin = last ? (now - last.ts)/60000 : el_min;
+  var needTemp = dueMin >= 60;
+  var kg = 0; b.itemsArr.forEach(function(it){ kg += num(it.kg); });
+  var chips = b.tempsArr.map(function(t){ var bad = t.t<T_MIN || t.t>T_MAX; return '<span class="temp-chip'+(bad?' bad':'')+'">'+fmtT(t.ts)+' · '+t.t+'°</span>'; }).join('') || '<span style="color:var(--text-muted);font-size:12px;">ยังไม่มีค่าอุณหภูมิ</span>';
+  var rem = Math.max(MIN_HOURS*60 - el_min, 0);
+  el.innerHTML = '<div class="card oven">' +
+    '<div class="oven-big">🔥 เตากำลังอบ · เริ่ม '+fmtT(b.startTs)+' ('+fmtD(b.startTs)+')</div>' +
+    '<div style="font-size:13px;margin:4px 0 8px;">อบมาแล้ว <b class="mono">'+durStr(el_min)+'</b> ชม. · ' + (rem>0 ? 'ครบ 4 ชม. ในอีก <b class="mono">'+durStr(rem)+'</b>' : '<b style="color:var(--green);">ครบ 4 ชั่วโมงแล้ว ✓</b>') + ' · '+b.itemsArr.length+' รายการ · '+round1(kg).toFixed(1)+' kg · ผู้นำเข้า '+esc((b.starter&&b.starter.name)||'')+'</div>' +
+    (needTemp ? '<div class="banner warn">'+tm('due')+'</div>' : '') +
+    '<div style="margin-bottom:8px;">'+chips+'</div>' +
+    '<div class="scroll"><table style="font-size:11.5px;"><thead><tr><th class="td-l">ไลน์ · P/No</th><th class="td-l">ลูกค้า</th><th class="td-l">Customer Lot No</th><th class="td-l">เลขบิล</th><th>kg</th></tr></thead><tbody>' +
+    b.itemsArr.map(function(it){ return '<tr><td class="td-l">'+esc(it.line)+' · <b>'+esc(it.partNo)+'</b></td><td class="td-l">'+esc(it.customer)+'</td><td class="td-l mono">'+esc(it.custLot||'–')+'</td><td class="td-l mono">'+esc(it.bill||'–')+'</td><td class="td-r mono">'+round1(num(it.kg)).toFixed(1)+'</td></tr>'; }).join('') +
+    '</tbody></table></div>' +
+    (canEdit() ? '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px;">' +
+      '<div class="field" style="margin:0;"><label>อุณหภูมิเตาตอนนี้ (°C)</label><input type="number" id="tNow" inputmode="decimal" style="width:130px;" placeholder="190–220"></div>' +
+      '<button class="btn btn-primary" onclick="addTemp()">💾 บันทึกอุณหภูมิ</button>' +
+      '<button class="btn btn-green" style="margin-left:auto;" onclick="openEnd()">✅ จบการอบ</button>' +
+      (isAdmin() ? '<button class="btn btn-danger btn-sm" onclick="cancelBatch(\''+b.id+'\')">ยกเลิกชุดนี้</button>' : '') +
+      '</div>' : '') +
+    '</div>';
+}
+
+// ═══════════ WRITE ═══════════
+async function putJSON(url, body, method){
+  var r = await fetch(url, { method:method||'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  return r;
+}
+function who(){ return { pin: session.pin || '', name: userName() }; }
+
+function openStart(){
+  if (!canEdit()) return;
+  if (runningBatch()) { toast(tm('busy'), false); return; }
+  var s = selectedRows();
+  if (!s.length) { toast(tm('nosel'), false); return; }
+  var warn = [], now = Date.now();
+  var html = '<table style="font-size:12px;"><thead><tr><th class="td-l">ไลน์ · P/No</th><th class="td-l">Customer Lot No</th><th>kg</th><th>ชุบ→เข้าเตา</th></tr></thead><tbody>' +
+    s.map(function(x){
+      var gap = Math.floor((now - x.r.ts)/60000);
+      if (gap > GAP_MIN) warn.push(x.r.partNo+' ('+durStr(gap)+')');
+      return '<tr><td class="td-l">'+esc(x.r.line)+' · <b>'+esc(x.r.partNo)+'</b></td><td class="td-l mono">'+esc(x.r.custLot||'–')+'</td><td class="td-r mono">'+x.kg.toFixed(1)+'</td><td class="td-c">'+(gap>GAP_MIN?'<span class="pill pill-red">'+durStr(gap)+' ⚠️</span>':'<span class="pill pill-ok">'+durStr(Math.max(gap,0))+'</span>')+'</td></tr>';
+    }).join('') + '</tbody></table>';
+  $('startItems').innerHTML = html;
+  $('sTime').value = nowTimeStr(); $('sTemp').value = ''; $('sWho').value = userName();
+  $('startWarn').innerHTML = warn.length ? '<div class="banner warn">'+tm('gap')+'\n'+esc(warn.join(', '))+'</div>' : '';
+  openM('mStart');
+}
+async function doStart(){
+  var s = selectedRows(); var btn = $('sOk');
+  if (!s.length) return;
+  for (var i=0;i<s.length;i++){
+    if (!(s[i].kg > 0)) { toast('kg ต้องมากกว่า 0 · ' + s[i].r.partNo, false); return; }
+    if (s[i].kg > s[i].rem + 0.05) { toast(tm('over') + '\n' + s[i].r.partNo, false); return; }
+  }
+  btn.disabled = true;
+  try {
+    await loadBatches(true);
+    if (runningBatch()) { toast(tm('busy'), false); closeM('mStart'); return; }
+    var startTs = tsFromTimeStr($('sTime').value, Date.now());
+    if (startTs > Date.now() + 5*60000) startTs -= 86400000;
+    var id = 'B' + Date.now();
+    var items = {};
+    s.forEach(function(x){
+      var r = x.r;
+      items[r.key] = { key:r.key, line:r.line, rowId:r.id, barrel:r.barrel||'', partNo:r.partNo, partName:r.partName, customer:r.customer, spec:r.spec,
+        custLot:r.custLot, bill:r.bill, lotNo:r.lotNo, kg:x.kg, pcs: r.kg>0 ? Math.round(r.pcs * x.kg / r.kg) : 0,
+        plateTs:r.ts, gapMin: Math.round((startTs - r.ts)/60000), thick:'' };
+    });
+    var b = { id:id, status:'running', startTs:startTs, starter:who(), items:items, temps:{}, updatedAt:Date.now(),
+              tMin:T_MIN, tMax:T_MAX, minHours:MIN_HOURS };
+    var t0 = $('sTemp').value;
+    if (t0 !== '') b.temps['t'+startTs] = { ts:startTs, t:num(t0), by:who().name, kind:'start' };
+    await putJSON(BK_BASE + '/' + id + '.json', b);
+    sel = {};
+    closeM('mStart');
+    if (t0 !== '' && (num(t0)<T_MIN || num(t0)>T_MAX)) toast(tm('range'), false); else toast(tm('saved'), true);
+    await loadBatches(true);
+  } catch(e){ toast(tm('fail'), false); }
+  btn.disabled = false;
+}
+async function addTemp(){
+  var b = runningBatch(); if (!b) return;
+  var v = $('tNow').value; if (v==='') return;
+  var ts = Date.now(), t = num(v);
+  try {
+    await putJSON(BK_BASE + '/' + b.id + '/temps/t' + ts + '.json', { ts:ts, t:t, by:who().name, kind:'hour' });
+    await putJSON(BK_BASE + '/' + b.id + '/updatedAt.json', Date.now());
+    if (t<T_MIN || t>T_MAX) toast(tm('range'), false); else toast(tm('saved'), true);
+    await loadBatches(true);
+  } catch(e){ toast(tm('fail'), false); }
+}
+function openEnd(){
+  var b = runningBatch(); if (!b) return;
+  $('eTime').value = nowTimeStr(); $('eTemp').value = ''; $('eWho').value = userName(); $('eReason').value = '';
+  endCalc(); openM('mEnd');
+}
+function endCalc(){
+  var b = runningBatch(); if (!b) return;
+  var endTs = tsFromTimeStr($('eTime').value, Date.now());
+  var min = (endTs - b.startTs)/60000;
+  var short = min < MIN_HOURS*60;
+  $('endInfo').innerHTML = '<div class="banner '+(short?'err':'ok')+'">อบ ' + durStr(min) + ' ชม. (เริ่ม '+fmtT(b.startTs)+')' + (short ? '\n'+tm('short') : ' · ครบ 4 ชั่วโมง ✓') + '</div>';
+  $('eReasonBox').classList.toggle('hidden', !short);
+}
+async function doEnd(){
+  var b = runningBatch(); if (!b) return;
+  var endTs = tsFromTimeStr($('eTime').value, Date.now());
+  if (endTs < b.startTs) endTs += 86400000;
+  var min = (endTs - b.startTs)/60000, short = min < MIN_HOURS*60;
+  var reason = $('eReason').value.trim();
+  if (short && !reason) { toast(tm('short'), false); return; }
+  var tv = $('eTemp').value;
+  try {
+    if (tv !== '') await putJSON(BK_BASE + '/' + b.id + '/temps/t' + endTs + '.json', { ts:endTs, t:num(tv), by:who().name, kind:'end' });
+    await putJSON(BK_BASE + '/' + b.id + '.json', { status:'done', endTs:endTs, ender:who(), shortReason: short ? reason : '', updatedAt:Date.now() }, 'PATCH');
+    closeM('mEnd'); toast(tm('saved'), true);
+    await loadBatches(true);
+  } catch(e){ toast(tm('fail'), false); }
+}
+async function cancelBatch(id){
+  if (!isAdmin()) return;
+  if (!confirm('ยกเลิกชุดอบนี้? รอบที่เลือกไว้จะกลับไปอยู่ในรายการรออบ')) return;
+  try { await putJSON(BK_BASE + '/' + id + '.json', { status:'cancelled', cancelledBy:who().name, updatedAt:Date.now() }, 'PATCH'); await loadBatches(true); toast(tm('saved'), true); }
+  catch(e){ toast(tm('fail'), false); }
+}
+
+// ═══════════ HISTORY ═══════════
+function batchFlags(b){
+  var f = [];
+  var end = b.endTs || null, min = end ? (end - b.startTs)/60000 : null;
+  if (end && min < MIN_HOURS*60) f.push('อบไม่ถึง 4 ชม.');
+  if (b.tempsArr.some(function(t){ return t.t<T_MIN || t.t>T_MAX; })) f.push('Temp นอกช่วง');
+  if (b.itemsArr.some(function(i){ return i.gapMin > GAP_MIN; })) f.push('เข้าเตาเกิน 1 ชม.');
+  return f;
+}
+function batchTempRange(b){
+  if (!b.tempsArr.length) return '–';
+  var mn = Math.min.apply(null, b.tempsArr.map(function(t){return t.t;})), mx = Math.max.apply(null, b.tempsArr.map(function(t){return t.t;}));
+  return mn===mx ? String(mn) : mn+'–'+mx;
+}
+function histBatches(){
+  var f = $('hFrom').value, t = $('hTo').value;
+  var from = f ? new Date(f+'T00:00:00').getTime() : 0, to = t ? new Date(t+'T23:59:59').getTime() : Infinity;
+  return batches.filter(function(b){ return b.status!=='cancelled' && b.startTs>=from && b.startTs<=to; }).sort(function(a,b){ return a.startTs - b.startTs; });
+}
+function renderHistory(){
+  var list = histBatches(), tb = $('histBody');
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="11" class="td-c" style="padding:20px;color:var(--text-muted);">ไม่มีข้อมูล</td></tr>'; return; }
+  tb.innerHTML = list.map(function(b, i){
+    var kg = 0; b.itemsArr.forEach(function(it){ kg += num(it.kg); });
+    var min = b.endTs ? (b.endTs - b.startTs)/60000 : null;
+    var flags = batchFlags(b);
+    var parts = b.itemsArr.map(function(it){ return esc(it.partNo); }).filter(function(v,j,a){ return a.indexOf(v)===j; }).join('<br>');
+    var st = b.status==='running' ? '<span class="pill pill-amber">กำลังอบ</span>' : (flags.length ? '<span class="pill pill-red">⚠️ '+esc(flags.join(' · '))+'</span>' : '<span class="pill pill-ok">ปกติ</span>');
+    return '<tr><td class="td-c">'+(i+1)+'</td><td class="td-c mono">'+fmtD(b.startTs)+'</td><td class="td-c mono">'+fmtT(b.startTs)+'</td><td class="td-c mono">'+(b.endTs?fmtT(b.endTs):'–')+'</td><td class="td-c mono">'+durStr(min)+'</td>' +
+      '<td class="td-l" style="font-size:11.5px;">'+parts+'</td><td class="td-r mono">'+round1(kg).toFixed(1)+'</td><td class="td-c mono">'+batchTempRange(b)+'</td>' +
+      '<td class="td-l">'+esc((b.starter&&b.starter.name)||'')+(b.ender&&b.ender.name&&b.ender.name!==(b.starter&&b.starter.name)?' / '+esc(b.ender.name):'')+'</td><td class="td-c">'+st+'</td>' +
+      '<td class="td-c"><button class="btn btn-outline btn-sm" onclick="openDetail(\''+b.id+'\')">ดู / Tag</button></td></tr>';
+  }).join('');
+}
+
+// ── detail + Baking Tag ──
+function tagGroups(b){
+  var g = {};
+  b.itemsArr.forEach(function(it){
+    var k = (it.custLot||'') + '|' + it.partNo;
+    if (!g[k]) g[k] = { key:k, custLot:it.custLot||'', partNo:it.partNo, partName:it.partName||'', customer:it.customer||'', spec:it.spec||'', thick:it.thick||'', kg:0, pcs:0, bills:{}, lots:{}, first:Infinity, last:0, items:[] };
+    var x = g[k]; x.kg += num(it.kg); x.pcs += num(it.pcs); if (it.bill) x.bills[it.bill]=1; if (it.lotNo) x.lots[it.lotNo]=1;
+    x.first = Math.min(x.first, it.plateTs); x.last = Math.max(x.last, it.plateTs); x.items.push(it); if (it.thick) x.thick = it.thick;
+  });
+  return Object.keys(g).map(function(k){ return g[k]; });
+}
+function openDetail(id){
+  var b = batches.filter(function(x){ return x.id===id; })[0]; if (!b) return;
+  var gs = tagGroups(b), min = b.endTs ? (b.endTs-b.startTs)/60000 : null, flags = batchFlags(b);
+  var h = '<h3>ชุดอบ '+fmtD(b.startTs)+' · '+fmtT(b.startTs)+(b.endTs?' → '+fmtT(b.endTs):' (กำลังอบ)')+' · '+durStr(min)+' ชม.</h3>';
+  if (flags.length) h += '<div class="banner err">⚠️ '+esc(flags.join(' · '))+(b.shortReason?'\nเหตุผล: '+esc(b.shortReason):'')+'</div>';
+  h += '<div style="margin-bottom:8px;">' + (b.tempsArr.map(function(t){ var bad=t.t<T_MIN||t.t>T_MAX; return '<span class="temp-chip'+(bad?' bad':'')+'">'+fmtT(t.ts)+' · '+t.t+'°</span>'; }).join('') || '<span style="color:var(--text-muted)">ไม่มีค่าอุณหภูมิ</span>') + '</div>';
+  h += '<div class="scroll"><table style="font-size:11.5px;"><thead><tr><th class="td-l">Customer Lot No · P/No</th><th class="td-l">เลขบิล</th><th class="td-l">Pro Lot No</th><th>kg</th><th class="td-l">ความหนามาตรฐาน (Tag)</th><th></th></tr></thead><tbody>';
+  gs.forEach(function(g, i){
+    h += '<tr><td class="td-l"><b class="mono">'+esc(g.custLot||'–')+'</b><br>'+esc(g.partNo)+' · '+esc(g.customer)+'</td><td class="td-l mono">'+esc(Object.keys(g.bills).join(', ')||'–')+'</td><td class="td-l mono">'+esc(Object.keys(g.lots).join(', ')||'–')+'</td><td class="td-r mono">'+round1(g.kg).toFixed(1)+'</td>' +
+      '<td class="td-l"><input class="inp" id="thk'+i+'" style="width:140px;padding:5px 8px;" placeholder="เช่น 8-20" value="'+esc(g.thick)+'" '+(canEdit()?'':'disabled')+'> µm</td>' +
+      '<td class="td-c"><button class="btn btn-primary btn-sm" onclick="printTag(\''+b.id+'\','+i+')">🖨 Baking Tag</button></td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="printTag(\''+b.id+'\',-1)">🖨 พิมพ์ Tag ทั้งชุด ('+gs.length+' ใบ)</button><button class="btn btn-outline" onclick="closeM(\'mDetail\')">ปิด</button></div>';
+  $('mDetailBody').innerHTML = h; openM('mDetail');
+}
+async function saveThick(b, gi){
+  var gs = tagGroups(b);
+  for (var i=0;i<gs.length;i++){
+    if (gi>=0 && i!==gi) continue;
+    var el = $('thk'+i); if (!el) continue; var v = el.value.trim();
+    if (v === gs[i].thick) continue;
+    for (var j=0;j<gs[i].items.length;j++){
+      var it = gs[i].items[j]; it.thick = v;
+      try { await putJSON(BK_BASE+'/'+b.id+'/items/'+encodeURIComponent(it.key)+'/thick.json', v); } catch(e){}
+    }
+    gs[i].thick = v;
+  }
+}
+
+// ═══════════ PRINT ═══════════
+function doPrint(html){
+  $('printRoot').innerHTML = html;
+  document.body.classList.add('printing');
+  setTimeout(function(){ window.print(); setTimeout(function(){ document.body.classList.remove('printing'); $('printRoot').innerHTML=''; }, 500); }, 150);
+}
+function logoHtml(){ return '<div style="font-family:Georgia,serif;font-style:italic;font-weight:700;font-size:26px;color:#1d4f91;line-height:1;">APK<div style="font-size:5.5px;font-style:normal;letter-spacing:.3px;font-family:sans-serif;">APK PLATING SERVICE CO.,LTD.</div></div>'; }
+
+// ── APK-FR-PR-008 (Rev.00 : 02-04-18) ──
+function printPR008(){
+  var list = histBatches().filter(function(b){ return b.status!=='cancelled'; });
+  if (!list.length) { toast('ไม่มีข้อมูลในช่วงที่เลือก', false); return; }
+  var lotCol = $('hLotCol').checked;
+  var PER_PAGE = 22;
+  var flat = []; // [{b, idxInBatch, n}]
+  list.forEach(function(b, bi){ var n = Math.max(b.itemsArr.length,1); for (var i=0;i<n;i++) flat.push({ b:b, i:i, n:n, no:bi+1 }); });
+  // แบ่งหน้า ไม่ตัดชุดกลาง
+  var pages = [], cur = [], cnt = 0, lastB = null;
+  var byBatch = {}; flat.forEach(function(x){ (byBatch[x.b.id] = byBatch[x.b.id] || []).push(x); });
+  list.forEach(function(b){ var g = byBatch[b.id]; if (cnt + g.length > PER_PAGE && cur.length) { pages.push(cur); cur=[]; cnt=0; } cur = cur.concat(g); cnt += g.length; });
+  if (cur.length) pages.push(cur);
+  var cols = lotCol ? 11 : 10;
+  var html = pages.map(function(rows){
+    var body = '';
+    rows.forEach(function(x){
+      var b = x.b, it = b.itemsArr[x.i];
+      var tS = b.tempsArr.length ? b.tempsArr[0].t : '', tE = (b.endTs && b.tempsArr.length > 1) ? b.tempsArr[b.tempsArr.length-1].t : '';
+      var min = b.endTs ? (b.endTs - b.startTs)/60000 : null;
+      body += '<tr>';
+      if (x.i===0) {
+        var rs = ' rowspan="'+x.n+'"';
+        body += '<td'+rs+'>'+x.no+'</td><td'+rs+'>'+fmtD(b.startTs)+'</td><td'+rs+'>'+fmtT(b.startTs)+'</td><td'+rs+'>'+tS+'</td><td'+rs+'>'+(b.endTs?fmtT(b.endTs):'')+'</td><td'+rs+'>'+tE+'</td><td'+rs+'>'+(min!=null?durStr(min):'')+(b.shortReason?'<br><span style="font-size:7.5px;">('+esc(b.shortReason)+')</span>':'')+'</td>';
+      }
+      body += '<td class="l">'+(it?esc(it.partNo):'')+'</td><td class="l">'+(it?esc(it.customer):'')+'</td>';
+      if (lotCol) body += '<td class="l" style="font-size:8.5px;">'+(it?esc((it.lotNo||'–')+' / '+(it.bill||'–')):'')+'</td>';
+      body += '<td>'+(it?round1(num(it.kg)).toFixed(1):'')+'</td>';
+      if (x.i===0) body += '<td rowspan="'+x.n+'">'+esc((b.starter&&b.starter.name)||'')+((b.ender&&b.ender.name&&b.starter&&b.ender.name!==b.starter.name)?'<br>'+esc(b.ender.name):'')+'</td>';
+      body += '</tr>';
+    });
+    for (var k=rows.length; k<PER_PAGE; k++) body += '<tr>'+new Array(lotCol?13:12).join('<td style="height:19px;">&nbsp;</td>')+'</tr>';
+    return '<div class="pg"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'+logoHtml()+'<div style="flex:1;text-align:center;font-size:16px;font-weight:700;">ใบรายงานการ Baking ประจำวัน</div></div>' +
+      '<table class="pr-tbl"><colgroup><col style="width:8mm"><col style="width:16mm"><col style="width:9mm"><col style="width:14mm"><col style="width:9mm"><col style="width:14mm"><col style="width:16mm"><col style="width:'+(lotCol?'27':'40')+'mm"><col style="width:'+(lotCol?'21':'28')+'mm">'+(lotCol?'<col style="width:26mm">':'')+'<col style="width:13mm"><col style="width:'+(lotCol?'19':'25')+'mm"></colgroup><thead>' +
+      '<tr><th rowspan="2" style="width:26px;">ลำดับที่</th><th rowspan="2" style="width:54px;">วันที่</th><th colspan="2">เริ่ม</th><th colspan="2">สิ้นสุด</th><th rowspan="2" style="width:48px;">รวมเวลา Baking<br>(≥ 4 ชั่วโมงขึ้นไป)</th><th rowspan="2">ชื่อ / หมายเลขชิ้นงาน</th><th rowspan="2">ชื่อลูกค้า</th>'+(lotCol?'<th rowspan="2">Pro Lot No / เลขบิล</th>':'')+'<th rowspan="2" style="width:42px;">จำนวนงาน<br>Baking (Kg)</th><th rowspan="2" style="width:62px;">ชื่อผู้บันทึก</th></tr>' +
+      '<tr><th style="width:34px;">เวลา</th><th style="width:40px;">Temp<br>(190-220°c)</th><th style="width:34px;">เวลา</th><th style="width:40px;">Temp<br>(190-220°c)</th></tr>' +
+      '</thead><tbody>'+body+'</tbody></table>' +
+      '<div style="font-size:9px;margin-top:8px;">หมายเหตุ : ระยะเวลาควบคุมคือส่วนหลังจากชุบถึงเข้าตู้อบ ภายใน 1 ชั่วโมง</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:8.5px;margin-top:26px;"><span>APK-FR-PR-008</span><span>อายุการจัดเก็บเอกสาร 1 ปี</span><span>Rev.00 : 02-04-18</span></div></div>';
+  }).join('');
+  doPrint(html);
+}
+
+// ── Baking Tag (1 ใบ / Customer Lot No) ──
+function tempGraphSvg(b){
+  var W = 700, H = 260, L = 44, R = 12, Tp = 10, Bt = 30;
+  var pts = b.tempsArr.slice();
+  var t0 = b.startTs, t1 = b.endTs || (pts.length ? pts[pts.length-1].ts : b.startTs + 4*3600000);
+  var h0 = new Date(t0); h0.setMinutes(0,0,0); var xs = h0.getTime();
+  var xe = Math.max(Math.ceil(t1/3600000)*3600000, xs + 5*3600000);
+  function X(ts){ return L + (ts - xs)/(xe - xs) * (W-L-R); }
+  function Y(v){ return Tp + (1 - v/250) * (H-Tp-Bt); }
+  var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;">';
+  for (var v=0; v<=250; v+=25){ s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="#bbb" stroke-width="0.6"/><text x="'+(L-5)+'" y="'+(Y(v)+3)+'" font-size="9" text-anchor="end">'+v+'</text>'; }
+  for (var t=xs; t<=xe+1; t+=3600000){ s += '<line x1="'+X(t)+'" x2="'+X(t)+'" y1="'+Tp+'" y2="'+(H-Bt)+'" stroke="#ccc" stroke-width="0.6"/><text x="'+X(t)+'" y="'+(H-Bt+13)+'" font-size="9" text-anchor="middle">'+fmtT(t)+'</text>'; }
+  [T_MIN,T_MAX].forEach(function(v){ s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="#000" stroke-width="1.6" stroke-dasharray="9 6"/>'; });
+  s += '<rect x="'+L+'" y="'+Tp+'" width="'+(W-L-R)+'" height="'+(H-Tp-Bt)+'" fill="none" stroke="#000" stroke-width="1"/>';
+  if (pts.length){
+    s += '<polyline fill="none" stroke="#000" stroke-width="1.6" points="'+pts.map(function(p){ return X(p.ts).toFixed(1)+','+Y(p.t).toFixed(1); }).join(' ')+'"/>';
+    pts.forEach(function(p){ s += '<circle cx="'+X(p.ts).toFixed(1)+'" cy="'+Y(p.t).toFixed(1)+'" r="3.5" fill="#fff" stroke="#000" stroke-width="1.4"/><text x="'+(X(p.ts)+5).toFixed(1)+'" y="'+(Y(p.t)-7).toFixed(1)+'" font-size="9">'+p.t+'</text>'; });
+  }
+  return s + '</svg>';
+}
+function tagHtml(b, g){
+  var pts = b.tempsArr;
+  var cell = function(a){ return '<td style="text-align:center;font-size:12px;">'+a+'</td>'; };
+  var tRow = '<table class="tag-tbl" style="margin-top:6px;"><tr><td style="width:60px;font-size:14px;">Time</td>' + pts.map(function(p){ return '<td style="text-align:center;font-size:11px;">'+fmtT(p.ts)+'</td>'; }).join('') + (pts.length?'':'<td>&nbsp;</td>') + '</tr><tr><td style="font-size:14px;">Temp.</td>' + pts.map(function(p){ return '<td style="text-align:center;font-size:12px;'+((p.t<T_MIN||p.t>T_MAX)?'font-weight:800;':'')+'">'+p.t+'</td>'; }).join('') + (pts.length?'':'<td>&nbsp;</td>') + '</tr></table>';
+  var starter = (b.starter&&b.starter.name)||'', ender = (b.ender&&b.ender.name)||'';
+  var pcsTxt = g.pcs>0 ? g.pcs.toLocaleString()+' ชิ้น / ' : '';
+  var th = 'style="text-align:center;font-size:12px;"';
+  return '<div class="pg">' +
+    '<table class="tag-tbl"><tr><td rowspan="2" style="width:120px;">'+logoHtml()+'</td><td colspan="3" style="text-align:center;font-size:26px;font-weight:800;letter-spacing:1px;border-left:none;">BAKING TAG</td></tr></table>' +
+    '<table class="tag-tbl" style="margin-top:-1.5px;">' +
+    '<tr><td style="width:96px;">ชื่อลูกค้า :</td><td>'+esc(g.customer)+'</td><td style="width:90px;">Part No.</td><td>'+esc(g.partNo)+'</td></tr>' +
+    '<tr><td>ล็อตนัมเบอร์ :</td><td>'+esc(g.custLot||'–')+'</td><td>Part Name.</td><td>'+esc(g.partName||'–')+'</td></tr>' +
+    '<tr><td>CODE :</td><td>'+esc(g.spec||'–')+'</td><td>THICKNESS<br>STANDARD</td><td>'+(g.thick?esc(g.thick)+' µm':'&nbsp;')+'</td></tr>' +
+    '<tr><td colspan="4">เงื่อนไขในการชุบ เบกกิ้ง(Baking)</td></tr>' +
+    '<tr><td colspan="4">อุณหภูมิในการอบ &nbsp; '+T_MIN+'°C–'+T_MAX+'°C &nbsp;&nbsp; ระยะเวลาในการอบ : &nbsp; '+MIN_HOURS+' &nbsp; ชั่วโมง &nbsp;&nbsp;&nbsp; จำนวนชิ้นงาน &nbsp; <b>'+pcsTxt+round1(g.kg).toFixed(1)+' กิโลกรัม</b>' + (Object.keys(g.lots).length||Object.keys(g.bills).length ? '<br><span style="font-size:10.5px;">Pro Lot No: '+esc(Object.keys(g.lots).join(', ')||'–')+' · เลขบิล: '+esc(Object.keys(g.bills).join(', ')||'–')+'</span>' : '') + '</td></tr>' +
+    '</table>' +
+    '<table class="tag-tbl" style="margin-top:-1.5px;"><tr><td style="width:72px;">&nbsp;</td>' +
+    '<td '+th+'>ฝ่ายผลิต<br>เริ่มกระบวนการชุบซิงค์</td><td '+th+'>ฝ่ายผลิต<br>เข้าตู้อบ Baking</td><td '+th+'>ฝ่ายผลิต<br>ทำสีโครเมท</td><td '+th+'>แผนกคัดเลือก QC LINE<br>ตรวจสอบบรรจุ</td><td '+th+'>ฝ่ายประกันคุณภาพ<br>ทวนสอบความถูกต้อง</td></tr>' +
+    '<tr><td style="font-size:12px;">วันที่ผลิต</td>'+cell(fmtD(g.first))+cell(fmtD(b.startTs))+cell('&nbsp;')+cell('&nbsp;')+cell('&nbsp;')+'</tr>' +
+    '<tr><td style="font-size:12px;">เวลาเริ่ม</td>'+cell(fmtT(g.first))+cell(fmtT(b.startTs))+cell('&nbsp;')+cell('&nbsp;')+cell('&nbsp;')+'</tr>' +
+    '<tr><td style="font-size:12px;">เวลาเสร็จ</td>'+cell(fmtT(g.last))+cell(b.endTs?fmtT(b.endTs):'&nbsp;')+cell('&nbsp;')+cell('&nbsp;')+cell('&nbsp;')+'</tr>' +
+    '<tr><td style="font-size:11px;">ผู้รับผิดชอบ</td><td style="text-align:center;font-size:11px;height:44px;">&nbsp;<br>หัวหน้าไลน์/ผู้ควบคุมไลน์</td><td style="text-align:center;font-size:11px;"><b>'+esc(starter)+(ender&&ender!==starter?' / '+esc(ender):'')+'</b><br>ผู้ควบคุมตู้อบ Baking</td><td style="text-align:center;font-size:11px;">&nbsp;<br>หัวหน้าไลน์</td><td style="text-align:center;font-size:11px;">&nbsp;<br>หัวหน้าแผนก</td><td style="text-align:center;font-size:11px;">&nbsp;<br>ผู้ตรวจสอบ</td></tr>' +
+    '</table>' +
+    '<div style="font-size:15px;font-weight:600;margin:14px 0 2px;">GRAPH TEMPERATURE</div>' + tempGraphSvg(b) + tRow +
+    '<div style="display:flex;justify-content:space-between;margin-top:22px;align-items:flex-start;">' +
+      '<table class="tag-tbl" style="width:230px;"><tr><td style="text-align:center;">Lot Judgement</td></tr><tr><td style="text-align:center;height:50px;font-size:20px;font-weight:800;">OK</td></tr><tr><td style="text-align:center;height:40px;font-size:20px;font-weight:800;">NG</td></tr></table>' +
+      '<table class="tag-tbl" style="width:300px;"><tr><td style="height:50px;width:120px;">&nbsp;</td><td style="height:50px;">&nbsp;</td></tr><tr><td style="text-align:center;">Approve By</td><td style="text-align:center;">Report By</td></tr></table>' +
+    '</div></div>';
+}
+async function printTag(id, gi){
+  var b = batches.filter(function(x){ return x.id===id; })[0]; if (!b) return;
+  if (canEdit()) await saveThick(b, gi);
+  var gs = tagGroups(b);
+  var sel2 = gi>=0 ? [gs[gi]] : gs;
+  doPrint(sel2.map(function(g){ return tagHtml(b, g); }).join(''));
+}
+
+// ═══════════ INIT ═══════════
+(function(){
+  $('loginBtn').addEventListener('click', function(){ doLogin($('loginPin').value); });
+  $('loginPin').addEventListener('keydown', function(e){ if (e.key==='Enter') doLogin($('loginPin').value); });
+  $('logoutBtn').addEventListener('click', function(){ clearSession(); location.reload(); });
+  var s = loadSession(); if (s && s.ok) { session = s; enterApp(); }
+})();
+</script>
+</body>
+</html>
