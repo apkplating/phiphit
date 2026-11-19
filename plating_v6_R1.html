@@ -578,6 +578,7 @@ if ('caches' in window) {
           <div id="ac-bPartSearch" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #3b82f6;border-top:none;border-radius:0 0 10px 10px;z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,.15);"></div>
         </div>
         <div id="bPartSearchStatus" style="font-size:11px;margin-top:4px;min-height:16px;"></div>
+        <div id="bSpecBox" style="display:none;margin-top:6px;padding:8px 10px;border-radius:10px;line-height:1.5;"></div>
         <!-- ปุ่มบันทึก Preset -->
         <button onclick="saveBarrelPreset()" style="margin-top:5px;background:none;border:1px dashed #93c5fd;border-radius:8px;padding:4px 10px;font-size:10px;color:#0369a1;cursor:pointer;font-family:'IBM Plex Sans Thai',sans-serif;">
           ⭐ บันทึกชิ้นงานนี้เป็น Preset
@@ -1763,7 +1764,7 @@ function selType(t) {
   }
   if (t !== 'R' && _barrelPartSelected) {
     // สลับจาก R กลับมา N หลังเลือก P/No ไว้แล้ว (ตอนเป็น R) → ให้เลือก P/No ใหม่อีกครั้งเพื่อโชว์รายชื่อบิล
-    _barrelPartSelected = false;
+    _barrelPartSelected = false; try{ barrelSpecClear(); }catch(e){}
     var bps = document.getElementById('bPartSearch');
     var pn = bps ? bps.value.trim() : '';
     if (bps) bps.value = '';
@@ -2111,6 +2112,8 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
               jobId: jobId,
               lotNo: lotNo,
               custLot: (selTypeVal==='R' ? '' : _custLotOf(jobId)),
+              spec: pmSpecOf(document.getElementById('bPartName').value.trim()),
+              bakeReq: bakeFromSpec(pmSpecOf(document.getElementById('bPartName').value.trim())),
               batchNo: _selBatchNo };
   if (selTypeVal === 'R') {
     var rrSel = document.getElementById('reworkReasonSelect');
@@ -2160,7 +2163,7 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
   var bpss = document.getElementById('bPartSearchStatus'); if(bpss) bpss.textContent='';
   var bbsw = document.getElementById('bBillSelWrap'); if(bbsw) bbsw.style.display='none';
   var bbi  = document.getElementById('bBillInfo'); if(bbi) bbi.textContent='';
-  _barrelPartSelected = false;
+  _barrelPartSelected = false; try{ barrelSpecClear(); }catch(e){}
   // เคลียร์เหตุผล rework ที่เพิ่งบันทึกไป — บังคับเลือกใหม่ทุกรอบ กันพลาดเอาเหตุผลรอบก่อนมาปนกับรอบใหม่
   var rrSelReset = document.getElementById('reworkReasonSelect'); if (rrSelReset) rrSelReset.value = '';
   var rrDetailReset = document.getElementById('reworkReasonDetail'); if (rrDetailReset) { rrDetailReset.value=''; rrDetailReset.style.display='none'; }
@@ -2268,7 +2271,7 @@ function renderBarrels() {
     var batchBadge = r.batchNo ? '<span style="background:'+(r.batchNo===1?'#1e40af':'#7c3aed')+';color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">บ่อ'+r.batchNo+'</span>' : '';
     return '<tr>' +
       '<td class="td-l">' + r.time + '</td>' +
-      '<td>' + r.barrel + '</td>' +
+      '<td>' + r.barrel + (r.bakeReq ? ' <span title="ต้องอบ ' + (r.spec||'') + '" style="font-size:13px;">🔥</span>' : (r.bakeReq===null||r.bakeReq===undefined ? '' : '')) + '</td>' +
       '<td style="text-align:center;">' + batchBadge + '</td>' +
       '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + (r.partName||'–') + '</td>' +
       '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
@@ -5399,9 +5402,47 @@ function pmToPartList_r1(pm) {
       weightG: p.weightPerPc || p.weightG || 0,
       color: (p.colors || p.color || '').charAt(0) || 'B',
       colors: p.colors || p.color || '',
-      note: p.note || ''
+      note: p.note || '',
+      platingType: p.platingType || ''
     };
   });
+}
+
+
+// ═══════ สเปคชุบ + ป้ายต้องอบ (Baking) — ดึงจาก Part Master (platingType) ═══════
+// ต้องอบ = สเปคมี "-H" ตามด้วยสี เช่น MFZn2-HB / MFZn2-HC / MFZn2-HK
+function bakeFromSpec(spec){ var s = String(spec||'').trim(); if (!s) return null; return /-H[BCK]/i.test(s); }
+function pmSpecOf(partNo){
+  var key = String(partNo||'').toLowerCase().replace(/[\s\-\.]+/g,'');
+  if (!key) return '';
+  var src = (typeof partList !== 'undefined' && partList.length) ? partList : [];
+  for (var i=0;i<src.length;i++){
+    var k = String(src[i].partNo||'').toLowerCase().replace(/[\s\-\.]+/g,'');
+    if (k === key) return src[i].platingType || '';
+  }
+  return '';
+}
+function barrelSpecClear(){ var b = document.getElementById('bSpecBox'); if (b){ b.style.display='none'; b.innerHTML=''; } }
+function barrelSpecShow(p){
+  var b = document.getElementById('bSpecBox'); if (!b) return;
+  if (!p){ barrelSpecClear(); return; }
+  var spec = (p.platingType || pmSpecOf(p.partNo) || '').trim();
+  var bake = bakeFromSpec(spec);
+  var h;
+  if (bake){
+    b.style.background = '#fff7ed'; b.style.border = '2px solid #f97316'; b.style.color = '#9a3412';
+    h = '<div style="font-size:15px;font-weight:800;">🔥 ต้องอบ (Baking) · မီးဖုတ်ရန်လိုသည်</div>'
+      + '<div style="font-size:11px;margin-top:2px;">สเปคชุบ · ပလပ်စပက်: <b>' + spec + '</b></div>'
+      + '<div style="font-size:11px;margin-top:2px;">เข้าเตาอบภายใน 1 ชั่วโมงหลังชุบ · ပလပ်ပြီး ၁ နာရီအတွင်း မီးဖုတ်ဖိုထဲ ထည့်ပါ</div>';
+  } else if (spec){
+    b.style.background = '#f0fdf4'; b.style.border = '1px solid #86efac'; b.style.color = '#166534';
+    h = '<div style="font-size:12px;">สเปคชุบ · ပလပ်စပက်: <b>' + spec + '</b> — ไม่ต้องอบ · မီးဖုတ်ရန် မလိုပါ</div>';
+  } else {
+    b.style.background = '#fef2f2'; b.style.border = '1px solid #fca5a5'; b.style.color = '#991b1b';
+    h = '<div style="font-size:12px;font-weight:700;">⚠ ยังไม่ระบุสเปคชุบใน Part Master · ပလပ်စပက် မသတ်မှတ်ရသေးပါ</div>'
+      + '<div style="font-size:11px;">ตรวจว่าชิ้นงานนี้ต้องอบหรือไม่ แล้วแจ้งผู้ดูแลระบบ · မီးဖုတ်ရန်လိုမလို စစ်ဆေးပြီး အကြောင်းကြားပါ</div>';
+  }
+  b.innerHTML = h; b.style.display = 'block';
 }
 
 function loadPartList() {
@@ -7252,7 +7293,7 @@ function barrelPmAcShow() {
   if (!input || !list) return;
 
   // reset step 2 ทุกครั้งที่พิมพ์ใหม่
-  _barrelPartSelected = false;
+  _barrelPartSelected = false; try{ barrelSpecClear(); }catch(e){}
   document.getElementById('bBillSelWrap').style.display = 'none';
   document.getElementById('bJobPick').value = '';
   document.getElementById('bPartName').value = '';
@@ -7327,7 +7368,7 @@ async function _refreshWipAfterChange() {
 function barrelPmAcPick(idx) {
   var p = _barrelPmMatches[idx];
   if (!p) return;
-  window._lastPickedPm = p;
+  window._lastPickedPm = p; try{ barrelSpecShow(p); }catch(e){}
   var partNo = p.partNo || p.name || '';
   var nm     = p.partName || p.name || '';
   var cust   = p.customer || '';
