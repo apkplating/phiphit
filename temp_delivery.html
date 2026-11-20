@@ -153,7 +153,7 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
       </div>
       <div class="field" style="margin-bottom:0;">
         <label>Cust. Lot No.</label>
-        <input type="text" id="tmpCustLot" autocomplete="off" placeholder="ดึงจากบิลรับเข้าอัตโนมัติ (แก้ได้)">
+        <input type="text" id="tmpCustLot" autocomplete="off" readonly style="background:#f1f5f9;" placeholder="ดึงจาก JM อัตโนมัติ (ถ้าผิด/ว่าง ให้แก้ที่ JM บิลรับเข้า)">
       </div>
     </div>
     <div class="grid2" style="margin-top:12px;">
@@ -189,8 +189,6 @@ html,body{min-height:100%;background:var(--navy);font-family:'IBM Plex Sans Thai
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
-<script src="docs-panel.js"></script>
-<script>document.addEventListener('DOMContentLoaded',function(){ try{ DocsPanel.mountTop('temp-delivery','#newView'); }catch(e){} });</script>
 <script>
 // ═══════════════════════════════════════════════
 //  ใบส่งของชั่วคราว (temp_delivery) — ให้พนักงานบันทึกของที่ส่งออกไปแล้วโดยไม่ผ่านระบบ
@@ -614,7 +612,7 @@ function editNote(id){
     var cv = !!l.convertedTo, kg = l.unit === 'kg';
     return '<tr><td>'+(i+1)+'</td><td>'+esc(l.partName||'')+'</td><td>'+esc(l.bill||'-')+'</td>'+
       '<td style="width:17%"><input type="text" id="edP'+i+'" value="'+esc(l.proLot||'')+'"></td>'+
-      '<td style="width:19%"><input type="text" id="edC'+i+'" value="'+esc(l.custLot||'')+'"></td>'+
+      '<td style="width:19%"><input type="text" id="edC'+i+'" value="'+esc(l.custLot||'')+'" readonly style="background:#f1f5f9;" title="ดึงจาก JM — แก้ที่ JM บิลรับเข้าเท่านั้น"></td>'+
       '<td style="width:15%"><input type="number" id="edQ'+i+'" value="'+esc(l.qty)+'" min="0" step="'+(kg?'0.001':'1')+'" '+(cv?'disabled title="ออก INV แล้ว — แก้จำนวนไม่ได้"':'')+'> <span class="hint" style="display:inline;">'+(kg?'กก.':'ชิ้น')+'</span></td>'+
       '<td>'+(cv?'<span class="pill done">'+esc(l.convertedTo)+'</span>'+((convOverage(l.convertedTo, l.jobId) >= Number(l.qty||0) - 0.0001) ? '<br><label style="white-space:nowrap;font-size:11px;color:#b45309;" title="ใน INV '+esc(l.convertedTo)+' มียอดน้อยกว่าที่ใบนี้แสดง — ลบส่วนเกินได้ (สต็อกไม่เปลี่ยน)"><input type="checkbox" id="edD'+i+'"> ลบส่วนเกิน</label>' : ''):'<label style="white-space:nowrap;font-size:12px;"><input type="checkbox" id="edD'+i+'"> ลบ</label>')+'</td></tr>';
   }).join('');

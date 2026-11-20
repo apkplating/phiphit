@@ -720,6 +720,7 @@ if ('caches' in window) {
       <button type="button" class="btn btn-outline btn-sm" onclick="bulkRecalcInvoiceTotals()" style="border-color:#d97706;color:#92400e;">
         🔧 คำนวณยอด INV ที่ยอดไม่ตรงทั้งหมด (แก้ INV เก่าก่อนแก้บั๊ก VAT)
       </button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="openJmAudit()" style="border-color:#0369a1;color:#0369a1;margin-left:6px;">🕘 ประวัติการแก้ไข JM / INV</button>
     </div>
   </div>
 
@@ -1179,8 +1180,6 @@ if ('caches' in window) {
 
 <script src="auth-central.js"></script>
 <script src="fb-auth.js"></script>
-<script src="docs-panel.js"></script>
-<script>document.addEventListener('DOMContentLoaded',function(){ try{ DocsPanel.mountTop('jm-intake','#v-in'); DocsPanel.mountTop('jm-inv','#v-out'); }catch(e){} });</script>
 <script src="money-utils.js"></script>
 <script>
 // ══════════════════════════════════════
@@ -2199,6 +2198,109 @@ function _dueLog(entries) {
   entries.forEach(function(e, i){ body[base+'-'+i+'-'+Math.random().toString(36).slice(2,6)] = e; });
   fetch(ARCH_BASE + '/jm-due-log.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) }).catch(function(){});
 }
+// ── ประวัติการแก้ไขข้อมูล JM/INV (สอบกลับ) — เก็บที่ /jm-audit.json แบบ id-keyed PATCH (ไม่เขียนทับของเดิม) ──
+var JM_AUDIT_BUILD = 'jm-audit-1';
+function _jmAudit(entries) {
+  if (!entries || !entries.length) return;
+  var body = {}, base = Date.now(), who = (typeof currentUserName === 'string' && currentUserName) || '-';
+  var role = (typeof currentRole === 'string' && currentRole) || '-';
+  entries.forEach(function(e, i){
+    e.at = new Date().toISOString(); e.by = who; e.role = role; e.build = JM_AUDIT_BUILD;
+    try { e.ua = navigator.userAgent.slice(0,120); } catch(x){}
+    body[base+'-'+i+'-'+Math.random().toString(36).slice(2,6)] = e;
+  });
+  try {
+    var q = JSON.parse(localStorage.getItem('jm_audit_pending') || '[]'); q.push(body);
+    localStorage.setItem('jm_audit_pending', JSON.stringify(q.slice(-50)));
+  } catch(x){}
+  _jmAuditFlush();
+}
+function _jmAuditFlush() {
+  var q = []; try { q = JSON.parse(localStorage.getItem('jm_audit_pending') || '[]'); } catch(x){}
+  if (!q.length) return;
+  var one = q[0];
+  fetch(ARCH_BASE + '/jm-audit.json', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(one) })
+    .then(function(r){ if (!r.ok) throw 0; q.shift(); try { localStorage.setItem('jm_audit_pending', JSON.stringify(q)); } catch(x){} if (q.length) _jmAuditFlush(); })
+    .catch(function(){});
+}
+var _JM_AUDIT_FIELDS = { bill:'เลขบิล', date:'วันที่รับ', partName:'ชิ้นงาน', customer:'ลูกค้า', unit:'หน่วย', qty:'จำนวนรับเข้า', qtyKg:'รับเข้า(กก.)', dueDate:'กำหนดส่ง', note:'หมายเหตุ', custLot:'Cust. Lot', closed:'ปิดบิล' };
+function _jmDiff(oldJ, newJ) {
+  var ch = [];
+  Object.keys(_JM_AUDIT_FIELDS).forEach(function(k){
+    var a = oldJ[k] == null ? '' : String(oldJ[k]), b = newJ[k] == null ? '' : String(newJ[k]);
+    if ((k==='qty'||k==='qtyKg') && Number(a||0) === Number(b||0)) return;
+    if (k==='closed' && !oldJ[k] && !newJ[k]) return;
+    if (a !== b) ch.push({ f:k, label:_JM_AUDIT_FIELDS[k], from:a, to:b });
+  });
+  return ch;
+}
+function openJmAudit() {
+  if (currentRole !== 'admin') { alert('เฉพาะ admin เท่านั้น'); return; }
+  var m = document.getElementById('jmAuditModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'jmAuditModal'; m.className = 'modal-overlay';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;';
+    m.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:90vh;display:flex;flex-direction:column;">' +
+      '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="font-size:15px;">🕘 ประวัติการแก้ไข JM / INV</b>' +
+      '<input id="jmAuditQ" placeholder="ค้นหา เลขบิล / INV / ชิ้นงาน / ชื่อผู้แก้" oninput="renderJmAudit()" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;">' +
+      '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'jmAuditModal\').style.display=\'none\'">✕ ปิด</button></div>' +
+      '<div id="jmAuditBody" style="overflow:auto;padding:10px 16px;font-size:12px;line-height:1.6;">กำลังโหลด…</div></div>';
+    document.body.appendChild(m);
+  }
+  m.style.display = 'flex';
+  document.getElementById('jmAuditBody').textContent = 'กำลังโหลด…';
+  fetch(ARCH_BASE + '/jm-audit.json', { cache:'no-store' }).then(function(r){ return r.json(); }).then(function(d){
+    window._jmAuditRows = d && typeof d === 'object' ? Object.keys(d).map(function(k){ return d[k]; }).sort(function(a,b){ return (b.at||'').localeCompare(a.at||''); }) : [];
+    renderJmAudit();
+  }).catch(function(){ document.getElementById('jmAuditBody').textContent = 'โหลดประวัติไม่สำเร็จ'; });
+}
+function renderJmAudit() {
+  var q = ((document.getElementById('jmAuditQ')||{}).value || '').toLowerCase().trim();
+  var rows = (window._jmAuditRows || []).filter(function(e){ return !q || JSON.stringify(e).toLowerCase().indexOf(q) >= 0; }).slice(0, 300);
+  var AL = { edit:'✏️ แก้ไขบิลรับเข้า', create:'➕ รับงานเข้า', delete:'🗑️ ลบบิล', 'inv-lot-fix':'🔠 แก้ Lot ใน INV', 'lot-blank-blocked':'⛔ กันค่า Lot หาย' };
+  document.getElementById('jmAuditBody').innerHTML = rows.length ? rows.map(function(e){
+    var d = new Date(e.at), ts = isNaN(d) ? '' : d.toLocaleString('th-TH', { dateStyle:'short', timeStyle:'medium' });
+    var ch = (e.changes||[]).map(function(c){ return '<div style="margin-left:14px;">• ' + esc(c.label||c.f) + ': <span style="color:#b91c1c;">' + esc(c.from||'(ว่าง)') + '</span> → <span style="color:#166534;">' + esc(c.to||'(ว่าง)') + '</span></div>'; }).join('');
+    return '<div style="border-bottom:1px solid #e2e8f0;padding:6px 0;"><b>' + esc(ts) + '</b> · ' + esc(e.by||'-') + ' (' + esc(e.role||'-') + ') · ' + (AL[e.action]||esc(e.action||'')) +
+      (e.bill ? ' · บิล <b>' + esc(e.bill) + '</b>' : '') + (e.invNo ? ' · INV <b>' + esc(e.invNo) + '</b>' : '') + (e.partName ? ' · ' + esc(e.partName) : '') +
+      (e.reason ? '<div style="margin-left:14px;color:#92400e;">เหตุผล: ' + esc(e.reason) + '</div>' : '') + ch +
+      '<div style="margin-left:14px;color:#94a3b8;font-size:10px;">jobId ' + esc(e.jobId||'-') + ' · ' + esc(e.build||'') + ' · ' + esc(e.ua||'') + '</div></div>';
+  }).join('') : '<div style="color:#64748b;">ไม่พบรายการ</div>';
+}
+// ── แอดมินแก้ Cust. Lot ในบรรทัด INV (ยังไม่วางบิล) ให้ตรงกับ JM ปัจจุบัน — ไม่แตะ จำนวน/ราคา/ยอดเงิน ──
+function fixInvLot(invId) {
+  if (currentRole !== 'admin') { showToast('sales','🚫 เฉพาะ admin เท่านั้น','err'); return; }
+  var inv = invoices.find(function(i){ return i.id === invId; });
+  if (!inv) { showToast('sales','ไม่พบ INV นี้','err'); return; }
+  if (inv.billNo) { showToast('sales','🔒 INV นี้วางบิลแล้ว แก้ไม่ได้','err'); return; }
+  if (inv.voided) { showToast('sales','INV นี้ถูกยกเลิกแล้ว','err'); return; }
+  var diffs = [], missing = [];
+  (inv.items||[]).forEach(function(it, idx){
+    var job = jobItems.find(function(j){ return j.id === it.jobId; });
+    if (!job) { missing.push(it.partName||''); return; }
+    var nl = job.custLot ? 'Cust. Lot: ' + job.custLot : '';
+    if ((it.lot||'') !== nl) diffs.push({ idx:idx, it:it, job:job, from:it.lot||'', to:nl });
+  });
+  if (!diffs.length) { showToast('sales','ℹ️ Cust. Lot ใน INV '+inv.invNo+' ตรงกับ JM อยู่แล้ว'+(missing.length?' (มี '+missing.length+' รายการหาบิลใน JM ไม่เจอ)':''),'ok'); return; }
+  var blank = diffs.filter(function(d){ return !d.to; });
+  if (blank.length && !confirm('⚠️ ใน JM ของ '+blank.map(function(d){ return d.it.partName; }).join(', ')+' ยังไม่มี Cust. Lot — ถ้าดำเนินการต่อ Lot ใน INV จะถูกลบเป็นค่าว่าง\n\nควรไปแก้ที่ JM (บิลรับเข้า) ก่อน ต้องการทำต่อไหม?')) return;
+  var msg = 'แก้ Cust. Lot ใน INV '+inv.invNo+' ให้ตรงกับ JM\n\n' + diffs.map(function(d){ return '• '+(d.it.partName||'')+' (บิล '+(d.it.bill||d.job.bill)+')\n   '+(d.from||'(ว่าง)')+' → '+(d.to||'(ว่าง)'); }).join('\n') + '\n\n(ไม่กระทบจำนวน/ราคา/ยอดเงิน/สต็อก)';
+  if (!confirm(msg)) return;
+  var reason = (prompt('ระบุเหตุผลการแก้ (บังคับ):', 'JM เดิมไม่มี Cust. Lot / แก้ JM แล้ว') || '').trim();
+  if (!reason) { showToast('sales','ยกเลิก — ต้องระบุเหตุผล','err'); return; }
+  var logs = [];
+  diffs.forEach(function(d){
+    d.it.lot = d.to;
+    jobRecords.forEach(function(r){ if (r.type === 'out' && r.inv === inv.invNo && r.jobId === d.it.jobId && (r.lot||'') === d.from) r.lot = d.to; });
+    logs.push({ action:'inv-lot-fix', invNo:inv.invNo, invId:inv.id, jobId:d.it.jobId, bill:d.it.bill||d.job.bill, partName:d.it.partName||'', reason:reason, fromTemp:d.it.fromTemp||'',
+      changes:[{ f:'lot', label:'Cust. Lot ใน INV', from:d.from, to:d.to }] });
+  });
+  _jmAudit(logs);
+  saveLocal(); fbSave();
+  showToast('sales','✅ แก้ Cust. Lot ใน INV '+inv.invNo+' แล้ว '+diffs.length+' รายการ (บันทึกประวัติแล้ว)','ok');
+  renderSales();
+}
+
 // บิลเกินกำหนดทุกลูกค้า (ไม่ปิด, คงเหลือ>0, ค้าง>7 วัน)
 function overdueAllJobs() { return withCalcIndex(_overdueAllJobsImpl); }
 function _overdueAllJobsImpl() {
@@ -2849,6 +2951,7 @@ async function closeOneBill(id) {
 function deleteJob(id) {
   var job = jobItems.find(function(j){ return j.id===id; });
   if (!job || !confirm('ลบ "'+job.bill+'" และประวัติทั้งหมด?')) return;
+  _jmAudit([{ action:'delete', jobId:id, bill:job.bill, partName:job.partName, changes:_jmDiff({}, job) }]);
   jobItems   = jobItems.filter(function(j){ return j.id!==id; });
   jobRecords = jobRecords.filter(function(r){ return r.jobId!==id; });
   saveLocal(); fbSave(); renderBoard();
@@ -3125,8 +3228,8 @@ function invCurCustName(){
   return m ? (m.name||'').trim() : t;
 }
 function tmpBuildItems(n){
-  var by = {}, order = [], errs = [], items = [];
-  (n.lines||[]).forEach(function(l){ if (l.convertedTo) return; var o = by[l.jobId]; if (!o) { o = by[l.jobId] = { jobId:l.jobId, partName:l.partName||'', qty:0 }; order.push(l.jobId); } o.qty += Number(l.qty||0); });
+  var by = {}, order = [], errs = [], items = [], warns = [];
+  (n.lines||[]).forEach(function(l){ if (l.convertedTo) return; if (!by[l.jobId]) { var _j = jobItems.find(function(j){ return j.id === l.jobId; }); if (_j && String(l.custLot||'').trim() !== String(_j.custLot||'').trim()) warns.push('⚠️ ' + (l.partName||'') + ': Cust. Lot ในใบชั่วคราว "' + (l.custLot||'ว่าง') + '" ≠ JM "' + (_j.custLot||'ว่าง') + '" (INV ใช้ค่าจาก JM — ถ้า JM ผิดให้แก้ที่ JM)'); } var o = by[l.jobId]; if (!o) { o = by[l.jobId] = { jobId:l.jobId, partName:l.partName||'', qty:0 }; order.push(l.jobId); } o.qty += Number(l.qty||0); });
   order.forEach(function(jid){
     var o = by[jid], job = jobItems.find(function(j){ return j.id === jid; });
     if (!job) { errs.push({ code:'nojob', msg:o.partName + ' (ไม่พบบิลในระบบ)' }); return; }
@@ -3141,7 +3244,7 @@ function tmpBuildItems(n){
       qtyEntered: qty, qtyUnit: isKg ? 'kg' : 'pcs', weightPerUnit: wPerUnit, weight: parseFloat(totalKg.toFixed(3)), pcs: totalPcs,
       price: found.price, priceUnit: pu, lot: job.custLot ? 'Cust. Lot: ' + job.custLot : '', amount: amount, stockOverride: false, fromTemp: n.no });
   });
-  return { items: items, errs: errs };
+  return { items: items, errs: errs, warns: warns };
 }
 function onInvSrcChange(){
   var tmp = (document.getElementById('invSrc')||{}).value === 'tmp' && invDocType !== 'claim';
@@ -3174,7 +3277,7 @@ function renderInvTmpPick(){
     html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px;margin:4px 0;border:1.5px solid ' + (dis ? '#e2e8f0' : '#fde68a') + ';border-radius:8px;background:' + (dis ? '#f8fafc' : '#fffbeb') + ';cursor:' + (dis ? 'default' : 'pointer') + ';">' +
       '<input type="checkbox" class="invTmpChk" value="' + esc(n.id) + '"' + (dis ? ' disabled' : '') + ' style="width:auto;margin-top:3px;">' +
       '<span style="font-size:12px;line-height:1.5;"><b>' + esc(n.no) + '</b> · ' + fmtDate(n.date) + ' · ' + nLines + ' รายการ · ค้าง ' + daysSince(n.date) + ' วัน' + (old ? ' <span style="color:#dc2626;font-weight:700;">⚠️ เกิน ' + TMP_LOCK_WD + ' วันทำการ</span>' : '') +
-      '<br><span style="color:var(--text-muted);font-size:11px;">' + parts + '</span>' + (why ? '<br><span style="color:' + (why.charAt(0) === '✅' ? '#166534' : '#b91c1c') + ';font-size:11px;">' + why + '</span>' : '') + '</span></label>';
+      '<br><span style="color:var(--text-muted);font-size:11px;">' + parts + '</span>' + (why ? '<br><span style="color:' + (why.charAt(0) === '✅' ? '#166534' : '#b91c1c') + ';font-size:11px;">' + why + '</span>' : '') + (b.warns && b.warns.length ? '<br><span style="color:#b45309;font-size:11px;">' + b.warns.map(esc).join('<br>') + '</span>' : '') + '</span></label>';
   });
   html += '<button class="btn btn-outline" onclick="invAddTmpNotes()" style="margin-top:6px;">➕ เพิ่มใบที่เลือกลงในบิล INV</button>';
   pk.innerHTML = html;
@@ -3379,6 +3482,7 @@ function addJobIn() {
                        qty:l.qty, qtyKg:l.qtyKg, unit:l.unit, dueDate:dueDate, note:note, custLot:l.custLot });
     jobRecords.unshift({ id:'R' + base + '_' + k, jobId:jobId, type:'in', date:date,
                          qty:l.qty, qtyKg:l.qtyKg, unit:l.unit, inv:'', by:'', note:note });
+    _jmAudit([{ action:'create', jobId:jobId, bill:bill, partName:l.partName, changes:_jmDiff({}, jobItems[0]) }]);
     n++;
   });
   saveLocal(); fbSave();
@@ -5474,6 +5578,7 @@ function renderSales() {
         : billed
           ? '<span style="font-size:9px;color:var(--text-muted);" title="วางบิลแล้ว ('+esc(inv.billNo)+') — แก้ไข/ยกเลิกไม่ได้">🔒 วางบิลแล้ว</span>'
           : '<button class="icon-btn" title="แก้ไข INV" onclick="editInvoice(\''+inv.id+'\')">✏️</button>'+
+            ((currentRole==='admin' && inv.docType!=='claim') ? '<button class="icon-btn" title="Admin: แก้ Cust. Lot ใน INV ให้ตรงกับ JM" onclick="fixInvLot(\''+inv.id+'\')" style="background:#e0f2fe;">🔠</button>' : '')+
             '<button class="icon-btn" title="ยกเลิก INV" onclick="voidInvoice(\''+inv.id+'\')">🚫</button>';
       var recalcBtn = (!voided && totalMismatch)
         ? '<button class="icon-btn" title="ยอดรวมไม่ตรงกับรายการในบิล (อาจเป็น INV เก่าก่อนแก้บั๊ก) กดเพื่อคำนวณใหม่" onclick="recalcInvoiceTotal(\''+inv.id+'\')" style="background:#fef9c3;">🔧</button>'
@@ -6964,7 +7069,8 @@ function saveEditJob() {
   var qtyKg    = parseFloat(document.getElementById('editQtyKg').value)|| 0;
   var dueDate  = document.getElementById('editDueDate').value;
   var note     = document.getElementById('editNote').value.trim();
-  var custLot  = (document.getElementById('editCustLot')||{value:''}).value.trim();
+  var _clEl    = document.getElementById('editCustLot');
+  var custLot  = _clEl ? _clEl.value.trim() : null;   // null = ไม่มีช่องในหน้า → คงค่าเดิม ห้ามเขียนทับเป็นว่าง
 
   if (!bill)     { showToast('edit','กรุณากรอกเลขที่บิล','err'); return; }
   if (!partName) { showToast('edit','กรุณากรอกชื่อชิ้นงาน','err'); return; }
@@ -6974,10 +7080,21 @@ function saveEditJob() {
   // ปลดล็อกบิลที่เคยปิดไว้ ถ้าติ๊ก checkbox "ปลดล็อกบิลนี้" — ไม่งั้น calcJob() จะยังล็อกคงเหลือเป็น 0 ต่อไปแม้แก้จำนวนรับเข้าแล้ว
   var unlockChk = document.getElementById('editUnlockClosed');
   var stayClosed = jobItems[idx].closed && !(unlockChk && unlockChk.checked);
+  var _old = Object.assign({}, jobItems[idx]);
+  if (custLot === null) custLot = _old.custLot || '';
+  if (_old.custLot && !custLot) {
+    if (!confirm('⚠️ บิล '+(_old.bill||'')+' เดิมมี Cust. Lot = "'+_old.custLot+'" แต่ตอนนี้ช่องว่าง\n\nต้องการ "ลบ Cust. Lot" ออกจริงหรือไม่?\n(ตกลง = ลบ / ยกเลิก = หยุดบันทึก)')) {
+      showToast('edit','ยกเลิกการบันทึก — Cust. Lot เดิมยังอยู่','err');
+      _jmAudit([{ action:'lot-blank-blocked', jobId:jobId, bill:_old.bill, partName:_old.partName, changes:[{ f:'custLot', label:'Cust. Lot', from:_old.custLot, to:'' }] }]);
+      return;
+    }
+  }
   var patch = { bill:bill, date:date, partName:partName, customer:customer,
       unit:unit, qty:unit==='kg'?0:qty, qtyKg:unit==='kg'?qtyKg:0,
       dueDate:dueDate, note:note, custLot:custLot, closed: stayClosed };
   jobItems[idx] = Object.assign({}, jobItems[idx], patch);
+  var _chg = _jmDiff(_old, jobItems[idx]);
+  if (_chg.length) _jmAudit([{ action:'edit', jobId:jobId, bill:jobItems[idx].bill, partName:jobItems[idx].partName, changes:_chg }]);
 
   // อัปเดต record 'in' ตัวแรกด้วย (qty หลัก)
   var firstIn = jobRecords.find(function(r){ return r.jobId===jobId && r.type==='in'; });
