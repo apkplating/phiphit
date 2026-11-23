@@ -2726,7 +2726,7 @@ function renderHistory() {
         '<td><span class="badge-'+b.color+'">'+b.color+'</span></td>' +
         '<td>' + (b.kg||0) + '</td>' +
         '<td>' + (b.pcs||0) + '</td>' +
-        '<td>' + (NasSync.canEdit() ? '<button class="td-del-btn" title="ลบรอบนี้" onclick="event.stopPropagation();delHistRound('+r.id+','+i+')">✕</button>' : '') + '</td>' +
+        '<td>' + (NasSync.canEditQuiet() ? '<button class="td-del-btn" title="ลบรอบนี้" onclick="event.stopPropagation();delHistRound('+r.id+','+i+')">✕</button>' : '') + '</td>' +
       '</tr>';
     }).join('');
 

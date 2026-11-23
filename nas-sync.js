@@ -222,8 +222,10 @@
       return await new Promise(function (resolve) { waiters.push(resolve); });
     },
     // ใช้ก่อนแก้ไข/ลบ/ออก INV: ในโหมดฉุกเฉินทำไม่ได้
+    // ใช้ตอนวาดหน้าจอ (ห้ามมี alert) — แค่บอกว่าแก้ไข/ลบได้หรือไม่
+    canEditQuiet: function () { if (emergency) return false; if (cfg && cfg.soft && hasDirty() && !lastFlushOk) return false; return true; },
     canEdit: function (msg) {
-      if (cfg && cfg.soft && hasDirty() && !lastFlushOk) { alert('ยังมีรายการที่ส่งขึ้น NAS ไม่สำเร็จ (' + pendingCount() + ' รายการ) — รอให้ส่งสำเร็จก่อน จึงจะแก้ไข/ลบได้\nမှတ်ချက်: NAS သို့ မပို့ရသေးသော ဒေတာရှိနေသည် — ပို့ပြီးမှ ပြင်/ဖျက်နိုင်မည်'); return false; }
+      if (cfg && cfg.soft && hasDirty() && !lastFlushOk) { toast('⏳ แก้ไข/ลบไม่ได้ชั่วคราว — รอส่งขึ้น NAS ' + pendingCount() + ' รายการก่อน · NAS သို့ ပို့ပြီးမှ ပြင်/ဖျက်နိုင်မည်', 'warn'); return false; }   // soft: แจ้งแบบจางหาย ไม่เด้งกล่องที่ต้องกดตกลง
       if (emergency) { alert(msg || 'ทำไม่ได้ในโหมดฉุกเฉิน (NAS ยังไม่กลับมา) — เพิ่มรายการใหม่ได้เท่านั้น แก้ไข/ลบ/ออก INV ต้องรอ NAS'); return false; }
       return true;
     },
