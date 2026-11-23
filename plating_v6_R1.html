@@ -2572,6 +2572,7 @@ async function autoJobOut(rec) {
 }
 function saveDay() {
   if (!validateDay()) return;
+  try { NasSync.strictOn(); } catch(e){}
   var rec = buildDayRecord();
   persist(rec);
   showToast('entry','บันทึกสรุปวันนี้สำเร็จ! ✓','ok');
@@ -2586,6 +2587,7 @@ function saveDay() {
 
 async function saveDayAndDiscord() {
   if (!validateDay()) return;
+  try { NasSync.strictOn(); } catch(e){}
   var wh = discordWH || localStorage.getItem('r1_discordWH') || '';
   if (!wh) { showToast('entry','กรุณาตั้งค่า Discord Webhook ก่อน','err'); return; }
 
@@ -4172,7 +4174,7 @@ async function fbSave() {
   _localDirty = true;
   NasSync.markDirty('node');
   var r = await NasSync.commit({kind:'append'});
-  return r === 'ok' || r === 'queued-then-ok';
+  return r === 'ok' || r === 'queued-then-ok' || r === 'queued';
 }
 
 // โหลดจาก Realtime Database
@@ -4528,6 +4530,7 @@ async function livePushNow() {
 
 NasSync.init({
   name: 'plating_r1',
+  soft: true,
   push: function(key){ return key==='live' ? fbPushLive() : fbPushNode(); },
   isAdmin: function(){ return window._currentRole === 'admin'; },
   who: function(){ return (typeof currentUserName!=='undefined' && currentUserName) || 'admin'; },
@@ -6936,6 +6939,7 @@ function showApp(role) {
 }
 
 function doLogout() {
+  if (NasSync.hasPending()) { try { NasSync.strictOn(); } catch(e){} showToast('entry','⏳ ยังมีรอบรอส่งขึ้น NAS — รอให้ส่งสำเร็จก่อนจึงออกจากระบบได้ · NAS သို့ ပို့ပြီးမှ ထွက်ပါ','err'); return; }
   if (!confirm('ออกจากระบบ?')) return;
   currentRole = null;
   currentTabs = null;

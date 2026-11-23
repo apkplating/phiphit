@@ -23,7 +23,9 @@
   'use strict';
   var cfg = null, dirty = {}, emergency = null, inflight = null, lastErr = '';
   var gateEl = null, gateKind = 'prev', gateStart = 0, gateTimer = null, waiters = [];
-  var toastTimer = null, ver = 0;
+  var toastTimer = null, ver = 0, strict = false, lastFlushOk = true;
+  // โหมด soft (cfg.soft=true): คีย์ต่อได้แม้ส่ง NAS ไม่ได้ — แสดงแถบเตือนเฉยๆ ไม่ขึ้นหน้าจอบล็อก ยกเว้นตอน strictOn() (บันทึกวัน/ออกจากระบบ)
+  function isSoft() { return !!(cfg && cfg.soft) && !strict; }
 
   function LS(k) { return 'nassync_' + (cfg ? cfg.name : 'x') + '_' + k; }
   function load() {
@@ -71,6 +73,10 @@
         b.style.background = '#7f1d1d';
         b.innerHTML = '🚨 โหมดฉุกเฉิน — ' + pendingCount() + ' รายการรอส่งขึ้น NAS (เพิ่มรายการใหม่ได้เท่านั้น · แก้ไข/ลบ/ออก INV ไม่ได้) ' +
           '<button onclick="NasSync.exportPending()" style="margin-left:8px;padding:3px 10px;border-radius:8px;border:0;font-weight:700;cursor:pointer;">⬇ สำรองรายการรอส่ง</button>';
+      } else if (isSoft()) {
+        b.style.background = mins >= 10 ? '#b91c1c' : '#b45309';
+        b.innerHTML = '⏳ รอส่งขึ้น NAS ' + pendingCount() + ' รายการ' + (mins >= 1 ? ' (ค้าง ' + mins + ' นาที)' : '') + ' — คีย์งานต่อได้ ระบบลองส่งเองเบื้องหลัง · ห้ามล้างข้อมูลเบราว์เซอร์ · ' +
+          '<button onclick="NasSync.retryNow()" style="margin-left:6px;padding:3px 10px;border-radius:8px;border:0;font-weight:700;cursor:pointer;">🔄 ส่งใหม่</button>';
       } else {
         b.style.background = '#b91c1c';
         b.textContent = '⚠️ ข้อมูลยังไม่ถูกส่งขึ้น NAS' + (mins >= 1 ? ' (ค้าง ' + mins + ' นาที)' : '') + ' — ห้ามปิดหน้านี้ และอย่าแจ้งว่าบันทึกแล้ว จนกว่าจะขึ้น "บันทึกขึ้น NAS สำเร็จ"';
@@ -94,7 +100,7 @@
   function gateMsg(t) { document.getElementById('nasGateMsg').textContent = t; }
   function gateBtns(h) { document.getElementById('nasGateBtns').innerHTML = h; }
   function showGate(kind) {
-    if (emergency) return;
+    if (emergency || isSoft()) return;
     var el = gate();
     if (el.style.display !== 'none' && gateTimer) return;
     gateKind = kind || 'now'; gateStart = Date.now(); el.style.display = 'flex';
@@ -141,11 +147,12 @@
     // กันค้าง: ถ้าส่งไม่จบใน 25 วินาที (เน็ต/NAS ตอบช้า) ถือว่าล้มเหลวรอบนี้ แล้วปล่อยให้ลองใหม่ได้ (ปุ่ม "ลองใหม่ตอนนี้" เดิมกดแล้วเงียบ เพราะรอบเก่ายังค้างอยู่)
     var _cur;
     var timeout = new Promise(function (res) { setTimeout(function () { if (inflight === _cur) { lastErr = lastErr || 'หมดเวลา (25 วินาที) — NAS ไม่ตอบ'; } res(false); }, 25000); });
-    _cur = Promise.race([flushOnce(), timeout]).then(function (ok) { if (inflight === _cur) inflight = null; return ok; }, function (e) { if (inflight === _cur) inflight = null; lastErr = String((e && e.message) || e); return false; });
+    _cur = Promise.race([flushOnce(), timeout]).then(function (ok) { if (inflight === _cur) inflight = null; lastFlushOk = !!ok; return ok; }, function (e) { if (inflight === _cur) inflight = null; lastErr = String((e && e.message) || e); lastFlushOk = false; return false; });
     inflight = _cur;
     return inflight;
   }
   function onClean(wasEmergency) {
+    strict = false;
     if (wasEmergency) {
       var info = emergency; emergency = null; persist();
       toast('✅ NAS กลับมาแล้ว — ส่งรายการที่ค้างสำเร็จ ปิดโหมดฉุกเฉินแล้ว', 'ok');
@@ -191,11 +198,17 @@
       if (!cfg) return 'ok';
       var wasDirty = hasDirty();
       var slow = setTimeout(function () { if (hasDirty() && !emergency) showGate('now'); }, 4000);
-      var ok = await flush();
+      var ok;
+      if (isSoft()) {   // soft: รอผลไม่เกิน 4 วินาที ถ้าช้ากว่านั้นปล่อยให้ส่งเบื้องหลัง ไม่ค้างหน้าจอ
+        var _r = await Promise.race([flush(), new Promise(function (res) { setTimeout(function () { res('slow'); }, 4000); })]);
+        if (_r === 'slow') { clearTimeout(slow); updateBar(); return 'queued'; }
+        ok = _r;
+      } else ok = await flush();
       for (var g2 = 0; ok && hasDirty() && g2 < 3; g2++) ok = await flush(); // มีการเปลี่ยนซ้อนระหว่างส่ง → ส่งรอบต่อไปทันที
       clearTimeout(slow);
       if (ok && !hasDirty()) {
         if (emergency) { onClean(true); return 'ok'; }
+        strict = false;
         if (wasDirty) toast('✅ บันทึกขึ้น NAS สำเร็จ', 'ok');
         hideGate(gateTimer ? (gateKind === 'now' ? '✅ บันทึกขึ้น NAS สำเร็จ — ทำงานต่อได้' : null) : null);
         updateBar();
@@ -203,14 +216,18 @@
       }
       updateBar();
       if (emergency) return 'queued';
+      if (isSoft()) return 'queued';   // soft: เก็บคิวในเครื่อง ลองส่งเองเบื้องหลัง ไม่บล็อกการทำงาน
       showGate('now');
       return await new Promise(function (resolve) { waiters.push(resolve); });
     },
     // ใช้ก่อนแก้ไข/ลบ/ออก INV: ในโหมดฉุกเฉินทำไม่ได้
     canEdit: function (msg) {
+      if (cfg && cfg.soft && hasDirty() && !lastFlushOk) { alert('ยังมีรายการที่ส่งขึ้น NAS ไม่สำเร็จ (' + pendingCount() + ' รายการ) — รอให้ส่งสำเร็จก่อน จึงจะแก้ไข/ลบได้\nမှတ်ချက်: NAS သို့ မပို့ရသေးသော ဒေတာရှိနေသည် — ပို့ပြီးမှ ပြင်/ဖျက်နိုင်မည်'); return false; }
       if (emergency) { alert(msg || 'ทำไม่ได้ในโหมดฉุกเฉิน (NAS ยังไม่กลับมา) — เพิ่มรายการใหม่ได้เท่านั้น แก้ไข/ลบ/ออก INV ต้องรอ NAS'); return false; }
       return true;
     },
+    strictOn: function () { if (cfg && cfg.soft) { strict = true; if (hasDirty()) { showGate('now'); tick(); } } },
+    isSoft: function () { return !!(cfg && cfg.soft); },
     isEmergency: emergencyActive,
     hasPending: hasDirty,
     retryNow: function () { lastErr = ''; tick(); },
