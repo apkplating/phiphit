@@ -114,6 +114,7 @@
     if (sec >= 20) {
       gateMsg('⚠️ ยังส่งขึ้น NAS ไม่ได้ (' + sec + ' วินาที) — ตรวจ WiFi/ซิม/เครือข่าย ระบบกำลังลองส่งต่อเอง ห้ามทำงานต่อหรือปิดหน้านี้จนกว่าจะส่งสำเร็จ' + (lastErr ? ' [สาเหตุล่าสุด: ' + lastErr + ']' : ''));
       var btns = '<button onclick="NasSync.retryNow()" style="padding:8px 14px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;">🔄 ลองใหม่ตอนนี้</button>';
+      if (cfg && cfg.soft) btns += '<button onclick="NasSync.dismissGate()" style="padding:8px 14px;border-radius:10px;border:0;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">✖ ปิดและกลับไปกรอกต่อ<br><span style="font-size:11px;font-weight:500;">ပိတ်ပြီး ဆက်လက်ဖြည့်ပါ</span></button>';
       if (sec >= 60) btns += '<button onclick="NasSync.enableEmergency()" style="padding:8px 14px;border-radius:10px;border:1px solid #b91c1c;background:#fff;color:#b91c1c;font-weight:700;cursor:pointer;">🚨 เปิดโหมดฉุกเฉิน (admin)</button>';
       var nb = document.getElementById('nasGateBtns');
       if (nb && nb.getAttribute('data-sec60') !== (sec >= 60 ? '1' : '0')) { nb.innerHTML = btns; nb.setAttribute('data-sec60', sec >= 60 ? '1' : '0'); }
@@ -225,6 +226,12 @@
       if (cfg && cfg.soft && hasDirty() && !lastFlushOk) { alert('ยังมีรายการที่ส่งขึ้น NAS ไม่สำเร็จ (' + pendingCount() + ' รายการ) — รอให้ส่งสำเร็จก่อน จึงจะแก้ไข/ลบได้\nမှတ်ချက်: NAS သို့ မပို့ရသေးသော ဒေတာရှိနေသည် — ပို့ပြီးမှ ပြင်/ဖျက်နိုင်မည်'); return false; }
       if (emergency) { alert(msg || 'ทำไม่ได้ในโหมดฉุกเฉิน (NAS ยังไม่กลับมา) — เพิ่มรายการใหม่ได้เท่านั้น แก้ไข/ลบ/ออก INV ต้องรอ NAS'); return false; }
       return true;
+    },
+    // ปิดกล่องบล็อก กลับไปกรอกต่อ — ข้อมูลยังอยู่ในคิวเครื่อง ลองส่งเองเบื้องหลัง แถบส้มยังอยู่
+    dismissGate: function () {
+      strict = false; hideGate(); updateBar();
+      var done = waiters; waiters = []; done.forEach(function (w) { w('queued'); });
+      toast('⏳ ปิดแล้ว — ข้อมูลรอส่งขึ้น NAS เบื้องหลัง (แถบส้มด้านล่าง)', 'warn');
     },
     strictOn: function () { if (cfg && cfg.soft) { strict = true; if (hasDirty()) { showGate('now'); tick(); } } },
     isSoft: function () { return !!(cfg && cfg.soft); },
