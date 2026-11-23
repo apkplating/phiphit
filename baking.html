@@ -106,7 +106,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 
 <div id="loginScreen">
   <div class="login-box">
-    <h1>🔥 ใบรายงานการ Baking ประจำวัน</h1>
+    <h1>🌡️ ใบรายงานการ Baking ประจำวัน</h1>
     <p>APK Plating — บันทึกการอบ · ใส่ PIN เพื่อเข้าใช้งาน</p>
     <input type="password" id="loginPin" inputmode="numeric" maxlength="6" placeholder="••••">
     <button class="btn btn-primary" id="loginBtn">เข้าสู่ระบบ</button>
@@ -117,7 +117,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 <div id="app" style="display:none;">
 <div class="app-header">
   <div class="hdr-badge">APK PLATING</div>
-  <div class="hdr-title">🔥 ใบรายงานการ Baking ประจำวัน</div>
+  <div class="hdr-title">🌡️ ใบรายงานการ Baking ประจำวัน</div>
   <div class="hdr-sub">APK-FR-PR-008 · เตาอบเตาเดียวใช้ร่วม B1 / B2 / R1 · พิมพ์ Baking Tag ได้</div>
   <div class="who-row">
     <a href="index.html">← หน้าแรก</a>
@@ -126,7 +126,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
     <span id="syncLbl" style="margin-left:auto;"></span>
   </div>
   <div class="tabs">
-    <button class="tab active" id="tab-run" onclick="showTab('run')">🔥 รออบ / ชุดอบ</button>
+    <button class="tab active" id="tab-run" onclick="showTab('run')">🌡️ รออบ / ชุดอบ</button>
     <button class="tab" id="tab-hist" onclick="showTab('hist')">🗂 ประวัติ / พิมพ์</button>
   </div>
 </div>
@@ -163,7 +163,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px;">
       <div id="selSum" style="font-size:12.5px;font-weight:700;color:var(--text-mid);">เลือก 0 รายการ · 0.0 kg</div>
-      <button class="btn btn-fire" id="startBtn" onclick="openStart()">🔥 เริ่มอบ (นำเข้าเตา)</button>
+      <button class="btn btn-fire" id="startBtn" onclick="openStart()">🌡️ เริ่มอบ (นำเข้าเตา)</button>
     </div>
   </div>
 </div>
@@ -193,7 +193,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 
 <!-- modal: start -->
 <div class="modal-bg" id="mStart"><div class="modal">
-  <h3>🔥 เริ่มอบ — นำงานเข้าเตา</h3>
+  <h3>🌡️ เริ่มอบ — นำงานเข้าเตา</h3>
   <div id="startItems" style="margin-bottom:10px;font-size:12.5px;"></div>
   <div class="grid3">
     <div class="field"><label>เวลาเข้าเตา</label><input type="time" id="sTime"></div>
@@ -233,7 +233,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
 <script src="fb-auth.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  🔥 ใบรายงานการ Baking ประจำวัน (APK-FR-PR-008) — ไฟล์แยก รวมรอบชุบ B1/B2/R1 · เตาเดียวใช้ร่วมกัน
+//  🌡️ ใบรายงานการ Baking ประจำวัน (APK-FR-PR-008) — ไฟล์แยก รวมรอบชุบ B1/B2/R1 · เตาเดียวใช้ร่วมกัน
 //  เก็บชุดอบที่ NAS กลาง: /baking-batches/{id}.json (1 ชุด = 1 โหนด ไม่เขียนทับกัน)
 //  อ่านรอบชุบ (ไม่แก้ไข) จาก /plating-{b1|b2|r1} + /data/todayBarrels ของแต่ละไลน์
 //  ยังไม่เชื่อมกับ Tag Card
@@ -498,7 +498,7 @@ function renderOven(){
   var chips = b.tempsArr.map(function(t){ var bad = t.t<T_MIN || t.t>T_MAX; return '<span class="temp-chip'+(bad?' bad':'')+'">'+fmtT(t.ts)+' · '+t.t+'°</span>'; }).join('') || '<span style="color:var(--text-muted);font-size:12px;">ยังไม่มีค่าอุณหภูมิ</span>';
   var rem = Math.max(MIN_HOURS*60 - el_min, 0);
   el.innerHTML = '<div class="card oven">' +
-    '<div class="oven-big">🔥 เตากำลังอบ · เริ่ม '+fmtT(b.startTs)+' ('+fmtD(b.startTs)+')</div>' +
+    '<div class="oven-big">🌡️ เตากำลังอบ · เริ่ม '+fmtT(b.startTs)+' ('+fmtD(b.startTs)+')</div>' +
     '<div style="font-size:13px;margin:4px 0 8px;">อบมาแล้ว <b class="mono">'+durStr(el_min)+'</b> ชม. · ' + (rem>0 ? 'ครบ 4 ชม. ในอีก <b class="mono">'+durStr(rem)+'</b>' : '<b style="color:var(--green);">ครบ 4 ชั่วโมงแล้ว ✓</b>') + ' · '+b.itemsArr.length+' รายการ · '+round1(kg).toFixed(1)+' kg · ผู้นำเข้า '+esc((b.starter&&b.starter.name)||'')+'</div>' +
     (needTemp ? '<div class="banner warn">'+tm('due')+'</div>' : '') +
     '<div style="margin-bottom:8px;">'+chips+'</div>' +

@@ -2327,7 +2327,7 @@ function renderBarrels() {
     var batchBadge = r.batchNo ? '<span style="background:'+(r.batchNo===1?'#1e40af':'#7c3aed')+';color:#fff;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;">บ่อ'+r.batchNo+'</span>' : '';
     return '<tr>' +
       '<td class="td-l">' + r.time + '</td>' +
-      '<td>' + r.barrel + (r.bakeReq ? ' <span title="ต้องอบ ' + (r.spec||'') + '" style="font-size:13px;">🔥</span>' : (r.bakeReq===null||r.bakeReq===undefined ? '' : '')) + '</td>' +
+      '<td>' + r.barrel + (r.bakeReq ? ' <span title="ต้องอบ ' + (r.spec||'') + '" style="display:inline-block;margin-left:3px;padding:1px 6px;border-radius:999px;background:#f59e0b;color:#fff;font-size:10px;font-weight:800;line-height:1.5;vertical-align:middle;">Baking</span>' : (r.bakeReq===null||r.bakeReq===undefined ? '' : '')) + '</td>' +
       '<td style="text-align:center;">' + batchBadge + '</td>' +
       '<td class="td-l" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;font-family:\'IBM Plex Sans Thai\',sans-serif;font-size:10px;color:var(--text-mid);">' + (r.partName||'–') + '</td>' +
       '<td class="td-l" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--text-mid);">' + (r.customer||'–') + '</td>' +
@@ -5578,7 +5578,7 @@ function barrelSpecShow(p){
   var h;
   if (bake){
     b.style.background = '#fff7ed'; b.style.border = '2px solid #f97316'; b.style.color = '#9a3412';
-    h = '<div style="font-size:15px;font-weight:800;">🔥 ต้องอบ (Baking) · မီးဖုတ်ရန်လိုသည်</div>'
+    h = '<div style="font-size:15px;font-weight:800;">🌡️ ต้องอบ (Baking) · မီးဖုတ်ရန်လိုသည်</div>'
       + '<div style="font-size:11px;margin-top:2px;">สเปคชุบ · ပလပ်စပက်: <b>' + spec + '</b></div>'
       + '<div style="font-size:11px;margin-top:2px;">เข้าเตาอบภายใน 1 ชั่วโมงหลังชุบ · ပလပ်ပြီး ၁ နာရီအတွင်း မီးဖုတ်ဖိုထဲ ထည့်ပါ</div>';
   } else if (spec){
