@@ -3529,7 +3529,7 @@ function applyPreset(idx) {
         // เติม dropdown แล้วเลือก jobId นั้นทันที
         var active = (jobMasterItems||[]).filter(function(j){
           var r = calcJobRemainToPlate(j.id);
-          if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
+          if (!_fifoOpenState(j, r).open) return false;
           return jobMatchesPartNo(j, partNo);
         });
         renderBillList(active, savedJobId);
@@ -3582,7 +3582,7 @@ function renderPresetChips() {
     // ตรวจสต็อก — เช็คทั้ง pcs และ kg (calcJobRemainToPlate — สูตรกลาง ตรงกับ bl_stock.html)
     var hasStock = (jobMasterItems||[]).some(function(j){
       var r = calcJobRemainToPlate(j.id);
-      if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
+      if (!_fifoOpenState(j, r).open) return false;
       return jobMatchesPartNo(j, partNo);
     });
     // ถ้า pmSrc ยังโหลดไม่เสร็จ แต่มีสต็อกใน JM → ถือว่าผ่าน
@@ -7560,7 +7560,7 @@ function barrelPmAcPick(idx) {
   // ตรวจว่ามีบิลมีคงเหลือไหม — ใช้ calcJobRemainToPlate() (wip-calc.js) สูตรกลาง ตรงกับ bl_stock.html
   var active  = (jobMasterItems||[]).filter(function(j){
     var r = calcJobRemainToPlate(j.id);
-    if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
+    if (!_fifoOpenState(j, r).open) return false;
     return jobMatchesPartNo(j, partNo);
   });
 
@@ -7919,6 +7919,7 @@ function calcJobBal(jobId) {
   }
   var remain   = totalIn - totalOut;
   var remainKg = parseFloat((totalInKg - totalOutKg).toFixed(3));
+  if (remainKg < 0.005) remainKg = 0; // เกณฑ์เศษ กก. เท่ากันทั้งระบบ
   return {
     totalIn:totalIn, totalOut:totalOut, remain: unit==='kg' ? remainKg : remain,
     totalInKg:totalInKg, totalOutKg:totalOutKg, remainKg:remainKg, unit:unit
@@ -7948,7 +7949,7 @@ function _jobDeliveredDone(job) {
   });
   var _t = jobTmpOut[job.id]; if (_t) { outQ += _t.pcs; outKg += _t.kg; }
   if (!hasIn) { inQ = Number(job.qty || job.pcs || 0); inKg = Number(job.qtyKg || job.kg || 0); }
-  if (job.unit === 'kg') return inKg > 0 && outKg >= inKg - 0.0005;
+  if (job.unit === 'kg') return inKg > 0 && outKg >= inKg - 0.005;
   return inQ > 0 && outQ >= inQ;
 }
 function calcJobRemainToPlate(jobId) {
@@ -7965,7 +7966,7 @@ function calcJobRemainToPlate(jobId) {
   var plated   = WipCalc.getPlatedForJob(jobId, weightG);
   return {
     remainPcs: Math.max(0, jobInPcs - plated.pcs),
-    remainKg:  Math.max(0, jobInKg  - plated.kg),
+    remainKg:  (function(x){ return x < 0.005 ? 0 : x; })(Math.max(0, jobInKg  - plated.kg)),
     unit: job.unit || 'pcs'
   };
 }
@@ -9356,7 +9357,7 @@ function openAddBillModal(dayId, rowIdx) {
   // หาบิลที่มีคงเหลือสำหรับ P/No นี้ (ลิสต์แนะนำ) — calcJobRemainToPlate() สูตรกลาง ตรงกับ bl_stock.html
   var active = (jobMasterItems||[]).filter(function(j){
     var r = calcJobRemainToPlate(j.id);
-    if (r.remainPcs <= 0 && r.remainKg <= 0) return false;
+    if (!_fifoOpenState(j, r).open) return false;
     return jobMatchesPartNo(j, partNo);
   });
 

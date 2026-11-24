@@ -2022,7 +2022,7 @@ function calcJob(jobId) {
   var _tmpO = _tmpByJob[jobId];
   if (_tmpO) { totalOut += _tmpO.pcs; totalOutKg += _tmpO.kg; }
   var remain   = totalIn - totalOut;
-  var remainKg = Math.max(0, parseFloat((totalInKg - totalOutKg).toFixed(3)));
+  var remainKg = Math.max(0, parseFloat((totalInKg - totalOutKg).toFixed(3))); if (remainKg < 0.005) remainKg = 0; // เกณฑ์เศษ กก. เท่ากันทั้งระบบ
   // บิลที่ปิดแล้ว (job.closed=true จาก "🧹 ปิดบิลเก่าเป็นชุด") ล็อกคงเหลือเป็น 0 ถาวร —
   // กันไว้เผื่อมีการแก้ไข/ลบ INV ที่เคยผูกกับบิลนี้ทีหลัง (ทำให้ totalOut ลดลง) จนคงเหลือคำนวณกลับมาเป็นบวกได้อีกโดยไม่ตั้งใจ
   // ถ้าต้องการเปิดบิลนี้กลับมาจริงๆ ต้องแก้ไขผ่าน "✏️ แก้ไขข้อมูลบิล" เอง (ลบ flag closed ออกด้วยตัวเอง ไม่ใช่เกิดขึ้นเองอัตโนมัติ)
