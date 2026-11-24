@@ -7638,6 +7638,17 @@ function _jobKeyedLabel(j) {
   var dt = new Date(t), p = function(n){ return (n<10?'0':'')+n; };
   return 'รับเข้า ' + d + ' · คีย์ ' + p(dt.getDate()) + '/' + p(dt.getMonth()+1) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
 }
+// ถือว่า "ครบ" เมื่อ กก. ครบ และชิ้นเหลือไม่เกินเศษ (max(5 ชิ้น, 1% ของบิล)) — กันเศษจากการแปลงน้ำหนัก/ชิ้น
+function _fifoOpenState(j, r) {
+  var inPcs = Number(j.qty || j.pcs || 0), inKg = Number(j.qtyKg || j.kg || 0);
+  var rp = Number((r && r.remainPcs) || 0), rk = Number((r && r.remainKg) || 0);
+  var pcsTol = Math.max(5, inPcs * 0.01);
+  var kgTol = (j.unit === 'kg') ? 0.005 : Math.max(0.005, inKg * 0.01);
+  var kgOpen = inKg > 0 && rk > kgTol;
+  var pcsOpen = inPcs > 0 && rp > pcsTol;
+  if (!inKg && !inPcs) { kgOpen = rk > 0.005; pcsOpen = rp > 0; }
+  return { open: kgOpen || pcsOpen, kgOpen: kgOpen, pcsOpen: pcsOpen, kg: rk, pcs: rp };
+}
 function findFifoBlocker(job) {
   if (!job) return null;
   var selPartKey = normalizePartKey(job.partName || job.partNo || '');
@@ -7649,8 +7660,9 @@ function findFifoBlocker(job) {
   for (var i=0; i<earlier.length; i++) {
     var ej = earlier[i];
     var ejR = calcJobRemainToPlate(ej.id);
-    if (ejR && ((ejR.remainPcs||0) > 0 || (ejR.remainKg||0) > 0)) {
-      return { job: ej, remain: ejR };
+    var _st = _fifoOpenState(ej, ejR);
+    if (ejR && _st.open) {
+      return { job: ej, remain: ejR, state: _st };
     }
   }
   return null;
@@ -7684,7 +7696,7 @@ function renderBillList(active, selectedJobId) {
     // "เหลือ X ชิ้น" เทียบเป็นกี่ กก. (ใช้ getWeightGForPO — น้ำหนัก/ชิ้น หน่วยกรัม จาก Part Master)
     var weightG = isKgUnit ? 0 : getWeightGForPO(j.partName || '');
     var kgHint  = (weightG > 0) ? ' (≈'+((r2*weightG)/1000).toFixed(2)+' กก.)' : (isKgUnit ? '' : ' <span style="color:#dc2626;font-weight:600;">(ไม่มี นน ใน PM)</span>');
-    var remStr  = isKgUnit ? r2.toFixed(2)+' กก.' : r2.toLocaleString()+' ชิ้น'+kgHint;
+    var remStr  = isKgUnit ? r2.toFixed(2)+' กก.'+' · '+Math.round(rPcs).toLocaleString()+' ชิ้น' : r2.toLocaleString()+' ชิ้น'+kgHint;
     var usedKgHint = (weightG > 0 && u.used) ? ' (≈'+((u.used*weightG)/1000).toFixed(2)+' กก.)' : '';
     var usedStr = (u.used||u.usedKg) ? '(ใช้ '+(isKgUnit?u.usedKg.toFixed(2)+' กก.':u.used+' ชิ้น'+usedKgHint)+' วันนี้)' : '';
     var weightWarn = u.weightMissing
@@ -7697,7 +7709,7 @@ function renderBillList(active, selectedJobId) {
     // ── FIFO: ถ้ามีบิลพาร์ทเดียวกันรับเข้าก่อนหน้ายังเหลืออยู่ ทำให้แถวนี้ "ติดคิว" — ยังคลิกได้ แต่จะโดนเตือนทันที ──
     var blocker = findFifoBlocker(j);
     var fifoNote = blocker
-      ? '<div style="font-size:10px;color:#dc2626;font-weight:600;margin-top:2px;">⏳ ติดคิว — ต้องชุบบิล "'+esc2(blocker.job.bill||'?')+'" ('+esc2(blocker.job.date||'')+') ให้หมดก่อน</div>'
+      ? '<div style="font-size:10px;color:#dc2626;font-weight:600;margin-top:2px;">⏳ ติดคิว — ต้องชุบบิล "'+esc2(blocker.job.bill||'?')+'" ('+esc2(blocker.job.date||'')+') ให้หมดก่อน · ยังเหลือ '+blocker.state.kg.toFixed(2)+' กก. / '+Math.round(blocker.state.pcs).toLocaleString()+' ชิ้น'+(blocker.state.pcsOpen&&!blocker.state.kgOpen?' (กก.ครบแล้ว แต่ชิ้นยังไม่ครบ — ตรวจจำนวนชิ้น/ให้หัวหน้าปิดบิล)':'')+'</div>'
       : '';
     var rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .15s,border .15s;margin-bottom:4px;'
       + (blocker
