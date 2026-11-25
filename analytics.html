@@ -306,6 +306,9 @@ if ('caches' in window) {
         <select id="qcSumLine" onchange="renderQcSummary()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;">
           <option value="ALL">ทุกสาย</option><option value="B1">B1</option><option value="B2">B2</option><option value="R1">R1</option>
         </select>
+        <input id="qcSumPart" list="qcPartList" placeholder="🔎 หมายเลขชิ้นงาน (หลายตัวคั่นด้วย ,)" oninput="clearTimeout(window._qcPartT);window._qcPartT=setTimeout(renderQcSummary,350)" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;min-width:230px;" autocomplete="off">
+        <datalist id="qcPartList"></datalist>
+        <button onclick="document.getElementById('qcSumPart').value='';renderQcSummary()" title="ล้างตัวกรองชิ้นงาน" style="font-size:12px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;">✕</button>
         <select id="qcSumMonth" onchange="renderQcSummary()" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;" title="ช่วงเวลาของกราฟพาเรโต">
           <option value="ALL">พาเรโต: 12 เดือนล่าสุด</option>
         </select>
@@ -1153,6 +1156,24 @@ async function renderQcSummary() {
     ? '⚠️ โหลดข้อมูล QC100% ไม่สำเร็จ: '+errs.join(', ')+' — ตัวเลขด้านล่างยังไม่ครบ เช็คอินเทอร์เน็ตแล้วรีเฟรช (ข้อมูลจริงไม่ได้หาย)' : '';
 
   var valid = recs.filter(function(r){ return r && r.date; });
+  // ── ตัวกรองหมายเลขชิ้นงาน (หลายตัวคั่นด้วย ,) — จับคู่แบบตัดช่องว่าง/ขีด/จุดก่อนเทียบ ──
+  var _pk = function(x){ return String(x||'').toUpperCase().replace(/[\s\-\._\/]/g,''); };
+  var _pl = document.getElementById('qcPartList');
+  if (_pl) {
+    var _seen = {};
+    valid.forEach(function(r){ var k = String(r.partNo||'').trim(); if (k && !_seen[k]) _seen[k] = String(r.partName||'').trim(); });
+    var _opts = Object.keys(_seen).sort().map(function(k){ return '<option value="'+esc(k)+'">'+esc(_seen[k])+'</option>'; }).join('');
+    if (_pl._sig !== _opts) { _pl.innerHTML = _opts; _pl._sig = _opts; }
+  }
+  var _terms = String((document.getElementById('qcSumPart')||{}).value||'').split(',').map(_pk).filter(Boolean);
+  var _partNote = '';
+  if (_terms.length) {
+    valid = valid.filter(function(r){
+      var a = _pk(r.partNo), b = _pk(r.partName);
+      return _terms.some(function(t){ return (a && a.indexOf(t) >= 0) || (b && b.indexOf(t) >= 0); });
+    });
+    _partNote = ' · ชิ้นงาน: ' + document.getElementById('qcSumPart').value.trim() + ' (' + valid.length + ' รายการตรวจ)';
+  }
   var byMonth = qcBuildMonthly(valid);
   var months = Object.keys(byMonth).sort().reverse().slice(0,12);   // ใหม่→เก่า 12 เดือน
 
@@ -1167,7 +1188,7 @@ async function renderQcSummary() {
   // ── ตารางรายเดือน ──
   var tbody = document.querySelector('#tblQcMonthly tbody');
   if (!months.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="loading">ยังไม่มีข้อมูล QC100%</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">'+(_terms.length?'ไม่พบข้อมูล QC100% ของชิ้นงานที่ค้นหา':'ยังไม่มีข้อมูล QC100%')+'</td></tr>';
   } else {
     var tI=0,tO=0,tN=0;
     var rows = months.map(function(m){
@@ -1188,7 +1209,7 @@ async function renderQcSummary() {
     return pMonth === 'ALL' ? months.indexOf(ym) >= 0 : ym === pMonth;
   });
   var par = qcBuildPareto(inPeriod);
-  document.getElementById('qcParetoPeriod').textContent = '· ' + (pMonth==='ALL' ? '12 เดือนล่าสุด' : monthLabelTH(pMonth)) + ' · ' + (lineSel==='ALL' ? 'ทุกสาย' : lineSel);
+  document.getElementById('qcParetoPeriod').textContent = '· ' + (pMonth==='ALL' ? '12 เดือนล่าสุด' : monthLabelTH(pMonth)) + ' · ' + (lineSel==='ALL' ? 'ทุกสาย' : lineSel) + _partNote;
 
   var pb = document.querySelector('#tblQcPareto tbody');
   destroyChart('chartQcPareto');
