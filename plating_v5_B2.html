@@ -8700,16 +8700,81 @@ function qaLoadRecords() {
 function qaSaveRecords(arr) { localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(arr)); try { chemStripRender(); } catch(e){} }
 
 // ── Firebase sync สำหรับ QA records ──
-async function qaFbSaveRecords() {
-  if (!fbIsConfigured()) return;
-  try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ records: qaLoadRecords(), savedAt: new Date().toISOString() })
-    });
-  } catch(e) { console.warn('qaFbSaveRecords:', e.message); }
+// ═══ DurablePut (.251): ส่งผลตรวจเครื่องจักร/ผลวิเคราะห์ขึ้น NAS แบบมีคิวส่งซ้ำ + รวมกับข้อมูลบนเซิร์ฟเวอร์ ═══
+var _DP_PAGE = (location.pathname.split('/').pop() || 'page');
+function _dpKey(k){ return 'apk_dp_' + _DP_PAGE + '_' + k; }
+function _dpFlag(k, v){ try { if (v) localStorage.setItem(_dpKey(k), '1'); else localStorage.removeItem(_dpKey(k)); } catch(e){} }
+function _dpHas(k){ try { return localStorage.getItem(_dpKey(k)) === '1'; } catch(e){ return false; } }
+function _dpBase(){ return FB_DB_URL.replace(/\/+$/, ''); }
+async function _dpFetch(url, opt){
+  var c = new AbortController(), t = setTimeout(function(){ c.abort(); }, 8000);
+  try { opt = opt || {}; opt.signal = c.signal; return await fetch(url, opt); } finally { clearTimeout(t); }
 }
+var _dpBusy = {};
+var _dpJobs = {
+  qa: async function(overwrite){
+    var url = _dpBase() + '/plating-b2-qa.json', recs;
+    if (overwrite) { recs = qaLoadRecords(); }
+    else {
+      var g = await _dpFetch(url); if (!g.ok) return false;
+      var d = await g.json();
+      recs = qaMergeRecs(qaLoadRecords(), (d && Array.isArray(d.records)) ? d.records : []);
+      try { localStorage.setItem(QA_RECORDS_KEY, JSON.stringify(recs)); chemStripRender(); } catch(e){}
+    }
+    var p = await _dpFetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: recs, savedAt: new Date().toISOString() }) });
+    return p.ok;
+  },
+  qap: async function(){
+    var p = await _dpFetch(_dpBase() + '/plating-b2-qa-processes.json', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ processes: qaLoadProcesses(), savedAt: new Date().toISOString() }) });
+    return p.ok;
+  },
+  mc: async function(){
+    var url = _dpBase() + '/plating-b2-mcheck.json';
+    var g = await _dpFetch(url); if (!g.ok) return false;
+    var d = await g.json();
+    var map = {}; mcLoadRecords().forEach(function(r){ map[r.id] = r; });
+    ((d && Array.isArray(d.records)) ? d.records : []).forEach(function(r){
+      var l = map[r.id];
+      if (!l || String(r.savedAt||'') > String(l.savedAt||'')) map[r.id] = r;
+    });
+    var merged = Object.keys(map).map(function(k){ return map[k]; });
+    merged.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    mcSaveRecords(merged); mcRecords = merged;
+    var p = await _dpFetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: mcItems, records: merged, savedAt: new Date().toISOString() }) });
+    return p.ok;
+  }
+};
+async function _dpRun(k, overwrite){
+  if (!fbIsConfigured()) { _dpFlag(k, false); _dpBanner(); return false; }
+  if (_dpBusy[k]) return false;
+  _dpBusy[k] = true;
+  var ok = false;
+  try { ok = await _dpJobs[k](overwrite); } catch(e) { ok = false; console.warn('DurablePut ' + k + ':', e.message); }
+  _dpBusy[k] = false;
+  _dpFlag(k, !ok);
+  _dpBanner();
+  return ok;
+}
+function _dpSend(k, overwrite){ _dpFlag(k, true); _dpBanner(); return _dpRun(k, overwrite); }
+function _dpBanner(){
+  var names = { qa:'ผลวิเคราะห์น้ำยา', qap:'รายการวิเคราะห์', mc:'ผลตรวจเครื่องจักร' };
+  var pend = Object.keys(names).filter(_dpHas);
+  var el = document.getElementById('dpBar');
+  if (!pend.length) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div'); el.id = 'dpBar';
+    el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:64px;z-index:99998;background:#ea580c;color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.3);display:flex;gap:8px;align-items:center;justify-content:space-between;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<span>⏳ ยังไม่ส่งขึ้นเซิร์ฟเวอร์: ' + pend.map(function(k){ return names[k]; }).join(', ') + ' — ข้อมูลอยู่ในเครื่องนี้ กำลังลองส่งซ้ำ (อย่าล้างแคช/ออกจากระบบ)</span>' +
+    '<button onclick="_dpRetryAll()" style="background:#fff;color:#c2410c;border:0;border-radius:7px;padding:5px 10px;font-weight:700;">ส่งใหม่</button>';
+}
+function _dpRetryAll(){ ['qa','qap','mc'].forEach(function(k){ if (_dpHas(k)) _dpRun(k); }); }
+setInterval(_dpRetryAll, 30000);
+window.addEventListener('online', _dpRetryAll);
+// เปิดหน้าทุกครั้ง: ส่งรวม (merge) ผลตรวจ/ผลวิเคราะห์ที่ค้างในเครื่องขึ้นเซิร์ฟเวอร์อีกรอบ — กู้ข้อมูลที่เคยส่งพลาด
+setTimeout(function(){ try { _dpRun('mc'); setTimeout(function(){ _dpRun('qa'); }, 1500); _dpRetryAll(); _dpBanner(); } catch(e){} }, 4000);
+async function qaFbSaveRecords(overwrite) { return _dpSend('qa', overwrite === true); }
 async function qaFbLoadRecords() {
   if (!fbIsConfigured()) return;
   try {
@@ -8728,16 +8793,7 @@ async function qaFbLoadRecords() {
     }
   } catch(e) { window._qaSyncFail = Date.now(); console.warn('qaFbLoadRecords:', e.message); }
 }
-async function qaFbSaveProcesses() {
-  if (!fbIsConfigured()) return;
-  try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-qa-processes.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ processes: qaLoadProcesses(), savedAt: new Date().toISOString() })
-    });
-  } catch(e) { console.warn('qaFbSaveProcesses:', e.message); }
-}
+async function qaFbSaveProcesses() { return _dpSend('qap'); }
 async function qaFbLoadProcesses() {
   if (!fbIsConfigured()) return;
   try {
@@ -9041,7 +9097,7 @@ function qaToast(msg, ok) {
 function qaDeleteRecord(id) {
   if (!confirm('ลบรายการนี้?')) return;
   qaSaveRecords(qaLoadRecords().filter(function(r){return r.id!==id;}));
-  qaFbSaveRecords(); // sync ขึ้น Firebase
+  qaFbSaveRecords(true); // sync ขึ้น Firebase
   qaRenderHistory();
   qaRenderChart();
   qaPendRefresh();
@@ -9785,16 +9841,7 @@ function mcLoadRecords() {
 function mcSaveRecords(arr) { try { localStorage.setItem(MC_RECORDS_KEY, JSON.stringify(arr)); } catch(e){} }
 
 // ── Firebase sync ──
-async function mcFbSave() {
-  if (!fbIsConfigured()) return;
-  try {
-    await fetch(FB_DB_URL.replace(/\/+$/, '') + '/plating-b2-mcheck.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: mcItems, records: mcLoadRecords(), savedAt: new Date().toISOString() })
-    });
-  } catch(e) { console.warn('mcFbSave:', e.message); }
-}
+async function mcFbSave() { return _dpSend('mc'); }
 async function mcFbLoad() {
   if (!fbIsConfigured()) return;
   try {
