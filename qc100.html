@@ -1343,7 +1343,7 @@ function qcRenderHistory() {
       +'<td style="color:#ef4444;">'+r.qtyNG.toLocaleString()+'</td>'
       +'<td style="font-weight:800;color:'+pctColor+';">'+r.percentNG.toFixed(2)+'%</td>'
       +'<td class="td-l" style="font-size:10px;">'+defectStr+'</td>'
-      +'<td class="td-l" style="white-space:nowrap;">'+esc(r.inspector||'–')+(r.lotNo && r.jobKey ? ' <a class="del-btn" title="พิมพ์ Tag + ICS ของบิลนี้" href="'+esc(qcTagUrl(r.partNo, (r.line||'')+'|'+r.lotNo+'|'+r.jobKey))+'" onclick="return qcOpenTag(this.getAttribute(\'href\'));" style="margin-left:6px;text-decoration:none;display:inline-block;font-size:18px;">🖨️</a>' : '')+'</td>'
+      +'<td class="td-l" style="white-space:nowrap;">'+esc(r.inspector||'–')+' <a class="del-btn" title="'+((r.lotNo && r.jobKey) ? 'พิมพ์ Tag + ICS ของบิลนี้' : 'พิมพ์ Tag + ICS (รายการนี้ไม่มีบิล/Pro Lot — เปิดหน้า Tag Card แล้วเลือกบิลเอง)')+'" href="'+esc((r.lotNo && r.jobKey) ? qcTagUrl(r.partNo, (r.line||'')+'|'+r.lotNo+'|'+r.jobKey) : qcTagUrl(r.partNo, ''))+'" onclick="return qcOpenTag(this.getAttribute(\'href\'));" style="margin-left:6px;text-decoration:none;display:inline-block;font-size:18px;'+((r.lotNo && r.jobKey) ? '' : 'opacity:.55;')+'">🖨️</a>'+'</td>'
       +'<td style="white-space:nowrap;">'+(canEdit() ? '<button class="del-btn" title="แก้เลขบิล" onclick="qcEditBill(\''+r.id+'\')" style="margin-right:4px;">✏️</button><button class="del-btn" onclick="qcDeleteRecord(\''+r.id+'\')">🗑</button>' : '')+'</td>'
       +'</tr>';
   }).join('');
@@ -1711,7 +1711,7 @@ window.addEventListener('message', function(ev){
     try { qcRenderHistory(); } catch(e){}
   }
 });
-function qcTagUrl(partNo, ek){ return 'tag_card.html?part=' + encodeURIComponent(partNo) + '&ek=' + encodeURIComponent(ek); }
+function qcTagUrl(partNo, ek){ return "tag_card.html?part=" + encodeURIComponent(partNo) + (ek ? "&ek=" + encodeURIComponent(ek) : ""); }
 function qcShowPrintBar(partNo, items){
   var t = document.getElementById('qcToast'); if (!t) return;
   var bar = document.getElementById('qcPrintBar');
