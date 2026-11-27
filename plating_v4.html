@@ -1921,7 +1921,14 @@ function chemStripRender() {
   var fresh = (age > 3)
     ? '<div class="cs-w o">🟠 ข้อมูลอาจไม่ล่าสุด (ซิงก์ล่าสุด ' + hh + ') — ตรวจว่า Tailscale เปิดอยู่ แล้วกด 🔄 · ဒေတာအသစ်မဟုတ်နိုင်ပါ <button onclick="chemStripRefresh()" class="cs-rb">🔄 รีเฟรช</button></div>'
     : '<div class="cs-f">ซิงก์ล่าสุด ' + hh + ' <button onclick="chemStripRefresh()" class="cs-rb">🔄</button></div>';
-  box.innerHTML = '<div class="cs-t">🧪 ผลวิเคราะห์น้ำยาวันนี้ · ယနေ့ ဓာတုခွဲခြမ်းစိတ်ဖြာမှု</div><div class="cs-g">' + cells + '</div>' + msg + fresh;
+  box.innerHTML = '<div class="cs-t">🧪 ผลวิเคราะห์น้ำยาวันนี้ · ယနေ့ ဓာတုခွဲခြမ်းစိတ်ဖြာမှု</div><div class="cs-g">' + cells + '</div>' + msg + fresh + (function(){
+    try {
+      var tl = recs.filter(function(r){ return r.date === today; }).length;
+      var rr = (window._qaRemoteRecs || []).filter(function(r){ return r.date === today; }).length;
+      var pd = (typeof _dpHas === 'function') ? ['qa','qap','mc'].filter(_dpHas).join(',') : '';
+      return '<div style="font-size:9px;color:#94a3b8;text-align:right;margin-top:2px;">build 251 · วันนี้: เครื่องนี้ ' + tl + ' / เซิร์ฟเวอร์ ' + rr + ' รายการ' + (pd ? ' · ค้างส่ง: ' + pd : '') + '</div>';
+    } catch(e) { return ''; }
+  })();
 }
 function chemStripRefresh() {
   var tasks = [];
@@ -2046,6 +2053,7 @@ function addBarrel() {
           _remainStr = Math.max(0,_remainPcs).toLocaleString()+' ชิ้น'+_remainKgHint;
         }
       }
+      if (_overAmt > 0 && _offerSplit(time, barrel, kg, pcs, lotNo, _billJob)) return;
       if (_overAmt > 0) {
         var _overKgHint = (_wGmsg > 0 && !_isKgUnit) ? ' (≈'+ucFmtKg((_overAmt*_wGmsg)/1000)+' กก.)' : '';
         var _overStr = _isKgUnit ? ucFmtKg(_overAmt)+' กก.' : _overAmt.toLocaleString()+' ชิ้น'+_overKgHint;
@@ -2081,7 +2089,87 @@ function addBarrel() {
 }
 
 // ── บันทึกรายรอบจริง (แยกออกมาเพื่อรองรับ flow ขออนุมัติแบบ async ของกรณี "ไม่ระบุบิล") ──
-function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
+
+// ═══ ตัดยอดข้ามบิลอัตโนมัติ (.258): กรอกเกินคงเหลือของบิลที่เลือก → ตัดบิลนี้ให้ครบ แล้วส่วนที่เกินไปบิลถัดไป (FIFO) แตกเป็น 2+ แถวให้เอง ═══
+function _splitUnitConv(x, from, to, wG) {            // from/to: 'kg' | 'pcs'
+  if (from === to) return x;
+  if (!(wG > 0)) return NaN;
+  return from === 'kg' ? (x * 1000 / wG) : (x * wG / 1000);
+}
+function _splitPlan(job0, kg, pcs) {
+  var wG = getWeightGForPO(job0.partName || job0.partNo || '');
+  var u0 = job0.unit === 'kg' ? 'kg' : 'pcs';
+  var M = (u0 === 'kg') ? (kg > 0 ? kg : _splitUnitConv(pcs, 'pcs', 'kg', wG))
+                        : (pcs > 0 ? pcs : _splitUnitConv(kg, 'kg', 'pcs', wG));
+  if (!(M > 0)) return null;
+  var key = normalizePartKey(job0.partName || job0.partNo || '');
+  var chain = [job0];
+  (jobMasterItems || []).filter(function(j){
+    return j.id !== job0.id && !j.closed && j.date && _jobIsEarlier(job0, j)
+      && normalizePartKey(j.partName || j.partNo || '') === key;
+  }).sort(_jobFifoCmp).forEach(function(j){
+    var r = calcJobRemainToPlate(j.id);
+    if (r && _fifoOpenState(j, r).open) chain.push(j);
+  });
+  var left = M, parts = [], curU = u0;
+  for (var i = 0; i < chain.length && left > 1e-9; i++) {
+    var j = chain[i], u = j.unit === 'kg' ? 'kg' : 'pcs', r = calcJobRemainToPlate(j.id);
+    var rem = u === 'kg' ? r.remainKg : r.remainPcs;
+    if (!(rem > 0)) continue;
+    var lj = _splitUnitConv(left, curU, u, wG); if (isNaN(lj)) return null;
+    var take = Math.min(lj, rem);
+    var takeInCur = _splitUnitConv(take, u, curU, wG);
+    parts.push({ job: j, unit: u, take: take, rem: rem, measure: takeInCur, last: false });
+    left = left - takeInCur; if (left < 1e-6) left = 0;
+  }
+  if (left > 0 || parts.length < 2) return left > 0 ? { over: left, unit: curU, parts: parts } : null;
+  // แบ่ง kg / pcs ที่กรอกตามสัดส่วนยอดของแต่ละบิล (แถวสุดท้ายรับเศษ ให้ผลรวมเท่ากับที่กรอกพอดี)
+  var sKg = 0, sPcs = 0;
+  parts.forEach(function(p, idx){
+    var share = p.measure / M, isLast = idx === parts.length - 1;
+    p.kg = isLast ? Math.round((kg - sKg) * 100) / 100 : Math.round(kg * share * 100) / 100;
+    p.pcs = isLast ? (pcs - sPcs) : Math.round(pcs * share);
+    sKg += p.kg; sPcs += p.pcs;
+  });
+  return { parts: parts };
+}
+function _offerSplit(time, barrel, kg, pcs, lotNo, billJob) {
+  var plan;
+  try { plan = _splitPlan(billJob, kg, pcs); } catch(e) { console.warn('split:', e); return false; }
+  if (!plan) return false;
+  if (plan.over) {                                   // เกินยอดรวมของทุกบิลที่เหลือ → บล็อก (กันพิมพ์ผิด)
+    var tot = plan.parts.reduce(function(s,p){ return s + p.measure; }, 0);
+    showToast('entry', '🚫 บันทึกไม่ได้ — จำนวนที่กรอกเกินยอดคงเหลือรวมของทุกบิลของชิ้นงานนี้ (เกินไป ' + Math.round(plan.over*100)/100 + (plan.unit==='kg'?' กก.':' ชิ้น') + ') — ตรวจตัวเลขอีกครั้ง', 'err');
+    return true;
+  }
+  var unitTxt = function(p, v){ return p.unit === 'kg' ? (Math.round(v*100)/100).toFixed(2) + ' กก.' : Math.round(v).toLocaleString() + ' ชิ้น'; };
+  var rows = plan.parts.map(function(p, i){
+    return '<div style="padding:8px 10px;margin-bottom:6px;border-radius:9px;border:1.5px solid ' + (i===0?'#fca5a5':'#86efac') + ';background:' + (i===0?'#fef2f2':'#f0fdf4') + ';font-size:13px;">'
+      + '<b>' + (i===0 ? '① ตัดบิลนี้ให้ครบ (ปิดคิว)' : '② ใส่ต่อบิลถัดไป') + '</b><br>'
+      + '<span style="font-family:monospace;">[' + esc2(p.job.bill||'?') + ']</span> ' + esc2(p.job.date||'')
+      + '<br>คงเหลือก่อนตัด ' + unitTxt(p, p.rem) + ' → <b>ลงรอบนี้ ' + unitTxt(p, p.take) + '</b>'
+      + (p.kg || p.pcs ? '<br><span style="color:#475569;">แถวที่บันทึก: ' + (p.kg ? p.kg.toFixed(2) + ' กก.' : '') + (p.kg && p.pcs ? ' · ' : '') + (p.pcs ? p.pcs.toLocaleString() + ' ชิ้น' : '') + '</span>' : '')
+      + '</div>';
+  }).join('');
+  var old = document.getElementById('splitModal'); if (old) old.remove();
+  var m = document.createElement('div'); m.id = 'splitModal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+  m.innerHTML = '<div style="background:#fff;border-radius:14px;padding:16px;width:420px;max-width:100%;max-height:90vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.3);">'
+    + '<div style="font-size:15px;font-weight:700;margin-bottom:4px;">✂️ จำนวนเกินคงเหลือของบิล — ระบบแบ่งให้ ' + plan.parts.length + ' แถว</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-bottom:8px;">ပထမဘီလ်ကို ပြည့်အောင်ဖြတ်ပြီး ကျန်သည့်အရေအတွက်ကို နောက်ဘီလ်သို့ အလိုအလျောက် ခွဲပေးမည် · ถังเดียวกัน Pro Lot เดียวกัน</div>'
+    + rows
+    + '<div style="display:flex;gap:8px;margin-top:10px;"><button id="splitOk" style="flex:1;background:#15803d;color:#fff;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:700;">✅ ยืนยัน บันทึก ' + plan.parts.length + ' แถว</button>'
+    + '<button id="splitNo" style="flex:0.6;background:#f1f5f9;border:none;border-radius:9px;padding:11px;font-size:14px;">ยกเลิก</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('splitNo').onclick = function(){ m.remove(); };
+  document.getElementById('splitOk').onclick = function(){
+    m.remove();
+    var more = plan.parts.slice(1).map(function(p){ return { jobId: p.job.id, kg: p.kg, pcs: p.pcs }; });
+    _commitBarrelRow(time, barrel, plan.parts[0].kg, plan.parts[0].pcs, lotNo, plan.parts[0].job.id, null, more);
+  };
+  return true;
+}
+function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo, splitMore) {
   var row = { id: Date.now(), time: time, barrel: barrel, type: selTypeVal, color: selColorVal, kg: kg, pcs: pcs,
               partName: document.getElementById('bPartName').value.trim(),
               customer: document.getElementById('bCustomer').value.trim(),
@@ -2107,7 +2195,16 @@ function _commitBarrelRow(time, barrel, kg, pcs, lotNo, jobId, approverInfo) {
     row.nobillApprovedBy = approverInfo.name || (approverInfo.role + (approverInfo.by==='self' ? ' (self)' : ''));
     row.nobillApprovedAt = approverInfo.at;
   }
-  todayBarrels.push(row);
+  if (splitMore && splitMore.length) {
+    row.autoSplit = true; row.splitNote = 'ตัดบิลอัตโนมัติ (แถว 1/' + (splitMore.length+1) + ')';
+    todayBarrels.push(row);
+    splitMore.forEach(function(sp, i){
+      var r2 = JSON.parse(JSON.stringify(row));
+      r2.id = row.id + i + 1; r2.jobId = sp.jobId; r2.kg = sp.kg; r2.pcs = sp.pcs;
+      r2.custLot = _custLotOf(sp.jobId); r2.autoSplit = true; r2.splitNote = 'ตัดบิลอัตโนมัติ (แถว ' + (i+2) + '/' + (splitMore.length+1) + ')';
+      todayBarrels.push(r2);
+    });
+  } else { todayBarrels.push(row); }
   _localDirty = true; // มีข้อมูลใหม่ในเครื่อง — รอยืนยันซิงค์ขึ้น Firebase
   try { localStorage.setItem('b1_todayBarrels', JSON.stringify(todayBarrels)); } catch(e){}
   livePush(); // ← Live Sync ทันที
