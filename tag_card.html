@@ -3596,6 +3596,26 @@ function publishIcs(id, ctx, pageHtml, password, deferSnap) {
 // ══════════════════════════════════════
 var _qcRecordsForPartNo = []; // record ทั้งหมดของ P/No ปัจจุบัน ที่โหลดมาครั้งเดียว ใช้เลือก Insp.By ต่อได้ทันทีไม่ fetch ซ้ำ
 var _tagClosed = {}, _tagClosedList = [];
+// ── (.259) แสดงเฉพาะ Lot ที่ชุบภายใน N วัน + ซ่อน Lot ที่ปิดไว้ใน QC100 (ปิดครั้งเดียวมีผลทั้งสองหน้า) ──
+var TAG_WINDOW_DAYS = 2, _tagShowOld = false, _qcClosedMap = { closed:{}, before:'' };
+function tgCutoff(){ var d = new Date(Date.now() - TAG_WINDOW_DAYS*86400000); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function tgQcClosedOf(partNo, e){
+  var pk = String(partNo||'').toUpperCase().replace(/[^A-Z0-9฀-๿]/g,'');
+  var k = (pk + '__' + e.jobKey + '|' + e.lot).replace(/[^A-Za-z0-9_\-]/g,'_');
+  var d = e.pd || e.date || '';
+  return !!(_qcClosedMap.closed[k] || (_qcClosedMap.before && d && d < _qcClosedMap.before));
+}
+function tgOldBarUpdate(oldN, oldRem, tinyN){
+  var h = $('tgLotHint'); if (!h) return;
+  var el = document.getElementById('tgOldBar');
+  if (!oldN && !(_tagShowOld) && !tinyN) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'tgOldBar'; el.style.cssText = 'font-size:12px;margin:6px 0;padding:6px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;color:#334155;'; h.parentNode.insertBefore(el, h.nextSibling); }
+  el.innerHTML = (oldN ? '📦 ซ่อน Lot ที่ชุบเก่ากว่า ' + TAG_WINDOW_DAYS + ' วัน <b>' + oldN + '</b> รายการ (คงเหลือ ' + oldRem.toLocaleString() + ' ชิ้น) ' : (_tagShowOld ? '📦 กำลังแสดง Lot เก่ากว่า ' + TAG_WINDOW_DAYS + ' วันด้วย ' : ''))
+    + (oldN || _tagShowOld ? '<a href="#" onclick="tgToggleOld();return false;" style="font-weight:700;">' + (_tagShowOld ? 'ซ่อน' : 'แสดง') + '</a>' : '')
+    + (tinyN ? ' · ซ่อนเศษเล็กน้อย ' + tinyN + ' รายการ (ถือว่าครบ)' : '');
+}
+function tgToggleOld(){ _tagShowOld = !_tagShowOld; try { loadLotOptionsForPartNo(String($('tgPartNo') ? $('tgPartNo').value : '').trim() || _tgCurPartNo); } catch(e){} }
+var _tgCurPartNo = '';
 function tgCloseKey(ek){ return (String($('tgPartNo').value||'').trim().toLowerCase() + '__' + ek).replace(/[^A-Za-z0-9_\-]/g,'_'); }
 function tgIsAdmin(){ return !!(session && session.role === 'admin'); }
 function tgReloadLots(){ loadLotOptionsForPartNo($('tgPartNo').value.trim()); }
@@ -3772,12 +3792,16 @@ function loadLotOptionsForPartNo(partNo) {
   var lines = ['B1','B2','R1'];
   var logP = fetchJsonWithTimeout(FB_LINES.B1 + '/tag-print-log.json', 10000).then(function(d){ return { ok:true, d:d }; }).catch(function(){ return { ok:false, d:null }; });
   var closedP = fetchJsonWithTimeout(FB_LINES.B1 + '/tag-lot-closed.json', 10000).then(function(d){ return d || {}; }).catch(function(){ return {}; });
+  var qcClosedP = Promise.all(lines.map(function(line){
+    return fetchJsonWithTimeout(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100-closed.json', 10000).then(function(d){ return d || {}; }).catch(function(){ return {}; });
+  })).then(function(arr){ var m = { closed:{}, before:'' }; arr.forEach(function(d){ Object.keys((d && d.closed) || {}).forEach(function(k){ m.closed[k] = d.closed[k]; }); if (!m.before && d && d.before) m.before = d.before; }); return m; });
   Promise.all(lines.map(function(line){
     return fetchJsonWithTimeout(FB_LINES[line] + '/plating-'+line.toLowerCase()+'-qc100.json', 10000)
       .then(function(d){ return { ok: true, recs: (d && Array.isArray(d.records)) ? d.records : [] }; })
       .catch(function(){ return { ok: false, recs: [] }; });
-  }).concat([closedP, logP])).then(function(results){
+  }).concat([closedP, qcClosedP, logP])).then(function(results){
     var logRes = results.pop();
+    _qcClosedMap = results.pop() || { closed:{}, before:'' };
     _tagClosed = results.pop() || {};
     _tagLogOk = logRes.ok;
     _tagLogIds = logRes.d ? Object.keys(logRes.d) : [];
@@ -3832,21 +3856,28 @@ function loadLotOptionsForPartNo(partNo) {
     var _cn = $('tgClosedN'); if (_cn) _cn.textContent = Object.keys(_tagClosed).filter(function(k){ var x=_tagClosed[k]; return x && String(x.partNo||'').trim().toLowerCase()===partNo.toLowerCase(); }).length;
     $('tgLotAdmin').style.display = tgIsAdmin() ? 'flex' : 'none';
     $('tgTestRow').style.display = tgIsAdmin() ? 'block' : 'none';
-    var options = ['<option value="">— เลือกบิล —</option>'];
+    var options = ['<option value="">— เลือกบิล —</option>'], tinyN = 0, oldN = 0, oldRem = 0, _cutT = tgCutoff();
+    _tgCurPartNo = partNo;
     lotOrder.forEach(function(ek){
       var e = lotInfo[ek], rem = e.ok - e.used;
       if (_tagClosed[tgCloseKey(ek)]) { closedN++; return; } // แอดมินปิดรายการแล้ว
-      if (rem <= 0) { usedUp++; return; } // พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้ว → เอาออกจากรายการ
+      if (tgQcClosedOf(partNo, e)) { closedN++; return; } // ปิดไว้ใน QC100
+      if (rem <= 0) { usedUp++; return; }
+      if (rem <= Math.min(5, Math.max(1, e.ok*0.01))) { tinyN++; return; } // เศษเล็กน้อย ถือว่าครบ
+      var _pd = e.pd || e.date || '';
+      if (!_tagShowOld && !_deepEk && _pd && _pd < _cutT) { oldN++; oldRem += rem; return; } // เก่ากว่า N วัน — พับไว้ // พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้ว → เอาออกจากรายการ
       seenLots[ek] = true; _lotRemain[ek] = rem; totalRemain += rem;
       _lotMeta[ek] = { rem: rem, date: e.pd || e.date || '', lot: e.lot, line: e.line, jobKey: e.jobKey, bill: e.bill, customer: e.customer, custLots: e.custLots, insp: e.insp };
       options.push('<option value="'+esc(ek)+'">'+(e.bill ? 'บิล '+esc(e.bill) : 'ไม่ระบุบิล')+' · Pro Lot '+esc(e.lot)+(e.custLots.length?' · Cust.Lot '+esc(e.custLots.join(', ')):'')+(e.insp?' · ตรวจโดย '+esc(e.insp):'')+' ('+esc(e.line)+') · พิมพ์ได้อีก '+rem.toLocaleString()+' ชิ้น</option>');
     });
     var n = Object.keys(seenLots).length;
+    tgOldBarUpdate(oldN, oldRem, tinyN);
     if (!n) {
       sel.innerHTML = '<option value="">— ไม่มี Lot คงเหลือ —</option>';
       sel.disabled = true;
       $('tgLotHint').textContent = '🚫 บิลของ P/No นี้พิมพ์ Tag ครบจำนวนที่ผ่านตรวจแล้วทั้งหมด — กรุณาให้ QC ตรวจ QC 100% เพิ่มก่อน';
       $('tgLotHint').className = 'hint err';
+      if (oldN > 0) $('tgLotHint').textContent = '🚫 ไม่มี Lot ที่ชุบภายใน ' + TAG_WINDOW_DAYS + ' วัน — มี Lot เก่ากว่านั้น ' + oldN + ' รายการ (คงเหลือ ' + oldRem.toLocaleString() + ' ชิ้น) กด "แสดง" ด้านล่างถ้าต้องการพิมพ์';
       return;
     }
     sel.innerHTML = options.join('');
