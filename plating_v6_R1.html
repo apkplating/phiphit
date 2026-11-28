@@ -7749,19 +7749,20 @@ function barrelPmAcPick(idx) {
 var _histSessionAdded = {};
 
 // ลำดับ FIFO: วันรับเข้าก่อน → ถ้าวันเดียวกัน ดูเวลาที่คีย์บันทึกในหน้า "รับงานเข้า" (id = 'J'+timestamp) บิลที่คีย์ก่อนต้องชุบก่อน
+// ═══ ตัวเรียงบิลกลาง (JOB_ORDER_V1) — โค้ดชุดนี้ต้องเหมือนกันทุกไฟล์: job_master / qc100 / plating_v4 / v5_B2 / v6_R1 ═══
+// ลำดับ FIFO ของบิล: วันรับเข้า → เวลาคีย์บิล (จาก id = 'J'+timestamp; ไม่มี = เก่าสุด) → เลขบิล (เรียงตามตัวเลข) → id
+function jobOrderTs(j) { var m = /^J(\d{10,})(?:_\d+)?$/.exec(String((j && j.id) || '')); return m ? parseInt(m[1], 10) : 0; }
+function jobOrderCmp(a, b, noId) {
+  var d = String(a.date || '').localeCompare(String(b.date || '')); if (d) return d < 0 ? -1 : 1;
+  var ta = jobOrderTs(a), tb = jobOrderTs(b); if (ta !== tb) return ta < tb ? -1 : 1;
+  var x = String(a.bill || '').trim().localeCompare(String(b.bill || '').trim(), undefined, { numeric: true }); if (x) return x < 0 ? -1 : 1;
+  if (noId) return 0;
+  var i = String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true }); return i < 0 ? -1 : (i > 0 ? 1 : 0);
+}
+// ═══ จบตัวเรียงบิลกลาง ═══
 function _jobTs(j) { var m = /^J(\d{10,})(?:_\d+)?$/.exec(String((j && j.id) || '')); return m ? parseInt(m[1], 10) : 0; }
-function _jobFifoCmp(a, b) {
-  var d = (a.date||'').localeCompare(b.date||'');
-  if (d !== 0) return d;
-  var ta = _jobTs(a), tb = _jobTs(b);
-  return (ta && tb) ? (ta - tb) : 0;
-}
-function _jobIsEarlier(j, job) {
-  if (j.date < job.date) return true;
-  if (j.date > job.date) return false;
-  var tj = _jobTs(j), tk = _jobTs(job);
-  return !!(tj && tk && tj < tk);
-}
+function _jobFifoCmp(a, b) { return jobOrderCmp(a, b); }
+function _jobIsEarlier(j, job) { return jobOrderCmp(j, job, true) < 0; }
 function _jobKeyedLabel(j) {
   var t = _jobTs(j), d = (j.date||'').split('-').reverse().join('/');
   if (!t) return 'รับเข้า ' + d + ' · ไม่ทราบเวลาคีย์ (จัดลำดับตามวันรับเท่านั้น) · id: ' + String(j.id||'-');

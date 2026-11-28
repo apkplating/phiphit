@@ -887,7 +887,7 @@ function qcBuildLots() {
     });
   });
   var list = Object.keys(map).map(function(k){ return map[k]; });
-  list.sort(function(a,b){ return (a.billDate||'').localeCompare(b.billDate||'') || (a.date||'').localeCompare(b.date||'') || a.lot.localeCompare(b.lot); });
+  list.sort(function(a,b){ return jobOrderCmp({ id:a.jobId, bill:a.bill, date:a.billDate }, { id:b.jobId, bill:b.bill, date:b.billDate }) || (a.date||'').localeCompare(b.date||'') || a.lot.localeCompare(b.lot); });   // เรียงบิลตามตัวเรียงกลาง → Pro Lot
   // หักยอดที่ตรวจไปแล้ว: รายการใหม่มี jobKey ตัดตรงบิล+Lot / รายการเก่า (ไม่มี jobKey) ตัดตาม Lot แบบเก่าสุดก่อน
   qcLoadRecords().forEach(function(r){
     var pk = qcKey(r.partNo);
@@ -1437,6 +1437,17 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══ QC100 v2 (ทดลอง): ชิ้นงาน → บิล FIFO → Pro Lot No. | ตัดยอดตามบิล = ผ่าน + ทิ้ง (ไม่สนยอดชุบ) ═══
 var qcSelBill = '';
 function qcManualToggle(){ } function qcManualUpd(){ }
+// ═══ ตัวเรียงบิลกลาง (JOB_ORDER_V1) — โค้ดชุดนี้ต้องเหมือนกันทุกไฟล์: job_master / qc100 / plating_v4 / v5_B2 / v6_R1 ═══
+// ลำดับ FIFO ของบิล: วันรับเข้า → เวลาคีย์บิล (จาก id = 'J'+timestamp; ไม่มี = เก่าสุด) → เลขบิล (เรียงตามตัวเลข) → id
+function jobOrderTs(j) { var m = /^J(\d{10,})(?:_\d+)?$/.exec(String((j && j.id) || '')); return m ? parseInt(m[1], 10) : 0; }
+function jobOrderCmp(a, b, noId) {
+  var d = String(a.date || '').localeCompare(String(b.date || '')); if (d) return d < 0 ? -1 : 1;
+  var ta = jobOrderTs(a), tb = jobOrderTs(b); if (ta !== tb) return ta < tb ? -1 : 1;
+  var x = String(a.bill || '').trim().localeCompare(String(b.bill || '').trim(), undefined, { numeric: true }); if (x) return x < 0 ? -1 : 1;
+  if (noId) return 0;
+  var i = String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true }); return i < 0 ? -1 : (i > 0 ? 1 : 0);
+}
+// ═══ จบตัวเรียงบิลกลาง ═══
 function qcJobTs(j){ var m=/^J(\d{10,})(?:_\d+)?$/.exec(String((j&&j.id)||'')); return m?parseInt(m[1],10):0; }
 function qcReceivedPcs(j){
   if (j.unit === 'kg') { var w = (qcSelectedPart && qcSelectedPart.weightG) || 0; return w>0 ? Math.round(Number(j.qtyKg||0)*1000/w) : 0; }
@@ -1496,15 +1507,15 @@ function qcBuildBills(){
           received:received, used:u, avail:extraCap, remain:extraCap, jmRemain:jmRem, waitInv:waitInv, closed:false, closedBill:false, locked:false, over:true, overDone:overDone });
         return;
       }
-      if (avail === 0 && !closed) qcWaitInv.push({ bill:String(j.bill).trim(), customer:j.customer||'', received:received, used:u, jmRemain:jmRem, waitInv:waitInv, date:j.date||'' });
+      if (avail === 0 && !closed) qcWaitInv.push({ id:j.id, bill:String(j.bill).trim(), customer:j.customer||'', received:received, used:u, jmRemain:jmRem, waitInv:waitInv, date:j.date||'' });
       return;
     }
     if (closed) { qcHiddenCount++; if (!qcShowClosed) return; }
     list.push({ id:j.id, bill:String(j.bill).trim(), date:j.date||'', ts:qcJobTs(j), customer:j.customer||'', custLot:j.custLot||'',
       received:received, used:u, avail:avail, remain:avail, jmRemain:jmRem, waitInv:waitInv, closed:closed, closedBill:!!bf, locked:closed });
   });
-  list.sort(function(a,b){ if (!!a.over !== !!b.over) return a.over ? 1 : -1; var d=(a.date||'').localeCompare(b.date||''); if (d) return d; return (a.ts&&b.ts)?(a.ts-b.ts):0; });   // บิลที่ยังไม่ได้ตรวจเก่าสุดก่อน (FIFO) · บิล "ตรวจครบแล้วแต่ JM ยังค้าง" ไว้ท้ายสุด
-  qcWaitInv.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  list.sort(function(a,b){ if (!!a.over !== !!b.over) return a.over ? 1 : -1; return jobOrderCmp(a,b); });   // บิลที่ยังไม่ได้ตรวจเก่าสุดก่อน (FIFO) · บิล "ตรวจครบแล้วแต่ JM ยังค้าง" ไว้ท้ายสุด
+  qcWaitInv.sort(function(a,b){ return jobOrderCmp(a,b); });
   return list;
 }
 var qcWaitInv = [];

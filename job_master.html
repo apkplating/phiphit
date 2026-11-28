@@ -2043,6 +2043,18 @@ function calcJob(jobId) {
 // คำนวณ "คงเหลือจริงตอนนี้" ของบิลหนึ่ง — หักรายการที่เพิ่งเพิ่มไปแล้วในดราฟต์ INV ที่กำลังสร้างอยู่ (invDraft) ออก
 // ด้วยเสมอ ไม่ใช่แค่ข้อมูลที่บันทึกจริงใน jobRecords เท่านั้น — กันปัญหา "ออก INV รวมหลายบิลในใบเดียวไม่ได้" ทั้งที่
 // เพิ่งเคลียร์บิลก่อนหน้าหมดในดราฟต์เดียวกันแล้ว (แค่ยังไม่กดบันทึก ระบบจริงเลยยังไม่อัปเดตคงเหลือ)
+// ═══ ตัวเรียงบิลกลาง (JOB_ORDER_V1) — โค้ดชุดนี้ต้องเหมือนกันทุกไฟล์: job_master / qc100 / plating_v4 / v5_B2 / v6_R1 ═══
+// ลำดับ FIFO ของบิล: วันรับเข้า → เวลาคีย์บิล (จาก id = 'J'+timestamp; ไม่มี = เก่าสุด) → เลขบิล (เรียงตามตัวเลข) → id
+function jobOrderTs(j) { var m = /^J(\d{10,})(?:_\d+)?$/.exec(String((j && j.id) || '')); return m ? parseInt(m[1], 10) : 0; }
+function jobOrderCmp(a, b, noId) {
+  var d = String(a.date || '').localeCompare(String(b.date || '')); if (d) return d < 0 ? -1 : 1;
+  var ta = jobOrderTs(a), tb = jobOrderTs(b); if (ta !== tb) return ta < tb ? -1 : 1;
+  var x = String(a.bill || '').trim().localeCompare(String(b.bill || '').trim(), undefined, { numeric: true }); if (x) return x < 0 ? -1 : 1;
+  if (noId) return 0;
+  var i = String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true }); return i < 0 ? -1 : (i > 0 ? 1 : 0);
+}
+// ═══ จบตัวเรียงบิลกลาง ═══
+
 function getEffectiveRemain(job) {
   var b = calcJob(job.id);
   var baseRemain = job.unit==='kg' ? b.remainKg : b.remain;
@@ -2056,7 +2068,7 @@ function getFifoSiblingsForJob(job) {
   var siblings = jobItems.filter(function(j) {
     return getEffectiveRemain(j) > 0.0001 && normalizePartKey(j.partName) === normKey;
   });
-  siblings.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  siblings.sort(jobOrderCmp);
   return siblings;
 }
 
@@ -3664,7 +3676,7 @@ function selectInvPart(partNo, hasStock, fromPM) {
   infoEl.innerHTML = '<span style="color:var(--green);">✅ <b>'+esc(partNo)+'</b> — พบ '+active.length+' บิล เลือกบิลด้านล่าง</span>';
 
   // เรียงเก่าสุดขึ้นก่อนเสมอ (FIFO) — ให้เห็นชัดว่าบิลไหนควรออก INV ก่อน ไม่ใช่เรียงตามลำดับที่บันทึกในระบบ
-  active.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+  active.sort(jobOrderCmp);
 
   var sel = document.getElementById('invLineJobSel');
   var optHtml = '<option value="">— เลือกบิลที่ต้องการ —</option>';
@@ -7447,7 +7459,7 @@ async function pullFromLines() {
           // (ถ้ารอบชุบนี้มากกว่าคงเหลือของบิลแรก จะตัดบิลแรกจนหมดแล้วไล่ตัดบิลถัดไปต่อ ไม่ตัดเกินจำนวนที่ผลิตจริงในรอบนี้)
           var matchingJobs = jobItems.filter(function(job){
             return normalizePartKey(job.partName||'') === bPartKey;
-          }).sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+          }).sort(jobOrderCmp);
 
           var remainPcsToAllocate = bPcs;
           var remainKgToAllocate  = bKg;
